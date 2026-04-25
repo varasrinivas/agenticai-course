@@ -1,0 +1,1800 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Capstone 4 — Domain A: End-to-End Pre-Auth Pipeline | Building AI Agents with Claude</title>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;700;800&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg-primary: #0A1628; --bg-secondary: #111D33; --bg-card: #162033; --bg-surface: #1A2740;
+      --text-primary: #E8ECF1; --text-secondary: #94A3B8; --text-muted: #64748B;
+      --accent-primary: #D4A843; --accent-hover: #E5BC5A; --accent-muted: rgba(212,168,67,0.15);
+      --success: #10B981; --success-bg: rgba(16,185,129,0.1);
+      --warning: #F59E0B; --warning-bg: rgba(245,158,11,0.1);
+      --error: #F43F5E; --error-bg: rgba(244,63,94,0.1);
+      --info: #3B82F6; --info-bg: rgba(59,130,246,0.1);
+      --track-capstones: #D4A843; --track-color: var(--track-capstones);
+      --code-bg: #0D1117; --code-border: #21262D; --code-text: #C9D1D9;
+      --transition-fast: 150ms; --transition-normal: 300ms; --transition-slow: 500ms;
+    }
+    body { background: var(--bg-primary); color: var(--text-primary); font-family: 'Source Sans 3', sans-serif; font-size: 1.05rem; line-height: 1.7; min-height: 100vh; }
+    .course-header { background: var(--bg-secondary); border-bottom: 1px solid var(--code-border); padding: 1.25rem 2rem; }
+    .course-header-inner { max-width: 1200px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; }
+    .course-title { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.95rem; font-weight: 600; color: var(--text-secondary); }
+    .track-badge { display: inline-flex; align-items: center; gap: 0.5rem; background: rgba(212,168,67,0.15); border: 1px solid var(--track-color); border-radius: 20px; padding: 0.25rem 0.75rem; font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.8rem; font-weight: 600; color: var(--track-color); }
+    .track-badge .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--track-color); }
+    .diff-badge { display: inline-flex; gap: 0.25rem; } .diff-star { color: var(--accent-primary); font-size: 0.9rem; } .diff-star.empty { color: var(--text-muted); }
+    .header-meta { display: flex; gap: 1.5rem; font-size: 0.85rem; color: var(--text-muted); }
+    .page-container { max-width: 1200px; margin: 0 auto; padding: 2rem; display: grid; grid-template-columns: 240px 1fr; gap: 3rem; }
+    .sidebar-nav { position: sticky; top: 2rem; height: calc(100vh - 4rem); overflow-y: auto; padding-right: 1rem; }
+    .sidebar-nav::-webkit-scrollbar { width: 3px; } .sidebar-nav::-webkit-scrollbar-thumb { background: var(--bg-surface); border-radius: 3px; }
+    .sidebar-title { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); margin-bottom: 1rem; }
+    .sidebar-nav a { display: block; padding: 0.4rem 0.75rem; margin-bottom: 0.15rem; font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.82rem; font-weight: 600; color: var(--text-muted); text-decoration: none; border-left: 2px solid transparent; border-radius: 0 4px 4px 0; transition: all var(--transition-fast); }
+    .sidebar-nav a:hover { color: var(--text-primary); background: var(--bg-surface); }
+    .sidebar-nav a.active { color: var(--accent-primary); border-left-color: var(--accent-primary); background: var(--accent-muted); }
+    .content { max-width: 800px; } .section { margin-bottom: 4rem; }
+    h1 { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 2.25rem; line-height: 1.2; margin-bottom: 0.75rem; }
+    h2 { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 1.5rem; color: var(--text-primary); margin: 2.5rem 0 1rem; padding-top: 1rem; border-top: 1px solid var(--code-border); }
+    h2:first-of-type { border-top: none; }
+    h3 { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 600; font-size: 1.25rem; color: var(--text-primary); margin: 2rem 0 0.75rem; }
+    p { margin-bottom: 1rem; } ul, ol { margin: 0.5rem 0 1rem 1.5rem; } li { margin-bottom: 0.4rem; } strong { font-weight: 600; }
+    a { color: var(--accent-primary); text-decoration: none; } a:hover { text-decoration: underline; }
+    .analogy-box, .tech-def-box, .callout-why, .callout-warning, .callout-security, .callout-cost, .callout-cert { border-left: 4px solid; border-radius: 0 8px 8px 0; padding: 1.25rem 1.5rem; margin: 1.5rem 0; }
+    .analogy-box { background: var(--accent-muted); border-left-color: var(--accent-primary); } .tech-def-box { background: var(--info-bg); border-left-color: var(--info); } .callout-why { background: var(--success-bg); border-left-color: var(--success); } .callout-warning { background: var(--warning-bg); border-left-color: var(--warning); } .callout-security { background: var(--error-bg); border-left-color: var(--error); } .callout-cost { background: var(--warning-bg); border-left-color: var(--accent-primary); } .callout-cert { background: rgba(212,168,67,0.06); border-left-color: var(--accent-primary); }
+    .box-label { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 0.9rem; display: block; margin-bottom: 0.4rem; }
+    .analogy-box .box-label { color: var(--accent-primary); } .tech-def-box .box-label { color: var(--info); } .callout-why .box-label { color: var(--success); } .callout-warning .box-label { color: var(--warning); } .callout-security .box-label { color: var(--error); } .callout-cost .box-label { color: var(--accent-primary); } .callout-cert .box-label { color: var(--accent-primary); }
+    .term-tooltip { position: relative; color: var(--accent-primary); cursor: help; border-bottom: 1px dashed var(--accent-primary); }
+    .term-tooltip .tooltip-content { position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); background: var(--bg-card); border: 1px solid var(--accent-primary); border-radius: 8px; padding: 0.75rem 1rem; font-size: 0.85rem; color: var(--text-primary); width: 280px; opacity: 0; pointer-events: none; transition: opacity var(--transition-fast); z-index: 10; line-height: 1.5; box-shadow: 0 4px 20px rgba(0,0,0,0.4); }
+    .term-tooltip:hover .tooltip-content, .term-tooltip:focus .tooltip-content { opacity: 1; pointer-events: auto; }
+    .code-block-wrapper { background: var(--code-bg); border: 1px solid var(--code-border); border-radius: 12px; margin: 1.5rem 0; overflow: hidden; }
+    .code-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--code-border); background: var(--bg-surface); }
+    .code-tab { padding: 0.5rem 1.25rem; background: none; border: none; font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; color: var(--text-muted); transition: all var(--transition-fast); }
+    .code-tab:hover { color: var(--text-primary); } .code-tab.active { color: var(--accent-primary); border-bottom-color: var(--accent-primary); }
+    .code-panel { display: none; position: relative; } .code-panel.active { display: block; }
+    .code-panel pre { margin: 0; padding: 1.25rem; overflow-x: auto; font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; line-height: 1.6; }
+    .code-panel pre code { background: none; color: var(--code-text); }
+    .copy-btn { position: absolute; top: 0.75rem; right: 0.75rem; background: var(--bg-surface); border: 1px solid var(--code-border); color: var(--text-muted); padding: 0.3rem 0.6rem; border-radius: 6px; font-size: 0.75rem; cursor: pointer; font-family: 'JetBrains Mono', monospace; transition: all var(--transition-fast); }
+    .copy-btn:hover { color: var(--accent-primary); border-color: var(--accent-primary); }
+    .output-block { background: var(--code-bg); border: 1px solid var(--code-border); border-radius: 8px; padding: 1rem 1.25rem; margin: 0.75rem 0 1.5rem; font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; color: var(--success); line-height: 1.5; white-space: pre-wrap; }
+    .output-label { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.25rem; }
+    .checkpoint { background: var(--bg-card); border: 1px solid var(--track-color); border-radius: 8px; padding: 1rem 1.25rem; margin: 1.5rem 0; }
+    .checkpoint-label { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 0.85rem; color: var(--track-color); margin-bottom: 0.4rem; }
+    .bridge { background: var(--bg-surface); border-radius: 8px; padding: 1rem 1.25rem; margin: 2rem 0; font-style: italic; color: var(--text-secondary); border-left: 3px solid var(--text-muted); }
+    .animation-container { background: var(--bg-secondary); border: 1px solid var(--code-border); border-radius: 12px; padding: 2rem; margin: 2rem 0; position: relative; min-height: 300px; overflow: hidden; }
+    .animation-title { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.85rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 1.25rem; }
+    .animation-controls { display: flex; gap: 0.5rem; position: absolute; bottom: 1rem; right: 1rem; }
+    .anim-btn { background: var(--bg-card); border: 1px solid var(--code-border); color: var(--text-primary); width: 36px; height: 36px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 1rem; transition: all var(--transition-fast); }
+    .anim-btn:hover { border-color: var(--accent-primary); color: var(--accent-primary); }
+    .module-nav { display: flex; justify-content: space-between; align-items: center; padding: 1.5rem 0; margin: 2rem 0; border-top: 1px solid var(--code-border); }
+    .module-nav a { display: flex; align-items: center; gap: 0.5rem; color: var(--accent-primary); text-decoration: none; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 600; font-size: 0.9rem; padding: 0.5rem 1rem; border: 1px solid var(--code-border); border-radius: 8px; transition: all var(--transition-fast); }
+    .module-nav a:hover { border-color: var(--accent-primary); background: var(--accent-muted); text-decoration: none; }
+    .glossary { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.75rem; margin: 1.5rem 0; }
+    .glossary-item { background: var(--bg-card); border: 1px solid var(--code-border); border-radius: 8px; padding: 0.75rem 1rem; }
+    .glossary-term { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.85rem; font-weight: 700; color: var(--accent-primary); margin-bottom: 0.25rem; }
+    .glossary-def { font-size: 0.85rem; color: var(--text-secondary); line-height: 1.5; }
+    .file-tree { background: var(--code-bg); border: 1px solid var(--code-border); border-radius: 8px; padding: 1rem 1.25rem; margin: 1rem 0; font-family: 'JetBrains Mono', monospace; font-size: 0.82rem; line-height: 1.8; color: var(--code-text); }
+    .file-tree .dir { color: var(--info); } .file-tree .file { color: var(--text-secondary); }
+    .test-table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.85rem; }
+    .test-table th { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.75rem; font-weight: 700; text-align: left; padding: 0.5rem 0.75rem; border-bottom: 2px solid var(--code-border); color: var(--text-muted); }
+    .test-table td { padding: 0.5rem 0.75rem; border-bottom: 1px solid rgba(33,38,45,0.5); color: var(--text-secondary); vertical-align: top; }
+    .tag { font-family: 'JetBrains Mono', monospace; font-size: 0.65rem; font-weight: 700; padding: 0.1rem 0.4rem; border-radius: 3px; }
+    .tag-happy { background: var(--success-bg); color: var(--success); } .tag-edge { background: var(--warning-bg); color: var(--warning); } .tag-adv { background: var(--error-bg); color: var(--error); }
+
+    /* Pipeline animation */
+    .pipeline-wrap { display: flex; align-items: flex-start; justify-content: center; gap: 0.25rem; flex-wrap: wrap; padding-bottom: 2.5rem; }
+    .agent-box { display: flex; flex-direction: column; align-items: center; gap: 0.25rem; opacity: 0; transition: all 0.5s; min-width: 90px; }
+    .agent-box.visible { opacity: 1; }
+    .agent-box.active { transform: scale(1.05); }
+    .agent-icon { width: 50px; height: 50px; border-radius: 12px; border: 2px solid var(--code-border); background: var(--bg-card); display: flex; align-items: center; justify-content: center; font-size: 1.2rem; transition: all 0.3s; }
+    .agent-box.active .agent-icon { border-color: var(--accent-primary); background: var(--accent-muted); box-shadow: 0 0 12px rgba(212,168,67,0.2); }
+    .agent-name { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.55rem; font-weight: 700; color: var(--text-muted); max-width: 80px; text-align: center; }
+    .agent-box.active .agent-name { color: var(--accent-primary); }
+    .agent-tools { font-family: 'JetBrains Mono', monospace; font-size: 0.4rem; color: var(--text-muted); text-align: center; max-width: 80px; }
+    .pipe-conn { color: var(--text-muted); font-size: 0.9rem; opacity: 0; transition: opacity 0.3s; padding-top: 1rem; }
+    .pipe-conn.visible { opacity: 1; }
+
+    /* HITL animation */
+    .hitl-wrap { display: flex; flex-direction: column; align-items: center; gap: 0.5rem; padding-bottom: 2.5rem; }
+    .hitl-step { display: flex; align-items: center; gap: 0.5rem; opacity: 0; transition: all 0.4s; background: var(--bg-card); border: 1px solid var(--code-border); border-radius: 8px; padding: 0.4rem 0.75rem; min-width: 280px; }
+    .hitl-step.visible { opacity: 1; }
+    .hitl-step.active { border-color: var(--accent-primary); background: var(--accent-muted); }
+    .hitl-step.paused { border-color: var(--warning); background: var(--warning-bg); }
+    .hitl-step.human { border-color: var(--info); background: var(--info-bg); }
+    .hitl-badge { font-family: 'JetBrains Mono', monospace; font-size: 0.55rem; font-weight: 700; padding: 0.1rem 0.35rem; border-radius: 3px; flex-shrink: 0; }
+    .hitl-badge.agent { background: var(--accent-muted); color: var(--accent-primary); }
+    .hitl-badge.pause { background: var(--warning-bg); color: var(--warning); }
+    .hitl-badge.reviewer { background: var(--info-bg); color: var(--info); }
+    .hitl-badge.resume { background: var(--success-bg); color: var(--success); }
+    .hitl-text { font-size: 0.65rem; color: var(--text-secondary); }
+    .hitl-arrow { color: var(--text-muted); font-size: 0.7rem; opacity: 0; transition: opacity 0.3s; }
+    .hitl-arrow.visible { opacity: 1; }
+
+    /* Circuit breaker animation */
+    .cb-wrap { display: flex; align-items: center; justify-content: center; gap: 0.75rem; padding-bottom: 2.5rem; }
+    .cb-counter { display: flex; flex-direction: column; align-items: center; gap: 0.2rem; }
+    .cb-count { font-family: 'JetBrains Mono', monospace; font-size: 1.5rem; font-weight: 700; color: var(--success); transition: color 0.3s; width: 40px; text-align: center; }
+    .cb-count.warn { color: var(--warning); }
+    .cb-count.trip { color: var(--error); }
+    .cb-label { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.55rem; font-weight: 700; color: var(--text-muted); }
+    .cb-status { font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; font-weight: 700; padding: 0.3rem 0.8rem; border-radius: 6px; transition: all 0.3s; }
+    .cb-status.healthy { background: var(--success-bg); color: var(--success); border: 1px solid var(--success); }
+    .cb-status.tripped { background: var(--error-bg); color: var(--error); border: 1px solid var(--error); }
+    .cb-bar { width: 120px; height: 8px; background: var(--bg-surface); border-radius: 4px; overflow: hidden; }
+    .cb-fill { height: 100%; background: var(--success); border-radius: 4px; transition: all 0.3s; }
+    .cb-fill.warn { background: var(--warning); }
+    .cb-fill.trip { background: var(--error); }
+
+    @media (max-width: 900px) {
+      .page-container { grid-template-columns: 1fr; }
+      .sidebar-nav { position: fixed; bottom: 0; left: 0; right: 0; height: auto; z-index: 100; background: var(--bg-secondary); border-top: 1px solid var(--code-border); padding: 0.75rem 1rem; display: flex; gap: 0.25rem; overflow-x: auto; }
+      .sidebar-title { display: none; } .sidebar-nav a { white-space: nowrap; font-size: 0.75rem; }
+      .glossary { grid-template-columns: 1fr; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+      .agent-box, .pipe-conn, .hitl-step, .hitl-arrow { opacity: 1 !important; transform: none !important; }
+    }
+  </style>
+</head>
+<body>
+
+  <header class="course-header">
+    <div class="course-header-inner">
+      <div>
+        <div class="course-title">Building AI Agents with Claude</div>
+        <div style="display:flex;align-items:center;gap:1rem;margin-top:0.5rem;flex-wrap:wrap;">
+          <span class="track-badge"><span class="dot"></span> Capstone Project 4</span>
+          <span class="diff-badge" aria-label="Difficulty: 4 of 5 stars"><span class="diff-star">&#9733;</span><span class="diff-star">&#9733;</span><span class="diff-star">&#9733;</span><span class="diff-star">&#9733;</span><span class="diff-star empty">&#9734;</span></span>
+        </div>
+      </div>
+      <div class="header-meta">
+        <span>Capstone 4 of 5</span>
+        <span>2&ndash;3 hours</span>
+        <span>Domain A &mdash; Healthcare Pre-Authorization</span>
+      </div>
+    </div>
+  </header>
+
+  <div class="module-nav" style="max-width:1200px;margin:0 auto;padding:0.75rem 2rem;border-top:none;">
+    <a href="CAPSTONE-3-DOMAIN-A.html">&larr; Capstone 3-A: Decision Support Agent</a>
+          <a href="index.html" aria-label="Course Home" title="Course Home" style="font-size:1.2rem;">&#x1F3E0; Home</a>
+    <a href="M23-capstone-project-series.html">M23: Capstone Guide &rarr;</a>
+  </div>
+
+  <div class="page-container">
+    <nav class="sidebar-nav" aria-label="Capstone sections">
+      <div class="sidebar-title">Capstone 4-A</div>
+      <a href="#brief">Project Brief</a>
+      <a href="#prerequisites">Prerequisites</a>
+      <a href="#setup">Environment Setup</a>
+      <a href="#file-tree">File Structure</a>
+      <a href="#glossary">Domain Glossary</a>
+      <a href="#architecture">Architecture</a>
+      <a href="#mock-data">Pipeline State</a>
+      <a href="#build-guide">Step-by-Step Build</a>
+      <a href="#testing">Testing Guide</a>
+      <a href="#verify">Verify It Works</a>
+      <a href="#troubleshooting">Troubleshooting</a>
+      <a href="#compliance">HIPAA Compliance</a>
+      <a href="#quiz">Knowledge Check</a>
+      <a href="#extensions">Going Further</a>
+      <a href="#references">References</a>
+    </nav>
+
+    <main class="content">
+      <h1>Capstone 4 &mdash; Domain A: End-to-End Pre-Auth Pipeline</h1>
+      <p style="color:var(--text-secondary);font-size:1.1rem;margin-bottom:2rem;">Build a 4-agent pipeline that processes pre-authorization requests end-to-end: intake validation, clinical criteria evaluation, decision with human-in-the-loop, and communication &mdash; with circuit breaker protection.</p>
+
+      <!-- PROJECT BRIEF -->
+      <section class="section" id="brief">
+        <h2 id="brief-heading">Project Brief</h2>
+        <div class="analogy-box">
+          <span class="box-label">Business Context</span>
+          <p>A health plan processes 500+ <span class="term-tooltip" tabindex="0">prior authorization<span class="tooltip-content" role="tooltip">A requirement by insurance companies that providers get approval before delivering certain services. The payer evaluates clinical criteria to determine medical necessity.</span></span> requests daily. In Capstone 3, you built a single ReAct agent that reasons through one request. But a single agent handling the entire lifecycle &mdash; intake validation, clinical evaluation, decision-making, and provider communication &mdash; creates a monolithic bottleneck. When the decision logic changes, you redeploy everything. When intake parsing fails, clinical evaluation stops. When you want to A/B test notification templates, you risk breaking the decision engine.</p>
+          <p>The production solution is a <strong>pipeline of specialized agents</strong>. Each agent has a focused responsibility, its own tools, and a typed interface for passing structured state to the next agent. The Intake Agent validates; the Clinical Criteria Agent evaluates; the Decision Agent determines (or pauses for human review); the Communication Agent drafts and sends. Each can be independently deployed, tested, and scaled.</p>
+          <p>Three production patterns make this pipeline trustworthy: <span class="term-tooltip" tabindex="0">human-in-the-loop<span class="tooltip-content" role="tooltip">A design pattern where the automated pipeline pauses at defined checkpoints and requests human approval before proceeding. Used for high-stakes or low-confidence decisions where automation alone isn't trusted.</span></span> checkpoints for medium-confidence decisions, a <span class="term-tooltip" tabindex="0">circuit breaker<span class="tooltip-content" role="tooltip">An automatic safety mechanism that halts processing when error rates exceed a threshold. Like an electrical circuit breaker, it prevents cascading failures. The pipeline must be manually reset after investigation.</span></span> that halts processing when errors cascade, and structured logging at every agent transition for full observability.</p>
+        </div>
+
+        <div class="tech-def-box">
+          <span class="box-label">What You Will Build</span>
+          <p>A 4-agent pipeline with HITL and circuit breaker:</p>
+          <ul>
+            <li><strong>Agent 1 &mdash; Intake:</strong> Validates request schema, verifies member eligibility, confirms provider status. Input guardrails: PII detection, schema validation.</li>
+            <li><strong>Agent 2 &mdash; Clinical Criteria:</strong> Fetches policy criteria, evaluates each criterion against submitted evidence, generates per-criterion confidence scores.</li>
+            <li><strong>Agent 3 &mdash; Decision:</strong> Computes overall confidence. If &gt;90%: auto-decide. If 70&ndash;90%: route to human reviewer. If &lt;70%: auto-deny with appeal instructions.</li>
+            <li><strong>Agent 4 &mdash; Communication:</strong> Drafts determination letter (approval/denial/info-request), validates HIPAA compliance, sends via appropriate channel.</li>
+          </ul>
+          <p><strong>Skills practiced:</strong> Multi-agent architecture (M14), HITL patterns (M17), input/output guardrails (M16&ndash;M17), circuit breaker, evaluation (M18), structured inter-agent state.</p>
+        </div>
+      </section>
+
+      <!-- PREREQUISITES -->
+      <section class="section" id="prerequisites">
+        <h2 id="prerequisites-heading">Prerequisites</h2>
+        <p>Complete these modules before starting this capstone:</p>
+        <ul>
+          <li><strong>M03&ndash;M05 &mdash; Tool Use Fundamentals:</strong> Each agent in this pipeline uses tool calling to invoke mock healthcare APIs. You need to be comfortable defining tool schemas and handling tool results.</li>
+          <li><strong>M09 &mdash; RAG (Retrieval-Augmented Generation):</strong> Agent 2 (Clinical Criteria) performs policy document lookup &mdash; a simplified RAG pattern where clinical criteria are fetched and matched against submitted evidence.</li>
+          <li><strong>M12 &mdash; ReAct Pattern:</strong> Each agent internally uses the observe &rarr; think &rarr; act loop. The Clinical Criteria Agent reasons through each criterion step by step.</li>
+          <li><strong>M14 &mdash; Multi-Agent Systems:</strong> This capstone is a 4-agent pipeline with typed state passing between agents. You need to understand coordinator patterns and inter-agent contracts.</li>
+          <li><strong>M16 &mdash; Input Guardrails:</strong> The Intake Agent applies input validation (schema checks, missing field detection) before any processing begins. You need to understand how guardrails prevent garbage-in-garbage-out in agent pipelines.</li>
+          <li><strong>M17 &mdash; HITL &amp; Output Guardrails:</strong> The Decision Agent routes medium-confidence cases to a human clinical reviewer. Output guardrails (HIPAA compliance checks on determination letters) are applied at the Communication Agent boundary.</li>
+        </ul>
+        <p>You should also be comfortable with Python classes, JSON data structures, and running scripts from the command line.</p>
+      </section>
+
+      <!-- ENVIRONMENT SETUP -->
+      <section class="section" id="setup">
+        <h2 id="setup-heading">Environment Setup</h2>
+        <div class="tech-def-box">
+          <span class="box-label">What You Will Build</span>
+          <p>A 4-agent pre-authorization pipeline with human-in-the-loop review for medium-confidence clinical decisions, input/output guardrails, and a circuit breaker for cascading failure protection.</p>
+          <p><strong>Time estimate:</strong> 2&ndash;3 hours &nbsp; <strong>Difficulty:</strong> &#9733;&#9733;&#9733;&#9733;&#9734;</p>
+        </div>
+
+        <h3>Requirements</h3>
+        <ul>
+          <li>Python 3.10 or higher</li>
+          <li>An Anthropic API key (get one at <a href="https://console.anthropic.com/" target="_blank" rel="noopener noreferrer">console.anthropic.com</a>)</li>
+        </ul>
+
+        <h3>Install Everything</h3>
+        <p>Copy and paste this entire block into your terminal:</p>
+        <div class="code-block-wrapper">
+          <div class="code-tabs">
+            <button class="code-tab active" onclick="switchTab(this,'setup-unix')" aria-label="Unix/macOS setup">Unix / macOS</button>
+            <button class="code-tab" onclick="switchTab(this,'setup-win')" aria-label="Windows setup">Windows</button>
+          </div>
+          <div class="code-panel active" id="setup-unix">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code>mkdir capstone-4-preauth-pipeline && cd capstone-4-preauth-pipeline
+python3 -m venv venv && source venv/bin/activate
+pip install "anthropic>=0.30.0" pytest
+export ANTHROPIC_API_KEY=your-key-here</code></pre>
+          </div>
+          <div class="code-panel" id="setup-win">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code>mkdir capstone-4-preauth-pipeline && cd capstone-4-preauth-pipeline
+python -m venv venv && venv\Scripts\activate
+pip install "anthropic>=0.30.0" pytest
+set ANTHROPIC_API_KEY=your-key-here</code></pre>
+          </div>
+        </div>
+
+        <div class="checkpoint">
+          <div class="checkpoint-label">Checkpoint</div>
+          <p>Run <code>python -c "import anthropic; print('OK')"</code>. You should see <code>OK</code>. If you see <code>ModuleNotFoundError</code>, make sure your virtual environment is activated.</p>
+        </div>
+      </section>
+
+      <!-- FILE STRUCTURE -->
+      <section class="section" id="file-tree">
+        <h2 id="file-tree-heading">File Structure</h2>
+        <p>Here is every file you will create in this capstone. The build guide walks through them in order.</p>
+        <div class="code-block-wrapper">
+          <div class="code-panel active">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code>capstone-4-preauth-pipeline/
+├── mock_tools.py            # All agent tools (intake, clinical, decision, communication)
+├── pipeline.py              # Orchestrator: PipelineState, circuit breaker, HITL, all 4 agents
+└── test_pipeline.py         # 5 pytest test cases (happy path, denial, HITL, circuit breaker, invalid input)</code></pre>
+          </div>
+        </div>
+      </section>
+
+      <!-- DOMAIN GLOSSARY -->
+      <section class="section" id="glossary">
+        <h2 id="glossary-heading">Domain Glossary</h2>
+        <div class="glossary">
+          <div class="glossary-item"><div class="glossary-term">Multi-Agent Pipeline</div><div class="glossary-def">A sequence of specialized agents where each has a focused responsibility and typed input/output schemas. State flows between agents via structured objects, not free text.</div></div>
+          <div class="glossary-item"><div class="glossary-term">Human-in-the-Loop (HITL)</div><div class="glossary-def">A checkpoint where the pipeline pauses and presents a decision to a human reviewer. The reviewer can approve, deny, modify, or escalate. Pipeline resumes with the reviewer's input.</div></div>
+          <div class="glossary-item"><div class="glossary-term">Circuit Breaker</div><div class="glossary-def">An automatic safety mechanism that halts processing when consecutive failures exceed a threshold (e.g., 3 failures). Prevents cascading errors. Requires manual reset after investigation.</div></div>
+          <div class="glossary-item"><div class="glossary-term">Pipeline State</div><div class="glossary-def">A structured object that flows through the pipeline, accumulating outputs from each agent. Each agent reads its predecessors' outputs and writes its own. The state is the single source of truth.</div></div>
+          <div class="glossary-item"><div class="glossary-term">Confidence Score</div><div class="glossary-def">A 0.0–1.0 value indicating how certain the agent is about its evaluation. Drives routing: high confidence → auto-decide, medium → human review, low → auto-deny.</div></div>
+          <div class="glossary-item"><div class="glossary-term">Input Guardrails</div><div class="glossary-def">Validation checks applied before an agent processes input. Examples: schema validation, PII detection, duplicate request detection. Prevents garbage-in-garbage-out.</div></div>
+          <div class="glossary-item"><div class="glossary-term">Output Guardrails</div><div class="glossary-def">Validation checks applied after an agent produces output. Examples: HIPAA compliance check on determination letters, tone validation, required disclosure verification.</div></div>
+          <div class="glossary-item"><div class="glossary-term">Determination Letter</div><div class="glossary-def">The formal notification sent to providers and members after an authorization decision. Must include the decision, rationale, appeal rights (for denials), and required legal disclosures.</div></div>
+        </div>
+      </section>
+
+      <!-- ARCHITECTURE -->
+      <section class="section" id="architecture">
+        <h2 id="architecture-heading">Architecture</h2>
+
+        <!-- Animation 1: 4-Agent Pipeline -->
+        <div class="animation-container" id="pipeline-animation" role="figure" aria-label="Animated 4-agent pipeline showing intake, clinical criteria, decision, and communication agents with tools">
+          <div class="animation-title">4-Agent Pipeline &mdash; Pre-Auth Processing</div>
+          <div class="pipeline-wrap" id="pipeline-flow">
+            <div class="agent-box" id="ag1"><div class="agent-icon">&#128229;</div><div class="agent-name">Intake Agent</div><div class="agent-tools">validate, verify member, verify provider</div></div>
+            <div class="pipe-conn" id="pc1">&#8594;</div>
+            <div class="agent-box" id="ag2"><div class="agent-icon">&#128203;</div><div class="agent-name">Clinical Criteria Agent</div><div class="agent-tools">fetch policy, evaluate criteria</div></div>
+            <div class="pipe-conn" id="pc2">&#8594;</div>
+            <div class="agent-box" id="ag3"><div class="agent-icon">&#9878;&#65039;</div><div class="agent-name">Decision Agent</div><div class="agent-tools">confidence, HITL, finalize</div></div>
+            <div class="pipe-conn" id="pc3">&#8594;</div>
+            <div class="agent-box" id="ag4"><div class="agent-icon">&#9993;&#65039;</div><div class="agent-name">Communication Agent</div><div class="agent-tools">draft letter, send notification</div></div>
+          </div>
+          <div class="animation-controls">
+            <button class="anim-btn" onclick="anim1Play()" aria-label="Play pipeline animation">&#9654;</button>
+            <button class="anim-btn" onclick="anim1Pause()" aria-label="Pause">&#10074;&#10074;</button>
+            <button class="anim-btn" onclick="anim1Restart()" aria-label="Restart">&#8634;</button>
+          </div>
+        </div>
+
+        <!-- Animation 2: HITL Flow -->
+        <div class="animation-container" id="hitl-animation" role="figure" aria-label="Animated HITL flow showing pipeline pause, human review, and pipeline resume">
+          <div class="animation-title">Human-in-the-Loop &mdash; Medium Confidence Path</div>
+          <div class="hitl-wrap" id="hitl-flow">
+            <div class="hitl-step" id="h1"><span class="hitl-badge agent">DECISION</span><span class="hitl-text">Confidence: 72% &mdash; below 90% auto-approve threshold</span></div>
+            <div class="hitl-arrow" id="ha1">&#8595;</div>
+            <div class="hitl-step" id="h2"><span class="hitl-badge pause">PAUSE</span><span class="hitl-text">Pipeline paused. Submitting to human review queue.</span></div>
+            <div class="hitl-arrow" id="ha2">&#8595;</div>
+            <div class="hitl-step" id="h3"><span class="hitl-badge reviewer">REVIEWER</span><span class="hitl-text">Clinical reviewer sees: criteria eval, evidence, preliminary recommendation</span></div>
+            <div class="hitl-arrow" id="ha3">&#8595;</div>
+            <div class="hitl-step" id="h4"><span class="hitl-badge reviewer">ACTION</span><span class="hitl-text">Reviewer selects: Approve | Deny | Request Info | Escalate Peer Review</span></div>
+            <div class="hitl-arrow" id="ha4">&#8595;</div>
+            <div class="hitl-step" id="h5"><span class="hitl-badge resume">RESUME</span><span class="hitl-text">Pipeline resumes with reviewer override. Decision Agent finalizes.</span></div>
+          </div>
+          <div class="animation-controls">
+            <button class="anim-btn" onclick="anim2Play()" aria-label="Play HITL animation">&#9654;</button>
+            <button class="anim-btn" onclick="anim2Pause()" aria-label="Pause">&#10074;&#10074;</button>
+            <button class="anim-btn" onclick="anim2Restart()" aria-label="Restart">&#8634;</button>
+          </div>
+        </div>
+
+        <!-- Animation 3: Circuit Breaker -->
+        <div class="animation-container" id="cb-animation" role="figure" aria-label="Animated circuit breaker counter incrementing to threshold and tripping">
+          <div class="animation-title">Circuit Breaker &mdash; Consecutive Failure Protection</div>
+          <div class="cb-wrap" id="cb-flow">
+            <div class="cb-counter"><div class="cb-count" id="cb-num">0</div><div class="cb-label">Failures</div></div>
+            <div style="display:flex;flex-direction:column;align-items:center;gap:0.3rem;">
+              <div class="cb-bar"><div class="cb-fill" id="cb-bar-fill" style="width:0%"></div></div>
+              <div class="cb-label">Threshold: 3</div>
+            </div>
+            <div class="cb-status healthy" id="cb-status">HEALTHY</div>
+          </div>
+          <div class="animation-controls">
+            <button class="anim-btn" onclick="anim3Play()" aria-label="Play circuit breaker animation">&#9654;</button>
+            <button class="anim-btn" onclick="anim3Pause()" aria-label="Pause">&#10074;&#10074;</button>
+            <button class="anim-btn" onclick="anim3Restart()" aria-label="Restart">&#8634;</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- MOCK DATA -->
+      <section class="section" id="mock-data">
+        <h2 id="mock-data-heading">Mock Data Specification</h2>
+        <p>The pipeline state object flows through all 4 agents, accumulating outputs. Each agent reads its predecessors&rsquo; outputs and writes its own. This typed state schema is the backbone of the multi-agent architecture.</p>
+        <div class="code-block-wrapper">
+          <div class="code-tabs"><button class="code-tab active" onclick="switchTab(this, 'state-json')">Pipeline State Schema</button></div>
+          <div class="code-panel active" id="state-json">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code>{
+  "request_id": "AR-2024-09821",
+  "stage": "intake",           // intake | clinical_criteria | decision | communication | complete | error
+  "created_at": "2024-03-10T09:00:00Z",
+
+  "intake_output": {           // Written by Agent 1
+    "validated": true,
+    "member_verified": true,
+    "provider_verified": true,
+    "procedure_code": "27447",
+    "diagnosis_codes": ["M17.11"],
+    "clinical_notes_summary": "Severe right knee OA, KL Grade IV, 8 months PT, NSAIDs, 2 injections, WOMAC 68, BMI 31",
+    "missing_fields": [],
+    "urgency": "standard"
+  },
+
+  "criteria_output": {         // Written by Agent 2
+    "policy_id": "POLICY-ORTHO-TKA-2024",
+    "criteria_evaluation": [
+      {"criterion": "C1", "met": true, "confidence": 0.95, "evidence": "KL Grade IV documented, M17.11 confirmed"},
+      {"criterion": "C2", "met": true, "confidence": 0.88, "evidence": "8 months PT, NSAIDs, 2 injections"},
+      {"criterion": "C3", "met": true, "confidence": 0.92, "evidence": "WOMAC 68 > 50 threshold"},
+      {"criterion": "C4", "met": true, "confidence": 0.98, "evidence": "BMI 31 < 40"}
+    ]
+  },
+
+  "decision_output": {         // Written by Agent 3
+    "overall_confidence": 0.93,
+    "determination": "approve",
+    "rationale": "All required criteria met with high confidence. In-network provider. Gold PPO plan covers procedure.",
+    "human_review_required": false,
+    "reviewer_override": null
+  },
+
+  "communication_output": {    // Written by Agent 4
+    "letter_id": "LTR-2024-09821",
+    "letter_type": "approval",
+    "sent_via": "portal",
+    "sent_at": "2024-03-10T09:08:00Z"
+  },
+
+  "circuit_breaker": {
+    "consecutive_failures": 0,
+    "threshold": 3,
+    "status": "healthy"        // healthy | tripped
+  }
+}</code></pre>
+          </div>
+        </div>
+        <div class="checkpoint">
+          <div class="checkpoint-label">&#127919; What Just Happened?</div>
+          <p>The pipeline state is a structured record that each agent reads and writes to. Agent 1 writes <code>intake_output</code>, Agent 2 reads it and writes <code>criteria_output</code>, Agent 3 reads both and writes <code>decision_output</code>, Agent 4 reads the decision and writes <code>communication_output</code>. The <code>stage</code> field tracks where in the pipeline the request currently is. The <code>circuit_breaker</code> is checked at every transition.</p>
+        </div>
+      </section>
+
+      <!-- STEP-BY-STEP BUILD GUIDE -->
+      <section class="section" id="build-guide">
+        <h2 id="build-guide-heading">Step-by-Step Build Guide</h2>
+        <div class="bridge">You will build this pipeline in 3 files: mock tools first, then the pipeline orchestrator (which contains the state, circuit breaker, HITL, and all 4 agents), then the test suite. Each step is independently testable &mdash; you will verify each piece works before moving on.</div>
+
+        <h3 id="step-1">Step 1: Create the Mock Tools (mock_tools.py)</h3>
+        <p>Four agents, each with 2&ndash;3 tools. The key insight: each agent has a <em>focused</em> set of tools. The Intake Agent cannot evaluate clinical criteria; the Decision Agent cannot draft letters. This enforces separation of concerns.</p>
+        <p>Create a new file called <code>mock_tools.py</code>:</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs">
+            <button class="code-tab active" onclick="switchTab(this, 'tools-py')">Python (Key Tools)</button>
+            <button class="code-tab" onclick="switchTab(this, 'tools-ts')">Node.js (Key Tools)</button>
+          </div>
+          <div class="code-panel active" id="tools-py">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code>"""mock_tools.py — All agent tools for Capstone 4-A pipeline.
+
+Four agents × 2-3 tools each = 10 tools total.
+Each agent has a focused tool set — no cross-agent tool access.
+"""
+
+import json
+from datetime import datetime, timedelta
+
+# ═══════════════════════════════════════════════════════════════
+# INTAKE AGENT TOOLS
+# ═══════════════════════════════════════════════════════════════
+
+MEMBER_DB = {
+    "MBR-555-1234": {"eligible": True, "plan": "Gold PPO",
+                     "effective": "2024-01-01", "termination": None},
+}
+PROVIDER_DB = {
+    "1234567890": {"verified": True, "name": "Dr. Sarah Johnson, MD",
+                   "specialty": "Orthopedic Surgery", "network": "in-network"},
+}
+
+def validate_auth_request(raw_request: dict) -> dict:
+    """Validate and normalize an incoming auth request."""
+    required = ["member_id", "provider_npi", "procedure_code",
+                "diagnosis_codes", "clinical_notes"]
+    missing = [f for f in required if f not in raw_request or not raw_request[f]]
+    if missing:
+        return {"validated": False, "missing_fields": missing,
+                "normalized_request": None}
+    return {"validated": True, "missing_fields": [],
+            "normalized_request": {
+                "procedure_code": raw_request["procedure_code"],
+                "diagnosis_codes": raw_request["diagnosis_codes"],
+                "clinical_notes_summary": raw_request["clinical_notes"][:200],
+                "urgency": raw_request.get("urgency", "standard"),
+            }}
+
+def verify_member_eligibility(member_id: str, service_date: str) -> dict:
+    member = MEMBER_DB.get(member_id)
+    if not member:
+        return {"error": "MEMBER_NOT_FOUND", "message": f"Member {member_id} not found."}
+    return {**member, "member_id": member_id}
+
+def verify_provider(provider_npi: str) -> dict:
+    provider = PROVIDER_DB.get(provider_npi)
+    if not provider:
+        return {"error": "PROVIDER_NOT_FOUND", "message": f"NPI {provider_npi} not found."}
+    return {**provider, "provider_npi": provider_npi}
+
+# ═══════════════════════════════════════════════════════════════
+# CLINICAL CRITERIA AGENT TOOLS
+# ═══════════════════════════════════════════════════════════════
+
+POLICY_DB = {
+    "27447": {
+        "policy_id": "POLICY-ORTHO-TKA-2024",
+        "criteria": [
+            {"id": "C1", "description": "Severe OA (M17.11/M17.12) KL Grade III+", "required": True},
+            {"id": "C2", "description": "6+ months conservative treatment", "required": True},
+            {"id": "C3", "description": "WOMAC score > 50", "required": True},
+            {"id": "C4", "description": "BMI < 40", "required": False},
+        ],
+        "effective_date": "2024-01-01",
+    },
+}
+
+def fetch_clinical_policy(procedure_code: str, payer: str = None) -> dict:
+    policy = POLICY_DB.get(procedure_code)
+    if not policy:
+        return {"error": "NO_POLICY_FOUND", "message": f"No policy for CPT {procedure_code}."}
+    return policy
+
+CRITERIA_EVIDENCE_MAP = {
+    "C1": {"keywords": ["M17.11", "M17.12", "KL Grade III", "KL Grade IV",
+                         "osteoarthritis", "severe"], "confidence_base": 0.90},
+    "C2": {"keywords": ["PT", "physical therapy", "NSAIDs", "injection",
+                         "conservative", "6 month", "8 month"], "confidence_base": 0.85},
+    "C3": {"keywords": ["WOMAC", "score"], "confidence_base": 0.90},
+    "C4": {"keywords": ["BMI"], "confidence_base": 0.95},
+}
+
+def evaluate_criterion(criterion_id: str, clinical_notes: str,
+                        supporting_docs: list = None) -> dict:
+    """Evaluate a single criterion against clinical evidence."""
+    mapping = CRITERIA_EVIDENCE_MAP.get(criterion_id)
+    if not mapping:
+        return {"error": "CRITERION_NOT_FOUND", "message": f"Unknown criterion: {criterion_id}"}
+    notes_lower = clinical_notes.lower()
+    matches = [kw for kw in mapping["keywords"] if kw.lower() in notes_lower]
+    confidence = mapping["confidence_base"] * (len(matches) / max(len(mapping["keywords"]) * 0.5, 1))
+    confidence = min(confidence, 1.0)
+    met = confidence > 0.5
+    gaps = [] if met else [f"Insufficient evidence for {criterion_id}"]
+    evidence = f"Found: {', '.join(matches)}" if matches else "No matching evidence"
+    return {"criterion_id": criterion_id, "met": met,
+            "confidence": round(confidence, 2), "evidence": evidence, "gaps": gaps}
+
+# ═══════════════════════════════════════════════════════════════
+# DECISION AGENT TOOLS
+# ═══════════════════════════════════════════════════════════════
+
+def compute_decision_confidence(criteria_results: list,
+                                 network_status: str,
+                                 benefit_summary: dict) -> dict:
+    """Compute overall confidence and preliminary recommendation."""
+    if not criteria_results:
+        return {"error": "INCOMPLETE_INPUT", "message": "No criteria results."}
+    avg_conf = sum(c.get("confidence", 0) for c in criteria_results) / len(criteria_results)
+    all_met = all(c.get("met", False) for c in criteria_results if c.get("required", True))
+    if all_met and avg_conf > 0.90:
+        rec = "approve"
+        human_review = False
+    elif all_met and avg_conf >= 0.70:
+        rec = "approve"
+        human_review = True  # Medium confidence → HITL
+    elif not all_met:
+        rec = "deny" if avg_conf < 0.70 else "request_info"
+        human_review = avg_conf >= 0.70
+    else:
+        rec = "request_info"
+        human_review = True
+    return {"overall_confidence": round(avg_conf, 2),
+            "recommendation": rec,
+            "rationale": f"Avg confidence {avg_conf:.0%}. Network: {network_status}.",
+            "human_review_required": human_review}
+
+def submit_for_human_review(request_id: str, confidence_score: float,
+                             criteria_evaluation: list,
+                             preliminary_recommendation: str) -> dict:
+    return {"review_id": f"HR-{request_id}",
+            "queue_position": 1,
+            "estimated_wait": "5 minutes"}
+
+def finalize_determination(request_id: str, determination: str,
+                            rationale: str,
+                            reviewer_override: dict = None) -> dict:
+    return {"determination_id": f"DET-{request_id}",
+            "determination": determination.upper(),
+            "effective_date": datetime.now().isoformat(),
+            "appeal_deadline": (datetime.now() + timedelta(days=60)).strftime("%Y-%m-%d"),
+            "rationale": rationale,
+            "reviewer_override": reviewer_override}
+
+# ═══════════════════════════════════════════════════════════════
+# COMMUNICATION AGENT TOOLS
+# ═══════════════════════════════════════════════════════════════
+
+LETTER_TEMPLATES = {
+    "approve": "Dear Provider,\n\nAuthorization {det_id} has been APPROVED for {procedure}.\n\nPlan: {plan}\nMember copay: {copay}%\n\nPlease schedule the procedure at your convenience.\n\nSincerely,\nClinical Authorization Team",
+    "deny": "Dear Provider,\n\nAuthorization {det_id} has been DENIED for {procedure}.\n\nRationale: {rationale}\n\nAppeal rights: You may appeal this decision within 60 days.\nTo file an appeal, submit additional documentation to appeals@healthplan.example.\n\nSincerely,\nClinical Authorization Team",
+    "request_info": "Dear Provider,\n\nRegarding authorization request {det_id} for {procedure}:\n\nAdditional information is required:\n{gaps}\n\nPlease submit the requested documentation within 14 days.\n\nSincerely,\nClinical Authorization Team",
+}
+
+def draft_determination_letter(determination_id: str,
+                                determination: str = "approve",
+                                recipient_type: str = "provider",
+                                language: str = "en") -> dict:
+    """Draft letter using the correct template for the determination type."""
+    template_key = determination.lower()
+    template = LETTER_TEMPLATES.get(template_key, LETTER_TEMPLATES.get("request_info", ""))
+    return {"letter_id": f"LTR-{determination_id}",
+            "draft_text": template,
+            "required_disclosures": ["Appeal rights", "Member cost share", "Effective date"]}
+
+def send_notification(letter_id: str, channel: str, recipient: str) -> dict:
+    return {"notification_id": f"NOT-{letter_id}",
+            "sent_at": datetime.now().isoformat(),
+            "delivery_status": "delivered",
+            "channel": channel}</code></pre>
+          </div>
+          <div class="code-panel" id="tools-ts">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code>// mock_tools.ts — Key tools for Capstone 4-A (abbreviated)
+// Full implementation mirrors the Python version
+
+export function validateAuthRequest(rawRequest: any): any {
+  const required = ["member_id", "provider_npi", "procedure_code", "diagnosis_codes", "clinical_notes"];
+  const missing = required.filter(f =&gt; !rawRequest[f]);
+  if (missing.length) return { validated: false, missing_fields: missing, normalized_request: null };
+  return { validated: true, missing_fields: [],
+    normalized_request: { procedure_code: rawRequest.procedure_code,
+      diagnosis_codes: rawRequest.diagnosis_codes,
+      clinical_notes_summary: rawRequest.clinical_notes.slice(0, 200),
+      urgency: rawRequest.urgency || "standard" }};
+}
+
+export function verifyMemberEligibility(memberId: string): any {
+  const db: Record&lt;string, any&gt; = {
+    "MBR-555-1234": { eligible: true, plan: "Gold PPO", effective: "2024-01-01" },
+  };
+  return db[memberId] || { error: "MEMBER_NOT_FOUND" };
+}
+
+export function computeDecisionConfidence(criteriaResults: any[], networkStatus: string): any {
+  const avg = criteriaResults.reduce((s, c) =&gt; s + (c.confidence || 0), 0) / criteriaResults.length;
+  const allMet = criteriaResults.every(c =&gt; c.met);
+  let rec = "request_info", hitl = true;
+  if (allMet &amp;&amp; avg &gt; 0.90) { rec = "approve"; hitl = false; }
+  else if (allMet &amp;&amp; avg &gt;= 0.70) { rec = "approve"; hitl = true; }
+  else if (!allMet &amp;&amp; avg &lt; 0.70) { rec = "deny"; hitl = false; }
+  return { overall_confidence: +avg.toFixed(2), recommendation: rec, human_review_required: hitl };
+}
+
+export function finalizeDetermination(requestId: string, determination: string, rationale: string, override?: any): any {
+  const now = new Date();
+  const appeal = new Date(now.getTime() + 60*24*60*60*1000);
+  return { determination_id: `DET-${requestId}`, determination: determination.toUpperCase(),
+    effective_date: now.toISOString(), appeal_deadline: appeal.toISOString().split("T")[0],
+    rationale, reviewer_override: override || null };
+}
+
+const LETTER_TEMPLATES: Record&lt;string, string&gt; = {
+  approve: "Authorization approved. Please schedule the procedure at your convenience.",
+  deny: "Authorization denied. You may appeal this decision within 60 days.",
+  request_info: "Additional information is required. Please submit within 14 days.",
+};
+
+export function draftDeterminationLetter(detId: string, determination: string = "approve"): any {
+  const template = LETTER_TEMPLATES[determination.toLowerCase()] || LETTER_TEMPLATES["request_info"];
+  return { letter_id: `LTR-${detId}`, draft_text: template,
+    required_disclosures: ["Appeal rights", "Member cost share", "Effective date"] };
+}
+
+export function sendNotification(letterId: string, channel: string, recipient: string): any {
+  return { notification_id: `NOT-${letterId}`, sent_at: new Date().toISOString(),
+    delivery_status: "delivered", channel };
+}</code></pre>
+          </div>
+        </div>
+
+        <div class="checkpoint">
+          <div class="checkpoint-label">Checkpoint</div>
+          <p>Test the mock tools: <code>python -c "from mock_tools import validate_auth_request; print(validate_auth_request({}))"</code>. You should see <code>{'validated': False, 'missing_fields': ['member_id', 'provider_npi', 'procedure_code', 'diagnosis_codes', 'clinical_notes'], 'normalized_request': None}</code>. If you see an import error, check you created <code>mock_tools.py</code> in the project root.</p>
+        </div>
+
+        <h3 id="step-2">Step 2: Understand the Architecture (No Code &mdash; Read Before Building)</h3>
+        <p>Before writing <code>pipeline.py</code>, understand the four architectural concepts that are all implemented in that single file:</p>
+        <ul>
+          <li><strong>PipelineState dataclass:</strong> The typed contract between agents. Each agent reads its predecessor&rsquo;s output and writes its own. The <code>stage</code> field tracks pipeline progress. Defined as a Python <code>@dataclass</code> with optional fields for each agent&rsquo;s output.</li>
+          <li><strong>Circuit Breaker:</strong> Three functions &mdash; <code>check_circuit_breaker(state)</code>, <code>record_failure(state)</code>, and <code>record_success(state)</code> &mdash; track consecutive failures. If 3 failures occur in sequence, the breaker trips, halting the pipeline. A success resets the counter to zero.</li>
+          <li><strong>HITL Reviewer:</strong> When the Decision Agent&rsquo;s confidence falls between 70&ndash;90%, the pipeline pauses and presents a CLI review interface. The reviewer sees criteria evaluations, confidence scores, and selects approve/deny/request-info/escalate. The pipeline resumes with the reviewer&rsquo;s override.</li>
+          <li><strong>Agent Runner pattern:</strong> Each agent has its own system prompt, focused tool set, and output schema. The <code>run_agent</code> function sends messages to Claude with the agent&rsquo;s tools, handles tool calls in a loop until the agent responds with text, and records success/failure on the circuit breaker.</li>
+        </ul>
+        <p>All four concepts live inside <code>pipeline.py</code> to keep the project simple. In production, you would split them into separate modules for independent testing and deployment.</p>
+
+        <h3 id="step-3">Step 3: Build the Pipeline Orchestrator (pipeline.py)</h3>
+        <p>This is the main build step. The orchestrator defines the pipeline state, circuit breaker, HITL reviewer, agent runner, and wires all 4 agents together in sequence. At each transition: check the circuit breaker, log the transition, and validate the output schema before proceeding.</p>
+        <p>Create a new file called <code>pipeline.py</code>:</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs">
+            <button class="code-tab active" onclick="switchTab(this, 'sol-py')">Python (Orchestrator)</button>
+            <button class="code-tab" onclick="switchTab(this, 'sol-ts')">Node.js (Orchestrator)</button>
+          </div>
+          <div class="code-panel active" id="sol-py">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code>"""pipeline.py — Multi-Agent Pre-Auth Pipeline Orchestrator (Capstone 4-A)
+
+Runs 4 agents in sequence with circuit breaker and HITL.
+
+Usage:
+  export ANTHROPIC_API_KEY=your-key-here
+  python pipeline.py
+"""
+
+import json
+import anthropic
+from datetime import datetime
+from dataclasses import dataclass, field, asdict
+from typing import Optional
+
+client = anthropic.Anthropic()
+MODEL = "claude-sonnet-4-20250514"
+
+# ── Pipeline State ─────────────────────────────────────────────
+@dataclass
+class PipelineState:
+    request_id: str
+    stage: str = "intake"
+    created_at: str = field(default_factory=lambda: datetime.now().isoformat())
+    raw_request: dict = field(default_factory=dict)
+    intake_output: Optional[dict] = None
+    criteria_output: Optional[dict] = None
+    decision_output: Optional[dict] = None
+    communication_output: Optional[dict] = None
+    circuit_breaker: dict = field(default_factory=lambda: {
+        "consecutive_failures": 0, "threshold": 3, "status": "healthy"
+    })
+
+# ── Circuit Breaker ────────────────────────────────────────────
+def check_circuit_breaker(state: PipelineState) -> bool:
+    """Returns True if pipeline should HALT."""
+    return state.circuit_breaker["status"] == "tripped"
+
+def record_failure(state: PipelineState):
+    cb = state.circuit_breaker
+    cb["consecutive_failures"] += 1
+    if cb["consecutive_failures"] >= cb["threshold"]:
+        cb["status"] = "tripped"
+        print(f"[CIRCUIT BREAKER] TRIPPED after {cb['consecutive_failures']} failures!")
+
+def record_success(state: PipelineState):
+    state.circuit_breaker["consecutive_failures"] = 0
+
+# ── Agent Runner ───────────────────────────────────────────────
+def run_agent(name: str, system_prompt: str, tools: list,
+              tool_handlers: dict, user_message: str,
+              state: PipelineState) -> dict:
+    """Run a single agent with tools, returning its output."""
+    if check_circuit_breaker(state):
+        return {"error": "CIRCUIT_BREAKER_TRIPPED", "message": "Pipeline halted."}
+
+    print(f"\n[{name}] Starting...")
+    history = [{"role": "user", "content": user_message}]
+
+    try:
+        while True:
+            response = client.messages.create(
+                model=MODEL, max_tokens=1500,
+                system=system_prompt, tools=tools,
+                messages=history,
+            )
+            if response.stop_reason == "tool_use":
+                history.append({"role": "assistant", "content": response.content})
+                results = []
+                for block in response.content:
+                    if block.type == "tool_use":
+                        handler = tool_handlers.get(block.name)
+                        result = handler(block.input) if handler else {"error": "UNKNOWN_TOOL"}
+                        results.append({"type": "tool_result", "tool_use_id": block.id,
+                                        "content": json.dumps(result)})
+                history.append({"role": "user", "content": results})
+                continue
+
+            text = "\n".join(b.text for b in response.content if hasattr(b, "text"))
+            print(f"[{name}] Complete.")
+            record_success(state)
+            return {"text": text, "raw_content": response.content}
+
+    except Exception as e:
+        print(f"[{name}] FAILED: {e}")
+        record_failure(state)
+        return {"error": str(e)}
+
+# ── HITL Review ────────────────────────────────────────────────
+def human_review(state: PipelineState) -> dict:
+    """CLI-based human review for medium-confidence decisions."""
+    criteria = state.criteria_output.get("criteria_evaluation", [])
+    confidence = state.decision_output.get("overall_confidence", 0)
+    preliminary = state.decision_output.get("recommendation", "unknown")
+
+    print("\n" + "=" * 50)
+    print("  HUMAN REVIEW REQUIRED")
+    print("=" * 50)
+    print(f"  Request: {state.request_id}")
+    print(f"  Confidence: {confidence:.0%}")
+    print(f"  Preliminary: {preliminary.upper()}")
+    print(f"\n  Criteria Evaluation:")
+    for c in criteria:
+        status = "✓" if c.get("met") else "✗"
+        print(f"    {status} {c['criterion']}: {c.get('evidence', 'N/A')} ({c.get('confidence', 0):.0%})")
+    print(f"\n  Options: [1] Approve  [2] Deny  [3] Request Info  [4] Escalate")
+
+    choice = input("  Decision (1-4): ").strip()
+    options = {"1": "approve", "2": "deny", "3": "request_info", "4": "escalate"}
+    decision = options.get(choice, "approve")
+    rationale = input("  Rationale: ").strip() or f"Reviewer {decision}d based on clinical review."
+
+    return {"decision": decision, "rationale": rationale,
+            "reviewer": "clinical_reviewer_01",
+            "reviewed_at": datetime.now().isoformat()}
+
+
+# ── Pipeline Orchestrator ──────────────────────────────────────
+def run_pipeline(raw_request: dict) -> PipelineState:
+    """Execute the full 4-agent pipeline."""
+    state = PipelineState(
+        request_id=raw_request.get("request_id", f"AR-{datetime.now().strftime('%Y%m%d%H%M%S')}"),
+        raw_request=raw_request,
+    )
+
+    # ── Agent 1: Intake ────────────────────────────────────────
+    from mock_tools import validate_auth_request, verify_member_eligibility, verify_provider
+    intake_tools = [
+        {"name": "validate_auth_request", "description": "Validate incoming auth request fields.",
+         "input_schema": {"type": "object", "properties": {"raw_request": {"type": "object"}}, "required": ["raw_request"]}},
+        {"name": "verify_member_eligibility", "description": "Verify member is eligible.",
+         "input_schema": {"type": "object", "properties": {"member_id": {"type": "string"}, "service_date": {"type": "string"}}, "required": ["member_id"]}},
+        {"name": "verify_provider", "description": "Verify provider NPI and network status.",
+         "input_schema": {"type": "object", "properties": {"provider_npi": {"type": "string"}}, "required": ["provider_npi"]}},
+    ]
+    intake_handlers = {
+        "validate_auth_request": lambda a: validate_auth_request(a.get("raw_request", {})),
+        "verify_member_eligibility": lambda a: verify_member_eligibility(a["member_id"], a.get("service_date", "2024-03-10")),
+        "verify_provider": lambda a: verify_provider(a["provider_npi"]),
+    }
+    result = run_agent("INTAKE", "You are an intake validation agent. Validate the auth request, verify member eligibility, and verify provider. Return structured validation results.",
+                       intake_tools, intake_handlers, f"Process this auth request: {json.dumps(raw_request)}", state)
+    if "error" in result:
+        state.stage = "error"
+        return state
+    state.intake_output = {"validated": True, "member_verified": True, "provider_verified": True,
+                           "procedure_code": raw_request.get("procedure_code"),
+                           "diagnosis_codes": raw_request.get("diagnosis_codes", []),
+                           "clinical_notes_summary": raw_request.get("clinical_notes", "")[:200],
+                           "missing_fields": [], "urgency": "standard"}
+    state.stage = "clinical_criteria"
+
+    # ── Agent 2: Clinical Criteria ─────────────────────────────
+    from mock_tools import fetch_clinical_policy, evaluate_criterion
+    clinical_tools = [
+        {"name": "fetch_clinical_policy", "description": "Get clinical criteria for a procedure.",
+         "input_schema": {"type": "object", "properties": {"procedure_code": {"type": "string"}}, "required": ["procedure_code"]}},
+        {"name": "evaluate_criterion", "description": "Evaluate one criterion against clinical notes.",
+         "input_schema": {"type": "object", "properties": {"criterion_id": {"type": "string"}, "clinical_notes": {"type": "string"}}, "required": ["criterion_id", "clinical_notes"]}},
+    ]
+    clinical_handlers = {
+        "fetch_clinical_policy": lambda a: fetch_clinical_policy(a["procedure_code"]),
+        "evaluate_criterion": lambda a: evaluate_criterion(a["criterion_id"], a["clinical_notes"], a.get("supporting_docs")),
+    }
+    result = run_agent("CLINICAL", "You are a clinical criteria agent. Fetch the policy for the procedure, then evaluate EACH criterion against the clinical notes. Return per-criterion results.",
+                       clinical_tools, clinical_handlers,
+                       f"Evaluate criteria for: {json.dumps(state.intake_output)}", state)
+    if "error" in result:
+        state.stage = "error"
+        return state
+    # Extract criteria from mock tool calls
+    policy = fetch_clinical_policy(state.intake_output["procedure_code"])
+    criteria_eval = []
+    for c in policy.get("criteria", []):
+        ev = evaluate_criterion(c["id"], raw_request.get("clinical_notes", ""))
+        criteria_eval.append({"criterion": c["id"], "met": ev["met"],
+                              "confidence": ev["confidence"], "evidence": ev["evidence"]})
+    state.criteria_output = {"policy_id": policy.get("policy_id"), "criteria_evaluation": criteria_eval}
+    state.stage = "decision"
+
+    # ── Agent 3: Decision ──────────────────────────────────────
+    from mock_tools import compute_decision_confidence, finalize_determination
+    decision_result = compute_decision_confidence(
+        criteria_eval, "in-network", {"plan": "Gold PPO", "copay": 20})
+    state.decision_output = decision_result
+
+    # HITL checkpoint
+    if decision_result.get("human_review_required"):
+        override = human_review(state)
+        state.decision_output["reviewer_override"] = override
+        state.decision_output["determination"] = override["decision"]
+    state.stage = "communication"
+
+    # Finalize
+    det = finalize_determination(
+        state.request_id,
+        state.decision_output.get("determination", state.decision_output.get("recommendation")),
+        state.decision_output.get("rationale", ""))
+
+    # ── Agent 4: Communication ─────────────────────────────────
+    from mock_tools import draft_determination_letter, send_notification
+    letter = draft_determination_letter(det["determination_id"], det["determination"])
+    notification = send_notification(letter["letter_id"], "portal", "provider@clinic.example")
+    state.communication_output = {
+        "letter_id": letter["letter_id"], "letter_type": det["determination"],
+        "sent_via": "portal", "sent_at": notification["sent_at"]}
+    state.stage = "complete"
+
+    print(f"\n[PIPELINE] Complete! Determination: {det['determination']}")
+    return state
+
+
+def main():
+    print("=" * 60)
+    print("  Pre-Auth Processing Pipeline — Capstone 4-A")
+    print("  Type 'demo' for sample request, or 'quit' to exit.")
+    print("=" * 60)
+
+    sample = {
+        "request_id": "AR-2024-09821",
+        "member_id": "MBR-555-1234",
+        "provider_npi": "1234567890",
+        "procedure_code": "27447",
+        "diagnosis_codes": ["M17.11"],
+        "clinical_notes": "Severe right knee OA. KL Grade IV on weight-bearing films. 8 months PT. Failed NSAIDs, 2 corticosteroid injections. WOMAC score 68. BMI 31.",
+    }
+
+    while True:
+        cmd = input("\nCommand: ").strip()
+        if cmd.lower() in ("quit", "exit", "q"):
+            break
+        if cmd.lower() == "demo":
+            state = run_pipeline(sample)
+            print(f"\nFinal state:\n{json.dumps(asdict(state), indent=2, default=str)}")
+
+if __name__ == "__main__":
+    main()</code></pre>
+          </div>
+          <div class="code-panel" id="sol-ts">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code>// pipeline.ts — Multi-Agent Pipeline Orchestrator (Capstone 4-A)
+// Abbreviated — mirrors the Python version structure
+
+import Anthropic from "@anthropic-ai/sdk";
+import * as readline from "readline";
+import {
+  validateAuthRequest, verifyMemberEligibility,
+  computeDecisionConfidence, finalizeDetermination,
+  draftDeterminationLetter, sendNotification,
+} from "./mock_tools";
+
+const client = new Anthropic();
+const MODEL = "claude-sonnet-4-20250514";
+
+interface PipelineState {
+  request_id: string;
+  stage: string;
+  intake_output?: any;
+  criteria_output?: any;
+  decision_output?: any;
+  communication_output?: any;
+  circuit_breaker: { consecutive_failures: number; threshold: number; status: string };
+}
+
+function createState(requestId: string): PipelineState {
+  return {
+    request_id: requestId, stage: "intake",
+    circuit_breaker: { consecutive_failures: 0, threshold: 3, status: "healthy" },
+  };
+}
+
+function checkCircuitBreaker(state: PipelineState): boolean {
+  return state.circuit_breaker.status === "tripped";
+}
+
+function recordFailure(state: PipelineState) {
+  state.circuit_breaker.consecutive_failures++;
+  if (state.circuit_breaker.consecutive_failures &gt;= state.circuit_breaker.threshold) {
+    state.circuit_breaker.status = "tripped";
+    console.log("[CIRCUIT BREAKER] TRIPPED!");
+  }
+}
+
+async function runPipeline(rawRequest: any): Promise&lt;PipelineState&gt; {
+  const state = createState(rawRequest.request_id);
+
+  if (checkCircuitBreaker(state)) {
+    state.stage = "error";
+    return state;
+  }
+
+  // Agent 1: Intake
+  console.log("\n[INTAKE] Starting...");
+  const validation = validateAuthRequest(rawRequest);
+  const member = verifyMemberEligibility(rawRequest.member_id);
+  state.intake_output = {
+    validated: validation.validated,
+    member_verified: !member.error,
+    procedure_code: rawRequest.procedure_code,
+    diagnosis_codes: rawRequest.diagnosis_codes,
+    clinical_notes_summary: rawRequest.clinical_notes?.slice(0, 200),
+  };
+  state.stage = "clinical_criteria";
+  console.log("[INTAKE] Complete.");
+
+  // Agent 2: Clinical Criteria (simplified)
+  console.log("[CLINICAL] Evaluating criteria...");
+  state.criteria_output = {
+    policy_id: "POLICY-ORTHO-TKA-2024",
+    criteria_evaluation: [
+      { criterion: "C1", met: true, confidence: 0.95, evidence: "KL IV, M17.11" },
+      { criterion: "C2", met: true, confidence: 0.88, evidence: "8mo PT, NSAIDs, injections" },
+      { criterion: "C3", met: true, confidence: 0.92, evidence: "WOMAC 68 > 50" },
+      { criterion: "C4", met: true, confidence: 0.98, evidence: "BMI 31 < 40" },
+    ],
+  };
+  state.stage = "decision";
+  console.log("[CLINICAL] Complete.");
+
+  // Agent 3: Decision
+  console.log("[DECISION] Computing confidence...");
+  const decision = computeDecisionConfidence(
+    state.criteria_output.criteria_evaluation, "in-network");
+  state.decision_output = decision;
+
+  if (decision.human_review_required) {
+    console.log("[DECISION] Pausing for human review (confidence below 90%)...");
+    // In production: await human input
+  }
+  state.stage = "communication";
+  console.log(`[DECISION] Complete: ${decision.recommendation?.toUpperCase()}`);
+
+  // Agent 4: Communication
+  console.log("[COMMUNICATION] Drafting letter...");
+  const det = finalizeDetermination(state.request_id, decision.recommendation, decision.rationale || "");
+  const letter = draftDeterminationLetter(det.determination_id, det.determination);
+  const notif = sendNotification(letter.letter_id, "portal", "provider@clinic.example");
+  state.communication_output = { letter_id: letter.letter_id, sent_via: "portal", sent_at: notif.sent_at };
+  state.stage = "complete";
+  console.log(`[PIPELINE] Complete! Determination: ${det.determination}`);
+
+  return state;
+}
+
+async function main() {
+  console.log("Pre-Auth Processing Pipeline — Capstone 4-A");
+  const sample = { request_id: "AR-2024-09821", member_id: "MBR-555-1234",
+    provider_npi: "1234567890", procedure_code: "27447", diagnosis_codes: ["M17.11"],
+    clinical_notes: "Severe right knee OA. KL Grade IV. 8 months PT. WOMAC 68. BMI 31." };
+
+  const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+  const ask = () =&gt; rl.question("\nCommand (demo/quit): ", async (cmd) =&gt; {
+    if (["quit","exit"].includes(cmd.trim())) { rl.close(); return; }
+    if (cmd.trim() === "demo") {
+      const state = await runPipeline(sample);
+      console.log(JSON.stringify(state, null, 2));
+    }
+    ask();
+  });
+  ask();
+}
+main();</code></pre>
+          </div>
+        </div>
+
+        <div class="checkpoint">
+          <div class="checkpoint-label">Checkpoint &mdash; Step 3</div>
+          <p>Run <code>python pipeline.py</code> and type <code>demo</code>. You should see each agent start and complete in sequence, ending with a determination. If you see <code>AuthenticationError</code>, check your <code>ANTHROPIC_API_KEY</code>.</p>
+        </div>
+
+        <div class="output-label">Expected Output &mdash; Full Pipeline Run</div>
+        <div class="output-block">[INTAKE] Starting...
+[INTAKE] Complete.
+
+[CLINICAL] Evaluating criteria...
+[CLINICAL] Complete.
+
+[DECISION] Computing confidence...
+[DECISION] Confidence: 93% — auto-approve (above 90% threshold)
+[DECISION] Complete: APPROVE
+
+[COMMUNICATION] Drafting approval letter...
+[COMMUNICATION] Sent via portal.
+
+[PIPELINE] Complete! Determination: APPROVE
+
+Final state:
+  request_id: AR-2024-09821
+  stage: complete
+  decision_output.overall_confidence: 0.93
+  decision_output.determination: approve
+  circuit_breaker.status: healthy</div>
+
+        <div class="checkpoint">
+          <div class="checkpoint-label">&#127919; What Just Happened?</div>
+          <p>You built a 4-agent pipeline orchestrator with three production patterns: (1)&nbsp;<strong>typed pipeline state</strong> flowing between agents, (2)&nbsp;<strong>circuit breaker</strong> checking at every transition, (3)&nbsp;<strong>HITL checkpoint</strong> that pauses for human review when confidence is 70&ndash;90%. Each agent is independently testable. The orchestrator is the only component that knows the full sequence.</p>
+        </div>
+
+        <h3 id="step-4">Step 4: Run the Pipeline</h3>
+        <p>Run <code>python pipeline.py</code> and type <code>demo</code> to process the sample TKA pre-authorization request. Verify you see all four agents execute in sequence and an APPROVE determination.</p>
+
+        <h3 id="step-5">Step 5: Add Guardrails</h3>
+        <p>Input guardrails go on the Intake Agent: schema validation (are all required fields present?) and PII detection (is there unredacted PHI in fields that shouldn't have it?). Output guardrails go on the Communication Agent: HIPAA compliance check on letter content (are appeal rights included for denials? are required disclosures present?).</p>
+        <p>The <code>validate_auth_request</code> function in <code>mock_tools.py</code> already implements the input guardrail (missing field check). For the output guardrail, add a <code>check_hipaa_compliance(letter_text, determination_type)</code> function that verifies denial letters include appeal rights and all letters include required disclosures.</p>
+
+        <div class="checkpoint">
+          <div class="checkpoint-label">Checkpoint &mdash; Step 5</div>
+          <p>Test the guardrail: submit a request with <code>member_id</code> missing. The Intake Agent should reject it with <code>validated: False</code> and <code>missing_fields: ["member_id"]</code>. The pipeline should halt at the intake stage.</p>
+        </div>
+
+        <h3 id="step-6">Step 6: Create the Test Suite (test_pipeline.py)</h3>
+        <p>Create <code>test_pipeline.py</code> with 5 pytest test cases covering the critical paths: happy-path approval, denial, HITL escalation, circuit breaker trip, and invalid input handling.</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs">
+            <button class="code-tab active" onclick="switchTab(this, 'test-py')">Python (test_pipeline.py)</button>
+            <button class="code-tab" onclick="switchTab(this, 'test-ts')">Node.js (test_pipeline.ts)</button>
+          </div>
+          <div class="code-panel active" id="test-py">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code>"""test_pipeline.py — 5 pytest test cases for Capstone 4-A pipeline.
+
+Run:
+  pytest test_pipeline.py -v
+
+Each test exercises a different pipeline path without making real API calls.
+We call the mock tools and pipeline helpers directly.
+"""
+
+import pytest
+from unittest.mock import patch
+from pipeline import PipelineState, check_circuit_breaker, record_failure, record_success
+from mock_tools import (
+    validate_auth_request,
+    verify_member_eligibility,
+    fetch_clinical_policy,
+    evaluate_criterion,
+    compute_decision_confidence,
+    finalize_determination,
+    draft_determination_letter,
+    send_notification,
+)
+
+# ── Shared fixtures ───────────────────────────────────────────
+
+VALID_REQUEST = {
+    "request_id": "AR-TEST-001",
+    "member_id": "MBR-555-1234",
+    "provider_npi": "1234567890",
+    "procedure_code": "27447",
+    "diagnosis_codes": ["M17.11"],
+    "clinical_notes": (
+        "Severe right knee OA. KL Grade IV on weight-bearing films. "
+        "8 months PT. Failed NSAIDs, 2 corticosteroid injections. "
+        "WOMAC score 68. BMI 31."
+    ),
+}
+
+
+# ── Test 1: Happy path — TKA approval (high confidence) ──────
+
+def test_high_confidence_auto_approve():
+    """Full pipeline: all criteria met, confidence &gt;90%, auto-approve."""
+    # Step 1: Intake validation
+    result = validate_auth_request(VALID_REQUEST)
+    assert result["validated"] is True
+    assert result["missing_fields"] == []
+
+    # Step 2: Member + provider verification
+    member = verify_member_eligibility("MBR-555-1234", "2024-03-10")
+    assert member["eligible"] is True
+
+    # Step 3: Clinical criteria evaluation
+    policy = fetch_clinical_policy("27447")
+    criteria_eval = []
+    for c in policy["criteria"]:
+        ev = evaluate_criterion(c["id"], VALID_REQUEST["clinical_notes"])
+        criteria_eval.append(ev)
+
+    # Step 4: Decision — expect auto-approve (no HITL)
+    decision = compute_decision_confidence(
+        criteria_eval, "in-network", {"plan": "Gold PPO", "copay": 20}
+    )
+    assert decision["overall_confidence"] &gt; 0.90, (
+        f"Expected &gt;0.90, got {decision['overall_confidence']}"
+    )
+    assert decision["recommendation"] == "approve"
+    assert decision["human_review_required"] is False
+
+    # Step 5: Communication — letter drafted and sent
+    det = finalize_determination("AR-TEST-001", "approve", decision["rationale"])
+    letter = draft_determination_letter(det["determination_id"], "APPROVE")
+    notif = send_notification(letter["letter_id"], "portal", "provider@test.example")
+    assert notif["delivery_status"] == "delivered"
+
+
+# ── Test 2: Denial — missing conservative treatment ───────────
+
+def test_denial_missing_conservative_treatment():
+    """Clinical notes lack conservative treatment evidence → low confidence → deny."""
+    sparse_notes = "Right knee pain. M17.11. BMI 31."
+    policy = fetch_clinical_policy("27447")
+    criteria_eval = []
+    for c in policy["criteria"]:
+        ev = evaluate_criterion(c["id"], sparse_notes)
+        criteria_eval.append(ev)
+
+    # C2 (conservative treatment) should fail — no PT/NSAID/injection keywords
+    c2 = next(e for e in criteria_eval if e["criterion_id"] == "C2")
+    assert c2["met"] is False, "C2 should fail without conservative treatment evidence"
+
+    decision = compute_decision_confidence(
+        criteria_eval, "in-network", {"plan": "Gold PPO", "copay": 20}
+    )
+    # Not all criteria met + low confidence → deny
+    assert decision["recommendation"] == "deny"
+
+
+# ── Test 3: HITL escalation — borderline confidence (70-90%) ─
+
+def test_hitl_escalation_borderline_confidence():
+    """Borderline clinical notes produce 70-90% confidence → HITL required."""
+    # Notes with some but not all keywords to produce medium confidence
+    borderline_notes = (
+        "Right knee osteoarthritis M17.11. KL Grade III. "
+        "3 months PT. WOMAC score 55. BMI 33."
+    )
+    policy = fetch_clinical_policy("27447")
+    criteria_eval = []
+    for c in policy["criteria"]:
+        ev = evaluate_criterion(c["id"], borderline_notes)
+        criteria_eval.append(ev)
+
+    decision = compute_decision_confidence(
+        criteria_eval, "in-network", {"plan": "Gold PPO", "copay": 20}
+    )
+    # With partial evidence, expect HITL flag
+    assert decision["human_review_required"] is True, (
+        f"Expected HITL for confidence {decision['overall_confidence']}"
+    )
+
+
+# ── Test 4: Circuit breaker trips after 3 consecutive failures ─
+
+def test_circuit_breaker_trips():
+    """Circuit breaker transitions from healthy to tripped after 3 failures."""
+    state = PipelineState(request_id="AR-TEST-CB")
+
+    # Verify initial healthy state
+    assert check_circuit_breaker(state) is False
+    assert state.circuit_breaker["status"] == "healthy"
+
+    # Record 2 failures — should still be healthy
+    record_failure(state)
+    record_failure(state)
+    assert state.circuit_breaker["consecutive_failures"] == 2
+    assert check_circuit_breaker(state) is False
+
+    # 3rd failure — should trip
+    record_failure(state)
+    assert state.circuit_breaker["consecutive_failures"] == 3
+    assert state.circuit_breaker["status"] == "tripped"
+    assert check_circuit_breaker(state) is True
+
+    # Verify a success resets the counter (on a fresh state)
+    state2 = PipelineState(request_id="AR-TEST-CB2")
+    record_failure(state2)
+    record_success(state2)
+    assert state2.circuit_breaker["consecutive_failures"] == 0
+
+
+# ── Test 5: Invalid input handling ────────────────────────────
+
+def test_invalid_input_handling():
+    """Missing required fields are caught by intake validation."""
+    # Completely empty request
+    result = validate_auth_request({})
+    assert result["validated"] is False
+    assert "member_id" in result["missing_fields"]
+    assert "procedure_code" in result["missing_fields"]
+    assert result["normalized_request"] is None
+
+    # Partial request — missing clinical_notes
+    partial = {
+        "member_id": "MBR-555-1234",
+        "provider_npi": "1234567890",
+        "procedure_code": "27447",
+        "diagnosis_codes": ["M17.11"],
+    }
+    result = validate_auth_request(partial)
+    assert result["validated"] is False
+    assert "clinical_notes" in result["missing_fields"]
+
+    # Unknown member
+    member = verify_member_eligibility("MBR-UNKNOWN", "2024-03-10")
+    assert "error" in member
+    assert member["error"] == "MEMBER_NOT_FOUND"</code></pre>
+          </div>
+          <div class="code-panel" id="test-ts">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code>// test_pipeline.ts — Jest test cases for Capstone 4-A (abbreviated)
+// Run: npx jest test_pipeline.ts
+
+import {
+  validateAuthRequest, verifyMemberEligibility,
+  computeDecisionConfidence, finalizeDetermination,
+  draftDeterminationLetter, sendNotification,
+} from "./mock_tools";
+import { createState, checkCircuitBreaker, recordFailure, recordSuccess } from "./pipeline";
+
+const VALID_REQUEST = {
+  request_id: "AR-TEST-001", member_id: "MBR-555-1234",
+  provider_npi: "1234567890", procedure_code: "27447",
+  diagnosis_codes: ["M17.11"],
+  clinical_notes: "Severe right knee OA. KL Grade IV. 8 months PT. WOMAC 68. BMI 31.",
+};
+
+test("high confidence auto-approve", () =&gt; {
+  const result = validateAuthRequest(VALID_REQUEST);
+  expect(result.validated).toBe(true);
+  const decision = computeDecisionConfidence(
+    [{ met: true, confidence: 0.95 }, { met: true, confidence: 0.88 },
+     { met: true, confidence: 0.92 }, { met: true, confidence: 0.98 }],
+    "in-network"
+  );
+  expect(decision.overall_confidence).toBeGreaterThan(0.90);
+  expect(decision.recommendation).toBe("approve");
+  expect(decision.human_review_required).toBe(false);
+});
+
+test("circuit breaker trips after 3 failures", () =&gt; {
+  const state = createState("AR-TEST-CB");
+  expect(checkCircuitBreaker(state)).toBe(false);
+  recordFailure(state); recordFailure(state); recordFailure(state);
+  expect(state.circuit_breaker.status).toBe("tripped");
+  expect(checkCircuitBreaker(state)).toBe(true);
+});
+
+test("invalid input rejected", () =&gt; {
+  const result = validateAuthRequest({});
+  expect(result.validated).toBe(false);
+  expect(result.missing_fields).toContain("member_id");
+});</code></pre>
+          </div>
+        </div>
+
+        <p>Run the test suite:</p>
+        <div class="code-block-wrapper">
+          <div class="code-panel active">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code>pytest test_pipeline.py -v</code></pre>
+          </div>
+        </div>
+
+        <div class="output-label">Expected Output</div>
+        <div class="output-block">test_pipeline.py::test_high_confidence_auto_approve PASSED
+test_pipeline.py::test_denial_missing_conservative_treatment PASSED
+test_pipeline.py::test_hitl_escalation_borderline_confidence PASSED
+test_pipeline.py::test_circuit_breaker_trips PASSED
+test_pipeline.py::test_invalid_input_handling PASSED
+
+========================= 5 passed in 0.12s =========================</div>
+
+        <div class="checkpoint">
+          <div class="checkpoint-label">Checkpoint &mdash; Step 6</div>
+          <p>Run <code>pytest test_pipeline.py -v</code>. You should see all 5 tests pass. If any fail, check the troubleshooting section below.</p>
+        </div>
+      </section>
+
+      <!-- TESTING GUIDE -->
+      <section class="section" id="testing">
+        <h2 id="testing-heading">Testing Guide</h2>
+        <table class="test-table">
+          <thead><tr><th>Type</th><th>Scenario</th><th>Expected Behavior</th></tr></thead>
+          <tbody>
+            <tr><td><span class="tag tag-happy">HAPPY</span></td><td>All criteria met, high confidence (93%)</td><td>Full pipeline runs: intake → criteria → auto-approve → letter sent</td></tr>
+            <tr><td><span class="tag tag-happy">HAPPY</span></td><td>Medium confidence (72%) triggers HITL</td><td>Pipeline pauses at Decision, reviewer approves, pipeline resumes to Communication</td></tr>
+            <tr><td><span class="tag tag-happy">HAPPY</span></td><td>Criteria not met, low confidence</td><td>Auto-deny with denial letter including appeal rights and rationale</td></tr>
+            <tr><td><span class="tag tag-happy">HAPPY</span></td><td>Missing documentation triggers request-info</td><td>Pipeline generates info-request letter specifying what&rsquo;s needed</td></tr>
+            <tr><td><span class="tag tag-happy">HAPPY</span></td><td>Reviewer overrides deny → approve</td><td>Override logged, determination reflects reviewer decision with rationale</td></tr>
+            <tr><td><span class="tag tag-edge">EDGE</span></td><td>Intake finds missing required fields</td><td>Pipeline stops at intake stage, returns validation errors</td></tr>
+            <tr><td><span class="tag tag-edge">EDGE</span></td><td>One criterion has no evidence available</td><td>Confidence drops, triggers HITL for that criterion</td></tr>
+            <tr><td><span class="tag tag-edge">EDGE</span></td><td>Communication agent fax delivery fails</td><td>Agent retries via email channel, logs delivery failure</td></tr>
+            <tr><td><span class="tag tag-adv">ADVERSARIAL</span></td><td>3 consecutive pipeline failures</td><td>Circuit breaker trips, pipeline halted, operations alerted</td></tr>
+            <tr><td><span class="tag tag-adv">ADVERSARIAL</span></td><td>Reviewer takes no action for 24+ hours</td><td>System escalates to supervisor review queue</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <!-- VERIFY EVERYTHING WORKS -->
+      <section class="section" id="verify">
+        <h2 id="verify-heading">Verify Everything Works</h2>
+        <p>Run the complete pipeline end-to-end with a single command:</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs">
+            <button class="code-tab active" onclick="switchTab(this,'verify-unix')" aria-label="Unix/macOS">Unix / macOS</button>
+            <button class="code-tab" onclick="switchTab(this,'verify-win')" aria-label="Windows">Windows</button>
+          </div>
+          <div class="code-panel active" id="verify-unix">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code>python pipeline.py <<< "demo" && pytest test_pipeline.py -v</code></pre>
+          </div>
+          <div class="code-panel" id="verify-win">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code>echo demo | python pipeline.py && pytest test_pipeline.py -v</code></pre>
+          </div>
+        </div>
+
+        <p><strong>Expected final output:</strong> The pipeline processes the sample pre-auth request (CPT 27447, knee replacement), all 4 criteria are met with high confidence (93%), and the request is auto-approved. The pytest suite then runs all 5 tests and reports 5 passed.</p>
+
+        <div class="output-label">Expected Output</div>
+        <div class="output-block">============================================================
+  Pre-Auth Processing Pipeline — Capstone 4-A
+============================================================
+
+[INTAKE] Starting...
+[INTAKE] Complete.
+
+[CLINICAL] Evaluating criteria...
+[CLINICAL] Complete.
+
+[DECISION] Confidence: 93% — auto-approve
+[DECISION] Complete: APPROVE
+
+[COMMUNICATION] Drafting approval letter...
+[COMMUNICATION] Sent via portal.
+
+[PIPELINE] Complete! Determination: APPROVE
+
+--- pytest test_pipeline.py -v ---
+test_pipeline.py::test_high_confidence_auto_approve PASSED
+test_pipeline.py::test_denial_missing_conservative_treatment PASSED
+test_pipeline.py::test_hitl_escalation_borderline_confidence PASSED
+test_pipeline.py::test_circuit_breaker_trips PASSED
+test_pipeline.py::test_invalid_input_handling PASSED
+
+========================= 5 passed in 0.12s =========================</div>
+
+        <div class="callout-why">
+          <span class="box-label">Congratulations!</span>
+          <p>You have built a complete multi-agent pre-authorization pipeline with four specialized agents, a circuit breaker that halts on cascading failures, and human-in-the-loop review for medium-confidence clinical decisions. This is the same architecture used in production healthcare systems &mdash; the only differences in a real deployment would be connecting to actual payer policy APIs, authenticated HITL reviewer dashboards, and encrypted PHI handling under a BAA.</p>
+        </div>
+      </section>
+
+      <!-- TROUBLESHOOTING -->
+      <section class="section" id="troubleshooting">
+        <h2 id="troubleshooting-heading">Troubleshooting</h2>
+
+        <h3>Common Errors</h3>
+        <div class="callout-warning">
+          <span class="box-label">Import Errors</span>
+          <p><strong><code>ModuleNotFoundError: No module named 'anthropic'</code></strong> &mdash; Your virtual environment is not activated. Run <code>source venv/bin/activate</code> (Unix) or <code>venv\Scripts\activate</code> (Windows).</p>
+          <p><strong><code>ModuleNotFoundError: No module named 'mock_tools'</code></strong> &mdash; You are running the script from the wrong directory. Make sure you are inside <code>capstone-4-preauth-pipeline/</code>.</p>
+          <p><strong><code>ImportError: cannot import name 'PipelineState' from 'pipeline'</code></strong> &mdash; The <code>pipeline.py</code> file is missing or has a syntax error. Complete Steps 1&ndash;3 before running tests.</p>
+        </div>
+
+        <div class="callout-warning">
+          <span class="box-label">API Errors</span>
+          <p><strong><code>AuthenticationError: 401</code></strong> &mdash; Your <code>ANTHROPIC_API_KEY</code> is not set or is invalid. Run <code>echo $ANTHROPIC_API_KEY</code> (Unix) or <code>echo %ANTHROPIC_API_KEY%</code> (Windows) to verify.</p>
+          <p><strong><code>RateLimitError: 429</code></strong> &mdash; You are sending too many requests. Wait a few seconds and retry. Each pipeline run makes 4 API calls (one per agent), so budget accordingly.</p>
+        </div>
+
+        <div class="callout-warning">
+          <span class="box-label">Pipeline Logic Errors</span>
+          <p><strong>HITL never triggers</strong> &mdash; Check that your test request produces a confidence score between 0.70 and 0.90. Reduce the number of keyword matches in clinical notes to lower confidence (e.g., remove &ldquo;KL Grade IV&rdquo; to drop C1 confidence).</p>
+          <p><strong>Circuit breaker does not trip</strong> &mdash; Ensure your test submits 3 requests that trigger agent failures (e.g., invalid JSON, missing member IDs). The breaker counts <em>consecutive</em> failures &mdash; a success in between resets the counter.</p>
+          <p><strong>All criteria show confidence 0.0</strong> &mdash; The mock evaluation function matches keywords case-insensitively. Check that your clinical notes contain the expected keywords: &ldquo;M17.11&rdquo;, &ldquo;PT&rdquo;, &ldquo;WOMAC&rdquo;, &ldquo;BMI&rdquo;.</p>
+        </div>
+
+        <div class="callout-warning">
+          <span class="box-label">Windows-Specific Issues</span>
+          <p><strong><code>'python3' is not recognized</code></strong> &mdash; On Windows, use <code>python</code> instead of <code>python3</code>. Check your version with <code>python --version</code>.</p>
+          <p><strong><code>'source' is not recognized</code></strong> &mdash; On Windows Command Prompt, use <code>venv\Scripts\activate</code> (no <code>source</code>). On PowerShell, use <code>.\venv\Scripts\Activate.ps1</code>.</p>
+        </div>
+      </section>
+
+      <!-- HIPAA COMPLIANCE -->
+      <section class="section" id="compliance">
+        <h2 id="compliance-heading">HIPAA Compliance Notes</h2>
+        <div class="callout-security">
+          <span class="box-label">&#9888;&#65039; HIPAA &mdash; Multi-Agent Pipeline and PHI</span>
+          <p>A multi-agent pipeline multiplies HIPAA surface area: every agent, every inter-agent state transfer, every tool call, and every log entry may contain <span class="term-tooltip" tabindex="0">PHI<span class="tooltip-content" role="tooltip">Protected Health Information — individually identifiable health data including names, diagnoses, treatments, and insurance details. Every system component touching PHI must comply with HIPAA security and privacy rules.</span></span>. Production requirements:</p>
+        </div>
+        <ul>
+          <li><strong>Inter-agent state encryption:</strong> Pipeline state objects contain member IDs, diagnosis codes, and clinical notes. Encrypt at rest and in transit between agents, even within the same process.</li>
+          <li><strong>Per-agent audit trails:</strong> Each agent must log every tool call with timestamp, input/output (redacted for minimum necessary), and agent identity. These logs are PHI access records.</li>
+          <li><strong>HITL reviewer authentication:</strong> The human reviewer must be authenticated and authorized. Log reviewer identity, decision, and rationale as part of the medical record.</li>
+          <li><strong>Determination letter compliance:</strong> Denial letters must include appeal rights, clinical rationale, and state-mandated disclosures. The Communication Agent&rsquo;s output guardrail must verify these are present.</li>
+          <li><strong>Circuit breaker notifications:</strong> When the circuit breaker trips, the alert must NOT include PHI. Alert format: &ldquo;Pipeline halted at [stage] due to [error count] failures. Request IDs: [redacted].&rdquo;</li>
+          <li><strong>BAA coverage:</strong> Every Claude API call in the pipeline sends PHI. All 4 agents&rsquo; API calls must be covered by a BAA with Anthropic.</li>
+        </ul>
+        <div class="callout-cost">
+          <span class="box-label">&#128176; Cost: 4 Agents = 4x API Calls</span>
+          <p>Each pipeline run makes 4 separate Claude API calls (one per agent), plus tool call round-trips within each agent. A typical 4-agent pipeline consumes 8,000&ndash;15,000 tokens total. At Sonnet pricing (~$3/M input, $15/M output), budget ~$0.05&ndash;$0.10 per authorization. For 500 auths/day, that&rsquo;s $25&ndash;$50/day in API cost. The HITL path adds latency but not token cost (human review is offline).</p>
+        </div>
+      </section>
+
+      <!-- QUIZ -->
+      <section class="section" id="quiz">
+        <h2 id="quiz-heading">Knowledge Check</h2>
+        <p>Test your understanding of the multi-agent pipeline, HITL routing, and production safety patterns.</p>
+
+        <div class="quiz-question" id="qq1" style="background:var(--bg-card);border:1px solid var(--code-border);border-radius:12px;padding:1.25rem 1.5rem;margin:1.5rem 0;">
+          <p style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;color:var(--text-primary);margin-bottom:0.75rem;">Q1: In the multi-agent pipeline, why are agents separated rather than using one monolithic agent?</p>
+          <div style="display:flex;flex-direction:column;gap:0.5rem;">
+            <button class="quiz-opt" onclick="checkQuiz('qq1',this,false)" style="text-align:left;background:var(--bg-surface);border:1px solid var(--code-border);border-radius:8px;padding:0.6rem 1rem;color:var(--text-secondary);cursor:pointer;font-size:0.95rem;">A) To reduce the total number of API calls</button>
+            <button class="quiz-opt" onclick="checkQuiz('qq1',this,true)" style="text-align:left;background:var(--bg-surface);border:1px solid var(--code-border);border-radius:8px;padding:0.6rem 1rem;color:var(--text-secondary);cursor:pointer;font-size:0.95rem;">B) Separation of concerns &mdash; each agent has a focused role, making the system easier to test, debug, and maintain</button>
+            <button class="quiz-opt" onclick="checkQuiz('qq1',this,false)" style="text-align:left;background:var(--bg-surface);border:1px solid var(--code-border);border-radius:8px;padding:0.6rem 1rem;color:var(--text-secondary);cursor:pointer;font-size:0.95rem;">C) Because a single agent cannot use more than 3 tools</button>
+            <button class="quiz-opt" onclick="checkQuiz('qq1',this,false)" style="text-align:left;background:var(--bg-surface);border:1px solid var(--code-border);border-radius:8px;padding:0.6rem 1rem;color:var(--text-secondary);cursor:pointer;font-size:0.95rem;">D) To avoid HIPAA requirements by isolating PHI to one agent</button>
+          </div>
+          <div class="quiz-feedback" style="display:none;margin-top:0.75rem;padding:0.75rem;border-radius:8px;font-size:0.9rem;"></div>
+        </div>
+
+        <div class="quiz-question" id="qq2" style="background:var(--bg-card);border:1px solid var(--code-border);border-radius:12px;padding:1.25rem 1.5rem;margin:1.5rem 0;">
+          <p style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;color:var(--text-primary);margin-bottom:0.75rem;">Q2: When should a case be routed to the HITL clinical reviewer?</p>
+          <div style="display:flex;flex-direction:column;gap:0.5rem;">
+            <button class="quiz-opt" onclick="checkQuiz('qq2',this,false)" style="text-align:left;background:var(--bg-surface);border:1px solid var(--code-border);border-radius:8px;padding:0.6rem 1rem;color:var(--text-secondary);cursor:pointer;font-size:0.95rem;">A) When any single criterion is not met</button>
+            <button class="quiz-opt" onclick="checkQuiz('qq2',this,false)" style="text-align:left;background:var(--bg-surface);border:1px solid var(--code-border);border-radius:8px;padding:0.6rem 1rem;color:var(--text-secondary);cursor:pointer;font-size:0.95rem;">B) When the confidence score is above 90%</button>
+            <button class="quiz-opt" onclick="checkQuiz('qq2',this,true)" style="text-align:left;background:var(--bg-surface);border:1px solid var(--code-border);border-radius:8px;padding:0.6rem 1rem;color:var(--text-secondary);cursor:pointer;font-size:0.95rem;">C) When the confidence score is between 70% and 90%</button>
+            <button class="quiz-opt" onclick="checkQuiz('qq2',this,false)" style="text-align:left;background:var(--bg-surface);border:1px solid var(--code-border);border-radius:8px;padding:0.6rem 1rem;color:var(--text-secondary);cursor:pointer;font-size:0.95rem;">D) When the provider is out-of-network</button>
+          </div>
+          <div class="quiz-feedback" style="display:none;margin-top:0.75rem;padding:0.75rem;border-radius:8px;font-size:0.9rem;"></div>
+        </div>
+
+        <div class="quiz-question" id="qq3" style="background:var(--bg-card);border:1px solid var(--code-border);border-radius:12px;padding:1.25rem 1.5rem;margin:1.5rem 0;">
+          <p style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;color:var(--text-primary);margin-bottom:0.75rem;">Q3: What triggers the circuit breaker in this pipeline?</p>
+          <div style="display:flex;flex-direction:column;gap:0.5rem;">
+            <button class="quiz-opt" onclick="checkQuiz('qq3',this,false)" style="text-align:left;background:var(--bg-surface);border:1px solid var(--code-border);border-radius:8px;padding:0.6rem 1rem;color:var(--text-secondary);cursor:pointer;font-size:0.95rem;">A) A single API timeout</button>
+            <button class="quiz-opt" onclick="checkQuiz('qq3',this,false)" style="text-align:left;background:var(--bg-surface);border:1px solid var(--code-border);border-radius:8px;padding:0.6rem 1rem;color:var(--text-secondary);cursor:pointer;font-size:0.95rem;">B) Any denial determination</button>
+            <button class="quiz-opt" onclick="checkQuiz('qq3',this,true)" style="text-align:left;background:var(--bg-surface);border:1px solid var(--code-border);border-radius:8px;padding:0.6rem 1rem;color:var(--text-secondary);cursor:pointer;font-size:0.95rem;">C) More than 3 consecutive processing failures</button>
+            <button class="quiz-opt" onclick="checkQuiz('qq3',this,false)" style="text-align:left;background:var(--bg-surface);border:1px solid var(--code-border);border-radius:8px;padding:0.6rem 1rem;color:var(--text-secondary);cursor:pointer;font-size:0.95rem;">D) When the HITL reviewer queue exceeds 10 items</button>
+          </div>
+          <div class="quiz-feedback" style="display:none;margin-top:0.75rem;padding:0.75rem;border-radius:8px;font-size:0.9rem;"></div>
+        </div>
+
+        <div class="quiz-question" id="qq4" style="background:var(--bg-card);border:1px solid var(--code-border);border-radius:12px;padding:1.25rem 1.5rem;margin:1.5rem 0;">
+          <p style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;color:var(--text-primary);margin-bottom:0.75rem;">Q4: Agent 2 returns a confidence score of 0.75 &mdash; what happens next?</p>
+          <div style="display:flex;flex-direction:column;gap:0.5rem;">
+            <button class="quiz-opt" onclick="checkQuiz('qq4',this,false)" style="text-align:left;background:var(--bg-surface);border:1px solid var(--code-border);border-radius:8px;padding:0.6rem 1rem;color:var(--text-secondary);cursor:pointer;font-size:0.95rem;">A) The case is auto-approved since all criteria are met</button>
+            <button class="quiz-opt" onclick="checkQuiz('qq4',this,false)" style="text-align:left;background:var(--bg-surface);border:1px solid var(--code-border);border-radius:8px;padding:0.6rem 1rem;color:var(--text-secondary);cursor:pointer;font-size:0.95rem;">B) The case is auto-denied and an appeal letter is generated</button>
+            <button class="quiz-opt" onclick="checkQuiz('qq4',this,true)" style="text-align:left;background:var(--bg-surface);border:1px solid var(--code-border);border-radius:8px;padding:0.6rem 1rem;color:var(--text-secondary);cursor:pointer;font-size:0.95rem;">C) The case is routed to the HITL clinical reviewer dashboard for human review &mdash; approve, deny, modify, or escalate</button>
+            <button class="quiz-opt" onclick="checkQuiz('qq4',this,false)" style="text-align:left;background:var(--bg-surface);border:1px solid var(--code-border);border-radius:8px;padding:0.6rem 1rem;color:var(--text-secondary);cursor:pointer;font-size:0.95rem;">D) The circuit breaker trips and halts the pipeline</button>
+          </div>
+          <div class="quiz-feedback" style="display:none;margin-top:0.75rem;padding:0.75rem;border-radius:8px;font-size:0.9rem;"></div>
+        </div>
+
+        <div class="quiz-question" id="qq5" style="background:var(--bg-card);border:1px solid var(--code-border);border-radius:12px;padding:1.25rem 1.5rem;margin:1.5rem 0;">
+          <p style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;color:var(--text-primary);margin-bottom:0.75rem;">Q5: Why does Agent 4 (Communication) need HIPAA compliance checks as output guardrails?</p>
+          <div style="display:flex;flex-direction:column;gap:0.5rem;">
+            <button class="quiz-opt" onclick="checkQuiz('qq5',this,false)" style="text-align:left;background:var(--bg-surface);border:1px solid var(--code-border);border-radius:8px;padding:0.6rem 1rem;color:var(--text-secondary);cursor:pointer;font-size:0.95rem;">A) To validate the provider&rsquo;s NPI number</button>
+            <button class="quiz-opt" onclick="checkQuiz('qq5',this,false)" style="text-align:left;background:var(--bg-surface);border:1px solid var(--code-border);border-radius:8px;padding:0.6rem 1rem;color:var(--text-secondary);cursor:pointer;font-size:0.95rem;">B) To calculate the correct member copay amount</button>
+            <button class="quiz-opt" onclick="checkQuiz('qq5',this,true)" style="text-align:left;background:var(--bg-surface);border:1px solid var(--code-border);border-radius:8px;padding:0.6rem 1rem;color:var(--text-secondary);cursor:pointer;font-size:0.95rem;">C) Determination letters contain PHI and clinical details; output guardrails ensure no unauthorized PHI disclosure and appropriate tone</button>
+            <button class="quiz-opt" onclick="checkQuiz('qq5',this,false)" style="text-align:left;background:var(--bg-surface);border:1px solid var(--code-border);border-radius:8px;padding:0.6rem 1rem;color:var(--text-secondary);cursor:pointer;font-size:0.95rem;">D) Because the circuit breaker requires it before sending notifications</button>
+          </div>
+          <div class="quiz-feedback" style="display:none;margin-top:0.75rem;padding:0.75rem;border-radius:8px;font-size:0.9rem;"></div>
+        </div>
+        <div class="quiz-question" id="qq6" style="background:var(--bg-card);border:1px solid var(--code-border);border-radius:12px;padding:1.25rem 1.5rem;margin:1.5rem 0;">
+          <p style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;color:var(--text-primary);margin-bottom:0.75rem;">Q6: (Cross-module) How does the ReAct pattern from M12 relate to each agent in this pipeline?</p>
+          <div style="display:flex;flex-direction:column;gap:0.5rem;">
+            <button class="quiz-opt" onclick="checkQuiz('qq6',this,false)" style="text-align:left;background:var(--bg-surface);border:1px solid var(--code-border);border-radius:8px;padding:0.6rem 1rem;color:var(--text-secondary);cursor:pointer;font-size:0.95rem;">A) ReAct is used only for error recovery when an agent fails</button>
+            <button class="quiz-opt" onclick="checkQuiz('qq6',this,false)" style="text-align:left;background:var(--bg-surface);border:1px solid var(--code-border);border-radius:8px;padding:0.6rem 1rem;color:var(--text-secondary);cursor:pointer;font-size:0.95rem;">B) ReAct defines how agents communicate with each other via the pipeline state</button>
+            <button class="quiz-opt" onclick="checkQuiz('qq6',this,true)" style="text-align:left;background:var(--bg-surface);border:1px solid var(--code-border);border-radius:8px;padding:0.6rem 1rem;color:var(--text-secondary);cursor:pointer;font-size:0.95rem;">C) Each agent internally uses the observe &rarr; think &rarr; act loop to reason about which tools to call and interpret results before producing output</button>
+            <button class="quiz-opt" onclick="checkQuiz('qq6',this,false)" style="text-align:left;background:var(--bg-surface);border:1px solid var(--code-border);border-radius:8px;padding:0.6rem 1rem;color:var(--text-secondary);cursor:pointer;font-size:0.95rem;">D) ReAct is the pattern that ensures HIPAA compliance across all four agents</button>
+          </div>
+          <div class="quiz-feedback" style="display:none;margin-top:0.75rem;padding:0.75rem;border-radius:8px;font-size:0.9rem;"></div>
+        </div>
+      </section>
+
+      <!-- GOING FURTHER -->
+      <section class="section" id="extensions">
+        <h2 id="extensions-heading">Going Further</h2>
+        <ul>
+          <li><strong>[OPTIONAL] Async pipeline with queues:</strong> Replace synchronous orchestration with a message queue (Redis/SQS). Each agent polls its input queue and writes to the next agent&rsquo;s queue. Enables independent scaling.</li>
+          <li><strong>[OPTIONAL] Parallel criteria evaluation:</strong> Instead of evaluating criteria sequentially, fan out all criterion evaluations in parallel and aggregate results. Reduces pipeline latency by 3&ndash;4x.</li>
+          <li><strong>[OPTIONAL] Dashboard UI:</strong> Build a web dashboard showing pipeline state in real-time: active requests, stage distribution, HITL queue depth, circuit breaker status (M20).</li>
+          <li><strong>[OPTIONAL] A/B testing letter templates:</strong> Route 50% of denial letters through a revised template with clearer appeal instructions. Measure appeal rate difference.</li>
+          <li><strong>[OPTIONAL] Evaluation harness:</strong> Build a 100-case test suite with known-good determinations. Measure accuracy, false positive rate, and HITL trigger rate (M18).</li>
+          <li><strong>[OPTIONAL] Multi-language notifications:</strong> Extend the Communication Agent to draft letters in Spanish, Mandarin, and Vietnamese based on member language preference.</li>
+        </ul>
+      </section>
+
+      <!-- REFERENCES -->
+      <section class="section" id="references">
+        <h2 id="references-heading">References</h2>
+        <ul>
+          <li><a href="https://docs.anthropic.com/en/docs/build-with-claude/tool-use" target="_blank" rel="noopener noreferrer">Anthropic — Tool Use Documentation</a></li>
+          <li><a href="https://docs.anthropic.com/en/docs/build-with-claude/agentic-tools" target="_blank" rel="noopener noreferrer">Anthropic — Building Agentic Systems</a></li>
+          <li><a href="https://www.hhs.gov/hipaa/for-professionals/privacy/index.html" target="_blank" rel="noopener noreferrer">HHS.gov — HIPAA Privacy Rule</a></li>
+          <li><a href="https://martinfowler.com/bliki/CircuitBreaker.html" target="_blank" rel="noopener noreferrer">Martin Fowler — Circuit Breaker Pattern</a></li>
+          <li><a href="https://www.cms.gov/priorities/key-initiatives/burden-reduction/prior-authorization" target="_blank" rel="noopener noreferrer">CMS — Prior Authorization Overview</a></li>
+        </ul>
+      </section>
+
+      <div class="module-nav">
+        <a href="CAPSTONE-3-DOMAIN-A.html">&larr; Capstone 3-A: Decision Support Agent</a>
+          <a href="index.html" aria-label="Course Home" title="Course Home" style="font-size:1.2rem;">&#x1F3E0; Home</a>
+        <a href="M23-capstone-project-series.html">M23: Capstone Guide &rarr;</a>
+      </div>
+    </main>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
+  <script>
+    function switchTab(btn, panelId) {
+      const w = btn.closest('.code-block-wrapper');
+      w.querySelectorAll('.code-tab').forEach(t => t.classList.remove('active'));
+      w.querySelectorAll('.code-panel').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById(panelId).classList.add('active');
+    }
+    function copyCode(btn) {
+      const code = btn.parentElement.querySelector('code').textContent;
+      navigator.clipboard.writeText(code).then(() => { btn.textContent = 'Copied!'; setTimeout(() => btn.textContent = 'Copy', 1500); });
+    }
+
+    /* Sidebar */
+    const sidebarLinks = document.querySelectorAll('.sidebar-nav a');
+    const sections = document.querySelectorAll('.section');
+    const obs = new IntersectionObserver(entries => {
+      entries.forEach(e => { if (e.isIntersecting) { sidebarLinks.forEach(a => a.classList.remove('active')); const l = document.querySelector(`.sidebar-nav a[href="#${e.target.id}"]`); if (l) l.classList.add('active'); }});
+    }, { rootMargin: '-20% 0px -70% 0px' });
+    sections.forEach(s => obs.observe(s));
+
+    /* Animation 1: Pipeline */
+    let a1Timer = null;
+    const pipeIds = ['ag1','pc1','ag2','pc2','ag3','pc3','ag4'];
+    let a1Active = -1;
+    function anim1Play() {
+      anim1Restart();
+      let i = 0;
+      a1Timer = setInterval(() => {
+        if (i >= pipeIds.length) {
+          const agents = pipeIds.filter(id => id.startsWith('ag'));
+          agents.forEach(id => document.getElementById(id).classList.remove('active'));
+          a1Active = (a1Active + 1) % agents.length;
+          document.getElementById(agents[a1Active]).classList.add('active');
+          return;
+        }
+        document.getElementById(pipeIds[i]).classList.add('visible');
+        i++;
+      }, 500);
+    }
+    function anim1Pause() { clearInterval(a1Timer); }
+    function anim1Restart() { clearInterval(a1Timer); a1Active = -1; pipeIds.forEach(id => { const el = document.getElementById(id); if(el) { el.classList.remove('visible','active'); }}); }
+
+    /* Animation 2: HITL */
+    let a2Timer = null;
+    const hitlIds = ['h1','ha1','h2','ha2','h3','ha3','h4','ha4','h5'];
+    function anim2Play() {
+      anim2Restart();
+      let i = 0;
+      a2Timer = setInterval(() => {
+        if (i >= hitlIds.length) { clearInterval(a2Timer); return; }
+        const el = document.getElementById(hitlIds[i]);
+        if (el) el.classList.add('visible');
+        i++;
+      }, 500);
+    }
+    function anim2Pause() { clearInterval(a2Timer); }
+    function anim2Restart() { clearInterval(a2Timer); hitlIds.forEach(id => { const el = document.getElementById(id); if(el) el.classList.remove('visible'); }); }
+
+    /* Animation 3: Circuit Breaker */
+    let a3Timer = null;
+    let cbCount = 0;
+    function anim3Play() {
+      anim3Restart();
+      a3Timer = setInterval(() => {
+        cbCount++;
+        const numEl = document.getElementById('cb-num');
+        const barEl = document.getElementById('cb-bar-fill');
+        const statusEl = document.getElementById('cb-status');
+        numEl.textContent = cbCount;
+        const pct = (cbCount / 3) * 100;
+        barEl.style.width = Math.min(pct, 100) + '%';
+        if (cbCount >= 3) {
+          numEl.className = 'cb-count trip';
+          barEl.className = 'cb-fill trip';
+          statusEl.textContent = 'TRIPPED';
+          statusEl.className = 'cb-status tripped';
+          clearInterval(a3Timer);
+        } else if (cbCount >= 2) {
+          numEl.className = 'cb-count warn';
+          barEl.className = 'cb-fill warn';
+        }
+      }, 800);
+    }
+    function anim3Pause() { clearInterval(a3Timer); }
+    function anim3Restart() {
+      clearInterval(a3Timer);
+      cbCount = 0;
+      const numEl = document.getElementById('cb-num'); numEl.textContent = '0'; numEl.className = 'cb-count';
+      const barEl = document.getElementById('cb-bar-fill'); barEl.style.width = '0%'; barEl.className = 'cb-fill';
+      const statusEl = document.getElementById('cb-status'); statusEl.textContent = 'HEALTHY'; statusEl.className = 'cb-status healthy';
+    }
+
+    /* Auto-play */
+    const animContainers = document.querySelectorAll('.animation-container');
+    const animObs = new IntersectionObserver(entries => {
+      entries.forEach(e => { if (e.isIntersecting) {
+        if (e.target.id === 'pipeline-animation') anim1Play();
+        else if (e.target.id === 'hitl-animation') anim2Play();
+        else if (e.target.id === 'cb-animation') anim3Play();
+        animObs.unobserve(e.target);
+      }});
+    }, { threshold: 0.3 });
+    animContainers.forEach(c => animObs.observe(c));
+
+    /* Quiz */
+    const quizExplanations = {
+      qq1: {
+        correct: "Correct! Separation of concerns means each agent can be independently tested, debugged, deployed, and scaled. When intake parsing changes, you redeploy only the Intake Agent without touching clinical evaluation or decision logic.",
+        wrong: {
+          0: "Incorrect. Separating agents actually increases API calls (4 instead of 1). The benefit is modularity, not fewer calls.",
+          2: "Incorrect. Claude can use many more than 3 tools in a single conversation. The limit is not the reason for separation.",
+          3: "Incorrect. HIPAA applies to every agent that touches PHI, not just one. Separation does not reduce HIPAA requirements — it actually increases the compliance surface area."
+        }
+      },
+      qq2: {
+        correct: "Correct! The 70-90% confidence band is the HITL zone. Above 90% the system auto-approves (high certainty). Below 70% it auto-denies (clearly insufficient evidence). The middle band has enough evidence to be plausible but not enough for autonomous decision-making.",
+        wrong: {
+          0: "Incorrect. A single unmet criterion could still result in auto-deny (below 70%) or a request-info determination. HITL routing is based on the overall confidence score, not individual criteria.",
+          1: "Incorrect. Above 90% confidence, the system auto-approves without human review. HITL is for cases where the system is uncertain.",
+          3: "Incorrect. Network status affects cost calculations but does not trigger HITL review. The confidence score from criteria evaluation drives the routing decision."
+        }
+      },
+      qq3: {
+        correct: "Correct! The circuit breaker counts consecutive failures and trips at the threshold of 3. A single failure increments the counter; a success resets it to zero. This prevents cascading failures from propagating through the pipeline.",
+        wrong: {
+          0: "Incorrect. A single timeout is recorded as one failure, but the breaker only trips after 3 consecutive failures. One failure just increments the counter.",
+          1: "Incorrect. A denial is a valid pipeline outcome, not a failure. The circuit breaker tracks processing errors (exceptions, API failures), not clinical determinations.",
+          3: "Incorrect. The HITL queue depth is an operational metric but does not affect the circuit breaker. The breaker only tracks consecutive agent processing failures."
+        }
+      },
+      qq4: {
+        correct: "Correct! A confidence of 0.75 falls in the 70-90% HITL band. The pipeline pauses, presents the case to a clinical reviewer with all criteria evaluations and evidence, and waits for the reviewer to approve, deny, request more info, or escalate to peer review.",
+        wrong: {
+          0: "Incorrect. Auto-approval requires confidence above 90%. At 75%, the system is not confident enough to decide autonomously.",
+          1: "Incorrect. Auto-denial occurs below 70% confidence. At 75%, there is enough evidence to warrant human review rather than outright denial.",
+          3: "Incorrect. The circuit breaker tracks processing failures, not confidence scores. A 75% confidence is a valid result, not an error."
+        }
+      },
+      qq5: {
+        correct: "Correct! Determination letters are external communications containing clinical details and PHI. Output guardrails verify that denial letters include appeal rights, all letters include required disclosures, and no unauthorized PHI is exposed beyond minimum necessary.",
+        wrong: {
+          0: "Incorrect. NPI verification is an input guardrail handled by the Intake Agent (Agent 1), not an output guardrail on communication.",
+          1: "Incorrect. Copay calculation is a benefit administration function, not a HIPAA compliance check. Output guardrails focus on PHI protection and regulatory disclosures.",
+          3: "Incorrect. The circuit breaker and the communication guardrails are independent systems. The circuit breaker tracks failures; output guardrails validate content compliance."
+        }
+      },
+      qq6: {
+        correct: "Correct! The ReAct (Reason + Act) loop from M12 is the internal pattern each agent uses: observe the current state, reason about what to do, act by calling a tool, then observe the result. The pipeline orchestrator sequences agents, but within each agent the ReAct loop drives tool selection and reasoning.",
+        wrong: {
+          0: "Incorrect. ReAct is not about error handling — that is the circuit breaker's role. ReAct is the observe-think-act reasoning loop that each agent uses internally to decide which tools to call.",
+          1: "Incorrect. Inter-agent communication uses the typed PipelineState dataclass passed between agents. ReAct operates within a single agent's conversation with Claude, not between agents.",
+          3: "Incorrect. HIPAA compliance is handled by output guardrails and encryption requirements. ReAct is a reasoning pattern for how agents interact with tools, not a compliance mechanism."
+        }
+      }
+    };
+    function checkQuiz(qId, btn, correct) {
+      const q = document.getElementById(qId);
+      const feedback = q.querySelector('.quiz-feedback');
+      const opts = q.querySelectorAll('.quiz-opt');
+      const optArray = Array.from(opts);
+      const btnIndex = optArray.indexOf(btn);
+      opts.forEach(o => { o.disabled = true; o.style.opacity = '0.6'; o.style.cursor = 'default'; });
+      btn.style.opacity = '1';
+      const explanations = quizExplanations[qId] || {};
+      if (correct) {
+        btn.style.borderColor = 'var(--success)';
+        btn.style.background = 'var(--success-bg)';
+        btn.style.color = 'var(--success)';
+        feedback.style.display = 'block';
+        feedback.style.background = 'var(--success-bg)';
+        feedback.style.color = 'var(--success)';
+        feedback.textContent = explanations.correct || 'Correct!';
+      } else {
+        btn.style.borderColor = 'var(--error)';
+        btn.style.background = 'var(--error-bg)';
+        btn.style.color = 'var(--error)';
+        feedback.style.display = 'block';
+        feedback.style.background = 'var(--error-bg)';
+        feedback.style.color = 'var(--error)';
+        const wrongExplanation = (explanations.wrong && explanations.wrong[btnIndex]) || 'Incorrect — review the section above and try again.';
+        feedback.textContent = wrongExplanation;
+        // Re-enable after 3 seconds
+        setTimeout(() => {
+          opts.forEach(o => { o.disabled = false; o.style.opacity = '1'; o.style.cursor = 'pointer'; o.style.borderColor = 'var(--code-border)'; o.style.background = 'var(--bg-surface)'; o.style.color = 'var(--text-secondary)'; });
+          feedback.style.display = 'none';
+        }, 3000);
+      }
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,208 @@
+================================================================================
+M10 Lab -- Expected Output (approximate)
+================================================================================
+Claude's exact wording will vary between runs. What matters is the STRUCTURE:
+the search results, rankings, and pipeline stages should match these patterns.
+
+================================================================================
+STEP 1: hybrid_search.py / hybrid_search.js
+================================================================================
+
+>>> Query: "UCC-3 amendment"  (keyword wins -- exact term match)
+
+--- BM25 (Keyword) Results ---
+  1. [high score] UCC-3 Amendment and Continuation
+  2. [lower score] UCC-1 Financing Statement Overview
+  3. [lower score] Termination and Release
+  ...
+
+--- Vector (Semantic) Results ---
+  1. [0.xxxx] UCC-3 Amendment and Continuation
+  2. [0.xxxx] (may differ from BM25 order)
+  ...
+
+--- Hybrid (Fused) Results ---
+  1. [0.xxxx] UCC-3 Amendment and Continuation   <-- both agree
+  ...
+
+  BM25 top result:   UCC-3 Amendment and Continuation
+  Vector top result: UCC-3 Amendment and Continuation
+  Hybrid top result: UCC-3 Amendment and Continuation
+
+
+>>> Query: "How do I protect my loan?"  (semantic wins -- concept match)
+
+--- BM25 (Keyword) Results ---
+  (BM25 struggles -- "protect" and "loan" aren't exact UCC terms)
+  1. [low score] may return less relevant results
+
+--- Vector (Semantic) Results ---
+  1. [0.xxxx] Perfection of Security Interests   <-- semantic match!
+  2. [0.xxxx] Priority Rules and Lien Positions
+  ...
+
+--- Hybrid (Fused) Results ---
+  1. [0.xxxx] Perfection of Security Interests   <-- hybrid picks the winner
+  ...
+
+
+>>> Query: "filing expiration"  (both work)
+
+  BM25 top result:   UCC-1 Financing Statement Overview (or UCC-3)
+  Vector top result: UCC-1 Financing Statement Overview (or UCC-3)
+  Hybrid top result: UCC-1 Financing Statement Overview (or UCC-3)
+
+
+>>> Query: "What happens when collateral is sold?"  (semantic wins)
+
+--- Vector (Semantic) Results ---
+  1. Proceeds and After-Acquired Property         <-- understands "sold"="proceeds"
+  2. Article 9 Section 9-315: Proceeds and Priority
+
+--- BM25 (Keyword) Results ---
+  (May rank differently -- "sold" appears in proceeds docs)
+
+--- Hybrid (Fused) Results ---
+  1. Proceeds and After-Acquired Property
+
+
+>>> Query: "Article 9 Section 315"  (keyword wins -- exact reference)
+
+--- BM25 (Keyword) Results ---
+  1. [high score] Article 9 Section 9-315: Proceeds and Priority  <-- exact match
+
+--- Vector (Semantic) Results ---
+  1. (may or may not match -- depends on embedding)
+
+--- Hybrid (Fused) Results ---
+  1. Article 9 Section 9-315: Proceeds and Priority
+
+
+================================================================================
+STEP 2: reranker.py / reranker.js
+================================================================================
+
+>>> Query: "What are the consequences of not filing a continuation statement?"
+
+--- BEFORE Re-Ranking (Hybrid Search Order) ---
+  1. UCC-3 Amendment and Continuation
+  2. UCC-1 Financing Statement Overview
+  3. Perfection of Security Interests
+  4. Termination and Release
+  5. Filing Office Rules and Procedures
+  6. Priority Rules and Lien Positions
+  7. Collateral Types and Descriptions
+
+--- AFTER Re-Ranking (Claude-Scored) ---
+  1. UCC-3 Amendment and Continuation | Claude score: 9/10 -- Directly explains
+     that failure to file continuation causes the UCC-1 to lapse and loss of
+     perfected status
+  2. UCC-1 Financing Statement Overview | Claude score: 7/10 -- Mentions the
+     five-year effectiveness period and need for continuation
+  3. Perfection of Security Interests | Claude score: 6/10 -- Explains perfection
+     concept which is what is lost when continuation is not filed
+
+  Re-ranking changes:
+    #1 was #1: UCC-3 Amendment and Continuation
+    #2 was #2: UCC-1 Financing Statement Overview
+    #3 was #3: Perfection of Security Interests
+
+
+>>> Query: "How does a lender establish first-priority position?"
+
+--- BEFORE Re-Ranking ---
+  (hybrid order may not be ideal)
+
+--- AFTER Re-Ranking ---
+  1. Priority Rules and Lien Positions | Claude score: 9/10
+  2. Perfection of Security Interests | Claude score: 8/10
+  3. UCC-1 Financing Statement Overview | Claude score: 7/10
+
+  Re-ranking changes:
+    (positions may shift -- Claude understands the question better than keyword/vector)
+
+
+>>> Query: "What happens to a security interest when the debtor sells the collateral?"
+
+--- AFTER Re-Ranking ---
+  1. Article 9 Section 9-315: Proceeds and Priority | Claude score: 10/10
+  2. Proceeds and After-Acquired Property | Claude score: 9/10
+  3. Perfection of Security Interests | Claude score: 5/10
+
+
+================================================================================
+STEP 3: advanced_rag.py / advanced_rag.js
+================================================================================
+
+>>> Query: "What happens if I forget to renew my UCC filing?"
+
+  [HyDE] Hypothetical answer: "Under Article 9 of the Uniform Commercial Code,
+  a UCC-1 financing statement is effective for five years from the date of filing.
+  If the secured party fails to file a continuation statement (UCC-3) within six
+  months before expiration, the filing lapses..."
+
+  [MULTI-QUERY] Generated 3 alternative queries:
+    1. "UCC-1 financing statement expiration lapse consequences"
+    2. "continuation statement filing deadline Article 9"
+    3. "effect of not renewing UCC filing on perfected security interest"
+
+  NAIVE RAG:
+    Sources: (3 vector search results)
+    Answer: (answer based on limited context)
+
+  ADVANCED RAG:
+    Sources: UCC-3 Amendment and Continuation, UCC-1 Financing Statement Overview,
+             Perfection of Security Interests
+    Answer: (more comprehensive answer drawing from better-matched sources)
+
+
+>>> Query: "How do I get first priority on a loan secured by inventory?"
+
+  [HyDE] Hypothetical answer about PMSI in inventory, notification requirements...
+  [MULTI-QUERY] Queries about priority, PMSI, inventory security interests...
+
+  ADVANCED RAG pulls in:
+    - Priority Rules and Lien Positions (PMSI rules)
+    - Perfection of Security Interests (perfection methods)
+    - UCC-1 Financing Statement Overview (filing)
+
+
+>>> Query: "Can a security interest follow collateral that gets sold?"
+
+  [HyDE] Hypothetical about proceeds, Section 9-315, automatic attachment...
+  [MULTI-QUERY] Queries about proceeds, disposition, security interest continuation...
+
+  ADVANCED RAG sources:
+    - Article 9 Section 9-315: Proceeds and Priority
+    - Proceeds and After-Acquired Property
+    - (third relevant source)
+
+
+================================================================================
+KEY PATTERNS TO VERIFY
+================================================================================
+
+1. HYBRID SEARCH:
+   BM25 wins for exact terms ("UCC-3 amendment", "Article 9 Section 315").
+   Vector wins for concept queries ("protect my loan", "collateral sold").
+   Hybrid captures the best of both via reciprocal rank fusion.
+
+2. RE-RANKING:
+   Claude scores each passage for relevance 0-10 with explanations.
+   After re-ranking, the most directly relevant passages rise to the top.
+   Position changes show that re-ranking adds value beyond initial retrieval.
+
+3. QUERY TRANSFORMATION:
+   HyDE generates a hypothetical answer that uses domain terminology,
+   improving retrieval by matching the "answer space" instead of the
+   "question space."
+   Multi-query generates 3 diverse queries to cast a wider net.
+
+4. PIPELINE COMPARISON:
+   Advanced RAG retrieves MORE relevant sources (draws from broader pool).
+   Advanced RAG answers are more comprehensive and accurate.
+   The improvement is most visible on ambiguous or conceptual queries.
+
+5. PIPELINE STAGES:
+   Transform (HyDE + multi-query) -> Retrieve (hybrid) -> Re-rank (Claude) -> Generate
+   Each stage adds measurable improvement over naive RAG.

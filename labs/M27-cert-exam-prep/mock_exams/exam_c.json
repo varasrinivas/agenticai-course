@@ -1,0 +1,229 @@
+{
+  "exam_id": "mock_exam_c",
+  "title": "Mock Exam C — Developer Productivity & Structured Extraction",
+  "description": "Covers Domains 2, 4, and 5 through Scenarios 4 (Developer Productivity) and 6 (Structured Extraction)",
+  "passing_score": 72,
+  "time_limit_minutes": 30,
+  "questions": [
+    {
+      "id": "C1",
+      "domain": 2,
+      "domain_name": "Tool Design & MCP",
+      "scenario": 4,
+      "difficulty": "medium",
+      "question": "You are setting up an MCP server that provides database access to your development agent. The server runs on the same machine as Claude Code. Which transport type should you use, and why?",
+      "options": {
+        "A": "HTTP with Server-Sent Events (SSE) — it's the most standard web protocol",
+        "B": "WebSocket — it provides bidirectional communication for real-time updates",
+        "C": "stdio (standard input/output) — it's the simplest transport for local servers with no network overhead",
+        "D": "gRPC — it provides the best performance for structured data exchange"
+      },
+      "correct_answer": "C",
+      "explanations": {
+        "A": "WRONG — HTTP+SSE is used for REMOTE MCP servers where network communication is required. For local servers running on the same machine, it adds unnecessary network overhead (even over localhost).",
+        "B": "WRONG — WebSocket is not a standard MCP transport type. MCP supports stdio for local and HTTP+SSE (or the newer Streamable HTTP) for remote servers.",
+        "C": "CORRECT — stdio is the recommended transport for local MCP servers. The server runs as a child process of Claude Code, communicating via stdin/stdout. This means: zero network overhead, no port management, no authentication needed, and automatic lifecycle management (server starts/stops with Claude Code).",
+        "D": "WRONG — gRPC is not a standard MCP transport type. MCP uses stdio (local) and HTTP-based transports (remote)."
+      },
+      "related_module": "M07"
+    },
+    {
+      "id": "C2",
+      "domain": 2,
+      "domain_name": "Tool Design & MCP",
+      "scenario": 4,
+      "difficulty": "hard",
+      "question": "Your development tool encounters a database connection timeout. The tool returns: {\"error\": \"Something went wrong\", \"isError\": true}. The agent retries 5 times with the same result before giving up. What is wrong with this error response, and what should it return instead?",
+      "options": {
+        "A": "The error message is fine — the agent should just retry more times",
+        "B": "Add a retry count: {\"error\": \"Something went wrong\", \"isError\": true, \"retryCount\": 5}",
+        "C": "Return a structured error: {\"error\": \"Database connection timeout after 30s\", \"errorCategory\": \"connection\", \"isRetryable\": true, \"isError\": true, \"retrySuggestion\": \"Wait 5 seconds before retrying. Check if database host is reachable.\"}",
+        "D": "Return the full database driver stack trace so Claude can diagnose the issue"
+      },
+      "correct_answer": "C",
+      "explanations": {
+        "A": "WRONG — 'Something went wrong' gives the model zero information about what happened, whether it's recoverable, or what to do differently. Anti-Pattern #6: generic error messages.",
+        "B": "WRONG — Adding a retry count doesn't help the model understand the error or decide what to do. The model needs to know WHAT failed and WHETHER to retry.",
+        "C": "CORRECT — Structured error responses must include: (1) specific error description, (2) errorCategory for classification, (3) isRetryable flag so the model knows whether retrying is worthwhile, (4) retrySuggestion for actionable guidance. This prevents Anti-Pattern #6 and enables intelligent retry decisions.",
+        "D": "WRONG — Full stack traces are noisy and may contain sensitive information (connection strings, internal IPs). The model needs a concise, structured summary, not raw implementation details."
+      },
+      "related_module": "M05"
+    },
+    {
+      "id": "C3",
+      "domain": 2,
+      "domain_name": "Tool Design & MCP",
+      "scenario": 4,
+      "difficulty": "medium",
+      "question": "A developer's MCP tool for file operations returns generic errors for every failure: {\"error\": \"Operation failed\", \"isError\": true}. The agent keeps retrying permission errors (which will never succeed) and gives up on transient network errors (which would succeed on retry). What anti-pattern is this?",
+      "options": {
+        "A": "Anti-Pattern #5 — Missing input validation",
+        "B": "Anti-Pattern #6 — Generic error messages that don't distinguish error types, causing the model to retry non-retryable errors and abandon retryable ones",
+        "C": "Anti-Pattern #7 — Empty results without context",
+        "D": "Anti-Pattern #8 — Too many tools"
+      },
+      "correct_answer": "B",
+      "explanations": {
+        "A": "WRONG — Input validation (#5) is about checking inputs before execution. This error occurs AFTER execution and is about error REPORTING quality.",
+        "B": "CORRECT — Anti-Pattern #6: generic error messages. When all errors look the same, the model cannot distinguish between: (1) permission errors (don't retry), (2) transient network errors (retry after delay), (3) invalid input errors (fix input and retry), (4) resource not found (don't retry). The fix is structured errors with errorCategory and isRetryable fields.",
+        "C": "WRONG — Empty results (#7) is about returning no data without explaining whether the search worked. This is about ERROR responses, not empty successful results.",
+        "D": "WRONG — Too many tools (#8) is about tool count affecting model selection accuracy. This is about individual tool error quality."
+      },
+      "related_module": "M05"
+    },
+    {
+      "id": "C4",
+      "domain": 4,
+      "domain_name": "Prompt Engineering & Structured Output",
+      "scenario": 6,
+      "difficulty": "hard",
+      "question": "You are designing a schema for extracting business entity information from legal documents. The entity type can be: LLC, Corporation, Partnership, Sole Proprietorship, or something not in this list. How should you define the entity_type field in your tool schema?",
+      "options": {
+        "A": "\"entity_type\": {\"type\": \"string\"} — let the model fill in whatever it finds",
+        "B": "\"entity_type\": {\"type\": \"string\", \"enum\": [\"LLC\", \"Corporation\", \"Partnership\", \"Sole Proprietorship\"]}",
+        "C": "\"entity_type\": {\"type\": \"string\", \"enum\": [\"LLC\", \"Corporation\", \"Partnership\", \"Sole Proprietorship\", \"Other\"]}, plus a separate \"entity_type_other\": {\"type\": \"string\", \"description\": \"Specify when entity_type is Other\"}",
+        "D": "\"entity_type\": {\"type\": \"array\", \"items\": {\"type\": \"string\"}} — allow multiple types"
+      },
+      "correct_answer": "C",
+      "explanations": {
+        "A": "WRONG — Unconstrained strings produce inconsistent values: 'LLC', 'L.L.C.', 'Limited Liability Company', 'llc' — all mean the same thing but would be treated as different categories in downstream processing.",
+        "B": "WRONG — This handles known types well but BLOCKS the model when it encounters a type not in the list. A 'Trust' or 'Non-Profit' would have no valid option, causing the model to force-fit into a wrong category.",
+        "C": "CORRECT — The 'enum + Other + freetext' pattern is the gold standard for structured extraction. Known categories are normalized via enum, but the escape hatch (Other + entity_type_other) captures novel values without breaking the schema. This is recommended in M04.",
+        "D": "WRONG — Entities have one type, not multiple. An array would imply an entity can simultaneously be an LLC AND a Corporation, which is not meaningful in legal contexts."
+      },
+      "related_module": "M04"
+    },
+    {
+      "id": "C5",
+      "domain": 4,
+      "domain_name": "Prompt Engineering & Structured Output",
+      "scenario": 4,
+      "difficulty": "hard",
+      "question": "Your development agent performs code reviews in a large monorepo. A single review session examines 15 files across 3 services. The reviews are thorough for individual files but miss cross-file issues (inconsistent API contracts, mismatched types between services). What architectural improvement would catch these issues?",
+      "options": {
+        "A": "Increase the context window to fit all 15 files simultaneously",
+        "B": "Add 'Check for cross-file consistency' to the system prompt",
+        "C": "Implement multi-pass review: Pass 1 reviews individual files in parallel sessions, Pass 2 runs a cross-file consistency check in a separate session that receives only the interfaces and API contracts from each file",
+        "D": "Use a single session that processes files sequentially, building up context about prior files"
+      },
+      "correct_answer": "C",
+      "explanations": {
+        "A": "WRONG — Even if all files fit, the model's attention degrades with longer contexts. 15 full files would be mostly noise for cross-file consistency checks.",
+        "B": "WRONG — Adding a prompt instruction doesn't give the model the INFORMATION it needs. If it's reviewing file 1, it doesn't have file 15's interfaces in context to compare.",
+        "C": "CORRECT — Multi-pass review separates concerns: Pass 1 (parallel) focuses on intra-file quality. Pass 2 (focused) extracts just the interfaces/contracts from each file and checks them against each other. This gives Pass 2 a clean, focused context containing only the cross-file relevant information.",
+        "D": "WRONG — Sequential processing in a single session suffers from context dilution. By file 15, the details of file 1's interfaces may be compressed or lost. It also prevents parallel execution of independent reviews."
+      },
+      "related_module": "M25"
+    },
+    {
+      "id": "C6",
+      "domain": 4,
+      "domain_name": "Prompt Engineering & Structured Output",
+      "scenario": 6,
+      "difficulty": "medium",
+      "question": "You need to extract structured data from invoices — amounts, dates, vendor names, and line items. Which approach produces the most reliable structured output?",
+      "options": {
+        "A": "Ask Claude to respond in JSON format and parse the text response",
+        "B": "Use regex to extract fields from Claude's natural language response",
+        "C": "Define a tool (e.g., 'record_invoice') with a strict JSON schema and use tool_use to force structured output",
+        "D": "Ask Claude to respond in XML format for easier parsing"
+      },
+      "correct_answer": "C",
+      "explanations": {
+        "A": "WRONG — Asking for JSON in the prompt is unreliable. The model may include markdown code fences, add explanatory text around the JSON, or produce invalid JSON. Parsing text for structure is fragile.",
+        "B": "WRONG — Regex parsing of natural language is extremely brittle. Date formats, amount formats, and name variations make regex patterns complex and error-prone.",
+        "C": "CORRECT — The tool_use approach is the recommended pattern for structured extraction. Define a tool with the exact schema you need (required fields, types, enums). Claude will call the tool with validated JSON matching your schema. This is 100% reliable for structure — no parsing needed.",
+        "D": "WRONG — XML has the same problems as asking for JSON in text: the model may produce malformed XML, include text outside the XML, or use unexpected tag names. Tool_use is the deterministic approach."
+      },
+      "related_module": "M04"
+    },
+    {
+      "id": "C7",
+      "domain": 4,
+      "domain_name": "Prompt Engineering & Structured Output",
+      "scenario": 6,
+      "difficulty": "medium",
+      "question": "Your extraction agent processes legal documents and occasionally enters a retry loop where it keeps calling the same tool with the same arguments, getting the same error. What field should your tool response include to help the agent break out of this loop?",
+      "options": {
+        "A": "A 'max_retries_remaining' counter that counts down to zero",
+        "B": "A 'detected_pattern' field: {\"detected_pattern\": \"repeated_identical_call\", \"suggestion\": \"Arguments are identical to previous call. Try: modify query terms, broaden date range, or use alternative lookup method\"}",
+        "C": "An 'auto_abort' flag that terminates the session after 3 identical calls",
+        "D": "A random variation in the error message to prevent the model from pattern-matching on the same response"
+      },
+      "correct_answer": "B",
+      "explanations": {
+        "A": "WRONG — A countdown counter manages the symptom (limiting retries) but doesn't help the model change its approach. It will still make the same failing call until the counter hits zero.",
+        "B": "CORRECT — The detected_pattern field tells the model: (1) we noticed you're repeating the same call, (2) here are SPECIFIC alternative strategies to try. This breaks the loop by giving the model new approaches rather than just stopping it. This is the recommended retry loop mitigation pattern.",
+        "C": "WRONG — Auto-abort is a blunt instrument that kills potentially recoverable sessions. The model might succeed with a different approach if given guidance.",
+        "D": "WRONG — Random variation in error messages is unpredictable and doesn't help the model reason about alternatives. Structured guidance (detected_pattern) is far more effective."
+      },
+      "related_module": "M06"
+    },
+    {
+      "id": "C8",
+      "domain": 5,
+      "domain_name": "Context & Reliability",
+      "scenario": 4,
+      "difficulty": "medium",
+      "question": "Your development agent has been working on a large refactoring task for 30 minutes. The context is getting full and you need to preserve critical architectural decisions made earlier in the session. Which approach preserves the most information with the least loss?",
+      "options": {
+        "A": "Use /compact immediately to summarize everything and free up context space",
+        "B": "Write critical decisions to a scratchpad file (e.g., SCRATCHPAD.md), then use /compact. The scratchpad survives compaction because it's on disk.",
+        "C": "Copy-paste the key decisions into a new message to 'refresh' them in the context",
+        "D": "Start a new session and re-explain the decisions from memory"
+      },
+      "correct_answer": "B",
+      "explanations": {
+        "A": "WRONG — /compact is lossy. It summarizes the conversation, which means nuanced decisions ('we chose approach B over A because of edge case X in the auth module') may be reduced to 'chose approach B.' Anti-Pattern #16.",
+        "B": "CORRECT — The scratchpad pattern: (1) Write critical state to a file on disk, (2) then compact the context. The file persists regardless of context compression because it's stored on the filesystem, not in the context window. When the model needs those decisions later, it can Read the scratchpad file.",
+        "C": "WRONG — Copy-pasting into the context just adds more tokens, making the problem worse. It doesn't free space — it fills more of it.",
+        "D": "WRONG — Starting a new session loses ALL context, not just the compactable parts. Re-explaining from human memory is error-prone and time-consuming."
+      },
+      "related_module": "M11"
+    },
+    {
+      "id": "C9",
+      "domain": 5,
+      "domain_name": "Context & Reliability",
+      "scenario": 4,
+      "difficulty": "hard",
+      "question": "Your development agent crashes mid-way through a complex 7-step refactoring. Steps 1-4 are complete (files modified and saved), step 5 was in progress (partial changes), steps 6-7 haven't started. How should a crash recovery manifest help resume the work?",
+      "options": {
+        "A": "The manifest isn't needed — just re-run the entire 7-step plan from scratch",
+        "B": "The manifest stores a git diff of all changes so you can replay them",
+        "C": "The manifest records: completed steps (1-4: done), current step (5: in_progress with details of what was modified), pending steps (6-7: not_started), and file checksums for integrity verification",
+        "D": "The manifest stores the full conversation history so the new session has identical context"
+      },
+      "correct_answer": "C",
+      "explanations": {
+        "A": "WRONG — Re-running from scratch wastes all completed work and may cause conflicts if steps 1-4 already modified files. You'd be applying changes to already-changed files.",
+        "B": "WRONG — A git diff captures WHAT changed but not WHERE in the plan you were. The new session needs to know which steps to skip, which to resume, and which to start fresh.",
+        "C": "CORRECT — A crash recovery manifest is a structured checkpoint that records: (1) completed steps with verification (checksums confirm files are in expected state), (2) in-progress step with enough detail to resume or roll back, (3) pending steps to execute. This allows a new session to pick up exactly where the crash occurred.",
+        "D": "WRONG — Full conversation history would exceed context limits for a 30+ minute session. The manifest should be a concise SUMMARY of progress, not a replay of the entire conversation."
+      },
+      "related_module": "M26"
+    },
+    {
+      "id": "C10",
+      "domain": 5,
+      "domain_name": "Context & Reliability",
+      "scenario": 6,
+      "difficulty": "hard",
+      "question": "Your structured extraction pipeline processes 50 legal documents and compiles findings into a summary report. A reviewer notices that the report states 'The debtor has no active liens' but doesn't indicate which documents were checked, when the extraction was performed, or how confident the system is in this finding. What fields are missing from the output?",
+      "options": {
+        "A": "A timestamp and version number",
+        "B": "A disclaimer saying 'This is AI-generated and may contain errors'",
+        "C": "Provenance fields: source (which documents were checked), confidence (high/medium/low with reasoning), timestamp (when extraction ran), and agent_id (which model/version produced this finding)",
+        "D": "A list of all 50 document filenames"
+      },
+      "correct_answer": "C",
+      "explanations": {
+        "A": "PARTIALLY CORRECT — Timestamp is one of the four required provenance fields, but alone it's insufficient. The reviewer also needs source and confidence information.",
+        "B": "WRONG — A generic disclaimer doesn't help the reviewer assess THIS specific finding. Was it based on 50 documents or 5? Was the extraction confident or uncertain? Disclaimers are not provenance.",
+        "C": "CORRECT — Anti-Pattern #18 requires four provenance fields on every finding: (1) source: which documents/tools produced this information, (2) confidence: how certain the system is (with reasoning), (3) timestamp: when the extraction was performed, (4) agent_id: which model and version ran the extraction. This enables audit trails and trust calibration.",
+        "D": "WRONG — A raw list of filenames is not provenance. Provenance connects SPECIFIC findings to SPECIFIC sources. Saying 'we checked 50 files' doesn't tell the reviewer which files support the 'no active liens' conclusion."
+      },
+      "related_module": "M18"
+    }
+  ]
+}

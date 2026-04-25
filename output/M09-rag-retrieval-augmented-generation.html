@@ -1,0 +1,1820 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>M09: RAG — Retrieval-Augmented Generation | Building AI Agents with Claude</title>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;700;800&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg-primary: #0A1628; --bg-secondary: #111D33; --bg-card: #162033; --bg-surface: #1A2740;
+      --text-primary: #E8ECF1; --text-secondary: #94A3B8; --text-muted: #64748B;
+      --accent-primary: #D4A843; --accent-hover: #E5BC5A; --accent-muted: rgba(212, 168, 67, 0.15);
+      --success: #10B981; --success-bg: rgba(16, 185, 129, 0.1);
+      --warning: #F59E0B; --warning-bg: rgba(245, 158, 11, 0.1);
+      --error: #F43F5E; --error-bg: rgba(244, 63, 94, 0.1);
+      --info: #3B82F6; --info-bg: rgba(59, 130, 246, 0.1);
+      --track-memory: #06B6D4; --track-color: var(--track-memory); --track-capstones: #D4A843;
+      --code-bg: #0D1117; --code-border: #21262D; --code-text: #C9D1D9;
+      --transition-fast: 150ms; --transition-normal: 300ms; --transition-slow: 500ms;
+    }
+    body { background: var(--bg-primary); color: var(--text-primary); font-family: 'Source Sans 3', sans-serif; font-size: 1.05rem; line-height: 1.7; min-height: 100vh; }
+    .top-progress { position: fixed; top: 0; left: 0; right: 0; height: 4px; background: var(--bg-surface); z-index: 200; }
+    .top-progress .fill { height: 100%; background: linear-gradient(90deg, var(--track-color), var(--accent-primary)); width: 33.33%; border-radius: 0 2px 2px 0; }
+    .course-header { background: var(--bg-secondary); border-bottom: 1px solid var(--code-border); padding: 1.25rem 2rem; }
+    .course-header-inner { max-width: 1200px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; }
+    .course-title { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.95rem; font-weight: 600; color: var(--text-secondary); }
+    .track-badge { display: inline-flex; align-items: center; gap: 0.5rem; background: rgba(6, 182, 212, 0.15); border: 1px solid var(--track-color); border-radius: 20px; padding: 0.25rem 0.75rem; font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.8rem; font-weight: 600; color: var(--track-color); }
+    .track-badge .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--track-color); }
+    .header-meta { display: flex; gap: 1.5rem; font-size: 0.85rem; color: var(--text-muted); }
+    .page-container { max-width: 1200px; margin: 0 auto; padding: 2rem; display: grid; grid-template-columns: 240px 1fr; gap: 3rem; }
+    .sidebar-nav { position: sticky; top: 2rem; height: calc(100vh - 4rem); overflow-y: auto; padding-right: 1rem; }
+    .sidebar-nav::-webkit-scrollbar { width: 3px; } .sidebar-nav::-webkit-scrollbar-thumb { background: var(--bg-surface); border-radius: 3px; }
+    .sidebar-title { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); margin-bottom: 1rem; }
+    .sidebar-nav a { display: block; padding: 0.4rem 0.75rem; margin-bottom: 0.15rem; font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.82rem; font-weight: 600; color: var(--text-muted); text-decoration: none; border-left: 2px solid transparent; border-radius: 0 4px 4px 0; transition: all var(--transition-fast); }
+    .sidebar-nav a:hover { color: var(--text-primary); background: var(--bg-surface); }
+    .sidebar-nav a.active { color: var(--accent-primary); border-left-color: var(--accent-primary); background: var(--accent-muted); }
+    .content { max-width: 800px; } .section { margin-bottom: 4rem; }
+    h1 { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 2.25rem; line-height: 1.2; margin-bottom: 0.75rem; }
+    h2 { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 1.5rem; color: var(--text-primary); margin: 2.5rem 0 1rem; padding-top: 1rem; border-top: 1px solid var(--code-border); }
+    h2:first-of-type { border-top: none; }
+    h3 { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 600; font-size: 1.25rem; color: var(--text-primary); margin: 2rem 0 0.75rem; }
+    p { margin-bottom: 1rem; } ul, ol { margin: 0.5rem 0 1rem 1.5rem; } li { margin-bottom: 0.4rem; } strong { font-weight: 600; }
+    a { color: var(--accent-primary); text-decoration: none; } a:hover { text-decoration: underline; }
+    .analogy-box, .tech-def-box, .callout-why, .callout-warning, .callout-security, .callout-cost { border-left: 4px solid; border-radius: 0 8px 8px 0; padding: 1.25rem 1.5rem; margin: 1.5rem 0; }
+    .analogy-box { background: var(--accent-muted); border-left-color: var(--accent-primary); }
+    .tech-def-box { background: var(--info-bg); border-left-color: var(--info); }
+    .callout-why { background: var(--success-bg); border-left-color: var(--success); }
+    .callout-warning { background: var(--warning-bg); border-left-color: var(--warning); }
+    .callout-security { background: var(--error-bg); border-left-color: var(--error); }
+    .callout-cost { background: var(--warning-bg); border-left-color: var(--accent-primary); }
+    .callout-cert { background: rgba(212, 168, 67, 0.06); border-left: 4px solid var(--accent-primary); border-radius: 0 8px 8px 0; padding: 1.25rem 1.5rem; margin: 1.5rem 0; }
+    .box-label { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 0.9rem; display: block; margin-bottom: 0.4rem; }
+    .analogy-box .box-label { color: var(--accent-primary); } .tech-def-box .box-label { color: var(--info); } .callout-why .box-label { color: var(--success); } .callout-warning .box-label { color: var(--warning); } .callout-security .box-label { color: var(--error); } .callout-cost .box-label { color: var(--accent-primary); } .callout-cert .box-label { color: var(--accent-primary); }
+    .term-tooltip { position: relative; color: var(--accent-primary); cursor: help; border-bottom: 1px dashed var(--accent-primary); }
+    .term-tooltip .tooltip-content { position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); background: var(--bg-card); border: 1px solid var(--accent-primary); border-radius: 8px; padding: 0.75rem 1rem; font-size: 0.85rem; color: var(--text-primary); width: 280px; opacity: 0; pointer-events: none; transition: opacity var(--transition-fast); z-index: 10; line-height: 1.5; box-shadow: 0 4px 20px rgba(0,0,0,0.4); }
+    .term-tooltip:hover .tooltip-content, .term-tooltip:focus .tooltip-content { opacity: 1; pointer-events: auto; }
+    .code-block-wrapper { background: var(--code-bg); border: 1px solid var(--code-border); border-radius: 12px; margin: 1.5rem 0; overflow: hidden; }
+    .code-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--code-border); background: var(--bg-surface); }
+    .code-tab { padding: 0.5rem 1.25rem; background: none; border: none; font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; color: var(--text-muted); transition: all var(--transition-fast); }
+    .code-tab:hover { color: var(--text-primary); } .code-tab.active { color: var(--accent-primary); border-bottom-color: var(--accent-primary); }
+    .code-panel { display: none; position: relative; } .code-panel.active { display: block; }
+    .code-panel pre { margin: 0; padding: 1.25rem; overflow-x: auto; font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; line-height: 1.6; }
+    .code-panel pre code { background: none; color: var(--code-text); }
+    .copy-btn { position: absolute; top: 0.75rem; right: 0.75rem; background: var(--bg-surface); border: 1px solid var(--code-border); color: var(--text-muted); padding: 0.3rem 0.6rem; border-radius: 6px; font-size: 0.75rem; cursor: pointer; font-family: 'JetBrains Mono', monospace; transition: all var(--transition-fast); }
+    .copy-btn:hover { color: var(--accent-primary); border-color: var(--accent-primary); }
+    .output-block { background: var(--code-bg); border: 1px solid var(--code-border); border-radius: 8px; padding: 1rem 1.25rem; margin: 0.75rem 0 1.5rem; font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; color: var(--success); line-height: 1.5; }
+    .output-label { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.25rem; }
+    .animation-container { background: var(--bg-secondary); border: 1px solid var(--code-border); border-radius: 12px; padding: 2rem; margin: 2rem 0; position: relative; min-height: 300px; overflow: hidden; }
+    .animation-title { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.85rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 1.25rem; }
+    .animation-controls { display: flex; gap: 0.5rem; position: absolute; bottom: 1rem; right: 1rem; }
+    .anim-btn { background: var(--bg-card); border: 1px solid var(--code-border); color: var(--text-primary); width: 36px; height: 36px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 1rem; transition: all var(--transition-fast); }
+    .anim-btn:hover { border-color: var(--accent-primary); color: var(--accent-primary); }
+    .anim-btn.step-btn { font-size: 0.85rem; letter-spacing: -1px; }
+    .quiz-question { background: var(--bg-card); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; }
+    .quiz-question h4 { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 600; margin-bottom: 1rem; font-size: 1rem; }
+    .quiz-option { padding: 0.75rem 1rem; margin: 0.5rem 0; border: 1px solid var(--code-border); border-radius: 8px; cursor: pointer; transition: all var(--transition-fast); display: flex; align-items: center; gap: 0.75rem; }
+    .quiz-option:hover { border-color: var(--accent-primary); }
+    .quiz-option.correct { border-color: var(--success); background: var(--success-bg); } .quiz-option.incorrect { border-color: var(--error); background: var(--error-bg); } .quiz-option.disabled { pointer-events: none; }
+    .quiz-marker { width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--code-border); flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 700; }
+    .quiz-option.correct .quiz-marker { border-color: var(--success); color: var(--success); } .quiz-option.incorrect .quiz-marker { border-color: var(--error); color: var(--error); }
+    .quiz-feedback { margin-top: 0.75rem; padding: 0.75rem; border-radius: 8px; font-size: 0.9rem; display: none; }
+    .quiz-feedback.show { display: block; } .quiz-feedback.correct-fb { background: var(--success-bg); color: var(--success); } .quiz-feedback.incorrect-fb { background: var(--error-bg); color: var(--error); }
+    .quiz-score { background: var(--bg-card); border-radius: 12px; padding: 1.5rem; text-align: center; margin-top: 2rem; display: none; }
+    .quiz-score .score-num { font-family: 'Bricolage Grotesque', sans-serif; font-size: 2.5rem; font-weight: 800; color: var(--accent-primary); }
+    .module-nav { display: flex; justify-content: space-between; align-items: center; padding: 1.5rem 0; margin: 2rem 0; border-top: 1px solid var(--code-border); }
+    .module-nav a { display: flex; align-items: center; gap: 0.5rem; color: var(--accent-primary); text-decoration: none; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 600; font-size: 0.9rem; padding: 0.5rem 1rem; border: 1px solid var(--code-border); border-radius: 8px; transition: all var(--transition-fast); }
+    .module-nav a:hover { border-color: var(--accent-primary); background: var(--accent-muted); text-decoration: none; }
+    .objectives-list { list-style: none; margin-left: 0; } .objectives-list li { padding: 0.5rem 0 0.5rem 2rem; position: relative; }
+    .objectives-list li::before { content: ''; position: absolute; left: 0; top: 0.85rem; width: 16px; height: 16px; border-radius: 4px; border: 2px solid var(--track-color); background: rgba(6, 182, 212, 0.1); }
+
+    /* === PIPELINE ANIMATION === */
+    .pipe-box { display: flex; flex-direction: column; align-items: center; gap: 0.75rem; }
+    .pipe-row { display: flex; align-items: center; gap: 0.4rem; flex-wrap: wrap; justify-content: center; }
+    .pipe-stage { padding: 0.5rem 0.6rem; border-radius: 8px; background: var(--bg-card); border: 1px solid var(--code-border); font-family: 'JetBrains Mono', monospace; font-size: 0.68rem; min-width: 85px; text-align: center; opacity: 0; transform: translateX(-15px); transition: all 0.4s ease; }
+    .pipe-stage.visible { opacity: 1; transform: translateX(0); }
+    .pipe-stage.active { border-color: var(--track-color); box-shadow: 0 0 10px rgba(6,182,212,0.25); }
+    .pipe-stage.done { border-color: var(--success); }
+    .pipe-stage .s-name { font-weight: 600; color: var(--text-primary); font-size: 0.7rem; }
+    .pipe-stage .s-icon { font-size: 1.1rem; }
+    .pipe-arrow { color: var(--text-muted); font-size: 1rem; opacity: 0; transition: opacity 0.3s; }
+    .pipe-arrow.visible { opacity: 1; }
+    .pipe-ann { font-size: 0.72rem; color: var(--accent-primary); font-family: 'Bricolage Grotesque', sans-serif; font-weight: 600; text-align: center; opacity: 0; transition: opacity 0.3s; min-height: 1.2rem; }
+    .pipe-ann.visible { opacity: 1; }
+
+    /* === EMBEDDING SPACE === */
+    .embed-canvas { position: relative; width: 100%; height: 220px; background: var(--bg-card); border-radius: 8px; overflow: hidden; }
+    .embed-dot { position: absolute; width: 8px; height: 8px; border-radius: 50%; transition: all 0.5s ease; opacity: 0; }
+    .embed-dot.visible { opacity: 1; }
+    .embed-dot.query { width: 12px; height: 12px; background: var(--accent-primary); box-shadow: 0 0 8px var(--accent-primary); z-index: 2; }
+    .embed-dot.near { box-shadow: 0 0 8px var(--success); border: 2px solid var(--success); }
+    .embed-label { position: absolute; font-family: 'JetBrains Mono', monospace; font-size: 0.6rem; color: var(--text-muted); white-space: nowrap; transition: all 0.4s; opacity: 0; }
+    .embed-label.visible { opacity: 1; }
+    .embed-label.near { color: var(--success); font-weight: 600; }
+    .embed-line { position: absolute; height: 1px; background: var(--accent-primary); transform-origin: left center; opacity: 0; transition: opacity 0.3s; }
+    .embed-line.visible { opacity: 0.4; }
+
+    /* === DATA FLOW PARTICLE (Pipeline Enhancement) === */
+    .pipe-data-packet {
+      position: absolute; width: 28px; height: 20px; border-radius: 4px;
+      font-size: 0.55rem; font-family: 'JetBrains Mono', monospace;
+      display: flex; align-items: center; justify-content: center;
+      color: var(--text-primary); font-weight: 600;
+      opacity: 0; transition: all 0.5s ease; z-index: 3;
+      pointer-events: none;
+    }
+    .pipe-data-packet.visible { opacity: 1; }
+    .pipe-stage-detail {
+      font-size: 0.58rem; color: var(--text-muted); font-family: 'JetBrains Mono', monospace;
+      text-align: center; margin-top: 2px; opacity: 0; transition: opacity 0.3s; max-width: 85px;
+      overflow: hidden; white-space: nowrap; text-overflow: ellipsis;
+    }
+    .pipe-stage-detail.visible { opacity: 1; }
+
+    /* === SIMILARITY LINES & SEARCH RADIUS (Embedding Enhancement) === */
+    .embed-sim-line {
+      position: absolute; height: 2px; transform-origin: left center;
+      opacity: 0; transition: opacity 0.4s; z-index: 1;
+      background: repeating-linear-gradient(90deg, var(--success) 0, var(--success) 4px, transparent 4px, transparent 8px);
+    }
+    .embed-sim-line.visible { opacity: 0.7; }
+    .embed-sim-score {
+      position: absolute; font-family: 'JetBrains Mono', monospace; font-size: 0.6rem;
+      font-weight: 700; padding: 1px 4px; border-radius: 3px;
+      background: var(--bg-surface); color: var(--success);
+      opacity: 0; transition: opacity 0.4s; z-index: 4; white-space: nowrap;
+    }
+    .embed-sim-score.visible { opacity: 1; }
+    .embed-search-radius {
+      position: absolute; border: 2px solid var(--accent-primary); border-radius: 50%;
+      opacity: 0; transition: all 0.8s ease; pointer-events: none; z-index: 1;
+      transform: translate(-50%, -50%);
+    }
+    .embed-search-radius.visible { opacity: 0.3; }
+    .embed-cluster-label {
+      position: absolute; font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.6rem;
+      font-weight: 700; padding: 2px 6px; border-radius: 4px;
+      opacity: 0; transition: opacity 0.4s; z-index: 3;
+    }
+    .embed-cluster-label.visible { opacity: 0.8; }
+
+    /* === CHUNK RETRIEVAL DEMO (Chunking Enhancement) === */
+    .chunk-block { height: 22px; border-radius: 3px; transition: all 0.3s; opacity: 0; position: relative; }
+    .chunk-block.visible { opacity: 1; }
+    .chunk-block.selected { box-shadow: 0 0 0 2px var(--accent-primary); transform: scaleY(1.15); z-index: 2; }
+    .chunk-block.dimmed { opacity: 0.3; }
+    .chunk-query-badge {
+      display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 4px;
+      background: var(--accent-muted); border: 1px solid var(--accent-primary);
+      font-family: 'JetBrains Mono', monospace; font-size: 0.6rem; color: var(--accent-primary);
+      opacity: 0; transition: opacity 0.3s;
+    }
+    .chunk-query-badge.visible { opacity: 1; }
+    .chunk-overlap-zone {
+      position: absolute; top: 0; height: 100%; background: rgba(255,255,255,0.15);
+      border-left: 2px dashed rgba(255,255,255,0.4); border-radius: 0 3px 3px 0;
+      opacity: 0; transition: opacity 0.5s;
+    }
+    .chunk-overlap-zone.visible { opacity: 1; }
+
+    /* === CHUNK VIS === */
+    .chunk-row { display: flex; gap: 2px; margin: 0.3rem 0; position: relative; }
+    .chunk-label { font-family: 'JetBrains Mono', monospace; font-size: 0.6rem; color: var(--text-muted); margin-bottom: 0.2rem; }
+
+    @media (max-width: 900px) {
+      .page-container { grid-template-columns: 1fr; padding: 1rem; }
+      .sidebar-nav { position: fixed; bottom: 0; left: 0; right: 0; height: auto; max-height: 40vh; background: var(--bg-secondary); border-top: 1px solid var(--code-border); z-index: 100; padding: 1rem; display: none; }
+      .sidebar-nav.open { display: block; }
+      .sidebar-toggle { display: flex; position: fixed; bottom: 1rem; right: 1rem; z-index: 101; background: var(--accent-primary); color: var(--bg-primary); border: none; width: 48px; height: 48px; border-radius: 50%; align-items: center; justify-content: center; cursor: pointer; font-size: 1.25rem; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
+      h1 { font-size: 1.75rem; }
+    }
+    @media (min-width: 901px) { .sidebar-toggle { display: none; } }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; } .pipe-stage, .pipe-arrow, .pipe-ann, .pipe-data-packet, .pipe-stage-detail, .embed-dot, .embed-label, .embed-line, .embed-sim-line, .embed-sim-score, .embed-search-radius, .embed-cluster-label, .chunk-block, .chunk-query-badge, .chunk-overlap-zone { opacity: 1; transform: none; } }
+    :focus-visible { outline: 2px solid var(--accent-primary); outline-offset: 2px; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <div class="top-progress" role="progressbar" aria-label="Course progress: Module 10 of 30" aria-valuenow="10" aria-valuemin="1" aria-valuemax="30"><div class="fill"></div></div>
+
+  <header class="course-header"><div class="course-header-inner">
+    <div><div class="course-title">Building AI Agents with Claude</div></div>
+    <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;">
+      <span class="track-badge"><span class="dot"></span>Track 3: Memory &amp; Context</span>
+      <div class="header-meta"><span>Module 10 of 30</span><span>75&ndash;90 min</span><span>Intermediate</span></div>
+    </div>
+  </div></header>
+
+  <button class="sidebar-toggle" id="sidebarToggle" aria-label="Toggle navigation menu">&#9776;</button>
+
+  <div class="page-container">
+    <nav class="sidebar-nav" id="sidebar" aria-label="Module sections">
+      <div class="sidebar-title">On this page</div>
+      <a href="#objectives">Learning Objectives</a>
+      <a href="#knowledge-problem">The Knowledge Problem</a>
+      <a href="#what-is-rag">What Is RAG?</a>
+      <a href="#embeddings">Embeddings Explained</a>
+      <a href="#chunking">Chunking Strategies</a>
+      <a href="#vector-dbs">Vector Databases</a>
+      <a href="#code-walkthrough">Code Walkthrough</a>
+      <a href="#hands-on">Hands-On Exercise</a>
+      <a href="#quiz">Knowledge Check</a>
+      <a href="#summary">Summary</a>
+      <a href="#references">References</a>
+    </nav>
+
+    <main class="content" role="main">
+      <section class="section" style="margin-bottom:2rem;">
+        <div class="module-nav" style="border-top:none;margin-top:0;">
+          <a href="M08-conversation-management.html" aria-label="Previous module: Conversation Management">&larr; M08: Conversation Management</a>
+          <a href="index.html" aria-label="Course Home" title="Course Home" style="font-size:1.2rem;">&#x1F3E0; Home</a>
+          <a href="M10-advanced-rag-patterns.html" aria-label="Next module: Advanced RAG">M10: Advanced RAG &rarr;</a>
+        </div>
+        <h1>M09: RAG &mdash; Retrieval-Augmented Generation</h1>
+        <p style="color:var(--text-secondary);font-size:1.1rem;">Claude is brilliant but has a <strong>knowledge cutoff</strong>. RAG solves this by giving Claude access to <em>your</em> documents at query time &mdash; no fine-tuning required. You'll build a complete "Chat with Your Docs" system.</p>
+      </section>
+
+      <section class="section" id="objectives">
+        <h2 id="objectives-heading">Learning Objectives</h2>
+        <ul class="objectives-list" aria-label="Learning objectives">
+          <li>Explain why RAG is needed and what problem it solves that prompt engineering cannot</li>
+          <li>Describe the end-to-end RAG pipeline: load, chunk, embed, store, retrieve, generate</li>
+          <li>Explain how text embeddings and cosine similarity enable semantic search</li>
+          <li>Compare chunking strategies and their impact on retrieval quality</li>
+          <li>Build a complete RAG system with ChromaDB and Claude</li>
+        </ul>
+      </section>
+
+      <!-- ==================== CONCEPT 1: KNOWLEDGE PROBLEM ==================== -->
+      <section class="section" id="knowledge-problem">
+        <h2 id="knowledge-problem-heading">The Knowledge Problem</h2>
+
+        <div class="analogy-box">
+          <span class="box-label">Everyday Analogy</span>
+          <p><strong>BEFORE:</strong> Imagine a brilliant doctor who graduated in 2023 but has never seen a 2025 medical journal &mdash; they practiced medicine using only what they learned in school and residency, with no access to anything published since.</p>
+          <p><strong>PAIN:</strong> When a patient asks about a breakthrough treatment approved six months ago, the doctor either says "I don't know" or, worse, confidently recommends an outdated protocol that has since been superseded &mdash; and the patient has no way to tell the difference.</p>
+          <p style="margin-bottom:0;"><strong>MAPPING:</strong> That's exactly the <span class="term-tooltip" tabindex="0" aria-describedby="tt-cutoff">knowledge cutoff problem<span class="tooltip-content" role="tooltip" id="tt-cutoff">LLMs are trained on data up to a specific date. They cannot access information published after that date, proprietary data, or private documents. This leads to hallucinations when asked about topics outside their training data.</span></span> with LLMs: Claude is the doctor, your private company docs and recent data are the new medical journals, and RAG is the system that puts those journals on the doctor's desk right when they need them.</p>
+        </div>
+
+        <div class="tech-def-box">
+          <span class="box-label">Technical Definition</span>
+          LLMs have a fixed <span class="term-tooltip" tabindex="0" aria-describedby="tt-traincutoff">training cutoff<span class="tooltip-content" role="tooltip" id="tt-traincutoff">The date after which no data was included in the model's training set. Claude's training data has a specific cutoff, meaning it has no knowledge of events, documents, or data published after that date.</span></span> and lack access to private, proprietary, or recently published data. This leads to <span class="term-tooltip" tabindex="0" aria-describedby="tt-hallucination">hallucinations<span class="tooltip-content" role="tooltip" id="tt-hallucination">When an LLM generates confident, plausible-sounding text that is factually incorrect. Hallucinations often occur when the model is asked about topics outside its training data and "fills in" answers from patterns rather than facts.</span></span> when asked about unknown topics &mdash; the model generates plausible-sounding but incorrect answers. Prompt engineering alone can't fix this: no matter how clever your prompt, Claude can't reference a document it has never seen.
+        </div>
+
+        <div class="callout-why">
+          <span class="box-label">Why It Matters</span>
+          <span class="term-tooltip" tabindex="0" aria-describedby="tt-rag">RAG<span class="tooltip-content" role="tooltip" id="tt-rag">Retrieval-Augmented Generation &mdash; a technique that combines information retrieval (searching a document corpus) with text generation (Claude). At query time, relevant documents are retrieved and injected into the prompt, giving Claude access to knowledge beyond its training data.</span></span> solves the knowledge problem by giving Claude access to external documents <strong>at query time</strong>, eliminating the need to fine-tune or retrain the model. <strong>Real-world impact:</strong> A customer support team at a mid-size SaaS company implemented RAG over their 2,000-page knowledge base and reduced hallucinated answers from ~35% to under 3%, while cutting average ticket resolution time from 12 minutes to 4 minutes. Fine-tuning a model on the same data would have cost $5,000&ndash;$50,000 and taken weeks; their RAG prototype was running in an afternoon. Your company docs, recent research, private databases &mdash; all become accessible without retraining anything.
+        </div>
+      </section>
+
+      <!-- ==================== CONCEPT 2: WHAT IS RAG ==================== -->
+      <section class="section" id="what-is-rag">
+        <h2 id="what-is-rag-heading">What Is RAG? (End-to-End Pipeline)</h2>
+
+        <div class="analogy-box">
+          <span class="box-label">Everyday Analogy</span>
+          <p><strong>BEFORE:</strong> Imagine taking a closed-book exam where you must answer every question purely from memory &mdash; you spent months cramming, but there are thousands of facts you simply could not memorize.</p>
+          <p><strong>PAIN:</strong> When a question covers a topic you didn't study deeply, you either leave it blank or guess &mdash; and guessing confidently is exactly what hallucination looks like in an LLM.</p>
+          <p style="margin-bottom:0;"><strong>MAPPING:</strong> RAG turns this into an <strong>open-book exam</strong>: Claude is the student, your document corpus is the textbook sitting on the desk, and the retrieval system is the index at the back of the book that helps Claude flip to exactly the right page instead of guessing from memory.</p>
+        </div>
+
+        <p>Here's what this looks like in practice. When a user asks a question, the retrieval step returns actual chunk objects like this:</p>
+        <div class="output-block">
+<div class="output-label">Retrieved chunks (what the retriever hands to Claude)</div>
+[
+  { "text": "UCC amendments must be filed within...", "source": "filing_guide.md", "score": 0.92 },
+  { "text": "The debtor name on a UCC-1 must exactly...", "source": "compliance_faq.txt", "score": 0.87 },
+  { "text": "Continuation statements are due every...", "source": "filing_guide.md", "score": 0.84 }
+]</div>
+        <p>Those chunk texts get pasted directly into Claude's prompt as context. Claude reads them, writes an answer, and cites <code>[Source 1: filing_guide.md]</code>. The user never sees the retrieval machinery &mdash; they just get an accurate, sourced answer.</p>
+
+        <div class="tech-def-box">
+          <span class="box-label">Technical Definition</span>
+          RAG works in two phases. First, the <strong>setup phase</strong> (you do this once): take your documents and break them into small pieces. This splitting process is called <span class="term-tooltip" tabindex="0" aria-describedby="tt-chunking">chunking<span class="tooltip-content" role="tooltip" id="tt-chunking">The process of splitting documents into smaller segments (chunks) for embedding. Each chunk should be small enough to embed meaningfully but large enough to preserve context. Typical chunk sizes range from 200 to 1000 tokens.</span></span>. Next, convert each piece into a number array using an <span class="term-tooltip" tabindex="0" aria-describedby="tt-embedding">embedding model<span class="tooltip-content" role="tooltip" id="tt-embedding">Converting text into a dense numerical vector (array of floats, typically 768-1536 dimensions) using an embedding model. Semantically similar texts produce vectors that are close together in this high-dimensional space, enabling similarity search.</span></span>. Finally, save those arrays in a <span class="term-tooltip" tabindex="0" aria-describedby="tt-vectordb">vector database<span class="tooltip-content" role="tooltip" id="tt-vectordb">A database optimized for storing and searching high-dimensional vectors. It uses approximate nearest neighbor (ANN) algorithms to quickly find vectors most similar to a query vector. Examples: ChromaDB, Pinecone, pgvector.</span></span>. Second, the <strong>query phase</strong> (this happens every time a user asks a question): search that database for the pieces most related to the question. Then paste them into the prompt and let Claude answer using that context. That's it &mdash; search, then generate.
+        </div>
+
+        <div class="callout-warning">
+          <span class="box-label">&#9888;&#65039; Common Misconceptions</span>
+          <p><strong>"RAG is just fine-tuning, right?"</strong> &mdash; No. Fine-tuning changes the model's internal weights &mdash; it costs $5,000&ndash;$50,000, takes weeks, and requires ML expertise. RAG doesn't touch the model at all. It just adds relevant text to the prompt at query time. Think of it as giving Claude a cheat sheet during the exam, not retraining Claude's brain.</p>
+          <p><strong>"Bigger chunks = better results?"</strong> &mdash; Usually the opposite. A 2,000-word chunk that contains one relevant sentence dilutes the signal. The retriever found the right chunk, but Claude has to wade through 1,999 irrelevant words to find the answer. Smaller, focused chunks almost always retrieve better.</p>
+          <p><strong>"RAG eliminates hallucinations"</strong> &mdash; It <em>reduces</em> them significantly (from ~35% to under 3% in typical deployments), but it doesn't eliminate them entirely. Claude can still misinterpret retrieved context, combine facts incorrectly, or fill gaps with plausible-sounding guesses. Always include the grounding instruction ("answer based ONLY on the provided context") and verify critical outputs.</p>
+          <p><strong>"You need a vector database to do RAG"</strong> &mdash; For production, yes &mdash; vector databases give you fast ANN search over millions of vectors. But basic RAG works with simple in-memory similarity search over a few hundred chunks. Don't let infrastructure requirements stop you from prototyping.</p>
+          <p style="margin-bottom:0;"><strong>"More retrieved chunks = better answers"</strong> &mdash; Diminishing returns kick in fast. Retrieving 3&ndash;5 highly relevant chunks is typically better than retrieving 20 chunks of mixed quality. Too many chunks flood Claude's context with noise, and information in the middle of long context gets lower recall (the "lost in the middle" effect).</p>
+        </div>
+
+        <!-- SVG Diagram: RAG Pipeline End-to-End -->
+        <div class="animation-container" aria-label="Diagram showing the complete RAG pipeline from documents to cited response">
+          <div class="animation-title">RAG Pipeline &mdash; End-to-End Flow</div>
+          <svg viewBox="0 0 600 340" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="RAG pipeline: Documents flow through chunk, embed, store stages, then user question is embedded, searched against the store, top-K chunks are sent to Claude, and a cited response is returned" style="width:100%;max-width:600px;margin:0 auto;display:block;">
+            <style>
+              .rag-svg-box { fill: var(--bg-surface, #1A2740); stroke: var(--accent-primary, #D4A843); stroke-width: 1.5; rx: 8; }
+              .rag-svg-box-query { fill: var(--bg-surface, #1A2740); stroke: var(--info, #3B82F6); stroke-width: 1.5; rx: 8; }
+              .rag-svg-box-gen { fill: var(--bg-surface, #1A2740); stroke: var(--success, #10B981); stroke-width: 1.5; rx: 8; }
+              .rag-svg-label { fill: var(--text-primary, #E8ECF1); font-family: system-ui, sans-serif; font-size: 11px; text-anchor: middle; font-weight: 600; }
+              .rag-svg-sub { fill: var(--text-secondary, #94A3B8); font-family: system-ui, sans-serif; font-size: 8.5px; text-anchor: middle; }
+              .rag-svg-arrow { stroke: var(--text-muted, #64748B); stroke-width: 1.5; fill: none; marker-end: url(#rag-arrow); }
+              .rag-svg-phase { fill: var(--text-muted, #64748B); font-family: system-ui, sans-serif; font-size: 9px; text-anchor: middle; font-style: italic; }
+              .rag-svg-divider { stroke: var(--text-muted, #64748B); stroke-width: 0.5; stroke-dasharray: 4 3; }
+              @media (prefers-reduced-motion: reduce) { .rag-svg-box, .rag-svg-arrow { transition: none; } }
+            </style>
+            <defs>
+              <marker id="rag-arrow" viewBox="0 0 10 7" refX="10" refY="3.5" markerWidth="8" markerHeight="6" orient="auto-start-reverse">
+                <path d="M 0 0 L 10 3.5 L 0 7 z" fill="var(--text-muted, #64748B)"/>
+              </marker>
+            </defs>
+            <!-- Phase labels -->
+            <text x="200" y="18" class="rag-svg-phase">SETUP PHASE (once)</text>
+            <text x="440" y="18" class="rag-svg-phase">QUERY PHASE (every request)</text>
+            <line x1="310" y1="8" x2="310" y2="335" class="rag-svg-divider"/>
+            <!-- Row 1: Setup pipeline -->
+            <rect x="16" y="32" width="80" height="52" class="rag-svg-box"/>
+            <text x="56" y="54" class="rag-svg-label">Documents</text>
+            <text x="56" y="68" class="rag-svg-sub">PDFs, CSVs, APIs</text>
+            <line x1="96" y1="58" x2="118" y2="58" class="rag-svg-arrow"/>
+            <rect x="118" y="32" width="72" height="52" class="rag-svg-box"/>
+            <text x="154" y="54" class="rag-svg-label">Chunk</text>
+            <text x="154" y="68" class="rag-svg-sub">Split into pieces</text>
+            <line x1="190" y1="58" x2="212" y2="58" class="rag-svg-arrow"/>
+            <rect x="212" y="32" width="72" height="52" class="rag-svg-box"/>
+            <text x="248" y="54" class="rag-svg-label">Embed</text>
+            <text x="248" y="68" class="rag-svg-sub">Text &rarr; vectors</text>
+            <line x1="248" y1="84" x2="248" y2="120" class="rag-svg-arrow"/>
+            <!-- Vector DB (shared) -->
+            <rect x="196" y="120" width="104" height="52" class="rag-svg-box" style="stroke: var(--track-memory, #06B6D4);"/>
+            <text x="248" y="142" class="rag-svg-label" style="fill: var(--track-memory, #06B6D4);">Vector DB</text>
+            <text x="248" y="156" class="rag-svg-sub">Indexed embeddings</text>
+            <!-- Row 2: Query pipeline -->
+            <rect x="324" y="32" width="88" height="52" class="rag-svg-box-query"/>
+            <text x="368" y="50" class="rag-svg-label" style="fill: var(--info, #3B82F6);">User Question</text>
+            <text x="368" y="64" class="rag-svg-sub">"How do I file a</text>
+            <text x="368" y="74" class="rag-svg-sub">UCC amendment?"</text>
+            <line x1="368" y1="84" x2="368" y2="120" class="rag-svg-arrow"/>
+            <rect x="324" y="120" width="88" height="52" class="rag-svg-box-query"/>
+            <text x="368" y="142" class="rag-svg-label">Embed Query</text>
+            <text x="368" y="156" class="rag-svg-sub">Same model</text>
+            <line x1="324" y1="146" x2="300" y2="146" class="rag-svg-arrow"/>
+            <!-- Search arrow from DB -->
+            <line x1="300" y1="146" x2="310" y2="146" style="stroke: var(--text-muted, #64748B); stroke-width: 1.5;"/>
+            <!-- Search result -->
+            <line x1="368" y1="172" x2="368" y2="200" class="rag-svg-arrow"/>
+            <rect x="324" y="200" width="88" height="52" class="rag-svg-box-query"/>
+            <text x="368" y="218" class="rag-svg-label">Top-K Chunks</text>
+            <text x="368" y="234" class="rag-svg-sub">k=3 most relevant</text>
+            <line x1="412" y1="226" x2="440" y2="226" class="rag-svg-arrow"/>
+            <!-- Claude + Generate -->
+            <rect x="440" y="192" width="144" height="68" class="rag-svg-box-gen"/>
+            <text x="512" y="216" class="rag-svg-label" style="fill: var(--success, #10B981);">Claude + Context</text>
+            <text x="512" y="232" class="rag-svg-sub">System prompt +</text>
+            <text x="512" y="244" class="rag-svg-sub">retrieved chunks + question</text>
+            <line x1="512" y1="260" x2="512" y2="290" class="rag-svg-arrow"/>
+            <!-- Response -->
+            <rect x="440" y="290" width="144" height="42" class="rag-svg-box-gen"/>
+            <text x="512" y="308" class="rag-svg-label" style="fill: var(--success, #10B981);">Cited Response</text>
+            <text x="512" y="322" class="rag-svg-sub">[Source: filing_guide.md]</text>
+            <!-- Annotations -->
+            <text x="56" y="102" class="rag-svg-sub" style="fill: var(--accent-primary, #D4A843);">1,000s of docs</text>
+            <text x="154" y="102" class="rag-svg-sub" style="fill: var(--accent-primary, #D4A843);">300-500 chars each</text>
+            <text x="248" y="102" class="rag-svg-sub" style="fill: var(--accent-primary, #D4A843);">1,536-dim vectors</text>
+          </svg>
+        </div>
+
+        <!-- Animation 1: RAG Pipeline -->
+        <div class="animation-container" aria-label="Animation showing the 6-stage RAG pipeline from document loading to answer generation">
+          <div class="animation-title">Animation: The RAG Pipeline</div>
+          <div class="pipe-box" id="ragPipe">
+            <div class="pipe-row">
+              <div class="pipe-stage" id="rp-1"><span class="s-icon">&#128196;</span><div class="s-name">Load</div></div>
+              <div class="pipe-arrow" id="rpa-1">&#8594;</div>
+              <div class="pipe-stage" id="rp-2"><span class="s-icon">&#9986;</span><div class="s-name">Chunk</div></div>
+              <div class="pipe-arrow" id="rpa-2">&#8594;</div>
+              <div class="pipe-stage" id="rp-3"><span class="s-icon">&#128290;</span><div class="s-name">Embed</div></div>
+              <div class="pipe-arrow" id="rpa-3">&#8594;</div>
+              <div class="pipe-stage" id="rp-4"><span class="s-icon">&#128451;</span><div class="s-name">Store</div></div>
+              <div class="pipe-arrow" id="rpa-4">&#8594;</div>
+              <div class="pipe-stage" id="rp-5"><span class="s-icon">&#128269;</span><div class="s-name">Retrieve</div></div>
+              <div class="pipe-arrow" id="rpa-5">&#8594;</div>
+              <div class="pipe-stage" id="rp-6"><span class="s-icon">&#129302;</span><div class="s-name">Generate</div></div>
+            </div>
+            <div class="pipe-ann" id="ragAnn"></div>
+          </div>
+          <div class="animation-controls">
+            <button class="anim-btn" onclick="ragPlay()" aria-label="Play animation" title="Play">&#9654;</button>
+            <button class="anim-btn" onclick="ragPause()" aria-label="Pause animation" title="Pause">&#9208;</button>
+            <button class="anim-btn" onclick="ragRestart()" aria-label="Restart animation" title="Restart">&#8635;</button>
+            <button class="anim-btn step-btn" onclick="ragStepFwd()" aria-label="Step forward" title="Step forward">&#9197;</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================== CONCEPT 3: EMBEDDINGS ==================== -->
+      <section class="section" id="embeddings">
+        <h2 id="embeddings-heading">Embeddings Explained from Scratch</h2>
+
+        <div class="analogy-box">
+          <span class="box-label">Everyday Analogy</span>
+          <p><strong>BEFORE:</strong> Think of traditional keyword search: you type "heart attack treatment" and the engine only finds documents containing those exact words &mdash; missing a document titled "myocardial infarction therapy" even though it means the same thing.</p>
+          <p><strong>PAIN:</strong> This keyword mismatch problem means relevant results are invisible unless the author happened to use the exact same vocabulary as the searcher, leading to frustrating dead ends and missed information.</p>
+          <p style="margin-bottom:0;"><strong>MAPPING:</strong> Embeddings fix this by placing words as <strong>coordinates in meaning-space</strong> &mdash; "king" and "queen" live close together, just as Paris and London are nearby on a map of capital cities. <span class="term-tooltip" tabindex="0" aria-describedby="tt-cosine">Cosine similarity<span class="tooltip-content" role="tooltip" id="tt-cosine">A measure of similarity between two vectors based on the angle between them. Ranges from -1 (opposite meaning) to 1 (identical meaning). Preferred over Euclidean distance for text embeddings because it measures direction (meaning) regardless of magnitude (text length).</span></span> measures the angle between two points &mdash; a small angle means similar meaning, regardless of the words used.</p>
+        </div>
+
+        <p>So what IS an embedding? In plain English, it's a way of representing text as a point in space. Each word, sentence, or paragraph gets converted into a list of numbers &mdash; and those numbers encode what the text <em>means</em>, not just what words it contains. Two sentences that say the same thing in different words will end up at nearby points, even if they share zero words in common.</p>
+
+        <p>How does this actually work under the hood? An embedding model (a specialized neural network, much smaller than Claude) reads your text and outputs a fixed-size array of floats &mdash; typically 1,536 numbers. During training, the model learned to place semantically similar text at nearby coordinates. It doesn't follow rules you wrote; it learned these associations from millions of text pairs. The result is that "cancel my subscription" and "I want to stop paying" land near each other, even though they share no keywords.</p>
+
+        <p>If you're familiar with keyword search (like SQL's <code>LIKE '%term%'</code>), here's the key difference: keyword search requires an exact character match, so "heart attack" won't find "myocardial infarction." Embedding-based search doesn't care about specific words at all &mdash; it compares <em>meaning</em>. This is why RAG systems use embeddings instead of traditional search: your users won't always use the same vocabulary as your documents.</p>
+
+        <p>So what does an embedding actually look like? It's just an array of floating-point numbers &mdash; typically 1,536 of them:</p>
+        <div class="output-block">
+<div class="output-label">Actual embedding vector (truncated)</div>
+"heart attack treatment" → [0.023, -0.841, 0.129, 0.567, -0.302, ... 1531 more floats]
+"myocardial infarction therapy" → [0.019, -0.838, 0.134, 0.571, -0.298, ... 1531 more floats]
+"best pizza recipes" → [0.892, 0.104, -0.667, 0.023, 0.445, ... 1531 more floats]</div>
+        <p>Notice how the first two vectors start with almost identical numbers &mdash; they mean the same thing, so their coordinates are nearly the same. The pizza vector looks completely different. That's the whole trick: meaning becomes geometry, and "similar meaning" becomes "short distance."</p>
+
+        <div class="tech-def-box">
+          <span class="box-label">Technical Definition</span>
+          Text embeddings are dense numerical vectors &mdash; long arrays of floating-point numbers, typically 768 to 1,536 dimensions. They are produced by a specialized <span class="term-tooltip" tabindex="0" aria-describedby="tt-embedmodel">embedding model<span class="tooltip-content" role="tooltip" id="tt-embedmodel">A neural network trained specifically to convert text into fixed-size vectors that capture semantic meaning. Examples include Voyage AI embeddings and OpenAI's text-embedding-3-small. These models are different from LLMs &mdash; they produce vectors, not text.</span></span> (not the same as an LLM &mdash; embedding models output numbers, not text). When two pieces of text mean similar things, their vectors end up close together, measured by cosine similarity (a score from 0 to 1, where 1 means identical meaning). This is what makes <strong>semantic search</strong> possible: finding relevant content by meaning rather than keyword matching.
+        </div>
+
+        <div class="callout-warning">
+          <span class="box-label">&#9888;&#65039; Common Misconceptions About Embeddings</span>
+          <p><strong>"Embeddings understand language like humans do"</strong> &mdash; No. Embeddings capture statistical patterns of word co-occurrence, not true understanding. "Bank" (financial) and "bank" (river) get the same embedding unless the surrounding context disambiguates them. Always embed enough context (a sentence or paragraph), not isolated words.</p>
+          <p><strong>"All embedding models produce the same quality"</strong> &mdash; Far from it. A general-purpose embedding model may not distinguish "UCC-1 filing" from "UCC-3 amendment" well, because it wasn't trained on legal text. Domain-specific or fine-tuned embedding models can dramatically improve retrieval quality for specialized content.</p>
+          <p style="margin-bottom:0;"><strong>"You can compare embeddings from different models"</strong> &mdash; You cannot. An embedding from Voyage AI and one from OpenAI live in completely different vector spaces. Cosine similarity between them is meaningless. Always use the same model for both indexing and querying.</p>
+        </div>
+
+        <!-- SVG Diagram: Embedding Space 2D Scatter -->
+        <div class="animation-container" aria-label="Diagram showing document chunks as points in a 2D embedding space with query similarity search">
+          <div class="animation-title">Embedding Space &mdash; 2D Scatter</div>
+          <svg viewBox="0 0 600 380" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="2D scatter plot showing document chunks as colored dots grouped by topic, with a query shown as a star and dashed lines to the three nearest neighbors" style="width:100%;max-width:600px;margin:0 auto;display:block;">
+            <style>
+              .es-axis { stroke: var(--text-muted, #64748B); stroke-width: 1; }
+              .es-axis-label { fill: var(--text-muted, #64748B); font-family: system-ui, sans-serif; font-size: 10px; }
+              .es-dot-medical { fill: var(--info, #3B82F6); opacity: 0.85; }
+              .es-dot-legal { fill: var(--success, #10B981); opacity: 0.85; }
+              .es-dot-food { fill: var(--error, #F43F5E); opacity: 0.85; }
+              .es-dot-label { fill: var(--text-secondary, #94A3B8); font-family: system-ui, sans-serif; font-size: 8px; }
+              .es-query { fill: var(--accent-primary, #D4A843); }
+              .es-query-label { fill: var(--accent-primary, #D4A843); font-family: system-ui, sans-serif; font-size: 9px; font-weight: 600; }
+              .es-dist { stroke: var(--accent-primary, #D4A843); stroke-width: 1; stroke-dasharray: 4 2; opacity: 0.7; }
+              .es-legend { fill: var(--text-secondary, #94A3B8); font-family: system-ui, sans-serif; font-size: 9px; }
+              .es-cluster { fill: none; stroke-width: 1; stroke-dasharray: 3 3; opacity: 0.3; rx: 20; }
+              @media (prefers-reduced-motion: reduce) { .es-dot-medical, .es-dot-legal, .es-dot-food, .es-query { transition: none; } }
+            </style>
+            <!-- Axes -->
+            <line x1="60" y1="340" x2="580" y2="340" class="es-axis"/>
+            <line x1="60" y1="340" x2="60" y2="20" class="es-axis"/>
+            <text x="320" y="370" class="es-axis-label" text-anchor="middle">Semantic Dimension 1</text>
+            <text x="18" y="180" class="es-axis-label" text-anchor="middle" transform="rotate(-90, 18, 180)">Semantic Dimension 2</text>
+            <!-- Cluster: Medical (top-left) -->
+            <rect x="80" y="40" width="180" height="140" class="es-cluster" style="stroke: var(--info, #3B82F6);"/>
+            <circle cx="130" cy="90" r="7" class="es-dot-medical"/>
+            <text x="130" y="78" class="es-dot-label" text-anchor="middle">heart attack treatment</text>
+            <circle cx="170" cy="110" r="7" class="es-dot-medical"/>
+            <text x="170" y="128" class="es-dot-label" text-anchor="middle">myocardial infarction</text>
+            <circle cx="110" cy="140" r="7" class="es-dot-medical"/>
+            <text x="110" y="158" class="es-dot-label" text-anchor="middle">cardiac symptoms</text>
+            <circle cx="200" cy="80" r="7" class="es-dot-medical"/>
+            <text x="200" y="68" class="es-dot-label" text-anchor="middle">blood pressure meds</text>
+            <circle cx="150" cy="160" r="7" class="es-dot-medical"/>
+            <!-- Cluster: Legal/UCC (center-right) -->
+            <rect x="320" y="100" width="200" height="140" class="es-cluster" style="stroke: var(--success, #10B981);"/>
+            <circle cx="380" cy="150" r="7" class="es-dot-legal"/>
+            <text x="380" y="138" class="es-dot-label" text-anchor="middle">UCC filing requirements</text>
+            <circle cx="420" cy="180" r="7" class="es-dot-legal"/>
+            <text x="420" y="198" class="es-dot-label" text-anchor="middle">lien priority rules</text>
+            <circle cx="460" cy="150" r="7" class="es-dot-legal"/>
+            <text x="460" y="138" class="es-dot-label" text-anchor="middle">debtor obligations</text>
+            <circle cx="390" cy="210" r="7" class="es-dot-legal"/>
+            <text x="390" y="228" class="es-dot-label" text-anchor="middle">continuation statements</text>
+            <circle cx="450" cy="200" r="7" class="es-dot-legal"/>
+            <!-- Cluster: Food (bottom-right) -->
+            <rect x="370" y="260" width="170" height="80" class="es-cluster" style="stroke: var(--error, #F43F5E);"/>
+            <circle cx="420" cy="290" r="7" class="es-dot-food"/>
+            <text x="420" y="308" class="es-dot-label" text-anchor="middle">best pizza recipes</text>
+            <circle cx="480" cy="300" r="7" class="es-dot-food"/>
+            <text x="480" y="318" class="es-dot-label" text-anchor="middle">pasta cooking tips</text>
+            <circle cx="450" cy="280" r="7" class="es-dot-food"/>
+            <!-- Query star -->
+            <polygon points="360,160 364,172 377,172 367,180 370,192 360,184 350,192 353,180 343,172 356,172" class="es-query"/>
+            <text x="360" y="205" class="es-query-label" text-anchor="middle">QUERY: "UCC amendment</text>
+            <text x="360" y="216" class="es-query-label" text-anchor="middle">filing process"</text>
+            <!-- Distance lines to nearest neighbors -->
+            <line x1="360" y1="168" x2="380" y2="150" class="es-dist"/>
+            <line x1="360" y1="168" x2="390" y2="210" class="es-dist"/>
+            <line x1="360" y1="168" x2="420" y2="180" class="es-dist"/>
+            <!-- Nearest neighbor highlights -->
+            <circle cx="380" cy="150" r="12" fill="none" stroke="var(--accent-primary, #D4A843)" stroke-width="2" opacity="0.6"/>
+            <circle cx="390" cy="210" r="12" fill="none" stroke="var(--accent-primary, #D4A843)" stroke-width="2" opacity="0.6"/>
+            <circle cx="420" cy="180" r="12" fill="none" stroke="var(--accent-primary, #D4A843)" stroke-width="2" opacity="0.6"/>
+            <!-- Legend -->
+            <circle cx="80" cy="360" r="5" class="es-dot-medical"/>
+            <text x="90" y="364" class="es-legend">Medical</text>
+            <circle cx="150" cy="360" r="5" class="es-dot-legal"/>
+            <text x="160" y="364" class="es-legend">Legal/UCC</text>
+            <circle cx="225" cy="360" r="5" class="es-dot-food"/>
+            <text x="235" y="364" class="es-legend">Food</text>
+            <polygon points="300,360 302,366 308,366 304,370 305,376 300,372 295,376 296,370 292,366 298,366" class="es-query"/>
+            <text x="315" y="370" class="es-legend">Query</text>
+            <circle cx="385" cy="366" r="8" fill="none" stroke="var(--accent-primary, #D4A843)" stroke-width="1.5" opacity="0.6"/>
+            <text x="398" y="370" class="es-legend">Top-K match (k=3)</text>
+          </svg>
+        </div>
+
+        <!-- Animation 2: Embedding Space -->
+        <div class="animation-container" style="min-height:320px;" aria-label="Animation showing text embeddings as points in a 2D meaning space with similarity search">
+          <div class="animation-title">Animation: Embedding Space &mdash; Words as Coordinates</div>
+          <div class="embed-canvas" id="embedCanvas"></div>
+          <div class="pipe-ann" id="embedAnn" style="margin-top:0.5rem;"></div>
+          <div class="animation-controls">
+            <button class="anim-btn" onclick="embedPlay()" aria-label="Play animation" title="Play">&#9654;</button>
+            <button class="anim-btn" onclick="embedPause()" aria-label="Pause animation" title="Pause">&#9208;</button>
+            <button class="anim-btn" onclick="embedRestart()" aria-label="Restart animation" title="Restart">&#8635;</button>
+            <button class="anim-btn step-btn" onclick="embedStepFwd()" aria-label="Step forward" title="Step forward">&#9197;</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ==================== CONCEPT 4: CHUNKING ==================== -->
+      <section class="section" id="chunking">
+        <h2 id="chunking-heading">Chunking Strategies</h2>
+
+        <div class="analogy-box">
+          <span class="box-label">Everyday Analogy</span>
+          <p><strong>BEFORE:</strong> Imagine you have a 300-page textbook and you need to create study flashcards &mdash; but you have to decide how much text goes on each card before you start studying.</p>
+          <p><strong>PAIN:</strong> Cut <strong>too big</strong> (an entire chapter per card) and you waste time re-reading pages of irrelevant material to find one sentence. Cut <strong>too small</strong> (one sentence per card) and you lose the surrounding context that makes that sentence meaningful &mdash; "the treatment was effective" means nothing without knowing which treatment and for what condition.</p>
+          <p style="margin-bottom:0;"><strong>MAPPING:</strong> Chunking is exactly this trade-off for your RAG system: each chunk is a flashcard that the retrieval engine can hand to Claude, and the right card size depends on the structure and density of your specific material.</p>
+        </div>
+
+        <p>Chunking is the process of splitting your documents into smaller pieces before embedding. Why not just embed the whole document? Because embedding models work best with short text (under ~512 tokens). A 5,000-word document crammed into a single vector loses nuance &mdash; the embedding becomes a blurry average of everything the document discusses, making it hard to match specific questions.</p>
+
+        <p>The core challenge is finding the right granularity. Too large, and each chunk covers multiple topics, so the retriever finds the chunk but Claude has to hunt for the relevant sentence inside a wall of text. Too small, and each chunk loses context &mdash; "the treatment was effective" tells you nothing without knowing which treatment or which patient. Most teams start with 300&ndash;500 character chunks and tune from there based on retrieval quality.</p>
+
+        <p>If you've used database pagination (<code>LIMIT 50 OFFSET 100</code>), chunking feels similar &mdash; you're dividing data into pages. But there's a crucial difference: database pages don't overlap, while chunks should. Without overlap, a sentence that spans a chunk boundary gets split across two chunks, and neither chunk alone answers the question. The overlap parameter (typically 10&ndash;20% of chunk size) duplicates a few sentences at each boundary to prevent this.</p>
+
+        <p>Here's what actual chunks look like after splitting a short document. Notice how the overlap zone duplicates text at chunk boundaries to preserve context:</p>
+        <div class="output-block">
+<div class="output-label">Original document (210 chars)</div>
+"UCC filings must be filed in the state where the debtor is located. The filing office assigns a unique file number. Continuation statements must be filed within 6 months before the 5-year lapse date."
+
+<div class="output-label">After chunking (chunk_size=120, overlap=30) &rarr; 2 chunks</div>
+Chunk 0: "UCC filings must be filed in the state where the debtor is located. The filing office assigns a unique file number."
+Chunk 1: "assigns a unique file number. Continuation statements must be filed within 6 months before the 5-year lapse date."
+         ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ &larr; overlap zone (30 chars from previous chunk)</div>
+        <p>The overlap ensures "The filing office assigns a unique file number" appears in both chunks, so a query about file numbers will match regardless of which chunk the retriever finds.</p>
+
+        <div class="tech-def-box">
+          <span class="box-label">Technical Definition</span>
+          Chunking divides source documents into smaller segments so each one can be embedded and searched independently. There are three main strategies. <strong>Fixed-size chunking</strong> splits by character or token count with <span class="term-tooltip" tabindex="0" aria-describedby="tt-overlap">overlap<span class="tooltip-content" role="tooltip" id="tt-overlap">The number of characters/tokens shared between adjacent chunks. Overlap ensures that information at chunk boundaries isn't lost. A typical overlap is 10-20% of the chunk size (e.g., chunk_size=500, overlap=50).</span></span> between adjacent chunks &mdash; simple and predictable, but may cut mid-sentence. <strong>Recursive chunking</strong> tries to split at natural boundaries first (headings, then paragraphs, then sentences), respecting document structure. <strong>Semantic chunking</strong> is the most advanced: it detects topic shifts by comparing embedding similarity between consecutive paragraphs, and splits where the topic changes.
+        </div>
+
+        <!-- SVG Diagram: Chunking Comparison -->
+        <div class="animation-container" aria-label="Diagram comparing three chunking strategies: fixed-size, recursive, and semantic">
+          <div class="animation-title">Chunking Strategy Comparison</div>
+          <svg viewBox="0 0 600 320" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Same document shown chunked three ways: fixed-size with rigid cuts, recursive respecting paragraph boundaries, and semantic detecting topic shifts" style="width:100%;max-width:600px;margin:0 auto;display:block;">
+            <style>
+              .cs-label { fill: var(--text-primary, #E8ECF1); font-family: system-ui, sans-serif; font-size: 11px; font-weight: 600; }
+              .cs-sub { fill: var(--text-secondary, #94A3B8); font-family: system-ui, sans-serif; font-size: 8.5px; }
+              .cs-doc { fill: var(--bg-surface, #1A2740); stroke: var(--text-muted, #64748B); stroke-width: 1; rx: 4; }
+              .cs-chunk-fixed { stroke: var(--warning, #F59E0B); stroke-width: 1.5; rx: 4; }
+              .cs-chunk-recursive { stroke: var(--info, #3B82F6); stroke-width: 1.5; rx: 4; }
+              .cs-chunk-semantic { stroke: var(--success, #10B981); stroke-width: 1.5; rx: 4; }
+              .cs-overlap { fill: var(--accent-muted, rgba(212,168,67,0.15)); }
+              .cs-cut { stroke: var(--error, #F43F5E); stroke-width: 1; stroke-dasharray: 3 2; }
+              .cs-cut-good { stroke: var(--success, #10B981); stroke-width: 1; stroke-dasharray: 3 2; }
+              .cs-chunk-label { font-family: system-ui, sans-serif; font-size: 7.5px; text-anchor: middle; }
+              @media (prefers-reduced-motion: reduce) { * { transition: none; } }
+            </style>
+            <!-- Original Document -->
+            <text x="16" y="20" class="cs-label">Original Document</text>
+            <text x="180" y="20" class="cs-sub">(2000 characters &mdash; 3 topics: Filing Rules, Fee Schedule, Deadlines)</text>
+            <rect x="16" y="28" width="568" height="28" class="cs-doc"/>
+            <text x="70" y="46" class="cs-sub" style="fill:var(--info,#3B82F6);">Filing Rules</text>
+            <text x="260" y="46" class="cs-sub" style="fill:var(--warning,#F59E0B);">Fee Schedule</text>
+            <text x="460" y="46" class="cs-sub" style="fill:var(--success,#10B981);">Deadlines</text>
+            <line x1="190" y1="30" x2="190" y2="54" class="cs-cut-good" opacity="0.4"/>
+            <line x1="370" y1="30" x2="370" y2="54" class="cs-cut-good" opacity="0.4"/>
+            <!-- Fixed-Size Chunking -->
+            <text x="16" y="88" class="cs-label" style="fill:var(--warning,#F59E0B);">Fixed-Size</text>
+            <text x="105" y="88" class="cs-sub">500 chars each, 50 overlap &mdash; 5 equal chunks (cuts mid-sentence)</text>
+            <rect x="16" y="96" width="105" height="28" fill="var(--bg-surface,#1A2740)" class="cs-chunk-fixed"/>
+            <text x="68" y="114" class="cs-chunk-label" style="fill:var(--warning,#F59E0B);">Chunk 1</text>
+            <rect x="109" y="96" width="12" height="28" class="cs-overlap"/>
+            <rect x="121" y="96" width="105" height="28" fill="var(--bg-surface,#1A2740)" class="cs-chunk-fixed"/>
+            <text x="173" y="114" class="cs-chunk-label" style="fill:var(--warning,#F59E0B);">Chunk 2</text>
+            <rect x="214" y="96" width="12" height="28" class="cs-overlap"/>
+            <rect x="226" y="96" width="105" height="28" fill="var(--bg-surface,#1A2740)" class="cs-chunk-fixed"/>
+            <text x="278" y="114" class="cs-chunk-label" style="fill:var(--warning,#F59E0B);">Chunk 3</text>
+            <rect x="319" y="96" width="12" height="28" class="cs-overlap"/>
+            <rect x="331" y="96" width="105" height="28" fill="var(--bg-surface,#1A2740)" class="cs-chunk-fixed"/>
+            <text x="383" y="114" class="cs-chunk-label" style="fill:var(--warning,#F59E0B);">Chunk 4</text>
+            <rect x="424" y="96" width="12" height="28" class="cs-overlap"/>
+            <rect x="436" y="96" width="105" height="28" fill="var(--bg-surface,#1A2740)" class="cs-chunk-fixed"/>
+            <text x="488" y="114" class="cs-chunk-label" style="fill:var(--warning,#F59E0B);">Chunk 5</text>
+            <!-- Cut lines through topic boundaries -->
+            <line x1="121" y1="92" x2="121" y2="128" class="cs-cut"/>
+            <line x1="226" y1="92" x2="226" y2="128" class="cs-cut"/>
+            <line x1="331" y1="92" x2="331" y2="128" class="cs-cut"/>
+            <line x1="436" y1="92" x2="436" y2="128" class="cs-cut"/>
+            <text x="560" y="114" class="cs-sub" style="fill:var(--error,#F43F5E);">&#x2718; cuts topics</text>
+            <!-- Recursive Chunking -->
+            <text x="16" y="162" class="cs-label" style="fill:var(--info,#3B82F6);">Recursive</text>
+            <text x="97" y="162" class="cs-sub">Heading &rarr; paragraph boundaries &mdash; 4 natural chunks</text>
+            <rect x="16" y="170" width="160" height="28" fill="var(--bg-surface,#1A2740)" class="cs-chunk-recursive"/>
+            <text x="96" y="188" class="cs-chunk-label" style="fill:var(--info,#3B82F6);">Filing Rules &sect;1</text>
+            <rect x="186" y="170" width="100" height="28" fill="var(--bg-surface,#1A2740)" class="cs-chunk-recursive"/>
+            <text x="236" y="188" class="cs-chunk-label" style="fill:var(--info,#3B82F6);">Filing Rules &sect;2</text>
+            <rect x="296" y="170" width="140" height="28" fill="var(--bg-surface,#1A2740)" class="cs-chunk-recursive"/>
+            <text x="366" y="188" class="cs-chunk-label" style="fill:var(--info,#3B82F6);">Fee Schedule</text>
+            <rect x="446" y="170" width="138" height="28" fill="var(--bg-surface,#1A2740)" class="cs-chunk-recursive"/>
+            <text x="515" y="188" class="cs-chunk-label" style="fill:var(--info,#3B82F6);">Deadlines</text>
+            <text x="560" y="162" class="cs-sub" style="fill:var(--info,#3B82F6);">&#x2714; respects headings</text>
+            <!-- Semantic Chunking -->
+            <text x="16" y="234" class="cs-label" style="fill:var(--success,#10B981);">Semantic</text>
+            <text x="97" y="234" class="cs-sub">Topic-shift detection &mdash; 3 meaningful chunks</text>
+            <rect x="16" y="242" width="190" height="28" fill="var(--bg-surface,#1A2740)" class="cs-chunk-semantic"/>
+            <text x="111" y="260" class="cs-chunk-label" style="fill:var(--success,#10B981);">Filing Rules (complete)</text>
+            <rect x="216" y="242" width="180" height="28" fill="var(--bg-surface,#1A2740)" class="cs-chunk-semantic"/>
+            <text x="306" y="260" class="cs-chunk-label" style="fill:var(--success,#10B981);">Fee Schedule (complete)</text>
+            <rect x="406" y="242" width="178" height="28" fill="var(--bg-surface,#1A2740)" class="cs-chunk-semantic"/>
+            <text x="495" y="260" class="cs-chunk-label" style="fill:var(--success,#10B981);">Deadlines (complete)</text>
+            <text x="560" y="234" class="cs-sub" style="fill:var(--success,#10B981);">&#x2714; topic-aligned</text>
+            <!-- Legend -->
+            <rect x="16" y="290" width="40" height="14" class="cs-overlap" style="stroke:var(--text-muted,#64748B);stroke-width:0.5;"/>
+            <text x="62" y="301" class="cs-sub">Overlap zone</text>
+            <line x1="130" y1="290" x2="130" y2="304" class="cs-cut"/>
+            <text x="140" y="301" class="cs-sub" style="fill:var(--error,#F43F5E);">Cut through topic</text>
+            <line x1="270" y1="290" x2="270" y2="304" class="cs-cut-good"/>
+            <text x="280" y="301" class="cs-sub" style="fill:var(--success,#10B981);">Natural boundary</text>
+          </svg>
+        </div>
+
+        <!-- Animation 3: Chunking Comparison -->
+        <div class="animation-container" style="min-height:260px;" aria-label="Animation comparing fixed-size, recursive, and semantic chunking strategies">
+          <div class="animation-title">Animation: Chunking Strategy Comparison</div>
+          <div id="chunkAnim" style="display:flex;flex-direction:column;gap:0.75rem;">
+            <div>
+              <div class="chunk-label">Original Document (2000 chars)</div>
+              <div class="chunk-row" id="chunk-orig"></div>
+            </div>
+            <div>
+              <div class="chunk-label">Fixed-Size (500 chars, 50 overlap) &mdash; 5 chunks</div>
+              <div class="chunk-row" id="chunk-fixed"></div>
+            </div>
+            <div>
+              <div class="chunk-label">Recursive (by headings &rarr; paragraphs) &mdash; 4 chunks</div>
+              <div class="chunk-row" id="chunk-recursive"></div>
+            </div>
+            <div>
+              <div class="chunk-label">Semantic (by topic shift) &mdash; 3 chunks</div>
+              <div class="chunk-row" id="chunk-semantic"></div>
+            </div>
+          </div>
+          <div class="pipe-ann" id="chunkAnn" style="margin-top:0.5rem;"></div>
+          <div class="animation-controls">
+            <button class="anim-btn" onclick="chunkPlay()" aria-label="Play animation" title="Play">&#9654;</button>
+            <button class="anim-btn" onclick="chunkPause()" aria-label="Pause animation" title="Pause">&#9208;</button>
+            <button class="anim-btn" onclick="chunkRestart()" aria-label="Restart animation" title="Restart">&#8635;</button>
+            <button class="anim-btn step-btn" onclick="chunkStepFwd()" aria-label="Step forward" title="Step forward">&#9197;</button>
+          </div>
+        </div>
+
+        <div class="callout-warning">
+          <span class="box-label">Key Insight</span>
+          Chunking strategy <strong>directly determines retrieval quality</strong>. Poor chunks mean the right answer exists in your corpus but the system cannot find it. Always experiment with chunk sizes for your specific content.
+        </div>
+      </section>
+
+      <!-- ==================== CONCEPT 5: VECTOR DBS ==================== -->
+      <section class="section" id="vector-dbs">
+        <h2 id="vector-dbs-heading">Vector Databases</h2>
+
+        <div class="analogy-box">
+          <span class="box-label">Everyday Analogy</span>
+          <p><strong>BEFORE:</strong> Imagine a traditional library where books are shelved alphabetically by author &mdash; to find everything about "machine learning in healthcare," you'd need to know every author who ever wrote on that topic and check each shelf individually.</p>
+          <p><strong>PAIN:</strong> You inevitably miss relevant books because you didn't know the author's name, and you waste hours browsing shelves that are organized by a criterion (author name) that has nothing to do with what you actually care about (the topic).</p>
+          <p style="margin-bottom:0;"><strong>MAPPING:</strong> A vector database is a library where books are shelved by <strong>what they're about</strong> &mdash; all books about "machine learning in healthcare" end up near each other regardless of who wrote them, and you find them by describing the topic you need rather than knowing an exact title or keyword.</p>
+        </div>
+
+        <p>Here's what a "row" in a vector database actually contains &mdash; the vector, the original text, and metadata sitting side by side:</p>
+        <div class="output-block">
+<div class="output-label">One row in ChromaDB (conceptual view)</div>
+{
+  "id": "chunk_14",
+  "vector": [0.023, -0.841, 0.129, ... 1533 more floats],
+  "document": "UCC continuation statements must be filed within 6 months before the 5-year lapse date...",
+  "metadata": { "source": "filing_guide.md", "chunk_index": 14 }
+}</div>
+        <p>When you query the database, it compares your question's vector against every stored vector, finds the closest matches, and returns the <code>document</code> text and <code>metadata</code> for each. You never have to work with the raw vectors yourself &mdash; the database handles that.</p>
+
+        <div class="tech-def-box">
+          <span class="box-label">Technical Definition</span>
+          A vector database is a specialized storage system designed for one job: storing high-dimensional vectors (those long arrays of floats from the embedding step) and finding the closest matches to a query vector extremely fast. It also stores the original text and any metadata you attach &mdash; so when a search returns a match, you get back the actual chunk text, not just a vector.
+        </div>
+
+        <p>Under the hood, vector databases use <span class="term-tooltip" tabindex="0" aria-describedby="tt-ann">approximate nearest neighbor (ANN)<span class="tooltip-content" role="tooltip" id="tt-ann">An algorithm that finds vectors "close to" a query vector without checking every single vector in the database. ANN trades a tiny amount of accuracy for massive speed gains, using index structures like HNSW (Hierarchical Navigable Small World) graphs.</span></span> algorithms to avoid comparing your query against every single stored vector. The most common algorithm is called HNSW (Hierarchical Navigable Small World). It works by building a graph structure that connects similar vectors to each other. When a query arrives, instead of checking all 100,000 vectors, the algorithm navigates the graph and checks maybe 200 &mdash; returning results in milliseconds with 95&ndash;99% accuracy. This small trade-off in precision makes the difference between a search that takes 50ms and one that takes 30 seconds.</p>
+
+        <p>If you already know SQL databases, here's the key contrast: in PostgreSQL, you'd write <code>SELECT * WHERE debtor_name = 'Acme Corp'</code> &mdash; an exact match. A vector database lets you say "find me everything semantically similar to 'Acme Corporation'" and it would also find "ACME CORP," "Acme Corp Inc," and related entities &mdash; because their embedding vectors are close together. It's the difference between exact lookup and meaning-based search.</p>
+
+        <p>Popular options include: <strong>ChromaDB</strong> (local, Python-native, great for prototyping), <strong>Pinecone</strong> (managed cloud service, scales to billions of vectors), and <strong>pgvector</strong> (a PostgreSQL extension that adds vector search to your existing database).</p>
+
+        <div class="callout-cost">
+          <span class="box-label">Choosing a Vector DB</span>
+          For learning and prototyping, use <strong>ChromaDB</strong> &mdash; it runs locally, needs no API key, and stores data in-process. For production at scale, evaluate Pinecone or pgvector based on your infrastructure.
+        </div>
+
+        <div class="callout-warning">
+          <span class="box-label">&#9888;&#65039; Common Misconceptions About Vector Databases</span>
+          <p><strong>"Vector databases replace SQL databases"</strong> &mdash; They don't. Vector databases excel at similarity search but are terrible at exact lookups, joins, aggregations, or transactions. Most production RAG systems use both: a vector DB for retrieval and a SQL DB for metadata, user data, and business logic.</p>
+          <p><strong>"ANN search always returns the best matches"</strong> &mdash; The "approximate" in ANN means it trades a small amount of accuracy for massive speed. In rare cases, the true nearest neighbor may not appear in results. For most RAG applications this is fine (95&ndash;99% accuracy), but if you need guaranteed exact results, use exact nearest neighbor search (much slower).</p>
+          <p style="margin-bottom:0;"><strong>"More vectors = slower search"</strong> &mdash; Not linearly. HNSW index performance scales logarithmically, so going from 10,000 to 100,000 vectors barely changes query time. The real bottleneck is usually the embedding step (calling the API to convert the query to a vector), not the search itself.</p>
+        </div>
+      </section>
+
+      <!-- ==================== CODE WALKTHROUGH ==================== -->
+      <section class="section" id="code-walkthrough">
+        <h2 id="code-walkthrough-heading">Code Walkthrough: Chat with Your Docs</h2>
+
+        <div style="background: rgba(139,92,246,0.05); border-left: 3px solid var(--accent-primary); padding: 1rem 1.25rem; margin: 1.25rem 0; border-radius: 0 6px 6px 0;">
+          <strong>Conceptual Bridge:</strong> You now understand the six-stage RAG pipeline conceptually (Load &rarr; Chunk &rarr; Embed &rarr; Store &rarr; Retrieve &rarr; Generate), how embeddings turn text into searchable coordinates, and why chunking strategy matters. Next, you'll implement all six stages in working code. We'll build it in three steps: first load and chunk documents, then embed and store them in ChromaDB, and finally wire up retrieval with Claude to answer questions.
+        </div>
+
+        <h3 id="ingest-heading">Step 1: Document Loading &amp; Chunking</h3>
+        <p>Let's start by getting our documents into the system. The <code>load_documents</code> function is straightforward &mdash; it reads every markdown and text file from a folder and returns them as a list. Nothing clever here, just file I/O with proper error handling (we skip files with encoding issues rather than crashing the whole pipeline).</p>
+        <p>The interesting part is <code>chunk_text</code>. Here's the dilemma: embedding models work best with short text &mdash; typically under 512 tokens &mdash; but our documents might be thousands of words. We <em>could</em> just chop the text every 500 characters, but that might cut a sentence in half. So instead, the function tries to find a natural break point &mdash; a paragraph boundary, a period, or at worst a space &mdash; before making the cut. This small detail makes a real difference in retrieval quality.</p>
+        <p>One thing to watch for: the 50-character overlap between chunks. Without overlap, information that spans a chunk boundary gets split across two chunks, and neither chunk alone contains the full thought. The overlap duplicates a small amount of text at each boundary, acting as insurance that context isn't lost.</p>
+        <div class="code-block-wrapper">
+          <div class="code-tabs" role="tablist" aria-label="Code language tabs">
+            <button class="code-tab active" role="tab" aria-selected="true" onclick="switchTab(this,'ingest')" data-lang="python" id="tab-ingest-py">Python</button>
+            <button class="code-tab" role="tab" aria-selected="false" onclick="switchTab(this,'ingest')" data-lang="nodejs" id="tab-ingest-js">Node.js</button>
+          </div>
+          <div class="code-panel active" id="ingest-python" role="tabpanel" aria-labelledby="tab-ingest-py">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy Python code">Copy</button>
+            <pre><code class="language-python"># pip install chromadb>=0.4.0 anthropic>=0.30.0
+import os
+import glob
+
+def load_documents(docs_dir: str) -> list[dict]:
+    """Load all .md and .txt files from a directory."""
+    docs = []
+    for pattern in ["*.md", "*.txt"]:
+        for path in glob.glob(os.path.join(docs_dir, pattern)):
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    docs.append({
+                        "content": f.read(),
+                        "source": os.path.basename(path),
+                    })
+            except (IOError, UnicodeDecodeError) as e:
+                print(f"Skipping {path}: {e}")
+    if not docs:
+        raise FileNotFoundError(f"No documents found in {docs_dir}")
+    return docs
+
+def chunk_text(
+    text: str, chunk_size: int = 500, overlap: int = 50
+) -> list[str]:
+    """Recursive character splitter with overlap."""
+    if len(text) <= chunk_size:
+        return [text]
+    chunks = []
+    start = 0
+    while start < len(text):
+        end = start + chunk_size
+        chunk = text[start:end]
+        # Try to break at a paragraph or sentence boundary
+        if end < len(text):
+            for sep in ["\n\n", "\n", ". ", " "]:
+                last_sep = chunk.rfind(sep)
+                if last_sep > chunk_size * 0.5:
+                    end = start + last_sep + len(sep)
+                    chunk = text[start:end]
+                    break
+        chunks.append(chunk.strip())
+        start = end - overlap  # overlap for continuity
+    return [c for c in chunks if c]
+
+# Usage
+docs = load_documents("./docs")
+all_chunks = []
+for doc in docs:
+    chunks = chunk_text(doc["content"], chunk_size=500, overlap=50)
+    for i, chunk in enumerate(chunks):
+        all_chunks.append({
+            "text": chunk,
+            "source": doc["source"],
+            "chunk_index": i,
+        })
+print(f"Loaded {len(docs)} docs, {len(all_chunks)} chunks")</code></pre>
+          </div>
+          <div class="code-panel" id="ingest-nodejs" role="tabpanel" aria-labelledby="tab-ingest-js">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy Node.js code">Copy</button>
+            <pre><code class="language-javascript">// npm install chromadb@^1.7.0 @anthropic-ai/sdk@^0.30.0
+import { readFileSync, readdirSync } from 'fs';
+import { join, basename } from 'path';
+
+function loadDocuments(docsDir) {
+  const files = readdirSync(docsDir).filter(
+    f => f.endsWith('.md') || f.endsWith('.txt')
+  );
+  if (files.length === 0)
+    throw new Error(`No documents found in ${docsDir}`);
+  return files.map(f => {
+    try {
+      return {
+        content: readFileSync(join(docsDir, f), 'utf-8'),
+        source: f,
+      };
+    } catch (e) {
+      console.warn(`Skipping ${f}: ${e.message}`);
+      return null;
+    }
+  }).filter(Boolean);
+}
+
+function chunkText(text, chunkSize = 500, overlap = 50) {
+  if (text.length <= chunkSize) return [text];
+  const chunks = [];
+  let start = 0;
+  while (start < text.length) {
+    let end = start + chunkSize;
+    let chunk = text.slice(start, end);
+    if (end < text.length) {
+      for (const sep of ['\n\n', '\n', '. ', ' ']) {
+        const lastSep = chunk.lastIndexOf(sep);
+        if (lastSep > chunkSize * 0.5) {
+          end = start + lastSep + sep.length;
+          chunk = text.slice(start, end);
+          break;
+        }
+      }
+    }
+    chunks.push(chunk.trim());
+    start = end - overlap;
+  }
+  return chunks.filter(Boolean);
+}
+
+const docs = loadDocuments('./docs');
+const allChunks = [];
+for (const doc of docs) {
+  const chunks = chunkText(doc.content, 500, 50);
+  chunks.forEach((chunk, i) => {
+    allChunks.push({ text: chunk, source: doc.source, chunkIndex: i });
+  });
+}
+console.log(`Loaded ${docs.length} docs, ${allChunks.length} chunks`);</code></pre>
+          </div>
+        </div>
+
+        <div style="background: rgba(16,185,129,0.06); border-left: 3px solid var(--success); padding: 1rem 1.25rem; margin: 1.25rem 0; border-radius: 0 6px 6px 0;">
+          <strong>What Just Happened?</strong> You loaded raw files from disk and split them into ~500-character chunks with 50-character overlap. Each chunk is a dictionary carrying the text, its source filename, and its position index. You now have a flat list of chunks ready for embedding &mdash; the "Load" and "Chunk" stages of the pipeline are complete.
+        </div>
+
+        <h3 id="embed-store-heading">Step 2: Embed &amp; Store in ChromaDB</h3>
+        <p>Now we need somewhere to store our chunks as searchable vectors. Here's the pleasant surprise: ChromaDB handles the embedding step for you. When you call <code>collection.add()</code> with text documents, ChromaDB automatically runs them through its built-in embedding model and stores the resulting vectors. You never touch a separate embedding API. The <code>"hnsw:space": "cosine"</code> setting tells ChromaDB to use cosine similarity when searching &mdash; the standard for text embeddings, as we discussed in the Embeddings section.</p>
+        <p>One gotcha that trips up every beginner: <code>chromadb.Client()</code> stores everything <strong>in memory only</strong>. When your Python script exits, all your vectors disappear. For this lab that's fine &mdash; we re-ingest each run. But for anything beyond a quick experiment, switch to <code>chromadb.PersistentClient(path="./chroma_db")</code>, which writes to disk and survives restarts. Also worth knowing: ChromaDB's default embedding model is good enough for prototyping, but for production you'll want Voyage AI or OpenAI embeddings, which produce more accurate similarity scores for domain-specific content like legal or medical text.</p>
+        <div class="code-block-wrapper">
+          <div class="code-tabs" role="tablist" aria-label="Code language tabs">
+            <button class="code-tab active" role="tab" aria-selected="true" onclick="switchTab(this,'store')" data-lang="python" id="tab-store-py">Python</button>
+            <button class="code-tab" role="tab" aria-selected="false" onclick="switchTab(this,'store')" data-lang="nodejs" id="tab-store-js">Node.js</button>
+          </div>
+          <div class="code-panel active" id="store-python" role="tabpanel" aria-labelledby="tab-store-py">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy Python code">Copy</button>
+            <pre><code class="language-python">import chromadb
+
+# ChromaDB uses its own built-in embedding model by default
+client = chromadb.Client()  # in-memory; use PersistentClient for disk
+collection = client.get_or_create_collection(
+    name="my_docs",
+    metadata={"hnsw:space": "cosine"},  # use cosine similarity
+)
+
+# Add chunks with metadata
+try:
+    collection.add(
+        ids=[f"chunk_{i}" for i in range(len(all_chunks))],
+        documents=[c["text"] for c in all_chunks],
+        metadatas=[{"source": c["source"], "index": c["chunk_index"]}
+                   for c in all_chunks],
+    )
+    print(f"Stored {collection.count()} chunks in ChromaDB")
+except Exception as e:
+    print(f"Error storing chunks: {e}")
+    raise</code></pre>
+          </div>
+          <div class="code-panel" id="store-nodejs" role="tabpanel" aria-labelledby="tab-store-js">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy Node.js code">Copy</button>
+            <pre><code class="language-javascript">import { ChromaClient } from 'chromadb';
+
+const chroma = new ChromaClient();
+const collection = await chroma.getOrCreateCollection({
+  name: "my_docs",
+  metadata: { "hnsw:space": "cosine" },
+});
+
+try {
+  await collection.add({
+    ids: allChunks.map((_, i) => `chunk_${i}`),
+    documents: allChunks.map(c => c.text),
+    metadatas: allChunks.map(c => ({
+      source: c.source, index: c.chunkIndex
+    })),
+  });
+  const count = await collection.count();
+  console.log(`Stored ${count} chunks in ChromaDB`);
+} catch (e) {
+  console.error(`Error storing chunks: ${e.message}`);
+  throw e;
+}</code></pre>
+          </div>
+        </div>
+
+        <div style="background: rgba(16,185,129,0.06); border-left: 3px solid var(--success); padding: 1rem 1.25rem; margin: 1.25rem 0; border-radius: 0 6px 6px 0;">
+          <strong>What Just Happened?</strong> You created a ChromaDB collection and inserted all your chunks. ChromaDB automatically converted each chunk's text into an embedding vector and stored it alongside the metadata. The "Embed" and "Store" pipeline stages are now complete &mdash; your documents are searchable by meaning.
+        </div>
+
+        <h3 id="query-heading">Step 3: Retrieve &amp; Generate with Claude</h3>
+        <p>This is where everything comes together &mdash; the "Retrieve" and "Generate" stages working as a pair. When a user asks a question, two things happen in sequence. First, we query ChromaDB to find the top-k most semantically similar chunks. Then we format those chunks into a context block and send them to Claude along with the original question. The key insight: we inject only the most relevant chunks (typically 3&ndash;5), not the entire corpus. This keeps the prompt small enough for Claude's context window while providing exactly the information needed to answer.</p>
+        <p>Pay close attention to the system prompt &mdash; it's the most important design decision in this entire function. We tell Claude to answer "based ONLY on the provided context" and to explicitly say so if the context doesn't contain the answer. Why so strict? Without this grounding instruction, Claude will cheerfully fall back to its training data and make up plausible-sounding answers &mdash; defeating the entire purpose of RAG. Also notice we wrap retrieval and generation in separate try/except blocks. These are independent failure points: ChromaDB might be down, or the Claude API might return a rate limit error. Catching them separately means you get a clear error message pointing to exactly which stage failed.</p>
+        <div class="code-block-wrapper">
+          <div class="code-tabs" role="tablist" aria-label="Code language tabs">
+            <button class="code-tab active" role="tab" aria-selected="true" onclick="switchTab(this,'query')" data-lang="python" id="tab-query-py">Python</button>
+            <button class="code-tab" role="tab" aria-selected="false" onclick="switchTab(this,'query')" data-lang="nodejs" id="tab-query-js">Node.js</button>
+          </div>
+          <div class="code-panel active" id="query-python" role="tabpanel" aria-labelledby="tab-query-py">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy Python code">Copy</button>
+            <pre><code class="language-python">import anthropic
+
+claude = anthropic.Anthropic()  # reads ANTHROPIC_API_KEY env var
+
+def query_rag(question: str, top_k: int = 3) -> str:
+    """Retrieve relevant chunks and generate an answer with citations."""
+    # Step 1: Retrieve
+    try:
+        results = collection.query(
+            query_texts=[question],
+            n_results=top_k,
+        )
+    except Exception as e:
+        return f"Retrieval error: {e}"
+
+    if not results["documents"] or not results["documents"][0]:
+        return "No relevant documents found. I don't have enough information."
+
+    # Check relevance threshold
+    distances = results["distances"][0] if results.get("distances") else []
+    chunks = results["documents"][0]
+    sources = results["metadatas"][0]
+
+    # Build context from retrieved chunks
+    context_parts = []
+    for i, (chunk, meta) in enumerate(zip(chunks, sources)):
+        context_parts.append(
+            f"[Source {i+1}: {meta['source']}]\n{chunk}"
+        )
+    context = "\n\n---\n\n".join(context_parts)
+
+    # Step 2: Generate with Claude
+    try:
+        response = claude.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=1024,
+            system=(
+                "You are a helpful assistant that answers questions "
+                "based ONLY on the provided context. If the context "
+                "doesn't contain the answer, say so. Always cite "
+                "your sources using [Source N] format."
+            ),
+            messages=[{
+                "role": "user",
+                "content": (
+                    f"Context:\n{context}\n\n"
+                    f"Question: {question}\n\n"
+                    "Answer based on the context above, citing sources:"
+                ),
+            }],
+        )
+        return response.content[0].text
+    except anthropic.APIError as e:
+        return f"Generation error: {e.status_code} - {e.message}"
+
+# Test it
+answer = query_rag("What are the key features of the product?")
+print(answer)</code></pre>
+          </div>
+          <div class="code-panel" id="query-nodejs" role="tabpanel" aria-labelledby="tab-query-js">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy Node.js code">Copy</button>
+            <pre><code class="language-javascript">import Anthropic from '@anthropic-ai/sdk';
+
+const claude = new Anthropic(); // reads ANTHROPIC_API_KEY env var
+
+async function queryRag(question, topK = 3) {
+  // Step 1: Retrieve
+  let results;
+  try {
+    results = await collection.query({
+      queryTexts: [question],
+      nResults: topK,
+    });
+  } catch (e) {
+    return `Retrieval error: ${e.message}`;
+  }
+
+  if (!results.documents?.[0]?.length) {
+    return "No relevant documents found. I don't have enough information.";
+  }
+
+  const chunks = results.documents[0];
+  const sources = results.metadatas[0];
+
+  const context = chunks.map((chunk, i) =>
+    `[Source ${i + 1}: ${sources[i].source}]\n${chunk}`
+  ).join('\n\n---\n\n');
+
+  // Step 2: Generate with Claude
+  try {
+    const response = await claude.messages.create({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 1024,
+      system:
+        "You are a helpful assistant that answers questions " +
+        "based ONLY on the provided context. If the context " +
+        "doesn't contain the answer, say so. Always cite " +
+        "your sources using [Source N] format.",
+      messages: [{
+        role: "user",
+        content:
+          `Context:\n${context}\n\n` +
+          `Question: ${question}\n\n` +
+          "Answer based on the context above, citing sources:",
+      }],
+    });
+    return response.content[0].text;
+  } catch (e) {
+    return `Generation error: ${e.status} - ${e.message}`;
+  }
+}
+
+const answer = await queryRag("What are the key features of the product?");
+console.log(answer);</code></pre>
+          </div>
+        </div>
+
+        <div style="background: rgba(16,185,129,0.06); border-left: 3px solid var(--success); padding: 1rem 1.25rem; margin: 1.25rem 0; border-radius: 0 6px 6px 0;">
+          <strong>What Just Happened?</strong> You built the complete RAG pipeline end-to-end. The <code>query_rag</code> function takes a plain-English question, searches ChromaDB for the 3 most semantically similar chunks, formats them into a context block with source labels, and sends everything to Claude with a grounding system prompt. Claude responds using only the retrieved context and cites its sources. All six pipeline stages &mdash; Load, Chunk, Embed, Store, Retrieve, Generate &mdash; are now working together.
+        </div>
+
+        <div class="callout-cert">
+          <span class="box-label" style="color:var(--accent-primary);">&#127891; Cert Tip &mdash; Domain 5.2</span>
+          <span style="color:var(--text-secondary);font-size:0.92rem;">The "lost in the middle" effect means information placed in the middle of a long context gets lower recall than information at the start or end. In RAG systems, this means the ORDER of your retrieved chunks matters: place the highest-relevance chunk first. If you retrieve 5 chunks, chunk #3 in the middle gets the least attention. The exam tests awareness of this positional bias and expects you to mitigate it by ranking chunks by relevance score.</span>
+        </div>
+
+        <div class="callout-cert">
+          <span class="box-label" style="color:var(--accent-primary);">&#127891; Cert Tip &mdash; Domain 4.3</span>
+          <span style="color:var(--text-secondary);font-size:0.92rem;">RAG provides CONTEXT but not CORRECTNESS guarantees. Even with perfect retrieval, Claude may still misinterpret or combine facts incorrectly. The exam-recommended pattern is to add a validation step after generation: check that cited source numbers actually exist, and that key claims in the answer appear verbatim in the retrieved chunks. Anti-pattern: trusting RAG output without any post-generation validation.</span>
+        </div>
+      </section>
+
+      <!-- ==================== HANDS-ON ==================== -->
+      <section class="section" id="hands-on">
+        <h2 id="hands-on-heading">Hands-On Exercise</h2>
+
+        <div style="background:var(--bg-card);border-radius:12px;padding:1.5rem;margin-bottom:1.5rem;">
+          <h3 style="margin-top:0;color:var(--accent-primary);">What You'll Build</h3>
+          <p>A complete RAG pipeline that ingests sample documents, stores them in ChromaDB, and answers questions with cited sources using Claude.</p>
+          <p><strong>Time Estimate:</strong> 30&ndash;45 minutes</p>
+          <p><strong>Prerequisites:</strong> Python 3.9+, an Anthropic API key (<code>ANTHROPIC_API_KEY</code> environment variable), and a terminal/command prompt.</p>
+          <p style="margin-bottom:0;"><strong>Files You'll Create:</strong> <code>rag_pipeline.py</code> (main pipeline script), <code>docs/filing_guide.md</code>, <code>docs/risk_assessment.md</code>, <code>docs/compliance_faq.txt</code> (sample documents)</p>
+        </div>
+
+        <h3>Environment Setup</h3>
+        <div class="code-block-wrapper">
+          <div class="code-tabs" role="tablist"><button class="code-tab active" role="tab" data-lang="python">Python</button></div>
+          <div class="code-panel active">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code class="language-python">mkdir rag-lab && cd rag-lab
+python -m venv venv && source venv/bin/activate   # Windows: venv\Scripts\activate
+pip install anthropic>=0.30.0 chromadb>=0.4.0
+export ANTHROPIC_API_KEY=your-key-here             # Windows: set ANTHROPIC_API_KEY=your-key-here</code></pre>
+          </div>
+        </div>
+
+        <h3>Step 1: Create Sample Documents &amp; Ingestion Pipeline</h3>
+        <p>First, we need documents to search. We'll create a <code>docs/</code> folder with 3 sample files, then build the ingestion pipeline that loads, chunks, and stores them in ChromaDB. This covers the first 4 stages of the RAG pipeline: Load &rarr; Chunk &rarr; Embed &rarr; Store.</p>
+        <p><strong>Create a <code>docs/</code> folder</strong> and add these 3 files:</p>
+        <div class="code-block-wrapper">
+          <div class="code-tabs" role="tablist"><button class="code-tab active" role="tab" data-lang="python">docs/filing_guide.md</button></div>
+          <div class="code-panel active">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code># UCC Filing Guide
+
+## Initial Filing (UCC-1)
+A UCC-1 financing statement must be filed in the state where the debtor is located. For individuals, this is their principal residence. For registered organizations (corporations, LLCs), this is the state of organization.
+
+The filing office assigns a unique file number and timestamps the filing. A properly filed UCC-1 is effective for 5 years from the date of filing.
+
+## Continuation Statements
+To maintain perfection beyond 5 years, a continuation statement (UCC-3) must be filed within 6 months before the 5-year lapse date. Missing this window means the filing lapses and the secured party loses priority.
+
+## Amendments
+Amendments can change the collateral description, add or remove debtors, or assign the financing statement to a new secured party. Each amendment receives its own file number but references the original UCC-1.</code></pre>
+          </div>
+        </div>
+        <div class="code-block-wrapper">
+          <div class="code-tabs" role="tablist"><button class="code-tab active" role="tab" data-lang="python">docs/risk_assessment.md</button></div>
+          <div class="code-panel active">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code># Risk Assessment Criteria
+
+## High Risk Indicators
+- Debtor has multiple UCC filings from different secured parties (competing liens)
+- Collateral description uses broad terms like "all assets" (blanket lien)
+- Filing is within 90 days of a bankruptcy petition (preference risk)
+- Debtor name on filing doesn't exactly match legal name (perfection defect)
+
+## Medium Risk Indicators
+- Continuation statement filed close to the deadline (less than 30 days before lapse)
+- Collateral type is inventory or accounts receivable (high turnover)
+- Secured party is an individual rather than an institution
+
+## Low Risk Indicators
+- Single secured party with specific collateral description
+- Filing has been continued at least once (established relationship)
+- Debtor is a well-established registered organization</code></pre>
+          </div>
+        </div>
+        <div class="code-block-wrapper">
+          <div class="code-tabs" role="tablist"><button class="code-tab active" role="tab" data-lang="python">docs/compliance_faq.txt</button></div>
+          <div class="code-panel active">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code>Q: What happens if a continuation statement is filed late?
+A: If filed after the 5-year lapse date, the original filing is no longer effective. The secured party must file a new UCC-1, and their priority date resets to the new filing date. Any liens filed by other parties in the gap period will have priority.
+
+Q: Can a UCC filing be terminated?
+A: Yes. The secured party can file a UCC-3 termination statement. Once filed, the financing statement is no longer effective. The debtor can also demand termination if the obligation has been satisfied.
+
+Q: What is the difference between a UCC-1 and a UCC-3?
+A: A UCC-1 is the initial financing statement that creates the public record. A UCC-3 is used for all subsequent changes: continuations, amendments, assignments, and terminations. The UCC-3 always references the original UCC-1 file number.</code></pre>
+          </div>
+        </div>
+
+        <p><strong>Now create <code>rag_pipeline.py</code></strong> with the ingestion pipeline:</p>
+        <div class="code-block-wrapper">
+          <div class="code-tabs" role="tablist"><button class="code-tab active" role="tab" data-lang="python">Python</button></div>
+          <div class="code-panel active">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code class="language-python">import os
+import glob
+import json
+import anthropic
+import chromadb
+
+# ── Document Loading ─────────────────────────────────────────
+def load_documents(docs_dir: str) -> list[dict]:
+    """Load all .md and .txt files from a directory."""
+    docs = []
+    for pattern in ["*.md", "*.txt"]:
+        for path in glob.glob(os.path.join(docs_dir, pattern)):
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    docs.append({"content": f.read(), "source": os.path.basename(path)})
+            except (IOError, UnicodeDecodeError) as e:
+                print(f"  Skipping {path}: {e}")
+    if not docs:
+        raise FileNotFoundError(f"No documents found in {docs_dir}")
+    return docs
+
+# ── Chunking ─────────────────────────────────────────────────
+def chunk_text(text: str, chunk_size: int = 500, overlap: int = 50) -> list[str]:
+    """Split text into chunks with overlap at natural boundaries."""
+    if len(text) <= chunk_size:
+        return [text]
+    chunks = []
+    start = 0
+    while start < len(text):
+        end = start + chunk_size
+        chunk = text[start:end]
+        if end < len(text):
+            for sep in ["\n\n", "\n", ". ", " "]:
+                last_sep = chunk.rfind(sep)
+                if last_sep > chunk_size * 0.5:
+                    end = start + last_sep + len(sep)
+                    chunk = text[start:end]
+                    break
+        chunks.append(chunk.strip())
+        start = end - overlap
+    return [c for c in chunks if c]
+
+# ── Ingestion (Load → Chunk → Embed → Store) ────────────────
+def ingest(docs_dir: str = "./docs") -> chromadb.Collection:
+    """Load docs, chunk them, and store in ChromaDB."""
+    print("── Ingestion Pipeline ──")
+    docs = load_documents(docs_dir)
+    print(f"  Loaded {len(docs)} documents")
+
+    all_chunks = []
+    for doc in docs:
+        chunks = chunk_text(doc["content"], chunk_size=500, overlap=50)
+        for i, chunk in enumerate(chunks):
+            all_chunks.append({"text": chunk, "source": doc["source"], "index": i})
+    print(f"  Created {len(all_chunks)} chunks")
+
+    client = chromadb.Client()  # in-memory for simplicity
+    collection = client.get_or_create_collection(
+        name="rag_lab", metadata={"hnsw:space": "cosine"}
+    )
+    collection.add(
+        ids=[f"chunk_{i}" for i in range(len(all_chunks))],
+        documents=[c["text"] for c in all_chunks],
+        metadatas=[{"source": c["source"], "index": c["index"]} for c in all_chunks],
+    )
+    print(f"  Stored {collection.count()} chunks in ChromaDB")
+    return collection
+
+# ── Run ingestion ────────────────────────────────────────────
+if __name__ == "__main__":
+    collection = ingest()
+    print("\n✓ Ingestion complete. Ready for queries.")</code></pre>
+          </div>
+        </div>
+        <p><strong>Run the ingestion:</strong></p>
+        <div class="output-label">Command</div>
+        <div class="output-block">python rag_pipeline.py</div>
+        <div class="output-label">Expected Output</div>
+        <div class="output-block">── Ingestion Pipeline ──
+  Loaded 3 documents
+  Created 8 chunks
+  Stored 8 chunks in ChromaDB
+
+✓ Ingestion complete. Ready for queries.</div>
+        <div class="callout-why" style="margin-top:1rem;">
+          <span class="box-label">&#9989; Checkpoint</span>
+          <p style="margin-bottom:0;">If you see 3 documents loaded and 6&ndash;10 chunks stored, Step 1 is working. The exact chunk count depends on document length and boundary detection. If you see 0 documents, check that your <code>docs/</code> folder is in the same directory as <code>rag_pipeline.py</code>.</p>
+        </div>
+        <div class="callout-warning" style="margin-top:0.75rem;">
+          <span class="box-label">Troubleshooting</span>
+          <ul style="margin-bottom:0;">
+            <li><strong><code>ModuleNotFoundError: No module named 'chromadb'</code></strong> &rarr; Run <code>pip install chromadb</code></li>
+            <li><strong><code>FileNotFoundError: No documents found</code></strong> &rarr; Make sure the <code>docs/</code> folder exists and contains <code>.md</code> or <code>.txt</code> files in the same directory where you run the script</li>
+            <li><strong>Very few chunks (1&ndash;2)</strong> &rarr; Your documents may be very short. Add more content to the sample files or lower <code>chunk_size</code> to 200.</li>
+          </ul>
+        </div>
+
+        <h3>Step 2: Add Retrieval &amp; Generation with Claude</h3>
+        <p><strong>Depends on:</strong> Step 1 (this step uses the <code>collection</code> object and <code>ingest()</code> function from Step 1. If you're starting fresh, complete Step 1 first.)</p>
+        <p>Now we wire up the last two pipeline stages &mdash; Retrieve and Generate. This function searches ChromaDB for the top-3 most relevant chunks, formats them into a context block with source labels, and sends everything to Claude with a grounding prompt.</p>
+        <p><strong>Replace the <code>if __name__ == "__main__"</code> block in <code>rag_pipeline.py</code></strong> with the following:</p>
+        <div class="code-block-wrapper">
+          <div class="code-tabs" role="tablist"><button class="code-tab active" role="tab" data-lang="python">Python</button></div>
+          <div class="code-panel active">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code class="language-python"># ── Query (Retrieve → Generate) ──────────────────────────────
+def query_rag(collection, question: str, top_k: int = 3, verbose: bool = True) -> str:
+    """Search for relevant chunks and generate an answer with Claude."""
+    client = anthropic.Anthropic()
+
+    # Retrieve
+    results = collection.query(query_texts=[question], n_results=top_k)
+    chunks = results["documents"][0]
+    sources = results["metadatas"][0]
+    distances = results["distances"][0] if results.get("distances") else []
+
+    if verbose:
+        print(f"\n  Query: {question}")
+        print(f"  Retrieved {len(chunks)} chunks:")
+        for i, (chunk, meta) in enumerate(zip(chunks, sources)):
+            dist = f" (distance: {distances[i]:.3f})" if distances else ""
+            print(f"    [{i+1}] {meta['source']}{dist}: {chunk[:80]}...")
+
+    # Format context
+    context = "\n\n---\n\n".join(
+        f"[Source {i+1}: {meta['source']}]\n{chunk}"
+        for i, (chunk, meta) in enumerate(zip(chunks, sources))
+    )
+
+    # Generate
+    response = client.messages.create(
+        model="claude-sonnet-4-20250514",
+        max_tokens=1024,
+        system=(
+            "You are a helpful assistant that answers questions "
+            "based ONLY on the provided context. If the context "
+            "doesn't contain the answer, say so explicitly. "
+            "Always cite sources using [Source N] format."
+        ),
+        messages=[{
+            "role": "user",
+            "content": f"Context:\n{context}\n\nQuestion: {question}\n\nAnswer based on the context above, citing sources:",
+        }],
+    )
+    return response.content[0].text
+
+
+# ── Test Queries ─────────────────────────────────────────────
+if __name__ == "__main__":
+    collection = ingest()
+
+    print("\n" + "=" * 55)
+    print("RAG QUERY TESTS")
+    print("=" * 55)
+
+    questions = [
+        "How long is a UCC-1 filing effective?",
+        "What are the high risk indicators for a UCC filing?",
+        "What happens if a continuation statement is filed late?",
+        "What is the difference between a UCC-1 and a UCC-3?",
+        "What is the weather in Tokyo?",  # Should say "not in context"
+    ]
+
+    for q in questions:
+        answer = query_rag(collection, q)
+        print(f"\n  Answer: {answer[:200]}...")
+        print(f"  {'─' * 50}")</code></pre>
+          </div>
+        </div>
+        <p><strong>Run the complete pipeline:</strong></p>
+        <div class="output-label">Command</div>
+        <div class="output-block">python rag_pipeline.py</div>
+        <div class="output-label">Expected Output (abbreviated)</div>
+        <div class="output-block">── Ingestion Pipeline ──
+  Loaded 3 documents
+  Created 8 chunks
+  Stored 8 chunks in ChromaDB
+
+✓ Ingestion complete. Ready for queries.
+
+=======================================================
+RAG QUERY TESTS
+=======================================================
+
+  Query: How long is a UCC-1 filing effective?
+  Retrieved 3 chunks:
+    [1] filing_guide.md (distance: 0.234): A UCC-1 financing statement must be filed in the state where...
+    [2] filing_guide.md (distance: 0.412): To maintain perfection beyond 5 years, a continuation...
+    [3] compliance_faq.txt (distance: 0.489): Q: What happens if a continuation statement is filed late?...
+
+  Answer: According to the filing guide, a properly filed UCC-1 is effective
+  for 5 years from the date of filing [Source 1]. To maintain...
+  ──────────────────────────────────────────────────────
+
+  Query: What is the weather in Tokyo?
+  Retrieved 3 chunks:
+    ...
+
+  Answer: The provided context does not contain any information about
+  the weather in Tokyo. The documents cover UCC filing procedures...
+  ──────────────────────────────────────────────────────</div>
+        <div class="callout-why" style="margin-top:1rem;">
+          <span class="box-label">&#9989; Checkpoint</span>
+          <p style="margin-bottom:0;">Look for these key behaviors:</p>
+          <ul style="margin-bottom:0;">
+            <li><strong>Questions 1&ndash;4:</strong> Should return accurate, cited answers drawn from the sample documents</li>
+            <li><strong>Question 5 (weather):</strong> Should say the context doesn't contain the answer &mdash; this confirms the grounding prompt is working</li>
+            <li><strong>Source citations:</strong> Answers should include <code>[Source 1]</code>, <code>[Source 2]</code> references matching the retrieved chunks</li>
+            <li><strong>Distances:</strong> Lower distances mean more relevant chunks. The best match should have the lowest distance.</li>
+          </ul>
+        </div>
+        <div class="callout-warning" style="margin-top:0.75rem;">
+          <span class="box-label">Troubleshooting</span>
+          <ul style="margin-bottom:0;">
+            <li><strong><code>AuthenticationError</code></strong> &rarr; Check your <code>ANTHROPIC_API_KEY</code> is set correctly</li>
+            <li><strong>Claude answers the weather question</strong> &rarr; The grounding system prompt may not be strict enough. Make sure it says "based ONLY on the provided context"</li>
+            <li><strong>Irrelevant chunks retrieved</strong> &rarr; Try smaller <code>chunk_size</code> (200 instead of 500) or add more focused content to your sample documents</li>
+            <li><strong><code>APIError: 529</code></strong> &rarr; The test makes 5 API calls. Wait 30 seconds and try again, or run fewer questions.</li>
+          </ul>
+        </div>
+
+        <h3>Verify Everything Works</h3>
+        <p>Run the complete pipeline end-to-end. All 5 queries should return answers, with the first 4 citing sources and the 5th correctly declining to answer:</p>
+        <div class="output-label">Command</div>
+        <div class="output-block">python rag_pipeline.py</div>
+        <p>If all queries complete and you see cited answers for domain questions and a "not in context" response for the weather question, you've built a working RAG pipeline.</p>
+        <div class="callout-why">
+          <span class="box-label">&#127881; Congratulations</span>
+          <p style="margin-bottom:0;">You've built a complete RAG system from scratch &mdash; document loading, chunking with overlap, vector storage in ChromaDB, semantic retrieval, and grounded generation with Claude. This is the same architecture used by production document Q&amp;A systems, knowledge bases, and AI assistants.</p>
+        </div>
+
+        <div class="callout-why" style="margin-top:1rem;">
+          <span class="box-label">Stretch Goals (Optional)</span>
+          <ul style="margin-bottom:0;">
+            <li>Add metadata filtering: <code>collection.query(where={"source": "filing_guide.md"})</code> to restrict search to specific files</li>
+            <li>Implement a relevance threshold: if all chunk distances are above 0.8, return "I don't have enough information"</li>
+            <li>Experiment with chunk sizes of 200, 500, and 1000 &mdash; which gives the best answers for the UCC content?</li>
+            <li>Add a <code>/sources</code> command that prints the raw retrieved chunks and similarity scores before the answer</li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- ==================== QUIZ ==================== -->
+      <section class="section" id="quiz">
+        <h2 id="quiz-heading">Knowledge Check</h2>
+
+        <div class="quiz-question" data-correct="c" aria-label="Quiz question 1">
+          <h4>Q1: What problem does RAG solve that prompt engineering alone cannot?</h4>
+          <div class="quiz-option" data-value="a" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option A"><span class="quiz-marker">A</span> Making Claude respond faster</div>
+          <div class="quiz-option" data-value="b" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option B"><span class="quiz-marker">B</span> Reducing API costs</div>
+          <div class="quiz-option" data-value="c" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option C"><span class="quiz-marker">C</span> Giving Claude access to private, proprietary, or recent data beyond its training cutoff</div>
+          <div class="quiz-option" data-value="d" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option D"><span class="quiz-marker">D</span> Improving Claude's grammar and writing style</div>
+          <div class="quiz-feedback correct-fb">Correct! No matter how clever your prompt, Claude can't reference documents it has never seen. RAG injects relevant external documents into the prompt at query time.</div>
+          <div class="quiz-feedback incorrect-fb"></div>
+        </div>
+
+        <div class="quiz-question" data-correct="b" aria-label="Quiz question 2">
+          <h4>Q2: Given a 2000-character document, chunk size of 500, and overlap of 50, approximately how many chunks result?</h4>
+          <div class="quiz-option" data-value="a" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option A"><span class="quiz-marker">A</span> 3 chunks</div>
+          <div class="quiz-option" data-value="b" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option B"><span class="quiz-marker">B</span> 5 chunks</div>
+          <div class="quiz-option" data-value="c" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option C"><span class="quiz-marker">C</span> 4 chunks</div>
+          <div class="quiz-option" data-value="d" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option D"><span class="quiz-marker">D</span> 8 chunks</div>
+          <div class="quiz-feedback correct-fb">Correct! With overlap, each step advances by (500 - 50) = 450 characters. 2000 / 450 &asymp; 4.4, plus the initial chunk = approximately 5 chunks. Overlap increases chunk count but ensures no information is lost at boundaries.</div>
+          <div class="quiz-feedback incorrect-fb"></div>
+        </div>
+
+        <div class="quiz-question" data-correct="a" aria-label="Quiz question 3">
+          <h4>Q3: Why is cosine similarity preferred over Euclidean distance for comparing text embeddings?</h4>
+          <div class="quiz-option" data-value="a" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option A"><span class="quiz-marker">A</span> It measures direction (meaning) regardless of vector magnitude (text length)</div>
+          <div class="quiz-option" data-value="b" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option B"><span class="quiz-marker">B</span> It's faster to compute</div>
+          <div class="quiz-option" data-value="c" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option C"><span class="quiz-marker">C</span> It produces integers instead of floats</div>
+          <div class="quiz-option" data-value="d" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option D"><span class="quiz-marker">D</span> Euclidean distance doesn't work with high-dimensional data</div>
+          <div class="quiz-feedback correct-fb">Correct! Cosine similarity compares the angle between vectors, making it invariant to magnitude. A short and long text about the same topic will have similar direction (meaning) even if their magnitudes differ.</div>
+          <div class="quiz-feedback incorrect-fb"></div>
+        </div>
+
+        <div class="quiz-question" data-correct="b" aria-label="Quiz question 4">
+          <h4>Q4: Your RAG system retrieves irrelevant chunks for user queries. Which fix is most likely to help?</h4>
+          <div class="quiz-option" data-value="a" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option A"><span class="quiz-marker">A</span> Use larger chunks (2000+ characters)</div>
+          <div class="quiz-option" data-value="b" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option B"><span class="quiz-marker">B</span> Try smaller chunks with more overlap, or switch to a better embedding model</div>
+          <div class="quiz-option" data-value="c" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option C"><span class="quiz-marker">C</span> Remove the vector database and use keyword search</div>
+          <div class="quiz-option" data-value="d" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option D"><span class="quiz-marker">D</span> Increase Claude's max_tokens parameter</div>
+          <div class="quiz-feedback correct-fb">Correct! Smaller chunks improve retrieval precision by isolating distinct concepts. A better embedding model produces more accurate semantic representations. These two changes address the root cause: retrieval quality.</div>
+          <div class="quiz-feedback incorrect-fb"></div>
+        </div>
+
+        <div class="quiz-question" data-correct="d" aria-label="Quiz question 5">
+          <h4>Q5: What is the correct order for the RAG pipeline steps?</h4>
+          <div class="quiz-option" data-value="a" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option A"><span class="quiz-marker">A</span> Embed &rarr; Chunk &rarr; Load &rarr; Store &rarr; Retrieve &rarr; Generate</div>
+          <div class="quiz-option" data-value="b" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option B"><span class="quiz-marker">B</span> Load &rarr; Embed &rarr; Chunk &rarr; Store &rarr; Generate &rarr; Retrieve</div>
+          <div class="quiz-option" data-value="c" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option C"><span class="quiz-marker">C</span> Chunk &rarr; Load &rarr; Embed &rarr; Retrieve &rarr; Store &rarr; Generate</div>
+          <div class="quiz-option" data-value="d" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option D"><span class="quiz-marker">D</span> Load &rarr; Chunk &rarr; Embed &rarr; Store &rarr; Retrieve &rarr; Generate</div>
+          <div class="quiz-feedback correct-fb">Correct! Load documents first, chunk them into segments, embed chunks into vectors, store in the vector DB. At query time: retrieve relevant chunks, then generate an answer with Claude using those chunks as context.</div>
+          <div class="quiz-feedback incorrect-fb"></div>
+        </div>
+
+        <div class="quiz-question" data-correct="c" aria-label="Quiz question 6">
+          <h4>Q6: (Recall from M05/M06) In the RAG query function, you call Claude's Messages API. If the API call fails, what should your code do?</h4>
+          <div class="quiz-option" data-value="a" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option A"><span class="quiz-marker">A</span> Return the raw chunks without an answer</div>
+          <div class="quiz-option" data-value="b" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option B"><span class="quiz-marker">B</span> Silently return an empty string</div>
+          <div class="quiz-option" data-value="c" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option C"><span class="quiz-marker">C</span> Catch the APIError and return a descriptive error message</div>
+          <div class="quiz-option" data-value="d" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option D"><span class="quiz-marker">D</span> Retry indefinitely until it succeeds</div>
+          <div class="quiz-feedback correct-fb">Correct! Just like the error handling patterns from M05 and M06, catch the error and return a clear message. Never crash silently or retry forever.</div>
+          <div class="quiz-feedback incorrect-fb"></div>
+        </div>
+
+        <div class="quiz-score" id="quiz-score">
+          <div class="score-num" id="score-display"></div>
+          <div id="score-message" style="margin-top:0.5rem;color:var(--text-secondary);"></div>
+        </div>
+      </section>
+
+      <!-- ==================== SUMMARY ==================== -->
+      <section class="section" id="summary">
+        <h2 id="summary-heading">Module Summary</h2>
+        <div style="background:var(--bg-card);border-radius:12px;padding:1.5rem;margin-bottom:1.5rem;">
+          <h3 id="key-concepts" style="margin-top:0;color:var(--accent-primary);">Key Concepts</h3>
+          <ul>
+            <li><strong>The knowledge problem:</strong> LLMs have a training cutoff and can't access private data &mdash; RAG fixes this.</li>
+            <li><strong>RAG pipeline:</strong> Load &rarr; Chunk &rarr; Embed &rarr; Store &rarr; Retrieve &rarr; Generate.</li>
+            <li><strong>Embeddings:</strong> Dense vectors that capture semantic meaning. Cosine similarity measures closeness.</li>
+            <li><strong>Chunking:</strong> How you split documents directly determines retrieval quality. Experiment with sizes.</li>
+            <li><strong>Vector databases:</strong> ChromaDB for prototyping, Pinecone/pgvector for production scale.</li>
+          </ul>
+        </div>
+        <div style="background:var(--bg-card);border-radius:12px;padding:1.5rem;">
+          <h3 id="next-preview" style="margin-top:0;color:var(--track-color);">Next: M10 &mdash; Advanced RAG</h3>
+          <p style="margin-bottom:0;">You've built a basic RAG system. In M10, you'll tackle the hard problems: hybrid search (combining semantic + keyword), reranking retrieved results, handling multi-document queries, and evaluating retrieval quality with metrics like MRR and recall@k.</p>
+        </div>
+      </section>
+
+      <!-- ==================== REFERENCES ==================== -->
+      <section class="section" id="references">
+        <h2 id="references-heading">References &amp; Resources</h2>
+        <ul>
+          <li><a href="https://docs.anthropic.com/en/docs/build-with-claude/retrieval-augmented-generation" target="_blank" rel="noopener noreferrer">RAG Guide &mdash; Anthropic Documentation</a></li>
+          <li><a href="https://docs.trychroma.com/" target="_blank" rel="noopener noreferrer">ChromaDB Documentation</a></li>
+          <li><a href="https://github.com/anthropics/anthropic-cookbook/tree/main/misc/retrieval_augmented_generation" target="_blank" rel="noopener noreferrer">RAG Cookbook &mdash; Anthropic GitHub</a></li>
+          <li><a href="https://docs.voyageai.com/docs/embeddings" target="_blank" rel="noopener noreferrer">Voyage AI Embeddings &mdash; Documentation</a></li>
+          <li><a href="https://www.pinecone.io/learn/chunking-strategies/" target="_blank" rel="noopener noreferrer">Chunking Strategies &mdash; Pinecone Learning</a></li>
+        </ul>
+      </section>
+
+      <div class="module-nav">
+        <a href="M08-conversation-management.html" aria-label="Previous module: Conversation Management">&larr; M08: Conversation Management</a>
+          <a href="index.html" aria-label="Course Home" title="Course Home" style="font-size:1.2rem;">&#x1F3E0; Home</a>
+        <a href="M10-advanced-rag-patterns.html" aria-label="Next module: Advanced RAG">M10: Advanced RAG &rarr;</a>
+      </div>
+    </main>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+  <script>
+    // === TABS & COPY ===
+    function switchTab(btn, group) {
+      const lang = btn.dataset.lang, w = btn.closest('.code-block-wrapper');
+      w.querySelectorAll('.code-tab').forEach(t => { t.classList.remove('active'); t.setAttribute('aria-selected','false'); });
+      w.querySelectorAll('.code-panel').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active'); btn.setAttribute('aria-selected','true');
+      const panel = w.querySelector('#' + group + '-' + (lang === 'python' ? 'python' : 'nodejs'));
+      if (panel) panel.classList.add('active');
+    }
+    function copyCode(btn) {
+      const code = btn.closest('.code-panel').querySelector('code');
+      navigator.clipboard.writeText(code.textContent).then(() => { btn.textContent = 'Copied!'; setTimeout(() => btn.textContent = 'Copy', 1500); });
+    }
+
+    // === rAF TIMER ===
+    function raf(fn, ms) {
+      let on = false, last = 0, id = null;
+      function tick(t) { if (!on) return; if (t - last >= ms) { last = t; fn(); } id = requestAnimationFrame(tick); }
+      return { play() { if (on) return; on = true; last = performance.now(); id = requestAnimationFrame(tick); }, pause() { on = false; if (id) { cancelAnimationFrame(id); id = null; } } };
+    }
+
+    // === ANIM 1: RAG PIPELINE (Enhanced with data flow + stage details) ===
+    const ragIds = ['rp-1','rp-2','rp-3','rp-4','rp-5','rp-6'];
+    const ragArrs = ['rpa-1','rpa-2','rpa-3','rpa-4','rpa-5'];
+    const ragAnns = [
+      'Load: Read raw documents from files on disk',
+      'Chunk: Split into ~500-char segments with 50-char overlap',
+      'Embed: Convert each chunk into a 1536-dimensional vector',
+      'Store: Index vectors in ChromaDB for fast similarity search',
+      'Retrieve: Find top-k chunks nearest to the user\'s query',
+      'Generate: Claude reads retrieved chunks and writes a cited answer'
+    ];
+    const ragDetails = [
+      '📄 report.md → 8,200 chars',
+      '✂️ → 18 chunks × ~500 chars',
+      '🔢 → 18 × [0.023, -0.041, ...]',
+      '💾 ChromaDB: 18 vectors indexed',
+      '🔍 query → top 3 matches',
+      '🤖 Claude → "Based on [Source 1]..."'
+    ];
+    let ragS = 0;
+    // Add detail elements under each stage on first run
+    function ragEnsureDetails() {
+      if (document.querySelector('.pipe-stage-detail')) return;
+      ragIds.forEach((id, i) => {
+        const el = document.getElementById(id);
+        const detail = document.createElement('div');
+        detail.className = 'pipe-stage-detail';
+        detail.id = 'rpd-' + (i + 1);
+        detail.textContent = ragDetails[i];
+        el.appendChild(detail);
+      });
+    }
+    function ragShow() {
+      ragEnsureDetails();
+      if (ragS >= ragIds.length) { ragT.pause(); return; }
+      const el = document.getElementById(ragIds[ragS]);
+      el.classList.add('visible','active');
+      // Show detail for current stage
+      const detail = document.getElementById('rpd-' + (ragS + 1));
+      if (detail) detail.classList.add('visible');
+      if (ragS > 0) {
+        document.getElementById(ragIds[ragS-1]).classList.replace('active','done');
+        document.getElementById(ragArrs[ragS-1]).classList.add('visible');
+      }
+      document.getElementById('ragAnn').textContent = ragAnns[ragS];
+      document.getElementById('ragAnn').classList.add('visible');
+      ragS++;
+    }
+    const ragT = raf(ragShow, 1400);
+    function ragPlay() { ragT.play(); } function ragPause() { ragT.pause(); } function ragStepFwd() { ragPause(); ragShow(); }
+    function ragRestart() {
+      ragPause(); ragS = 0;
+      ragIds.forEach(id => document.getElementById(id).classList.remove('visible','active','done'));
+      ragArrs.forEach(id => document.getElementById(id).classList.remove('visible'));
+      document.querySelectorAll('.pipe-stage-detail').forEach(d => d.classList.remove('visible'));
+      const a = document.getElementById('ragAnn'); a.textContent = ''; a.classList.remove('visible');
+    }
+
+    // === ANIM 2: EMBEDDING SPACE (Enhanced with similarity lines, scores, search radius, cluster labels) ===
+    const embedPoints = [
+      { x: 25, y: 30, label: '"king"', color: '#8B5CF6', cluster: 'royalty' },
+      { x: 30, y: 25, label: '"queen"', color: '#8B5CF6', cluster: 'royalty' },
+      { x: 28, y: 35, label: '"monarch"', color: '#8B5CF6', cluster: 'royalty' },
+      { x: 70, y: 65, label: '"python"', color: '#06B6D4', cluster: 'code' },
+      { x: 75, y: 70, label: '"javascript"', color: '#06B6D4', cluster: 'code' },
+      { x: 65, y: 60, label: '"coding"', color: '#06B6D4', cluster: 'code' },
+      { x: 50, y: 80, label: '"pizza"', color: '#F59E0B', cluster: 'food' },
+      { x: 55, y: 85, label: '"pasta"', color: '#F59E0B', cluster: 'food' },
+    ];
+    const clusterLabels = [
+      { x: 18, y: 16, text: '👑 Royalty', color: '#8B5CF6' },
+      { x: 60, y: 50, text: '💻 Programming', color: '#06B6D4' },
+      { x: 42, y: 92, text: '🍕 Food', color: '#F59E0B' },
+    ];
+    const queryPos = { x: 27, y: 28 };
+    const simScores = [
+      { idx: 0, score: '0.94' },
+      { idx: 1, score: '0.91' },
+      { idx: 2, score: '0.88' },
+    ];
+    let embedS = 0;
+    // Helper: create a line from (x1%,y1%) to (x2%,y2%) inside the canvas
+    function createSimLine(canvas, x1, y1, x2, y2, id) {
+      const rect = canvas.getBoundingClientRect();
+      const px1 = x1 / 100 * rect.width, py1 = y1 / 100 * rect.height;
+      const px2 = x2 / 100 * rect.width, py2 = y2 / 100 * rect.height;
+      const dx = px2 - px1, dy = py2 - py1;
+      const len = Math.sqrt(dx * dx + dy * dy);
+      const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+      const line = document.createElement('div');
+      line.className = 'embed-sim-line'; line.id = id;
+      line.style.cssText = `left:${x1}%;top:${y1}%;width:${len}px;transform:rotate(${angle}deg);`;
+      canvas.appendChild(line);
+      return line;
+    }
+    const embedSteps = [
+      () => { // Show all dots with cluster labels
+        const c = document.getElementById('embedCanvas');
+        // Cluster labels first (background)
+        clusterLabels.forEach((cl, i) => {
+          const lbl = document.createElement('div');
+          lbl.className = 'embed-cluster-label'; lbl.id = 'ecl-' + i;
+          lbl.style.cssText = `left:${cl.x}%;top:${cl.y}%;color:${cl.color};background:${cl.color}22;`;
+          lbl.textContent = cl.text;
+          c.appendChild(lbl);
+          setTimeout(() => lbl.classList.add('visible'), 200);
+        });
+        // Points
+        embedPoints.forEach((p, i) => {
+          const dot = document.createElement('div'); dot.className = 'embed-dot'; dot.id = 'ed-'+i;
+          dot.style.cssText = `left:${p.x}%;top:${p.y}%;background:${p.color};`;
+          c.appendChild(dot);
+          const lbl = document.createElement('div'); lbl.className = 'embed-label'; lbl.id = 'el-'+i;
+          lbl.style.cssText = `left:${p.x+2}%;top:${p.y-4}%;`; lbl.textContent = p.label;
+          c.appendChild(lbl);
+          setTimeout(() => { dot.classList.add('visible'); lbl.classList.add('visible'); }, i * 120);
+        });
+        document.getElementById('embedAnn').textContent = 'Words plotted as coordinates in meaning-space. Similar words form clusters.';
+        document.getElementById('embedAnn').classList.add('visible');
+      },
+      () => { // Show query with expanding search radius
+        const c = document.getElementById('embedCanvas');
+        const q = document.createElement('div'); q.className = 'embed-dot query'; q.id = 'ed-query';
+        q.style.cssText = `left:${queryPos.x}%;top:${queryPos.y}%;`;
+        c.appendChild(q);
+        const ql = document.createElement('div'); ql.className = 'embed-label'; ql.id = 'el-query';
+        ql.style.cssText = `left:${queryPos.x+3}%;top:${queryPos.y-5}%;color:var(--accent-primary);font-weight:600;`;
+        ql.textContent = '🔍 Query: "royalty"';
+        c.appendChild(ql);
+        // Search radius circle
+        const radius = document.createElement('div'); radius.className = 'embed-search-radius'; radius.id = 'embed-radius';
+        radius.style.cssText = `left:${queryPos.x}%;top:${queryPos.y}%;width:0;height:0;`;
+        c.appendChild(radius);
+        setTimeout(() => {
+          q.classList.add('visible'); ql.classList.add('visible');
+          radius.classList.add('visible');
+          radius.style.width = '35%'; radius.style.height = '50%';
+        }, 100);
+        document.getElementById('embedAnn').textContent = 'A query arrives: "royalty". The search radius expands to find nearest neighbors...';
+      },
+      () => { // Highlight nearest + draw similarity lines with scores
+        const c = document.getElementById('embedCanvas');
+        [0,1,2].forEach(i => {
+          document.getElementById('ed-'+i).classList.add('near');
+          document.getElementById('el-'+i).classList.add('near');
+        });
+        // Draw dashed lines from query to each match
+        simScores.forEach((s, i) => {
+          const p = embedPoints[s.idx];
+          const line = createSimLine(c, queryPos.x, queryPos.y, p.x, p.y, 'esim-line-'+i);
+          setTimeout(() => line.classList.add('visible'), i * 200);
+          // Score badge at midpoint
+          const mx = (queryPos.x + p.x) / 2, my = (queryPos.y + p.y) / 2;
+          const badge = document.createElement('div');
+          badge.className = 'embed-sim-score'; badge.id = 'esim-score-'+i;
+          badge.style.cssText = `left:${mx}%;top:${my - 3}%;`;
+          badge.textContent = `cos=${s.score}`;
+          c.appendChild(badge);
+          setTimeout(() => badge.classList.add('visible'), i * 200 + 300);
+        });
+        document.getElementById('embedAnn').textContent = 'Nearest neighbors found! Cosine similarity scores: "king" 0.94, "queen" 0.91, "monarch" 0.88.';
+      },
+      () => { // Show far-away distances
+        document.getElementById('embedAnn').textContent = '"pizza" (cos=0.12) and "python" (cos=0.18) are far away — low similarity. Semantic search finds meaning, not keywords.';
+        // Shrink search radius to show it excludes far points
+        const radius = document.getElementById('embed-radius');
+        if (radius) { radius.style.width = '22%'; radius.style.height = '32%'; }
+      },
+    ];
+    function embedShow() { if (embedS >= embedSteps.length) { embedT.pause(); return; } embedSteps[embedS++](); }
+    const embedT = raf(embedShow, 1800);
+    function embedPlay() { embedT.play(); } function embedPause() { embedT.pause(); } function embedStepFwd() { embedPause(); embedShow(); }
+    function embedRestart() { embedPause(); embedS = 0; document.getElementById('embedCanvas').innerHTML = ''; const a = document.getElementById('embedAnn'); a.textContent = ''; a.classList.remove('visible'); }
+
+    // === ANIM 3: CHUNKING (Enhanced with overlap zones + retrieval simulation) ===
+    const chunkColors = ['#8B5CF6','#06B6D4','#10B981','#F59E0B','#F43F5E'];
+    let chunkS = 0;
+    const chunkSteps = [
+      () => { // Show original doc
+        const r = document.getElementById('chunk-orig');
+        r.innerHTML = '<div class="chunk-block visible" style="width:100%;height:22px;background:var(--bg-surface);border:1px solid var(--code-border);border-radius:3px;opacity:1;"></div>';
+        document.getElementById('chunkAnn').textContent = 'A 2000-character document about UCC filings. How should we split it for embedding?';
+        document.getElementById('chunkAnn').classList.add('visible');
+      },
+      () => { // Fixed-size with animated overlap zones
+        const r = document.getElementById('chunk-fixed');
+        r.innerHTML = [0,1,2,3,4].map(i =>
+          `<div class="chunk-block visible" style="width:18%;background:${chunkColors[i]};opacity:1;position:relative;">`+
+          (i > 0 ? `<div class="chunk-overlap-zone" style="left:0;width:15%;"></div>` : '') +
+          `</div>`
+        ).join('');
+        document.getElementById('chunkAnn').textContent = 'Fixed-size: 5 equal chunks (500 chars each). Now watch for the overlap zones...';
+        // Animate overlap zones appearing
+        setTimeout(() => {
+          r.querySelectorAll('.chunk-overlap-zone').forEach(z => z.classList.add('visible'));
+          document.getElementById('chunkAnn').textContent = 'Fixed-size: 50-char overlap zones (highlighted) ensure no info lost at boundaries.';
+        }, 800);
+      },
+      () => { // Recursive
+        const r = document.getElementById('chunk-recursive');
+        r.innerHTML = ['30%','20%','25%','25%'].map((w, i) =>
+          `<div class="chunk-block visible" style="width:${w};background:${chunkColors[i]};opacity:1;"></div>`
+        ).join('');
+        document.getElementById('chunkAnn').textContent = 'Recursive: 4 chunks split at heading/paragraph boundaries. Sizes vary — structure preserved.';
+      },
+      () => { // Semantic
+        const r = document.getElementById('chunk-semantic');
+        r.innerHTML = ['40%','25%','35%'].map((w, i) =>
+          `<div class="chunk-block visible" style="width:${w};background:${chunkColors[i]};opacity:1;"></div>`
+        ).join('');
+        document.getElementById('chunkAnn').textContent = 'Semantic: 3 chunks by topic shift. Each covers one coherent concept — best for retrieval.';
+      },
+      () => { // NEW: Retrieval simulation — query arrives, best chunk highlights
+        // Add query badge above the semantic row
+        const semLabel = document.getElementById('chunk-semantic').previousElementSibling;
+        let badge = document.getElementById('chunk-query-sim');
+        if (!badge) {
+          badge = document.createElement('span'); badge.id = 'chunk-query-sim';
+          badge.className = 'chunk-query-badge';
+          badge.innerHTML = '🔍 Query: "What are UCC filing amendment rules?"';
+          semLabel.appendChild(badge);
+        }
+        badge.classList.add('visible');
+        document.getElementById('chunkAnn').textContent = 'A query arrives! Which chunk is most relevant? The retriever scores each...';
+      },
+      () => { // Highlight selected chunk, dim others
+        const semChunks = document.getElementById('chunk-semantic').querySelectorAll('.chunk-block');
+        semChunks.forEach((c, i) => {
+          if (i === 2) { c.classList.add('selected'); }
+          else { c.classList.add('dimmed'); }
+        });
+        // Also dim other strategy rows to focus attention
+        ['chunk-fixed','chunk-recursive'].forEach(id => {
+          document.getElementById(id).querySelectorAll('.chunk-block').forEach(c => c.classList.add('dimmed'));
+        });
+        document.getElementById('chunkAnn').textContent = '✓ Chunk 3 (semantic) selected — cos=0.89. It covers "amendment rules" as one coherent topic. Better than a fixed chunk that splits the answer across two pieces.';
+      },
+    ];
+    function chunkShow() { if (chunkS >= chunkSteps.length) { chunkT.pause(); return; } chunkSteps[chunkS++](); }
+    const chunkT = raf(chunkShow, 1800);
+    function chunkPlay() { chunkT.play(); } function chunkPause() { chunkT.pause(); } function chunkStepFwd() { chunkPause(); chunkShow(); }
+    function chunkRestart() {
+      chunkPause(); chunkS = 0;
+      ['chunk-orig','chunk-fixed','chunk-recursive','chunk-semantic'].forEach(id => document.getElementById(id).innerHTML = '');
+      const badge = document.getElementById('chunk-query-sim'); if (badge) badge.remove();
+      const a = document.getElementById('chunkAnn'); a.textContent = ''; a.classList.remove('visible');
+    }
+
+    // === QUIZ ===
+    let answered = 0, correct = 0;
+    const total = document.querySelectorAll('.quiz-question').length;
+    function selectQuiz(el) {
+      const q = el.closest('.quiz-question'); if (q.classList.contains('answered')) return;
+      q.classList.add('answered');
+      const cv = q.dataset.correct, sv = el.dataset.value, ok = sv === cv;
+      q.querySelectorAll('.quiz-option').forEach(o => o.classList.add('disabled'));
+      if (ok) { el.classList.add('correct'); el.querySelector('.quiz-marker').textContent = '\u2713'; correct++; }
+      else { el.classList.add('incorrect'); el.querySelector('.quiz-marker').textContent = '\u2717'; q.querySelectorAll('.quiz-option').forEach(o => { if (o.dataset.value === cv) { o.classList.add('correct'); o.querySelector('.quiz-marker').textContent = '\u2713'; } }); }
+      const cfb = q.querySelector('.quiz-feedback.correct-fb'), ifb = q.querySelector('.quiz-feedback.incorrect-fb');
+      if (ok) cfb.classList.add('show'); else { ifb.textContent = 'Not quite. ' + cfb.textContent.replace('Correct! ',''); ifb.classList.add('show'); }
+      answered++;
+      if (answered === total) { document.getElementById('quiz-score').style.display = 'block'; document.getElementById('score-display').textContent = correct + ' / ' + total; const p = Math.round(correct/total*100); document.getElementById('score-message').textContent = p === 100 ? 'Perfect! Ready for Module 10.' : p >= 67 ? 'Good work! Review missed concepts.' : 'Consider re-reading before continuing.'; }
+    }
+    document.querySelectorAll('.quiz-option').forEach(o => o.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectQuiz(o); } }));
+
+    // === SIDEBAR ===
+    const sects = document.querySelectorAll('section[id]');
+    const navs = document.querySelectorAll('.sidebar-nav a');
+    function updateNav() { let cur = ''; sects.forEach(s => { if (s.getBoundingClientRect().top <= 120) cur = s.id; }); navs.forEach(l => l.classList.toggle('active', l.getAttribute('href') === '#' + cur)); }
+    window.addEventListener('scroll', updateNav, { passive: true });
+    navs.forEach(l => l.addEventListener('click', e => { e.preventDefault(); const t = document.querySelector(l.getAttribute('href')); if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' }); document.getElementById('sidebar').classList.remove('open'); }));
+    document.getElementById('sidebarToggle').addEventListener('click', () => document.getElementById('sidebar').classList.toggle('open'));
+
+    setTimeout(ragPlay, 1200);
+  </script>
+</body>
+</html>

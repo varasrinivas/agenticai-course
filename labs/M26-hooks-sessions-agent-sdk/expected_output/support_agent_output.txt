@@ -1,0 +1,116 @@
+============================================================
+M26 Lab -- Full Customer Support Agent
+============================================================
+  [SupportAgent] Initialized with hooks, sessions, and subagent coordinator
+
+============================================================
+SCENARIO 1: Simple Filing Lookup
+============================================================
+
+  --- Request #1 ---
+  Customer: CUST-100
+  Request: Look up filing UCC-2024-NY-0012847 and check for risk flags.
+  Session: session-CUST-100-1
+  Classified as: filing_lookup
+
+  [AgentLoop] Starting filing lookup (max 3 turns)
+    Turn 1: lookup_filing -> Active
+    Turn 2: check_risk_profile -> LOW
+    Turn 3: end_turn -> response delivered
+
+  Response: Filing UCC-2024-NY-0012847 is Active.
+Debtor: Greenfield Logistics LLC
+Risk: LOW (score: 0.35)
+Expires: 2029-03-15
+
+  Status: completed
+
+============================================================
+SCENARIO 2: Refund Request Over $500
+============================================================
+
+  --- Request #2 ---
+  Customer: CUST-200
+  Request: I need a refund of $750 for duplicate filing charges.
+  Session: session-CUST-200-2
+  Classified as: refund
+
+  [AgentLoop] Processing refund of $750.00
+    Refund BLOCKED: Refund $750.00 exceeds $500 limit. Requires human approval.
+
+  Response: I apologize, but I cannot process a refund of $750.00 automatically.
+Refunds over $500 require human approval.
+I have escalated your request (ticket: ESC-2024-0891).
+Expected response time: 15 minutes.
+
+  Status: escalated
+  Escalation ticket: ESC-2024-0891
+
+============================================================
+SCENARIO 3: Cross-State Entity Research
+============================================================
+
+  --- Request #3 ---
+  Customer: CUST-300
+  Request: Research Greenfield Logistics LLC across all states. Find related entities and aggregate risk.
+  Session: session-CUST-300-3
+  Classified as: entity_research
+
+  [AgentLoop] Delegating to subagent coordinator
+    Entity: Greenfield Logistics LLC
+    Forked session: session-CUST-300-3-research-fork
+      [Coordinator] Decomposing entity research for: Greenfield Logistics LLC
+      [EntityAgent] Resolved: Greenfield Logistics LLC -> ['Greenfield Logistics West LLC']
+      [FilingAgent] Found filing for Greenfield Logistics LLC: Active
+      [FilingAgent] Found filing for Greenfield Logistics West LLC: Active
+      [RiskAgent] Greenfield Logistics LLC: LOW (0.35)
+      [RiskAgent] Greenfield Logistics West LLC: LOW (0.35)
+
+  Response:
+Cross-state research complete for Greenfield Logistics LLC:
+- Entities found: 2 (Greenfield Logistics LLC, Greenfield Logistics West LLC)
+- States covered: NY, CA
+- Total filings: 2
+- Aggregate risk: LOW (score: 0.35)
+  - Greenfield Logistics LLC: LOW (0.35)
+  - Greenfield Logistics West LLC: LOW (0.35)
+
+  Status: completed
+
+============================================================
+Agent Execution Summary
+============================================================
+  Total requests handled: 3
+  Hook audit trail entries: 4
+  Hooks blocked: 1
+  Sessions created: 4
+
+  Audit trail:
+    [PostToolUse] lookup_filing -> LOGGED
+    [PostToolUse] check_risk_profile -> LOGGED
+    [PreToolUse] issue_refund -> BLOCKED
+    [PostToolUse] escalate_to_human -> LOGGED
+
+  Sessions:
+    session-CUST-100-1: 2 messages
+    session-CUST-200-2: 2 messages
+    session-CUST-300-3: 2 messages
+    session-CUST-300-3-research-fork [forked from session-CUST-300-3]: 1 messages
+
+============================================================
+Key Takeaways -- Composition
+============================================================
+
+    1. Agent loop: stop_reason drives the control flow (not text parsing)
+    2. Hooks: Refund blocked DETERMINISTICALLY by PreToolUse hook (not prompt)
+    3. Sessions: Each request gets its own session; research gets a fork
+    4. Subagents: Complex research delegated to specialized subagents
+    5. Escalation: Triggered by POLICY GAPS ($750 > $500), not customer sentiment
+
+    This is the Agent SDK pattern in practice:
+    - The SDK runs the loop (query())
+    - Hooks enforce rules (settings.json)
+    - Sessions manage state (named, forked)
+    - Subagents handle complexity (isolated context)
+
+[OK] Lab Step 5 complete -- Full customer support agent

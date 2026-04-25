@@ -1,0 +1,186 @@
+======================================================================
+SAMPLE INTERACTIVE SESSION — UCC Production Agent
+3 queries demonstrating routing, agent execution, and dashboard
+======================================================================
+
+============================================================
+  UCC Production Agent -- Interactive Mode
+  Type 'quit' to exit, 'dashboard' for metrics,
+  'trace <id>' to see a request trace
+============================================================
+
+########################################################################
+# QUERY 1: Filing Lookup (routed to Filing Agent, fast tier)
+########################################################################
+
+You: What UCC filings exist for ACME Corporation in California?
+
+Processing...
+
+--- Routing ---
+  Router Agent analyzing query...
+  Task Type: filing_lookup
+  Target Agent: filing_agent
+  Complexity: simple
+  Reasoning: Simple filing search by debtor name and state
+
+--- Model Selection ---
+  Complexity Score: 0.18
+  Selected Tier: fast (threshold: 0.0-0.3)
+  Model: claude-sonnet-4-20250514
+
+--- Filing Agent Processing ---
+  [Tool Call] search_filings({"debtor_name": "ACME Corporation", "state": "CA"})
+  [Tool Result] Found 3 filings in CA:
+    - CA-2021-0289451 (active, Silicon Valley Bank)
+    - CA-2022-0553192 (active, First Republic Business Finance)
+    - CA-2023-0834129 (active, Wells Fargo Equipment Finance)
+
+--- Working Memory ---
+  Query: "What UCC filings exist for ACME Corporation in California?"
+  Tool Calls: 1 (search_filings)
+  Intermediate Results: 3 filings found
+
+--- Episodic Memory ---
+  No similar past queries found (first query in session)
+  Stored new episode: filing_lookup, 1 tool call, success
+
+Agent: I found 3 active UCC filings for ACME Corporation in California:
+
+1. **CA-2021-0289451** (Filed: 2021-03-22, Lapse: 2026-03-22)
+   - Secured Party: Silicon Valley Bank
+   - Collateral: All equipment, machinery, and fixtures located at 500 Industrial Blvd, San Jose, CA
+   - Status: Active
+
+2. **CA-2022-0553192** (Filed: 2022-08-14, Lapse: 2027-08-14)
+   - Secured Party: First Republic Business Finance
+   - Collateral: All accounts receivable and contract rights
+   - Status: Active
+
+3. **CA-2023-0834129** (Filed: 2023-11-02, Lapse: 2028-11-02)
+   - Secured Party: Wells Fargo Equipment Finance
+   - Collateral: Specific equipment as described in Schedule A
+   - Status: Active
+
+All three filings are currently active with no amendments on record.
+
+  [Task: filing_lookup | Model: fast | Latency: 1247ms | Trace: trc_a1b2c3d4e5]
+
+########################################################################
+# QUERY 2: Risk Assessment (routed to Risk Agent, powerful tier)
+########################################################################
+
+You: What is the total lien exposure for entity ENT-001?
+
+Processing...
+
+--- Routing ---
+  Router Agent analyzing query...
+  Task Type: risk_assessment
+  Target Agent: risk_agent
+  Complexity: complex
+  Reasoning: Risk assessment requires collateral analysis and exposure calculation
+
+--- Model Selection ---
+  Complexity Score: 0.78
+  Selected Tier: powerful (threshold: 0.7-1.0)
+  Model: claude-sonnet-4-20250514
+
+--- Episodic Memory ---
+  Found similar past query (score: 0.42) — not similar enough to use (threshold: 0.8)
+
+--- Risk Agent Processing ---
+  [Tool Call] search_filings({"entity_id": "ENT-001"})
+  [Tool Result] Entity ENT-001 = Acme Corporation. Found filings across 5 states:
+    NY: 1 filing (NY-2023-0558291)
+    DE: 1 filing (DE-2021-0091447)
+    CA: 3 filings (CA-2021-0289451, CA-2022-0553192, CA-2023-0834129)
+    TX: 2 filings (TX-2022-1847592, TX-2024-0229183)
+    FL: 1 filing (FL-2023-0291847)
+
+  [Tool Call] classify_collateral({"filings": ["NY-2023-0558291", "DE-2021-0091447", ...]})
+  [Tool Result] Collateral classifications:
+    - DE-2021-0091447: BLANKET LIEN (all assets)
+    - NY-2023-0558291: ACCOUNTS RECEIVABLE + GENERAL INTANGIBLES
+    - CA-2021-0289451: EQUIPMENT (machinery, fixtures)
+    - CA-2022-0553192: ACCOUNTS RECEIVABLE + CONTRACT RIGHTS
+    - CA-2023-0834129: EQUIPMENT (specific per Schedule A)
+    - TX-2022-1847592: EQUIPMENT (machinery)
+    - TX-2024-0229183: ACCOUNTS RECEIVABLE
+    - FL-2023-0291847: EQUIPMENT + INVENTORY
+
+  [Tool Call] calculate_exposure({"entity": "Acme Corporation", "filings_count": 8})
+  [Tool Result] Exposure calculation:
+    - Total filings: 8 across 5 states
+    - Blanket lien: YES (DE-2021-0091447 covers all assets)
+    - Collateral overlap: HIGH (accounts receivable covered by 3 separate filings)
+    - Priority conflict: YES (blanket lien vs. specific equipment liens)
+    - Risk Level: HIGH
+
+  [Tool Call] generate_risk_report({"entity": "Acme Corporation", "exposure": "high"})
+  [Tool Result] Risk report generated with severity HIGH
+
+--- Working Memory ---
+  Query: "What is the total lien exposure for entity ENT-001?"
+  Tool Calls: 4 (search_filings, classify_collateral, calculate_exposure, generate_risk_report)
+  Intermediate Results: 8 filings, blanket lien detected, HIGH risk
+
+--- Episodic Memory ---
+  Stored new episode: risk_assessment, 4 tool calls, success
+
+Agent: ## Lien Exposure Report: Acme Corporation (ENT-001)
+
+**Risk Level: HIGH**
+
+### Filing Summary
+Acme Corporation has **8 active UCC filings across 5 states** (NY, DE, CA, TX, FL), involving 6 different secured parties.
+
+### Critical Findings
+
+1. **Blanket Lien Detected**: Filing DE-2021-0091447 (Delaware Trust Financial) covers "all assets of the Debtor" — this is a blanket lien that subordinates all other secured parties on the same collateral categories.
+
+2. **Collateral Overlap**: Accounts receivable are pledged in 3 separate filings (NY-2023-0558291, CA-2022-0553192, TX-2024-0229183). The Delaware blanket lien also covers accounts receivable, creating a 4-way overlap.
+
+3. **Priority Conflict**: The Delaware blanket lien (filed 2021-06-30) has first-in-time priority over the California equipment lien (filed 2021-03-22) on overlapping equipment collateral. However, the California filing predates Delaware on specific equipment.
+
+4. **Multi-State Exposure**: Active liens in 5 jurisdictions increase complexity for any new lender. Perfection must be verified in each state.
+
+### Recommendation
+Any new lending to Acme Corporation should:
+- Obtain a subordination agreement from Delaware Trust Financial
+- Conduct a full collateral audit to map overlap
+- Consider only asset-specific liens on unencumbered collateral categories
+
+  [Task: risk_assessment | Model: powerful | Latency: 3842ms | Trace: trc_f6g7h8i9j0]
+
+########################################################################
+# QUERY 3: Dashboard Command
+########################################################################
+
+You: dashboard
+
++-----------------------------------------------------+
+|       UCC PRODUCTION AGENT DASHBOARD                 |
++-----------------------------------------------------+
+|  Requests: 2  |  Success Rate: 100.0%               |
+|  Total Cost: $0.0126  |  Avg: $0.0063/req            |
++-----------------------------------------------------+
+|  Cost by Tier:                                       |
+|    fast       $0.0024  (1 requests)                  |
+|    balanced   $0.0000  (0 requests)                  |
+|    powerful   $0.0102  (1 requests)                  |
++-----------------------------------------------------+
+|  Latency:                                            |
+|    p50: 2545ms  p95: 3712ms  p99: 3816ms             |
++-----------------------------------------------------+
+|  Tokens:                                             |
+|    Total: 4,280  (in: 2,140  out: 2,140)             |
+|    Avg/request: 2,140                                |
++-----------------------------------------------------+
+
+########################################################################
+# END OF SESSION
+########################################################################
+
+You: quit
+Goodbye!

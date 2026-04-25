@@ -1,0 +1,2792 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>M11: Multi-Layer Memory Architecture | Building AI Agents with Claude</title>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;700;800&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg-primary: #0A1628; --bg-secondary: #111D33; --bg-card: #162033; --bg-surface: #1A2740;
+      --text-primary: #E8ECF1; --text-secondary: #94A3B8; --text-muted: #64748B;
+      --accent-primary: #D4A843; --accent-hover: #E5BC5A; --accent-muted: rgba(212, 168, 67, 0.15);
+      --success: #10B981; --success-bg: rgba(16, 185, 129, 0.1);
+      --warning: #F59E0B; --warning-bg: rgba(245, 158, 11, 0.1);
+      --error: #F43F5E; --error-bg: rgba(244, 63, 94, 0.1);
+      --info: #3B82F6; --info-bg: rgba(59, 130, 246, 0.1);
+      --track-memory: #06B6D4; --track-color: var(--track-memory); --track-capstones: #D4A843;
+      --code-bg: #0D1117; --code-border: #21262D; --code-text: #C9D1D9;
+      --transition-fast: 150ms; --transition-normal: 300ms; --transition-slow: 500ms;
+    }
+    body { background: var(--bg-primary); color: var(--text-primary); font-family: 'Source Sans 3', sans-serif; font-size: 1.05rem; line-height: 1.7; min-height: 100vh; }
+    .top-progress { position: fixed; top: 0; left: 0; right: 0; height: 4px; background: var(--bg-surface); z-index: 200; }
+    .top-progress .fill { height: 100%; background: linear-gradient(90deg, var(--track-color), var(--accent-primary)); width: 40%; border-radius: 0 2px 2px 0; }
+    .course-header { background: var(--bg-secondary); border-bottom: 1px solid var(--code-border); padding: 1.25rem 2rem; }
+    .course-header-inner { max-width: 1200px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; }
+    .course-title { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.95rem; font-weight: 600; color: var(--text-secondary); }
+    .track-badge { display: inline-flex; align-items: center; gap: 0.5rem; background: rgba(6, 182, 212, 0.15); border: 1px solid var(--track-color); border-radius: 20px; padding: 0.25rem 0.75rem; font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.8rem; font-weight: 600; color: var(--track-color); }
+    .track-badge .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--track-color); }
+    .header-meta { display: flex; gap: 1.5rem; font-size: 0.85rem; color: var(--text-muted); }
+    .page-container { max-width: 1200px; margin: 0 auto; padding: 2rem; display: grid; grid-template-columns: 240px 1fr; gap: 3rem; }
+    .sidebar-nav { position: sticky; top: 2rem; height: calc(100vh - 4rem); overflow-y: auto; padding-right: 1rem; }
+    .sidebar-nav::-webkit-scrollbar { width: 3px; } .sidebar-nav::-webkit-scrollbar-thumb { background: var(--bg-surface); border-radius: 3px; }
+    .sidebar-title { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); margin-bottom: 1rem; }
+    .sidebar-nav a { display: block; padding: 0.4rem 0.75rem; margin-bottom: 0.15rem; font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.82rem; font-weight: 600; color: var(--text-muted); text-decoration: none; border-left: 2px solid transparent; border-radius: 0 4px 4px 0; transition: all var(--transition-fast); }
+    .sidebar-nav a:hover { color: var(--text-primary); background: var(--bg-surface); }
+    .sidebar-nav a.active { color: var(--accent-primary); border-left-color: var(--accent-primary); background: var(--accent-muted); }
+    .content { max-width: 800px; } .section { margin-bottom: 4rem; }
+    h1 { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 2.25rem; line-height: 1.2; margin-bottom: 0.75rem; }
+    h2 { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 1.5rem; color: var(--text-primary); margin: 2.5rem 0 1rem; padding-top: 1rem; border-top: 1px solid var(--code-border); }
+    h2:first-of-type { border-top: none; }
+    h3 { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 600; font-size: 1.25rem; color: var(--text-primary); margin: 2rem 0 0.75rem; }
+    p { margin-bottom: 1rem; } ul, ol { margin: 0.5rem 0 1rem 1.5rem; } li { margin-bottom: 0.4rem; } strong { font-weight: 600; }
+    a { color: var(--accent-primary); text-decoration: none; } a:hover { text-decoration: underline; }
+    .analogy-box, .tech-def-box, .callout-why, .callout-warning, .callout-security, .callout-cost, .callout-cert { border-left: 4px solid; border-radius: 0 8px 8px 0; padding: 1.25rem 1.5rem; margin: 1.5rem 0; }
+    .analogy-box { background: var(--accent-muted); border-left-color: var(--accent-primary); }
+    .tech-def-box { background: var(--info-bg); border-left-color: var(--info); }
+    .callout-why { background: var(--success-bg); border-left-color: var(--success); }
+    .callout-warning { background: var(--warning-bg); border-left-color: var(--warning); }
+    .callout-security { background: var(--error-bg); border-left-color: var(--error); }
+    .callout-cost { background: var(--warning-bg); border-left-color: var(--accent-primary); }
+    .callout-cert { background: rgba(212, 168, 67, 0.06); border-left-color: var(--accent-primary); }
+    .box-label { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 0.9rem; display: block; margin-bottom: 0.4rem; }
+    .analogy-box .box-label { color: var(--accent-primary); } .tech-def-box .box-label { color: var(--info); } .callout-why .box-label { color: var(--success); } .callout-warning .box-label { color: var(--warning); } .callout-security .box-label { color: var(--error); } .callout-cost .box-label { color: var(--accent-primary); } .callout-cert .box-label { color: var(--accent-primary); }
+    .term-tooltip { position: relative; color: var(--accent-primary); cursor: help; border-bottom: 1px dashed var(--accent-primary); }
+    .term-tooltip .tooltip-content { position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); background: var(--bg-card); border: 1px solid var(--accent-primary); border-radius: 8px; padding: 0.75rem 1rem; font-size: 0.85rem; color: var(--text-primary); width: 280px; opacity: 0; pointer-events: none; transition: opacity var(--transition-fast); z-index: 10; line-height: 1.5; box-shadow: 0 4px 20px rgba(0,0,0,0.4); }
+    .term-tooltip:hover .tooltip-content, .term-tooltip:focus .tooltip-content { opacity: 1; pointer-events: auto; }
+    .code-block-wrapper { background: var(--code-bg); border: 1px solid var(--code-border); border-radius: 12px; margin: 1.5rem 0; overflow: hidden; }
+    .code-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--code-border); background: var(--bg-surface); }
+    .code-tab { padding: 0.5rem 1.25rem; background: none; border: none; font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; color: var(--text-muted); transition: all var(--transition-fast); }
+    .code-tab:hover { color: var(--text-primary); } .code-tab.active { color: var(--accent-primary); border-bottom-color: var(--accent-primary); }
+    .code-panel { display: none; position: relative; } .code-panel.active { display: block; }
+    .code-panel pre { margin: 0; padding: 1.25rem; overflow-x: auto; font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; line-height: 1.6; }
+    .code-panel pre code { background: none; color: var(--code-text); }
+    .copy-btn { position: absolute; top: 0.75rem; right: 0.75rem; background: var(--bg-surface); border: 1px solid var(--code-border); color: var(--text-muted); padding: 0.3rem 0.6rem; border-radius: 6px; font-size: 0.75rem; cursor: pointer; font-family: 'JetBrains Mono', monospace; transition: all var(--transition-fast); }
+    .copy-btn:hover { color: var(--accent-primary); border-color: var(--accent-primary); }
+    .output-block { background: var(--code-bg); border: 1px solid var(--code-border); border-radius: 8px; padding: 1rem 1.25rem; margin: 0.75rem 0 1.5rem; font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; color: var(--success); line-height: 1.5; }
+    .output-label { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.25rem; }
+    .animation-container { background: var(--bg-secondary); border: 1px solid var(--code-border); border-radius: 12px; padding: 2rem; margin: 2rem 0; position: relative; min-height: 300px; overflow: hidden; }
+    .animation-title { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.85rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 1.25rem; }
+    .animation-controls { display: flex; gap: 0.5rem; position: absolute; bottom: 1rem; right: 1rem; }
+    .anim-btn { background: var(--bg-card); border: 1px solid var(--code-border); color: var(--text-primary); width: 36px; height: 36px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 1rem; transition: all var(--transition-fast); }
+    .anim-btn:hover { border-color: var(--accent-primary); color: var(--accent-primary); }
+    .quiz-question { background: var(--bg-card); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; }
+    .quiz-question h4 { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 600; margin-bottom: 1rem; font-size: 1rem; }
+    .quiz-option { padding: 0.75rem 1rem; margin: 0.5rem 0; border: 1px solid var(--code-border); border-radius: 8px; cursor: pointer; transition: all var(--transition-fast); display: flex; align-items: center; gap: 0.75rem; }
+    .quiz-option:hover { border-color: var(--accent-primary); }
+    .quiz-option.correct { border-color: var(--success); background: var(--success-bg); } .quiz-option.incorrect { border-color: var(--error); background: var(--error-bg); } .quiz-option.disabled { pointer-events: none; }
+    .quiz-marker { width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--code-border); flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 700; }
+    .quiz-option.correct .quiz-marker { border-color: var(--success); color: var(--success); } .quiz-option.incorrect .quiz-marker { border-color: var(--error); color: var(--error); }
+    .quiz-feedback { margin-top: 0.75rem; padding: 0.75rem; border-radius: 8px; font-size: 0.9rem; display: none; }
+    .quiz-feedback.show { display: block; } .quiz-feedback.correct-fb { background: var(--success-bg); color: var(--success); } .quiz-feedback.incorrect-fb { background: var(--error-bg); color: var(--error); }
+    .quiz-score { background: var(--bg-card); border-radius: 12px; padding: 1.5rem; text-align: center; margin-top: 2rem; display: none; }
+    .quiz-score .score-num { font-family: 'Bricolage Grotesque', sans-serif; font-size: 2.5rem; font-weight: 800; color: var(--accent-primary); }
+    .module-nav { display: flex; justify-content: space-between; align-items: center; padding: 1.5rem 0; margin: 2rem 0; border-top: 1px solid var(--code-border); }
+    .module-nav a { display: flex; align-items: center; gap: 0.5rem; color: var(--accent-primary); text-decoration: none; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 600; font-size: 0.9rem; padding: 0.5rem 1rem; border: 1px solid var(--code-border); border-radius: 8px; transition: all var(--transition-fast); }
+    .module-nav a:hover { border-color: var(--accent-primary); background: var(--accent-muted); text-decoration: none; }
+    .objectives-list { list-style: none; margin-left: 0; } .objectives-list li { padding: 0.5rem 0 0.5rem 2rem; position: relative; }
+    .objectives-list li::before { content: ''; position: absolute; left: 0; top: 0.85rem; width: 16px; height: 16px; border-radius: 4px; border: 2px solid var(--track-color); background: rgba(6, 182, 212, 0.1); }
+    .checkpoint { background: var(--bg-card); border: 1px solid var(--track-color); border-radius: 8px; padding: 1rem 1.25rem; margin: 1.5rem 0; }
+    .checkpoint-label { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 0.85rem; color: var(--track-color); margin-bottom: 0.4rem; }
+    .bridge { background: var(--bg-surface); border-radius: 8px; padding: 1rem 1.25rem; margin: 2rem 0; font-style: italic; color: var(--text-secondary); border-left: 3px solid var(--text-muted); }
+
+    /* === MEMORY TIERS ANIMATION === */
+    .mem-tiers-wrap { display: flex; flex-direction: column; gap: 0.75rem; }
+    .mem-tier { background: var(--bg-card); border: 1px solid var(--code-border); border-radius: 8px; padding: 0.75rem 1rem; display: flex; align-items: center; gap: 0.75rem; opacity: 0; transform: translateY(10px); transition: all 0.5s ease; }
+    .mem-tier.visible { opacity: 1; transform: translateY(0); }
+    .mem-tier.active { border-color: var(--track-color); box-shadow: 0 0 12px rgba(6,182,212,0.15); }
+    .tier-icon { width: 40px; height: 40px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-size: 1.2rem; flex-shrink: 0; }
+    .tier-working .tier-icon { background: rgba(245,158,11,0.15); }
+    .tier-episodic .tier-icon { background: rgba(59,130,246,0.15); }
+    .tier-procedural .tier-icon { background: rgba(16,185,129,0.15); }
+    .tier-label { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 0.85rem; }
+    .tier-working .tier-label { color: var(--warning); }
+    .tier-episodic .tier-label { color: var(--info); }
+    .tier-procedural .tier-label { color: var(--success); }
+    .tier-desc { font-size: 0.8rem; color: var(--text-muted); }
+    .tier-data { margin-left: auto; font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; color: var(--text-muted); max-width: 200px; text-align: right; opacity: 0; transition: opacity 0.4s; }
+    .tier-data.visible { opacity: 1; color: var(--text-secondary); }
+    .mem-task { background: var(--accent-muted); border: 1px solid var(--accent-primary); border-radius: 8px; padding: 0.5rem 0.75rem; font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; color: var(--accent-primary); text-align: center; opacity: 0; transition: all 0.5s; }
+    .mem-task.visible { opacity: 1; }
+    .mem-flow-arrow { text-align: center; color: var(--text-muted); font-size: 1.2rem; opacity: 0; transition: opacity 0.3s; }
+    .mem-flow-arrow.visible { opacity: 1; }
+
+    /* === WORKING MEMORY SCRATCHPAD ANIMATION === */
+    .scratchpad-wrap { display: flex; gap: 1.5rem; }
+    .scratch-flow { flex: 1; display: flex; flex-direction: column; gap: 0.5rem; }
+    .scratch-step { display: flex; align-items: center; gap: 0.5rem; opacity: 0; transform: translateX(-10px); transition: all 0.4s; }
+    .scratch-step.visible { opacity: 1; transform: translateX(0); }
+    .scratch-step.active { }
+    .step-dot { width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--code-border); display: flex; align-items: center; justify-content: center; font-size: 0.65rem; font-weight: 700; color: var(--text-muted); flex-shrink: 0; }
+    .scratch-step.active .step-dot { border-color: var(--track-color); color: var(--track-color); }
+    .scratch-step.done .step-dot { border-color: var(--success); color: var(--success); background: var(--success-bg); }
+    .step-text { font-size: 0.8rem; color: var(--text-muted); font-family: 'JetBrains Mono', monospace; }
+    .scratch-step.active .step-text { color: var(--text-primary); }
+    .scratch-panel { flex: 1; background: var(--code-bg); border: 1px solid var(--code-border); border-radius: 8px; padding: 0.75rem 1rem; min-height: 200px; }
+    .scratch-panel-title { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.75rem; font-weight: 700; color: var(--warning); margin-bottom: 0.5rem; }
+    .scratch-entry { font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; color: var(--code-text); padding: 0.15rem 0; opacity: 0; transition: opacity 0.3s; }
+    .scratch-entry.visible { opacity: 1; }
+    .scratch-entry .key { color: var(--warning); }
+    .scratch-entry .val { color: var(--code-text); }
+
+    /* === EPISODIC MEMORY VECTOR SPACE ANIMATION === */
+    .episode-space { position: relative; height: 250px; }
+    .episode-node { position: absolute; background: var(--bg-card); border: 1px solid var(--code-border); border-radius: 6px; padding: 0.3rem 0.5rem; font-family: 'JetBrains Mono', monospace; font-size: 0.6rem; color: var(--text-muted); opacity: 0; transition: all 0.6s; white-space: nowrap; }
+    .episode-node.visible { opacity: 1; }
+    .episode-node.match { border-color: var(--info); color: var(--info); background: var(--info-bg); }
+    .episode-query { position: absolute; background: var(--accent-muted); border: 2px solid var(--accent-primary); border-radius: 8px; padding: 0.4rem 0.6rem; font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; color: var(--accent-primary); opacity: 0; transition: all 0.6s; }
+    .episode-query.visible { opacity: 1; }
+    .ep-line { position: absolute; height: 1px; background: var(--info); opacity: 0; transform-origin: left center; transition: opacity 0.4s; }
+    .ep-line.visible { opacity: 0.4; }
+
+    /* === PIPELINE FLOW ANIMATION === */
+    .pipeline-wrap { display: flex; align-items: center; gap: 0.3rem; justify-content: center; flex-wrap: wrap; }
+    .pipe-stage { padding: 0.5rem 0.75rem; border-radius: 8px; background: var(--bg-card); border: 1px solid var(--code-border); font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; text-align: center; min-width: 80px; opacity: 0; transform: scale(0.9); transition: all 0.5s; }
+    .pipe-stage.visible { opacity: 1; transform: scale(1); }
+    .pipe-stage.active { border-color: var(--track-color); box-shadow: 0 0 10px rgba(6,182,212,0.2); }
+    .pipe-stage.done { border-color: var(--success); }
+    .pipe-stage .s-name { font-weight: 600; color: var(--text-primary); font-size: 0.7rem; display: block; }
+    .pipe-stage .s-detail { color: var(--text-muted); font-size: 0.6rem; }
+    .pipe-arrow { color: var(--text-muted); font-size: 0.9rem; opacity: 0; transition: opacity 0.3s; }
+    .pipe-arrow.visible { opacity: 1; }
+    .pipe-data-block { display: inline-block; padding: 0.2rem 0.4rem; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 0.55rem; margin: 0.15rem; }
+
+    /* === DAG EXECUTION ANIMATION === */
+    .dag-wrap { position: relative; height: 220px; }
+    .dag-node { position: absolute; background: var(--bg-card); border: 1px solid var(--code-border); border-radius: 8px; padding: 0.4rem 0.6rem; font-family: 'JetBrains Mono', monospace; font-size: 0.65rem; color: var(--text-muted); text-align: center; opacity: 0; transition: all 0.5s; }
+    .dag-node.visible { opacity: 1; }
+    .dag-node.active { border-color: var(--track-color); color: var(--track-color); }
+    .dag-node.done { border-color: var(--success); color: var(--success); background: var(--success-bg); }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+    }
+    @media (max-width: 900px) {
+      .page-container { grid-template-columns: 1fr; }
+      .sidebar-nav { position: fixed; bottom: 0; left: 0; right: 0; height: auto; z-index: 100; background: var(--bg-secondary); border-top: 1px solid var(--code-border); padding: 0.75rem; display: flex; overflow-x: auto; gap: 0.25rem; }
+      .sidebar-title { display: none; }
+      .sidebar-nav a { white-space: nowrap; font-size: 0.75rem; }
+      .content { padding-bottom: 4rem; }
+      .scratchpad-wrap { flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+  <div class="top-progress" role="progressbar" aria-valuenow="12" aria-valuemin="1" aria-valuemax="30" aria-label="Course progress: Module 12 of 30"><div class="fill"></div></div>
+
+  <header class="course-header">
+    <div class="course-header-inner">
+      <span class="course-title">Building AI Agents with Claude</span>
+      <span class="track-badge"><span class="dot"></span> Track 3: Memory &amp; Context</span>
+      <div class="header-meta">
+        <span>Module 12 of 30</span>
+        <span>~65 min</span>
+        <span>Advanced</span>
+      </div>
+    </div>
+  </header>
+
+  <div class="page-container">
+    <!-- Sidebar Navigation -->
+    <nav class="sidebar-nav" aria-label="Module sections">
+      <div class="sidebar-title">M11 Sections</div>
+      <a href="#objectives">Learning Objectives</a>
+      <a href="#why-multiple-tiers">Why One Memory Isn&rsquo;t Enough</a>
+      <a href="#tier1-working">Tier 1: Working Memory</a>
+      <a href="#tier2-episodic">Tier 2: Episodic Memory</a>
+      <a href="#tier3-procedural">Tier 3: Procedural Memory</a>
+      <a href="#summarization">Summarization Pipeline</a>
+      <a href="#persistence">Persistence Layer</a>
+      <a href="#code-walkthrough">Code Walkthrough</a>
+      <a href="#integration">Integration Demo</a>
+      <a href="#exercise">Hands-On Exercise</a>
+      <a href="#quiz">Knowledge Check</a>
+      <a href="#summary">Summary &amp; Next</a>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="content">
+      <div class="module-nav" style="border-top:none;margin-top:0;">
+        <a href="M10-advanced-rag-patterns.html" aria-label="Previous module: Advanced RAG Patterns">&larr; M10: Advanced RAG</a>
+          <a href="index.html" aria-label="Course Home" title="Course Home" style="font-size:1.2rem;">&#x1F3E0; Home</a>
+        <a href="M12-react-agent-loop.html" aria-label="Next module: ReAct Agent Loop">M12: ReAct Agent Loop &rarr;</a>
+      </div>
+
+      <h1 style="color:var(--track-color);">Multi-Layer Memory Architecture</h1>
+      <p style="font-size:1.1rem;color:var(--text-secondary);margin-bottom:0.5rem;">Give your agent a brain that remembers &mdash; across turns, across sessions, across tasks.</p>
+      <p style="font-size:0.9rem;color:var(--text-muted);">Prerequisites: <a href="M08-conversation-management.html">M08: Conversation Management</a>, <a href="M09-rag-retrieval-augmented-generation.html">M09: RAG Fundamentals</a></p>
+
+      <!-- ========== LEARNING OBJECTIVES ========== -->
+      <section class="section" id="objectives">
+        <h2 id="objectives-heading">Learning Objectives</h2>
+        <ul class="objectives-list" aria-label="Learning objectives">
+          <li>Explain why production agents need multiple memory tiers instead of a single <span class="term-tooltip" tabindex="0">context window<span class="tooltip-content" role="tooltip">The maximum amount of text (measured in tokens) that Claude can process in a single API call. It includes the system prompt, conversation history, tool definitions, and Claude's response. Current Claude models support up to 200K tokens, but larger context doesn't mean better recall.</span></span> or vector store</li>
+          <li>Implement a working memory scratchpad that tracks current task state and injects it into each LLM call</li>
+          <li>Build an episodic memory system that stores conversation summaries in a vector database for cross-session retrieval</li>
+          <li>Create a procedural memory store that saves and retrieves proven tool-call sequences for reuse</li>
+          <li>Wire all three memory tiers together with a Memory Manager that orchestrates loading, updating, and persisting memory across sessions</li>
+        </ul>
+      </section>
+
+      <!-- ========== WHY MULTIPLE MEMORY TIERS ========== -->
+      <section class="section" id="why-multiple-tiers">
+        <h2 id="why-heading">Why One Memory Type Isn&rsquo;t Enough</h2>
+
+        <div class="analogy-box">
+          <span class="box-label">Everyday Analogy</span>
+          <p><strong>Before:</strong> Imagine if your brain stored everything in one place &mdash; today&rsquo;s grocery list, how to ride a bike, your childhood memories, and the recipe for your favorite pasta &mdash; all jumbled in a single notebook. Every time you needed something, you&rsquo;d flip through every page.</p>
+          <p><strong>Pain:</strong> You&rsquo;d waste enormous time searching, the notebook would fill up fast, and important long-term memories would get crowded out by temporary notes. You&rsquo;d forget how to ride a bike because you overwrote it with a shopping list.</p>
+          <p><strong>Mapping:</strong> Your brain uses different memory systems for a reason: <em>working memory</em> for what you&rsquo;re thinking about right now (like holding a phone number while you dial), <em>episodic memory</em> for past experiences (what happened at your wedding), and <em>procedural memory</em> for learned skills (how to ride a bike). AI agents need the same separation &mdash; a single context window or vector store is the &ldquo;one notebook&rdquo; approach, and it breaks down at scale.</p>
+        </div>
+
+        <div class="tech-def-box">
+          <span class="box-label">Technical Definition</span>
+          <p>A <span class="term-tooltip" tabindex="0">multi-layer memory architecture<span class="tooltip-content" role="tooltip">A design pattern that separates an agent's memory into distinct tiers with different storage backends, retrieval strategies, and retention policies &mdash; optimized for the type of information each tier holds.</span></span> separates an agent&rsquo;s memory into specialized tiers, each optimized for a different kind of information:</p>
+          <ul>
+            <li><strong>Working memory</strong> &mdash; a fast, mutable scratchpad for the current task. Think of it as a <span class="term-tooltip" tabindex="0">key-value store<span class="tooltip-content" role="tooltip">A simple data structure that maps unique keys (like &ldquo;user_intent&rdquo;) to values (like &ldquo;book a flight&rdquo;). Fast to read and write, often held in RAM.</span></span> (like a Python dict or Redis cache) that holds the user&rsquo;s current intent, extracted entities, intermediate tool results, and the plan for the current turn. It&rsquo;s included in every LLM prompt and cleared when the task finishes.</li>
+            <li><strong>Episodic memory</strong> &mdash; a searchable archive of past interactions. Stores summarized records of past conversations in a <span class="term-tooltip" tabindex="0">vector database<span class="tooltip-content" role="tooltip">A database that stores data as high-dimensional vectors (arrays of numbers) and supports similarity search &mdash; finding items whose vectors are closest to a query vector. Examples: ChromaDB, Pinecone, Weaviate.</span></span>, indexed by semantic embeddings and timestamps. Retrieved via similarity search when the agent needs context from prior sessions.</li>
+            <li><strong>Procedural memory</strong> &mdash; a library of reusable action sequences. Stores proven tool-call chains (like &ldquo;search &rarr; filter &rarr; summarize &rarr; respond&rdquo;) as structured templates. When a new task matches a known pattern, the agent retrieves and executes the template instead of reasoning from scratch.</li>
+          </ul>
+          <p>The key insight: mixing all three in a single store causes <strong>retrieval pollution</strong> &mdash; when you search for &ldquo;what did the user ask last week?&rdquo;, you don&rsquo;t want to also get back the current task&rsquo;s scratchpad entries and stored tool sequences. Separation keeps retrieval precise and context windows lean.</p>
+        </div>
+
+        <!-- SVG Diagram: Three-Tier Brain (Concentric Layers) -->
+        <div class="animation-container" aria-label="Diagram showing three concentric memory tiers: working memory (inner), episodic memory (middle), procedural memory (outer)">
+          <div class="animation-title">Three-Tier Memory Architecture</div>
+          <svg viewBox="0 0 600 400" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Concentric circles representing three memory tiers: innermost amber ring is working memory (fast scratchpad), middle blue ring is episodic memory (past interactions), outermost green ring is procedural memory (learned patterns)" style="width:100%;max-width:600px;margin:0 auto;display:block;">
+            <style>
+              .mb-ring { fill: none; stroke-width: 2.5; }
+              .mb-ring-fill { opacity: 0.08; }
+              .mb-label { font-family: system-ui, sans-serif; font-weight: 700; font-size: 12px; text-anchor: middle; }
+              .mb-desc { font-family: system-ui, sans-serif; font-size: 9px; text-anchor: middle; }
+              .mb-detail { fill: var(--text-secondary, #94A3B8); font-family: system-ui, sans-serif; font-size: 8px; text-anchor: middle; }
+              .mb-working { stroke: var(--warning, #F59E0B); fill: var(--warning, #F59E0B); }
+              .mb-episodic { stroke: var(--info, #3B82F6); fill: var(--info, #3B82F6); }
+              .mb-procedural { stroke: var(--success, #10B981); fill: var(--success, #10B981); }
+              .mb-center-icon { fill: var(--text-primary, #E8ECF1); font-family: system-ui, sans-serif; font-size: 14px; text-anchor: middle; }
+              .mb-callout { fill: var(--text-secondary, #94A3B8); font-family: system-ui, sans-serif; font-size: 8.5px; }
+              .mb-callout-line { stroke: var(--text-muted, #64748B); stroke-width: 1; stroke-dasharray: 3 2; }
+              .mb-speed { font-family: 'JetBrains Mono', monospace; font-size: 8px; fill: var(--text-muted, #64748B); text-anchor: middle; }
+              @media (prefers-reduced-motion: reduce) { * { transition: none; } }
+            </style>
+            <!-- Outer ring: Procedural -->
+            <circle cx="280" cy="200" r="170" class="mb-ring mb-procedural"/>
+            <circle cx="280" cy="200" r="170" class="mb-ring-fill" style="fill:var(--success,#10B981);stroke:none;"/>
+            <text x="280" y="50" class="mb-label" style="fill:var(--success,#10B981);">Procedural Memory</text>
+            <text x="280" y="64" class="mb-desc" style="fill:var(--success,#10B981);">Learned patterns &amp; reusable action sequences</text>
+            <text x="280" y="378" class="mb-speed">Latency: ~5ms (template lookup)</text>
+            <!-- Middle ring: Episodic -->
+            <circle cx="280" cy="200" r="115" class="mb-ring mb-episodic"/>
+            <circle cx="280" cy="200" r="115" class="mb-ring-fill" style="fill:var(--info,#3B82F6);stroke:none;"/>
+            <text x="280" y="100" class="mb-label" style="fill:var(--info,#3B82F6);">Episodic Memory</text>
+            <text x="280" y="114" class="mb-desc" style="fill:var(--info,#3B82F6);">Past interactions &amp; session summaries</text>
+            <text x="280" y="318" class="mb-speed">Latency: ~50-200ms (vector search)</text>
+            <!-- Inner ring: Working -->
+            <circle cx="280" cy="200" r="60" class="mb-ring mb-working"/>
+            <circle cx="280" cy="200" r="60" class="mb-ring-fill" style="fill:var(--warning,#F59E0B);stroke:none;"/>
+            <text x="280" y="182" class="mb-label" style="fill:var(--warning,#F59E0B);">Working</text>
+            <text x="280" y="196" class="mb-label" style="fill:var(--warning,#F59E0B);">Memory</text>
+            <text x="280" y="212" class="mb-desc" style="fill:var(--warning,#F59E0B);">Current task</text>
+            <text x="280" y="224" class="mb-desc" style="fill:var(--warning,#F59E0B);">scratchpad</text>
+            <text x="280" y="268" class="mb-speed">Latency: &lt;1ms (in-memory dict)</text>
+            <!-- Callout: Working Memory details -->
+            <line x1="340" y1="190" x2="470" y2="130" class="mb-callout-line"/>
+            <text x="474" y="120" class="mb-callout">Key-value store (Redis/dict)</text>
+            <text x="474" y="132" class="mb-callout">intent, entities, plan, tool results</text>
+            <text x="474" y="144" class="mb-callout" style="fill:var(--warning,#F59E0B);">Cleared after task completes</text>
+            <!-- Callout: Episodic Memory details -->
+            <line x1="395" y1="150" x2="470" y2="168" class="mb-callout-line"/>
+            <text x="474" y="166" class="mb-callout">Vector DB (ChromaDB/Pinecone)</text>
+            <text x="474" y="178" class="mb-callout">Session summaries, decisions, prefs</text>
+            <text x="474" y="190" class="mb-callout" style="fill:var(--info,#3B82F6);">Persists across sessions</text>
+            <!-- Callout: Procedural Memory details -->
+            <line x1="395" y1="280" x2="470" y2="240" class="mb-callout-line"/>
+            <text x="474" y="236" class="mb-callout">Template store (JSON/DB)</text>
+            <text x="474" y="248" class="mb-callout">Tool chains, proven workflows</text>
+            <text x="474" y="260" class="mb-callout" style="fill:var(--success,#10B981);">Updated via reinforcement</text>
+            <!-- Access frequency labels -->
+            <text x="85" y="134" class="mb-detail" style="fill:var(--success,#10B981);">Accessed: ~10% of requests</text>
+            <text x="85" y="200" class="mb-detail" style="fill:var(--info,#3B82F6);">Accessed: ~40% of requests</text>
+            <text x="85" y="248" class="mb-detail" style="fill:var(--warning,#F59E0B);">Accessed: 100% of requests</text>
+          </svg>
+        </div>
+
+        <!-- MEMORY TIERS ANIMATION -->
+        <div class="animation-container" aria-label="Memory tiers animation showing three layers of agent memory">
+          <div class="animation-title">Memory Tiers Architecture</div>
+          <div id="mem-tiers-anim">
+            <div class="mem-task" id="mt-task">User: &ldquo;What did we decide about the deployment schedule last Tuesday?&rdquo;</div>
+            <div class="mem-flow-arrow" id="mt-arrow1">&darr;</div>
+            <div class="mem-tiers-wrap">
+              <div class="mem-tier tier-working" id="mt-working">
+                <div class="tier-icon">&#x1F4DD;</div>
+                <div><div class="tier-label">Working Memory</div><div class="tier-desc">Current task state &bull; Fast read/write</div></div>
+                <div class="tier-data" id="mt-wd">intent: "recall_decision"<br>topic: "deployment schedule"</div>
+              </div>
+              <div class="mem-tier tier-episodic" id="mt-episodic">
+                <div class="tier-icon">&#x1F4D6;</div>
+                <div><div class="tier-label">Episodic Memory</div><div class="tier-desc">Past interactions &bull; Semantic search</div></div>
+                <div class="tier-data" id="mt-ed">Found: Session #42 (Tue)<br>"Deploy moved to Friday"</div>
+              </div>
+              <div class="mem-tier tier-procedural" id="mt-procedural">
+                <div class="tier-icon">&#x2699;&#xFE0F;</div>
+                <div><div class="tier-label">Procedural Memory</div><div class="tier-desc">Learned skills &bull; Pattern matching</div></div>
+                <div class="tier-data" id="mt-pd">Template: recall_decision<br>→ search episodes → cite → respond</div>
+              </div>
+            </div>
+          </div>
+          <div class="animation-controls">
+            <button class="anim-btn" onclick="memTiersAnim.play()" aria-label="Play animation">&#x25B6;</button>
+            <button class="anim-btn" onclick="memTiersAnim.pause()" aria-label="Pause animation">&#x23F8;</button>
+            <button class="anim-btn" onclick="memTiersAnim.restart()" aria-label="Restart animation">&#x21BB;</button>
+          </div>
+        </div>
+
+        <p>So what does multi-layer memory actually look like in an agent's system prompt? Here's the formatted output from all three tiers combined — this is what gets injected into every Claude call:</p>
+        <div style="background:var(--code-bg);border:1px solid var(--code-border);border-radius:8px;padding:1rem;font-family:'JetBrains Mono',monospace;font-size:0.75rem;color:var(--code-text);line-height:1.6;overflow-x:auto;margin:0.75rem 0;">
+<span style="color:#F59E0B;">[Working Memory — Session sess_044]</span>
+  Created: 2026-03-29T10:00:00Z
+  intent: recall_decision
+  entities: {"topic": "deployment", "timeframe": "last Tuesday"}
+
+<span style="color:#3B82F6;">[Relevant Past Interactions]</span>
+  - Session sess_042 (2026-03-25): Discussed deployment schedule.
+    Decision: deploy moved to Friday due to QA delays.
+  - Session sess_038 (2026-03-20): Reviewed API rate limits.
+    No deployment-related decisions.
+
+<span style="color:#10B981;">[Suggested Procedure: recall_decision (used 8x)]</span>
+  Step 1: Search episodic memory for matching topic (tool: search_episodes)
+  Step 2: Cite the source session and date (tool: format_citation)
+  Step 3: Respond with the decision and context (tool: generate_response)</div>
+        <p>Three tiers, three colors, under 400 tokens total. Claude sees the current task state (working memory in amber), the 2 most relevant past conversations (episodic in blue), and a proven action template (procedural in green). Compare that to stuffing the full transcript of every past conversation into the prompt — which would use 50,000+ tokens and exceed context limits within a few days.</p>
+
+        <div class="callout-warning">
+          <span class="box-label">&#9888;&#65039; Common Misconceptions</span>
+          <p><strong>"Every agent needs all three memory tiers"</strong> — Not at all. A simple Q&A bot needs zero memory. A single-session agent might only need working memory. Episodic memory matters when users return across sessions. Procedural memory matters when the agent repeats complex workflows. Start with the tier that solves your actual problem, not the full architecture.</p>
+          <p><strong>"Episodic memory gives the agent perfect recall"</strong> — Episodic memory stores <em>summaries</em>, not transcripts. Summarization is lossy — specific names, numbers, and nuances may be dropped. If you need exact recall of a specific detail (like a contract amount), store it as structured metadata, not just in the summary text.</p>
+          <p><strong>"More retrieved episodes = better responses"</strong> — Injecting 10 past episodes into the prompt does more harm than good. Each extra episode adds noise and tokens, and Claude may get confused about which details apply to the current situation. Best practice: retrieve 2-3 most relevant episodes, max.</p>
+          <p><strong>"Procedural memory replaces Claude's reasoning"</strong> — Procedural memory provides a <em>suggested</em> plan, not a mandate. Claude can adapt or override the template based on the current context. Think of it as a recipe that an experienced chef can riff on — not a rigid script.</p>
+          <p style="margin-bottom:0;"><strong>"Episodic memory has no privacy implications"</strong> — Storing conversation summaries means you're persisting user data across sessions. This has real GDPR/CCPA implications: users may have the right to request deletion of their stored episodes. You need to be able to delete all episodes for a specific user_id, and your privacy policy must disclose that conversations are summarized and stored.</p>
+        </div>
+
+        <div class="callout-why">
+          <span class="box-label">Why It Matters</span>
+          <p>A customer-facing support agent handling 500 conversations per day generates roughly 2 million tokens of conversation history per week. Without separated memory tiers, you&rsquo;d either hit context window limits constantly (200K tokens max) or pay $60+/day in API costs injecting irrelevant history. Multi-layer memory keeps the prompt lean: only the current task state (working), the 2&ndash;3 most relevant past conversations (episodic), and the matching skill template (procedural) go into each call &mdash; typically under 4,000 tokens of memory context total.</p>
+        </div>
+
+        <div class="bridge">Now you understand WHY agents need multiple memory types. Let&rsquo;s build each tier, starting with the fastest and most immediate: working memory.</div>
+      </section>
+
+      <!-- ========== TIER 1: WORKING MEMORY ========== -->
+      <section class="section" id="tier1-working">
+        <h2 id="working-heading">Tier 1: Working Memory &mdash; The Scratchpad</h2>
+
+        <div class="analogy-box">
+          <span class="box-label">Everyday Analogy</span>
+          <p><strong>Before:</strong> Imagine a doctor seeing a patient without a clipboard. They walk into the room, the patient describes three symptoms, the doctor orders a blood test, then walks to the lab &mdash; and has to ask the patient to repeat everything because they had nowhere to jot notes.</p>
+          <p><strong>Pain:</strong> Without a scratchpad, the doctor loses track of what they&rsquo;ve already learned, repeats questions, orders duplicate tests, and the visit takes three times longer. The patient loses trust.</p>
+          <p><strong>Mapping:</strong> Working memory is the agent&rsquo;s clipboard. It holds the current user intent, extracted entities (names, dates, IDs), intermediate tool results, and the plan for the current task. Every LLM call sees this scratchpad, so the agent never &ldquo;forgets&rdquo; what it learned two tool calls ago. When the task is done, the scratchpad is cleared or archived.</p>
+        </div>
+
+        <p>In concrete terms, working memory is a Python dictionary that looks like this at any given moment during a task:</p>
+        <div style="background:var(--code-bg);border:1px solid var(--code-border);border-radius:8px;padding:1rem;font-family:'JetBrains Mono',monospace;font-size:0.75rem;color:var(--code-text);line-height:1.6;overflow-x:auto;margin:0.75rem 0;">
+{
+  <span style="color:#F59E0B;">"intent"</span>: <span style="color:var(--text-secondary);">"find_deployment_date"</span>,
+  <span style="color:#F59E0B;">"entities"</span>: { <span style="color:var(--info);">"topic"</span>: <span style="color:var(--text-secondary);">"deployment"</span>, <span style="color:var(--info);">"timeframe"</span>: <span style="color:var(--text-secondary);">"last Tuesday"</span> },
+  <span style="color:#F59E0B;">"search_results"</span>: [{ <span style="color:var(--info);">"session"</span>: <span style="color:var(--info);">42</span>, <span style="color:var(--info);">"summary"</span>: <span style="color:var(--text-secondary);">"Deploy moved to Friday"</span> }],
+  <span style="color:#F59E0B;">"confidence"</span>: <span style="color:var(--info);">0.94</span>,
+  <span style="color:#F59E0B;">"response_plan"</span>: <span style="color:var(--text-secondary);">"cite session #42, confirm Friday"</span>
+}</div>
+        <p>Each key-value pair gets added as the agent progresses through the task. The <code>to_prompt()</code> method formats this dict into a text block that Claude reads at the start of every call. That's all working memory is — a structured dict that rides along with each API request.</p>
+
+        <div class="tech-def-box">
+          <span class="box-label">Technical Definition</span>
+          <p><strong>Working memory</strong> is a structured, mutable state object (a Python dictionary or JavaScript Map) that holds everything the agent needs for the <em>current</em> task. It includes:</p>
+          <ul>
+            <li><strong>User intent</strong> &mdash; what the user is trying to accomplish, parsed from their message</li>
+            <li><strong>Extracted entities</strong> &mdash; specific values like names, dates, IDs pulled from the conversation</li>
+            <li><strong>Intermediate results</strong> &mdash; outputs from tool calls that inform the next step</li>
+            <li><strong>Task plan</strong> &mdash; the sequence of steps the agent plans to execute</li>
+          </ul>
+          <p>The working memory is <strong>injected into the system prompt</strong> of every LLM call, so Claude always has full awareness of the current state. It lives in RAM (or a fast cache like Redis for distributed agents), and its lifetime matches the task &mdash; created when a request arrives, destroyed when the response is sent.</p>
+        </div>
+
+        <!-- SCRATCHPAD ANIMATION -->
+        <div class="animation-container" aria-label="Working memory scratchpad animation showing state updates during a tool loop">
+          <div class="animation-title">Working Memory Scratchpad</div>
+          <div class="scratchpad-wrap" id="scratch-anim">
+            <div class="scratch-flow">
+              <div class="scratch-step" id="ss-1"><div class="step-dot">1</div><div class="step-text">Parse user request</div></div>
+              <div class="scratch-step" id="ss-2"><div class="step-dot">2</div><div class="step-text">Extract entities</div></div>
+              <div class="scratch-step" id="ss-3"><div class="step-dot">3</div><div class="step-text">Call search tool</div></div>
+              <div class="scratch-step" id="ss-4"><div class="step-dot">4</div><div class="step-text">Evaluate results</div></div>
+              <div class="scratch-step" id="ss-5"><div class="step-dot">5</div><div class="step-text">Generate response</div></div>
+            </div>
+            <div class="scratch-panel">
+              <div class="scratch-panel-title">Scratchpad State</div>
+              <div class="scratch-entry" id="se-1"><span class="key">intent:</span> <span class="val">"find_deployment_date"</span></div>
+              <div class="scratch-entry" id="se-2"><span class="key">entities:</span> <span class="val">{ topic: "deployment", timeframe: "last Tuesday" }</span></div>
+              <div class="scratch-entry" id="se-3"><span class="key">search_results:</span> <span class="val">[Session #42: "Deploy moved to Fri"]</span></div>
+              <div class="scratch-entry" id="se-4"><span class="key">confidence:</span> <span class="val">0.94 &mdash; single clear match</span></div>
+              <div class="scratch-entry" id="se-5"><span class="key">response_plan:</span> <span class="val">"cite session #42, confirm Friday"</span></div>
+            </div>
+          </div>
+          <div class="animation-controls">
+            <button class="anim-btn" onclick="scratchAnim.play()" aria-label="Play animation">&#x25B6;</button>
+            <button class="anim-btn" onclick="scratchAnim.pause()" aria-label="Pause animation">&#x23F8;</button>
+            <button class="anim-btn" onclick="scratchAnim.restart()" aria-label="Restart animation">&#x21BB;</button>
+          </div>
+        </div>
+
+        <div class="callout-why">
+          <span class="box-label">Why It Matters</span>
+          <p>Without working memory, an agent that calls 3 tools in sequence has to re-derive context from the full conversation history each time &mdash; burning tokens and losing track of intermediate state. In benchmarks, adding a structured scratchpad to a multi-step agent reduces token usage by 30&ndash;40% and improves task completion rates by 15&ndash;25%, because the agent always knows exactly where it is in the task.</p>
+        </div>
+
+        <div class="bridge">Working memory handles the &ldquo;now.&rdquo; But what about information from yesterday, last week, or last month? That&rsquo;s where episodic memory comes in.</div>
+      </section>
+
+      <!-- ========== TIER 2: EPISODIC MEMORY ========== -->
+      <section class="section" id="tier2-episodic">
+        <h2 id="episodic-heading">Tier 2: Episodic Memory &mdash; Past Interactions</h2>
+
+        <div class="analogy-box">
+          <span class="box-label">Everyday Analogy</span>
+          <p><strong>Before:</strong> Imagine a personal assistant who keeps a detailed diary that&rsquo;s searchable by topic. They don&rsquo;t read the entire diary every morning &mdash; that would take hours. Instead, when you ask &ldquo;What did we discuss about the budget last week?&rdquo;, they search their diary and find the right entry in seconds.</p>
+          <p><strong>Pain:</strong> Without the diary, the assistant starts every day with amnesia. You&rsquo;d have to re-explain your preferences, past decisions, and ongoing projects every single session. For a support agent, this means every returning customer feels like they&rsquo;re talking to a stranger.</p>
+          <p><strong>Mapping:</strong> Episodic memory is the agent&rsquo;s searchable diary. After each conversation, the agent writes a summary of what happened &mdash; key topics, decisions made, user preferences learned, outcomes. These summaries are stored as <em>vector embeddings</em> in a database. When a new conversation starts, the agent searches for relevant past episodes and injects them into the prompt, giving it cross-session continuity.</p>
+        </div>
+
+        <p>Here's what an episode record actually looks like once it's stored in ChromaDB:</p>
+        <div style="background:var(--code-bg);border:1px solid var(--code-border);border-radius:8px;padding:1rem;font-family:'JetBrains Mono',monospace;font-size:0.75rem;color:var(--code-text);line-height:1.6;overflow-x:auto;margin:0.75rem 0;">
+{
+  <span style="color:var(--info);">"id"</span>: <span style="color:var(--text-secondary);">"ep_a3f2b1c9d0e4"</span>,
+  <span style="color:var(--info);">"document"</span>: <span style="color:var(--text-secondary);">"Discussed deployment schedule. Decision: deploy moved to Friday due to QA delays. User prefers email notifications."</span>,
+  <span style="color:var(--info);">"metadata"</span>: {
+    <span style="color:var(--info);">"session_id"</span>: <span style="color:var(--text-secondary);">"sess_042"</span>,
+    <span style="color:var(--info);">"user_id"</span>: <span style="color:var(--text-secondary);">"user_alice"</span>,
+    <span style="color:var(--info);">"timestamp"</span>: <span style="color:var(--text-secondary);">"2026-03-25T14:30:00Z"</span>,
+    <span style="color:var(--info);">"topics"</span>: <span style="color:var(--text-secondary);">"deployment,scheduling"</span>
+  },
+  <span style="color:var(--info);">"embedding"</span>: [<span style="color:var(--info);">0.023</span>, <span style="color:var(--info);">-0.841</span>, <span style="color:var(--info);">0.129</span>, ... <span style="color:#8B949E;">1533 more floats</span>]
+}</div>
+        <p>The <code>document</code> is the summary text. The <code>embedding</code> is a 1536-float array representing its semantic meaning. The <code>metadata</code> enables filtered search (e.g., "find episodes for user_alice about deployment"). When a new message comes in, ChromaDB compares its embedding against all stored episodes and returns the closest matches.</p>
+
+        <div class="tech-def-box">
+          <span class="box-label">Technical Definition</span>
+          <p><strong>Episodic memory</strong> stores summarized records of past conversations in a vector database, indexed by <span class="term-tooltip" tabindex="0">semantic embeddings<span class="tooltip-content" role="tooltip">Numerical representations (arrays of floating-point numbers) of text meaning. Texts with similar meanings have similar embedding vectors, enabling similarity search even when exact words differ.</span></span> and timestamped <span class="term-tooltip" tabindex="0">metadata<span class="tooltip-content" role="tooltip">Additional structured data attached to each record &mdash; like session ID, timestamp, user ID, topic tags &mdash; that enables filtered search beyond just semantic similarity.</span></span>. The workflow is:</p>
+          <ol>
+            <li><strong>At conversation end:</strong> Summarize the conversation into a structured episode record (topics, decisions, preferences, outcomes) using Claude</li>
+            <li><strong>Embed &amp; store:</strong> Convert the summary into a vector embedding and store it in ChromaDB (or Pinecone, Weaviate, etc.) with metadata (session ID, timestamp, user ID)</li>
+            <li><strong>At conversation start:</strong> Take the new user message, embed it, and search the vector database for the most similar past episodes using <span class="term-tooltip" tabindex="0">cosine similarity<span class="tooltip-content" role="tooltip">A mathematical measure of how similar two vectors are, based on the angle between them. A score of 1.0 means identical direction (very similar meaning), 0.0 means unrelated. ChromaDB uses this by default via its HNSW index &mdash; an algorithm that makes nearest-neighbor search fast even with millions of vectors.</span></span></li>
+            <li><strong>Inject:</strong> Add the top 2&ndash;3 matching episode summaries into the system prompt as &ldquo;relevant past context&rdquo;</li>
+          </ol>
+          <p>This gives the agent cross-session memory without replaying full conversation logs (which would be prohibitively expensive and exceed context limits).</p>
+        </div>
+
+        <!-- EPISODIC VECTOR SPACE ANIMATION -->
+        <div class="animation-container" aria-label="Episodic memory vector space animation showing semantic search over past conversations">
+          <div class="animation-title">Episodic Memory &mdash; Semantic Retrieval</div>
+          <div class="episode-space" id="ep-anim">
+            <div class="episode-node" id="ep-n1" style="left:10%;top:20%">Session #38: API rate limits</div>
+            <div class="episode-node" id="ep-n2" style="left:55%;top:15%">Session #39: User prefers email</div>
+            <div class="episode-node" id="ep-n3" style="left:25%;top:55%">Session #40: Bug in auth flow</div>
+            <div class="episode-node" id="ep-n4" style="left:60%;top:60%">Session #41: Pricing discussion</div>
+            <div class="episode-node" id="ep-n5" style="left:15%;top:80%">Session #42: Deploy &rarr; Friday</div>
+            <div class="episode-node" id="ep-n6" style="left:70%;top:40%">Session #43: Onboarding docs</div>
+            <div class="episode-query" id="ep-query" style="left:40%;top:85%">Query: &ldquo;deployment schedule&rdquo;</div>
+            <div class="ep-line" id="ep-line1"></div>
+            <div class="ep-line" id="ep-line2"></div>
+          </div>
+          <div class="animation-controls">
+            <button class="anim-btn" onclick="episodicAnim.play()" aria-label="Play animation">&#x25B6;</button>
+            <button class="anim-btn" onclick="episodicAnim.pause()" aria-label="Pause animation">&#x23F8;</button>
+            <button class="anim-btn" onclick="episodicAnim.restart()" aria-label="Restart animation">&#x21BB;</button>
+          </div>
+        </div>
+
+        <div class="callout-why">
+          <span class="box-label">Why It Matters</span>
+          <p>Episodic memory is the difference between a stateless chatbot and a persistent assistant. A SaaS support agent with episodic memory can say &ldquo;Last time we spoke, you were having trouble with the OAuth redirect &mdash; did that get resolved?&rdquo; instead of asking the customer to explain from scratch. Studies show that agents with cross-session memory reduce average handle time by 40% and increase customer satisfaction scores by 20%, because users don&rsquo;t have to repeat themselves.</p>
+        </div>
+
+        <div class="bridge">Episodic memory remembers <em>what happened</em>. But what about remembering <em>how to do things</em>? That&rsquo;s procedural memory &mdash; the agent&rsquo;s skill library.</div>
+      </section>
+
+      <!-- ========== TIER 3: PROCEDURAL MEMORY ========== -->
+      <section class="section" id="tier3-procedural">
+        <h2 id="procedural-heading">Tier 3: Procedural Memory &mdash; The Skill Library</h2>
+
+        <div class="analogy-box">
+          <span class="box-label">Everyday Analogy</span>
+          <p><strong>Before:</strong> Imagine an experienced chef who has cooked the same pasta dish 200 times. They don&rsquo;t re-read the recipe or measure spices from scratch each time. They&rsquo;ve internalized the steps: boil water, salt it, cook pasta 8 minutes, saut&eacute; garlic in olive oil, toss everything together. It&rsquo;s automatic.</p>
+          <p><strong>Pain:</strong> A novice chef without any recipes has to reason through every step from first principles, makes mistakes, and takes 3x longer. Worse, they might solve the same problem differently each time, leading to inconsistent results. Customers who order the same dish twice get different meals.</p>
+          <p><strong>Mapping:</strong> Procedural memory is the agent&rsquo;s recipe book. When the agent successfully completes a multi-step task (e.g., &ldquo;search &rarr; filter &rarr; summarize &rarr; format as table&rdquo;), it stores that tool sequence as a reusable template. Next time a similar request arrives, the agent retrieves the template instead of reasoning from scratch &mdash; faster execution, consistent results, fewer tokens burned on planning.</p>
+        </div>
+
+        <p>Here's what a stored procedure template looks like as a JSON record:</p>
+        <div style="background:var(--code-bg);border:1px solid var(--code-border);border-radius:8px;padding:1rem;font-family:'JetBrains Mono',monospace;font-size:0.75rem;color:var(--code-text);line-height:1.6;overflow-x:auto;margin:0.75rem 0;">
+{
+  <span style="color:#10B981;">"name"</span>: <span style="color:var(--text-secondary);">"weekly_sales_report"</span>,
+  <span style="color:#10B981;">"trigger"</span>: <span style="color:var(--text-secondary);">"Generate a weekly sales report with charts and insights"</span>,
+  <span style="color:#10B981;">"steps"</span>: [
+    { <span style="color:var(--info);">"tool"</span>: <span style="color:var(--text-secondary);">"query_db"</span>, <span style="color:var(--info);">"params"</span>: {<span style="color:var(--info);">"query"</span>: <span style="color:var(--text-secondary);">"sales_last_7_days"</span>}, <span style="color:var(--info);">"description"</span>: <span style="color:var(--text-secondary);">"Fetch sales data"</span> },
+    { <span style="color:var(--info);">"tool"</span>: <span style="color:var(--text-secondary);">"aggregate"</span>, <span style="color:var(--info);">"params"</span>: {<span style="color:var(--info);">"group_by"</span>: <span style="color:var(--text-secondary);">"region"</span>}, <span style="color:var(--info);">"description"</span>: <span style="color:var(--text-secondary);">"Aggregate by region"</span> },
+    { <span style="color:var(--info);">"tool"</span>: <span style="color:var(--text-secondary);">"chart_gen"</span>, <span style="color:var(--info);">"params"</span>: {<span style="color:var(--info);">"type"</span>: <span style="color:var(--text-secondary);">"bar"</span>}, <span style="color:var(--info);">"description"</span>: <span style="color:var(--text-secondary);">"Generate bar chart"</span> },
+    { <span style="color:var(--info);">"tool"</span>: <span style="color:var(--text-secondary);">"format_pdf"</span>, <span style="color:var(--info);">"params"</span>: {}, <span style="color:var(--info);">"description"</span>: <span style="color:var(--text-secondary);">"Format as PDF report"</span> }
+  ],
+  <span style="color:#10B981;">"success_count"</span>: <span style="color:var(--info);">12</span>
+}</div>
+        <p>The <code>trigger</code> is stored as an embedding for semantic matching. When a user says "Can you make the weekly report?", the agent embeds that request, searches procedural memory, and finds this template with high similarity. The <code>steps</code> array tells Claude exactly which tools to call and in what order. The <code>success_count</code> gives the agent confidence that this is a proven workflow.</p>
+
+        <div class="tech-def-box">
+          <span class="box-label">Technical Definition</span>
+          <p><strong>Procedural memory</strong> stores reusable <span class="term-tooltip" tabindex="0">action sequences<span class="tooltip-content" role="tooltip">An ordered list of tool calls with their parameters, representing a proven workflow. For example: [search_db(query), filter_results(criteria), format_output(template)]. The sequence can include conditional branches and parallel steps.</span></span> &mdash; tool chains, proven workflows, and task templates &mdash; as structured records with two components:</p>
+          <ul>
+            <li><strong>Trigger condition:</strong> A natural language description of when this procedure applies (e.g., &ldquo;user asks to generate a weekly sales report&rdquo;). Stored as an embedding for similarity matching.</li>
+            <li><strong>Execution steps:</strong> An ordered list of tool calls with parameter templates, expected outputs, and error handling instructions. Stored as JSON.</li>
+          </ul>
+          <p>At runtime, the agent embeds the current user request, searches procedural memory for matching triggers, and &mdash; if a match is found with high confidence &mdash; loads the procedure into the prompt as a suggested plan. The agent can then follow or adapt the plan rather than reasoning from scratch.</p>
+        </div>
+
+        <!-- DAG EXECUTION ANIMATION -->
+        <div class="animation-container" aria-label="Procedural memory animation showing a skill template being retrieved and executed as a DAG">
+          <div class="animation-title">Procedural Memory &mdash; Skill Retrieval &amp; Execution</div>
+          <div class="dag-wrap" id="dag-anim">
+            <div class="dag-node" id="dag-trigger" style="left:5%;top:10%;width:130px;">User: &ldquo;Weekly report&rdquo;</div>
+            <div class="dag-node" id="dag-match" style="left:38%;top:10%;width:120px;">Match: report_gen<br>confidence: 0.93</div>
+            <div class="dag-node" id="dag-s1" style="left:5%;top:50%;width:100px;">1. query_db<br>(sales data)</div>
+            <div class="dag-node" id="dag-s2" style="left:28%;top:50%;width:100px;">2. aggregate<br>(by region)</div>
+            <div class="dag-node" id="dag-s3a" style="left:50%;top:38%;width:100px;">3a. chart_gen<br>(bar chart)</div>
+            <div class="dag-node" id="dag-s3b" style="left:50%;top:62%;width:100px;">3b. summary<br>(key insights)</div>
+            <div class="dag-node" id="dag-s4" style="left:75%;top:50%;width:100px;">4. format<br>(PDF report)</div>
+          </div>
+          <div class="animation-controls">
+            <button class="anim-btn" onclick="dagAnim.play()" aria-label="Play animation">&#x25B6;</button>
+            <button class="anim-btn" onclick="dagAnim.pause()" aria-label="Pause animation">&#x23F8;</button>
+            <button class="anim-btn" onclick="dagAnim.restart()" aria-label="Restart animation">&#x21BB;</button>
+          </div>
+        </div>
+
+        <div class="callout-why">
+          <span class="box-label">Why It Matters</span>
+          <p>Procedural memory is how agents get faster and more reliable over time. Without it, an agent that generates weekly reports reasons through the same 5-step plan every Monday &mdash; burning ~2,000 tokens on planning alone. With procedural memory, it retrieves the proven template in a single lookup, saving tokens and executing the same reliable sequence every time. For a B2B ecommerce agent handling 50 report requests per week, this saves roughly $15/week in API costs and eliminates the variance in report quality that comes from re-deriving the approach each time.</p>
+        </div>
+
+        <div class="bridge">You now understand all three memory tiers. The next question is: how do conversations become memories? That&rsquo;s the summarization pipeline &mdash; the bridge between short-term conversation and long-term storage.</div>
+      </section>
+
+      <!-- ========== SUMMARIZATION PIPELINE ========== -->
+      <section class="section" id="summarization">
+        <h2 id="summarization-heading">Summarization Pipeline &amp; Cross-Session Persistence</h2>
+
+        <div class="analogy-box">
+          <span class="box-label">Everyday Analogy</span>
+          <p><strong>Before:</strong> At the end of each workday, imagine a project manager who writes a brief summary of what was accomplished: key decisions made, action items assigned, blockers identified, and what&rsquo;s pending for tomorrow. They file this summary in a searchable archive.</p>
+          <p><strong>Pain:</strong> Without this habit, Monday morning is chaos. Nobody remembers what was decided on Friday, action items fall through the cracks, and the team re-discusses the same issues. The project manager effectively has weekly amnesia.</p>
+          <p><strong>Mapping:</strong> The summarization pipeline is this end-of-day summary habit, automated. When a conversation ends, Claude summarizes the key information &mdash; decisions, preferences, outcomes &mdash; into a compact record. This record is embedded and stored in episodic memory. When the next session starts, the stored summaries are retrieved and injected, giving the agent continuity across sessions without replaying entire conversation logs.</p>
+        </div>
+
+        <p>Here's what the summary record looks like after Claude processes a 10-turn conversation:</p>
+        <div style="background:var(--code-bg);border:1px solid var(--code-border);border-radius:8px;padding:1rem;font-family:'JetBrains Mono',monospace;font-size:0.75rem;color:var(--code-text);line-height:1.6;overflow-x:auto;margin:0.75rem 0;">
+{
+  <span style="color:#10B981;">"summary"</span>: <span style="color:var(--text-secondary);">"Discussed deployment schedule and notification preferences. Decision: deploy moved to Friday due to QA delays. User prefers email over Slack for notifications."</span>,
+  <span style="color:#10B981;">"topics"</span>: [<span style="color:var(--text-secondary);">"deployment"</span>, <span style="color:var(--text-secondary);">"notifications"</span>, <span style="color:var(--text-secondary);">"scheduling"</span>],
+  <span style="color:#10B981;">"decisions"</span>: [<span style="color:var(--text-secondary);">"Deploy moved to Friday"</span>],
+  <span style="color:#10B981;">"user_preferences"</span>: [<span style="color:var(--text-secondary);">"Email notifications preferred over Slack"</span>],
+  <span style="color:#10B981;">"action_items"</span>: [<span style="color:var(--text-secondary);">"Confirm Friday deploy with QA team"</span>]
+}</div>
+        <p>That's it &mdash; a 10-turn, 4,000-token conversation compressed into ~80 tokens of structured JSON. The <code>topics</code> array is used for metadata filtering, and the <code>summary</code> text is what gets embedded and stored in ChromaDB.</p>
+
+        <!-- SVG Diagram: Memory Activation Timeline -->
+        <div class="animation-container" aria-label="Diagram showing a horizontal timeline of when each memory tier activates during a single request">
+          <div class="animation-title">Memory Activation Timeline &mdash; Single Request Lifecycle</div>
+          <svg viewBox="0 0 600 280" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Horizontal timeline showing: at 0ms working memory loads context, at 1ms procedural memory matches a template, at 50ms episodic memory retrieves past sessions, then tool execution occurs, and finally working memory updates and episodic memory stores the summary" style="width:100%;max-width:600px;margin:0 auto;display:block;">
+            <style>
+              .mt-axis { stroke: var(--text-muted, #64748B); stroke-width: 1.5; }
+              .mt-tick { stroke: var(--text-muted, #64748B); stroke-width: 1; }
+              .mt-time { fill: var(--text-muted, #64748B); font-family: 'JetBrains Mono', monospace; font-size: 8px; text-anchor: middle; }
+              .mt-phase { font-family: system-ui, sans-serif; font-size: 9px; font-weight: 600; text-anchor: middle; }
+              .mt-bar { rx: 3; opacity: 0.8; }
+              .mt-bar-label { fill: var(--text-primary, #E8ECF1); font-family: system-ui, sans-serif; font-size: 8px; font-weight: 600; }
+              .mt-bar-detail { fill: var(--text-secondary, #94A3B8); font-family: system-ui, sans-serif; font-size: 7.5px; }
+              .mt-legend-label { fill: var(--text-secondary, #94A3B8); font-family: system-ui, sans-serif; font-size: 9px; }
+              .mt-row-label { fill: var(--text-primary, #E8ECF1); font-family: system-ui, sans-serif; font-size: 10px; font-weight: 600; text-anchor: end; }
+              @media (prefers-reduced-motion: reduce) { * { transition: none; } }
+            </style>
+            <!-- Timeline axis -->
+            <line x1="140" y1="250" x2="580" y2="250" class="mt-axis" marker-end="url(#hy-arr)"/>
+            <text x="360" y="272" class="mt-time" style="font-size:9px;">Time &rarr;</text>
+            <!-- Time ticks -->
+            <line x1="150" y1="246" x2="150" y2="254" class="mt-tick"/>
+            <text x="150" y="264" class="mt-time">0ms</text>
+            <line x1="210" y1="246" x2="210" y2="254" class="mt-tick"/>
+            <text x="210" y="264" class="mt-time">1ms</text>
+            <line x1="280" y1="246" x2="280" y2="254" class="mt-tick"/>
+            <text x="280" y="264" class="mt-time">50ms</text>
+            <line x1="370" y1="246" x2="370" y2="254" class="mt-tick"/>
+            <text x="370" y="264" class="mt-time">200ms</text>
+            <line x1="460" y1="246" x2="460" y2="254" class="mt-tick"/>
+            <text x="460" y="264" class="mt-time">500ms</text>
+            <line x1="540" y1="246" x2="540" y2="254" class="mt-tick"/>
+            <text x="540" y="264" class="mt-time">~1-3s</text>
+            <!-- Phase labels at top -->
+            <text x="180" y="20" class="mt-phase" style="fill:var(--text-muted,#64748B);">Parse</text>
+            <text x="280" y="20" class="mt-phase" style="fill:var(--text-muted,#64748B);">Retrieve</text>
+            <text x="420" y="20" class="mt-phase" style="fill:var(--text-muted,#64748B);">Execute</text>
+            <text x="540" y="20" class="mt-phase" style="fill:var(--text-muted,#64748B);">Persist</text>
+            <line x1="230" y1="12" x2="230" y2="244" style="stroke:var(--text-muted,#64748B);stroke-width:0.5;stroke-dasharray:3 3;opacity:0.3;"/>
+            <line x1="340" y1="12" x2="340" y2="244" style="stroke:var(--text-muted,#64748B);stroke-width:0.5;stroke-dasharray:3 3;opacity:0.3;"/>
+            <line x1="500" y1="12" x2="500" y2="244" style="stroke:var(--text-muted,#64748B);stroke-width:0.5;stroke-dasharray:3 3;opacity:0.3;"/>
+            <!-- Row labels -->
+            <text x="130" y="60" class="mt-row-label" style="fill:var(--warning,#F59E0B);">Working</text>
+            <text x="130" y="120" class="mt-row-label" style="fill:var(--success,#10B981);">Procedural</text>
+            <text x="130" y="180" class="mt-row-label" style="fill:var(--info,#3B82F6);">Episodic</text>
+            <!-- Working Memory bars -->
+            <rect x="150" y="40" width="70" height="24" class="mt-bar" fill="var(--warning,#F59E0B)"/>
+            <text x="156" y="52" class="mt-bar-label">Load context</text>
+            <text x="156" y="62" class="mt-bar-detail">intent, entities</text>
+            <rect x="370" y="40" width="100" height="24" class="mt-bar" fill="var(--warning,#F59E0B)" opacity="0.6"/>
+            <text x="376" y="52" class="mt-bar-label">Update state</text>
+            <text x="376" y="62" class="mt-bar-detail">tool results, plan</text>
+            <rect x="510" y="40" width="50" height="24" class="mt-bar" fill="var(--warning,#F59E0B)" opacity="0.4"/>
+            <text x="516" y="56" class="mt-bar-label">Clear</text>
+            <!-- Procedural Memory bars -->
+            <rect x="210" y="100" width="80" height="24" class="mt-bar" fill="var(--success,#10B981)"/>
+            <text x="216" y="112" class="mt-bar-label">Pattern match</text>
+            <text x="216" y="122" class="mt-bar-detail">find template</text>
+            <rect x="510" y="100" width="60" height="24" class="mt-bar" fill="var(--success,#10B981)" opacity="0.5"/>
+            <text x="516" y="116" class="mt-bar-label">Learn</text>
+            <!-- Episodic Memory bars -->
+            <rect x="250" y="160" width="90" height="24" class="mt-bar" fill="var(--info,#3B82F6)"/>
+            <text x="256" y="172" class="mt-bar-label">Retrieve</text>
+            <text x="256" y="182" class="mt-bar-detail">semantic search</text>
+            <rect x="510" y="160" width="60" height="24" class="mt-bar" fill="var(--info,#3B82F6)" opacity="0.5"/>
+            <text x="516" y="176" class="mt-bar-label">Store</text>
+            <!-- Legend -->
+            <rect x="150" y="226" width="30" height="10" fill="var(--warning,#F59E0B)" rx="2" opacity="0.8"/>
+            <text x="184" y="235" class="mt-legend-label">Working</text>
+            <rect x="230" y="226" width="30" height="10" fill="var(--success,#10B981)" rx="2" opacity="0.8"/>
+            <text x="264" y="235" class="mt-legend-label">Procedural</text>
+            <rect x="325" y="226" width="30" height="10" fill="var(--info,#3B82F6)" rx="2" opacity="0.8"/>
+            <text x="359" y="235" class="mt-legend-label">Episodic</text>
+            <rect x="410" y="226" width="30" height="10" fill="var(--text-muted,#64748B)" rx="2" opacity="0.4"/>
+            <text x="444" y="235" class="mt-legend-label">Active (read/write)</text>
+          </svg>
+        </div>
+
+        <!-- PIPELINE FLOW ANIMATION -->
+        <div class="animation-container" aria-label="Summarization pipeline animation showing conversation flowing through summarize, embed, and store stages">
+          <div class="animation-title">Summarization Pipeline</div>
+          <div id="pipeline-anim">
+            <div class="pipeline-wrap">
+              <div class="pipe-stage" id="pl-conv"><span class="s-name">Conversation</span><span class="s-detail">~4,000 tokens</span></div>
+              <div class="pipe-arrow" id="pl-a1">&rarr;</div>
+              <div class="pipe-stage" id="pl-summ"><span class="s-name">Summarize</span><span class="s-detail">Claude extracts key info</span></div>
+              <div class="pipe-arrow" id="pl-a2">&rarr;</div>
+              <div class="pipe-stage" id="pl-embed"><span class="s-name">Embed</span><span class="s-detail">Convert to vector</span></div>
+              <div class="pipe-arrow" id="pl-a3">&rarr;</div>
+              <div class="pipe-stage" id="pl-store"><span class="s-name">Store</span><span class="s-detail">Episodic DB + metadata</span></div>
+              <div class="pipe-arrow" id="pl-a4">&rarr;</div>
+              <div class="pipe-stage" id="pl-retrieve"><span class="s-name">Retrieve</span><span class="s-detail">Next session loads it</span></div>
+            </div>
+          </div>
+          <div class="animation-controls">
+            <button class="anim-btn" onclick="pipelineAnim.play()" aria-label="Play animation">&#x25B6;</button>
+            <button class="anim-btn" onclick="pipelineAnim.pause()" aria-label="Pause animation">&#x23F8;</button>
+            <button class="anim-btn" onclick="pipelineAnim.restart()" aria-label="Restart animation">&#x21BB;</button>
+          </div>
+        </div>
+
+        <div class="tech-def-box">
+          <span class="box-label">Technical Definition</span>
+          <p>The <strong>summarization pipeline</strong> is a multi-stage process that converts raw conversations into compact, searchable memory records:</p>
+          <ol>
+            <li><strong>Summarize:</strong> Send the conversation to Claude with a structured prompt that extracts: key topics discussed, decisions made, user preferences learned, action items, and outcomes. Output is a structured JSON record (~200&ndash;400 tokens), down from the original ~4,000+ token conversation.</li>
+            <li><strong>Embed:</strong> Convert the summary text into a vector embedding using an embedding model (like Voyage AI or OpenAI embeddings). This enables semantic search later.</li>
+            <li><strong>Store:</strong> Save the embedding + summary text + metadata (session ID, timestamp, user ID, topic tags) in a vector database like ChromaDB.</li>
+            <li><strong>Compact:</strong> Periodically merge related episodes and remove outdated information to prevent the memory store from growing unbounded. A <span class="term-tooltip" tabindex="0">compaction strategy<span class="tooltip-content" role="tooltip">A maintenance process that periodically reviews stored memories, merges duplicates, and removes entries older than a threshold or below a relevance score. Prevents the memory database from growing indefinitely.</span></span> might merge all &ldquo;deployment&rdquo; episodes from the same week into one consolidated record.</li>
+          </ol>
+        </div>
+
+        <div class="callout-why">
+          <span class="box-label">Why It Matters</span>
+          <p>A 10-turn conversation with Claude uses roughly 4,000&ndash;8,000 tokens. Storing the full transcript for 500 daily conversations would mean 2&ndash;4 million tokens of raw history per day. The summarization pipeline compresses each conversation to ~300 tokens &mdash; a 93% reduction. That means 500 days of conversation summaries (~150,000 tokens total) can fit in a single ChromaDB collection and be searched in under 50ms. Without summarization, you&rsquo;d blow through storage limits within a week.</p>
+        </div>
+
+        <div class="callout-warning">
+          <span class="box-label">&#9888;&#65039; Common Misconceptions</span>
+          <p><strong>"Summarization is lossless &mdash; Claude captures everything"</strong> &mdash; No. Summarization is inherently lossy. Specific numbers (contract amounts, API rate limits), exact timestamps, and subtle nuances often get dropped. If a detail is business-critical, store it as structured metadata alongside the summary, not just in the summary text.</p>
+          <p><strong>"I should summarize after every message"</strong> &mdash; Summarize at conversation END, not after every turn. Mid-conversation summarization wastes API calls and may lose context that only makes sense in the full conversation flow. The one exception: very long conversations (50+ turns) where you want to summarize-and-compact periodically to prevent context overflow.</p>
+          <p style="margin-bottom:0;"><strong>"Any LLM can summarize equally well"</strong> &mdash; Summarization quality varies significantly between models. A weak summarizer might miss that "the user seemed frustrated about the delay" or drop the distinction between "we discussed X" and "we decided X." Use a capable model (Claude Sonnet or better) for summarization &mdash; the cost difference is negligible and the quality gap is significant.</p>
+        </div>
+
+        <div class="checkpoint">
+          <div class="checkpoint-label">What Just Happened?</div>
+          <p>You&rsquo;ve learned the four components of the memory architecture: working memory (current state), episodic memory (past conversations), procedural memory (learned skills), and the summarization pipeline (the bridge between them). Now let&rsquo;s build the persistence layer that keeps all this data alive across process restarts.</p>
+        </div>
+      </section>
+
+      <!-- ========== PERSISTENCE LAYER ========== -->
+      <section class="section" id="persistence">
+        <h2 id="persistence-heading">Persistence Layer</h2>
+
+        <p>Memory that only lives in RAM disappears when your process crashes or restarts. For production agents, all three memory tiers need durable storage &mdash; meaning the data is written to disk (or a managed database) and survives server restarts, crashes, and deployments.</p>
+
+        <p>Here's how persistence works internally, tier by tier. When working memory updates a key, the change happens in RAM first (that's what makes it fast). Periodically, the in-memory state is flushed to a backing store &mdash; Redis for distributed agents, or SQLite or a JSON file for simpler setups.</p>
+        <p>Episodic memory is a bit different. When you store an episode, ChromaDB writes two things to disk: the embedding vector (the 1536-float array) and the document text (the summary). Both go into ChromaDB's SQLite backend, so they survive restarts.</p>
+        <p>Procedural memory splits its data across two stores. The trigger description goes into the vector DB as an embedding (for semantic search). The steps JSON goes into a relational table (SQLite or PostgreSQL). On restart, each tier reads its persisted state and resumes where it left off.</p>
+
+        <p>If you've worked with web apps, this is similar to the difference between storing user data in a session cookie versus a database. Session cookies disappear when the browser closes. A database persists across restarts. The same pattern applies here: without persistence, your agent's memory is a session cookie that vanishes on crash.</p>
+        <p>This is fundamentally different from the context-window approach in M08, where conversation history lived only in the <code>messages</code> array passed to each API call. That array exists only while your code is running. Persistence adds a storage layer underneath each memory tier, turning ephemeral state into durable records.</p>
+        <p>The tradeoff is additional infrastructure complexity &mdash; you now need a database, backup strategy, and a plan for when storage grows unbounded. For a hobby project, SQLite and a local ChromaDB directory are fine. For a production agent handling thousands of users, you'll likely graduate to a managed vector database (Pinecone, Weaviate Cloud) with automatic backups and horizontal scaling.</p>
+
+        <ul>
+          <li><strong>Working memory:</strong> Persisted to Redis or a session store &mdash; survives brief disconnects. For simpler deployments, a JSON file or SQLite row per active session works.</li>
+          <li><strong>Episodic memory:</strong> Vector database (ChromaDB with SQLite backend, Pinecone, Weaviate) &mdash; survives restarts and scales to millions of episodes.</li>
+          <li><strong>Procedural memory:</strong> SQLite or PostgreSQL table with trigger embeddings stored in the same vector database &mdash; survives restarts and supports filtered retrieval.</li>
+        </ul>
+
+        <div class="callout-warning">
+          <span class="box-label">Production Warning</span>
+          <p>ChromaDB&rsquo;s default in-memory mode loses all data on restart. Always configure persistent storage: <code>chromadb.PersistentClient(path="./chroma_db")</code> in Python or specify a persist directory. In production, consider a managed vector database (Pinecone, Weaviate Cloud) for automatic backups and scaling.</p>
+        </div>
+
+        <!-- CERT TIP - Domain 5.4 (after persistence section) -->
+        <div class="callout-cert" style="background:rgba(212,168,67,.06);border-left:4px solid #D4A843;border-radius:0 8px 8px 0;padding:1.25rem 1.5rem;margin:1.5rem 0;">
+          <span class="box-label" style="color:#D4A843;">&#x1F393; Cert Tip &mdash; Domain 5.4</span>
+          <p>Long sessions accumulate stale context &mdash; Claude may reference code that&rsquo;s been changed. Mitigations: <code>/compact</code> (lossy), scratchpad files (lossless), subagent delegation (fresh context), or crash recovery manifests for interrupted sessions. The exam tests your knowledge of these tradeoffs.</p>
+        </div>
+
+        <div class="bridge">Now that you understand the architecture conceptually, let&rsquo;s build it. The code walkthrough implements all three tiers, the summarization pipeline, and a Memory Manager that orchestrates everything.</div>
+      </section>
+
+      <!-- ========== CODE WALKTHROUGH ========== -->
+      <section class="section" id="code-walkthrough">
+        <h2 id="code-heading">Code Walkthrough: 3-Tier Memory System</h2>
+
+        <h3 id="cw-working">Step 1: Working Memory Class</h3>
+        <p>Let's start with the simplest tier. The <code>WorkingMemory</code> class is essentially a key-value store (a Python dict with timestamps) that tracks the current task state. The interesting design choice is the <code>to_prompt()</code> method &mdash; it formats the entire state into a structured text block that you inject into Claude's system prompt. Without this, every LLM call within a multi-step task would be stateless &mdash; Claude would forget what it learned two tool calls ago. The scratchpad solves that by riding along with every API request.</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs" role="tablist">
+            <button class="code-tab active" role="tab" aria-selected="true" onclick="switchTab(this, 'wm-py')">Python</button>
+            <button class="code-tab" role="tab" aria-selected="false" onclick="switchTab(this, 'wm-ts')">Node.js / TypeScript</button>
+          </div>
+          <div class="code-panel active" id="wm-py">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy Python code">Copy</button>
+            <pre><code class="language-python">import json
+from datetime import datetime, timezone
+from typing import Any
+
+
+class WorkingMemory:
+    """Fast, mutable scratchpad for current task state.
+
+    Stores key-value pairs in memory and provides a formatted
+    string for injection into Claude's system prompt.
+    """
+
+    def __init__(self, session_id: str):
+        self.session_id = session_id
+        self.created_at = datetime.now(timezone.utc).isoformat()
+        self._state: dict[str, Any] = {}
+
+    def set(self, key: str, value: Any) -> None:
+        """Store a key-value pair in working memory."""
+        self._state[key] = {
+            "value": value,
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }
+
+    def get(self, key: str, default: Any = None) -> Any:
+        """Retrieve a value by key. Returns default if not found."""
+        entry = self._state.get(key)
+        return entry["value"] if entry else default
+
+    def delete(self, key: str) -> bool:
+        """Remove a key from working memory. Returns True if existed."""
+        return self._state.pop(key, None) is not None
+
+    def clear(self) -> None:
+        """Clear all working memory state."""
+        self._state.clear()
+
+    def to_prompt(self) -> str:
+        """Format working memory for injection into system prompt.
+
+        Returns a structured string that Claude can parse to understand
+        the current task state.
+        """
+        if not self._state:
+            return "[Working Memory: empty — new task]"
+
+        lines = [
+            f"[Working Memory — Session {self.session_id}]",
+            f"  Created: {self.created_at}"
+        ]
+        for key, entry in self._state.items():
+            val = json.dumps(entry["value"]) if not isinstance(
+                entry["value"], str
+            ) else entry["value"]
+            lines.append(f"  {key}: {val}")
+
+        return "\n".join(lines)
+
+    def to_dict(self) -> dict:
+        """Serialize for persistence (e.g., to Redis or SQLite)."""
+        return {
+            "session_id": self.session_id,
+            "created_at": self.created_at,
+            "state": {
+                k: v["value"] for k, v in self._state.items()
+            }
+        }
+
+
+# --- Usage ---
+wm = WorkingMemory(session_id="sess_001")
+wm.set("intent", "find_deployment_date")
+wm.set("entities", {"topic": "deployment", "timeframe": "last Tuesday"})
+wm.set("search_results", [{"session": 42, "summary": "Deploy moved to Friday"}])
+
+print(wm.to_prompt())
+# [Working Memory — Session sess_001]
+#   Created: 2026-03-29T10:00:00+00:00
+#   intent: find_deployment_date
+#   entities: {"topic": "deployment", "timeframe": "last Tuesday"}
+#   search_results: [{"session": 42, "summary": "Deploy moved to Friday"}]</code></pre>
+          </div>
+          <div class="code-panel" id="wm-ts">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy TypeScript code">Copy</button>
+            <pre><code class="language-typescript">interface MemoryEntry {
+  value: unknown;
+  updatedAt: string;
+}
+
+class WorkingMemory {
+  /** Fast, mutable scratchpad for current task state. */
+
+  public readonly sessionId: string;
+  public readonly createdAt: string;
+  private state: Map&lt;string, MemoryEntry&gt; = new Map();
+
+  constructor(sessionId: string) {
+    this.sessionId = sessionId;
+    this.createdAt = new Date().toISOString();
+  }
+
+  set(key: string, value: unknown): void {
+    this.state.set(key, {
+      value,
+      updatedAt: new Date().toISOString(),
+    });
+  }
+
+  get(key: string, defaultValue: unknown = null): unknown {
+    const entry = this.state.get(key);
+    return entry ? entry.value : defaultValue;
+  }
+
+  delete(key: string): boolean {
+    return this.state.delete(key);
+  }
+
+  clear(): void {
+    this.state.clear();
+  }
+
+  toPrompt(): string {
+    if (this.state.size === 0) {
+      return "[Working Memory: empty — new task]";
+    }
+    const lines = [
+      `[Working Memory — Session ${this.sessionId}]`,
+      `  Created: ${this.createdAt}`,
+    ];
+    for (const [key, entry] of this.state) {
+      const val =
+        typeof entry.value === "string"
+          ? entry.value
+          : JSON.stringify(entry.value);
+      lines.push(`  ${key}: ${val}`);
+    }
+    return lines.join("\n");
+  }
+
+  toJSON(): Record&lt;string, unknown&gt; {
+    const state: Record&lt;string, unknown&gt; = {};
+    for (const [key, entry] of this.state) {
+      state[key] = entry.value;
+    }
+    return {
+      sessionId: this.sessionId,
+      createdAt: this.createdAt,
+      state,
+    };
+  }
+}
+
+// --- Usage ---
+const wm = new WorkingMemory("sess_001");
+wm.set("intent", "find_deployment_date");
+wm.set("entities", { topic: "deployment", timeframe: "last Tuesday" });
+wm.set("search_results", [{ session: 42, summary: "Deploy moved to Friday" }]);
+
+console.log(wm.toPrompt());</code></pre>
+          </div>
+        </div>
+
+        <div class="checkpoint">
+          <div class="checkpoint-label">What Just Happened?</div>
+          <p>You built a <code>WorkingMemory</code> class that acts as a structured scratchpad. It stores key-value pairs with timestamps, and the <code>to_prompt()</code> method formats the entire state into a string that you inject into Claude&rsquo;s system prompt. This means every LLM call during a multi-step task can &ldquo;see&rdquo; everything the agent has learned so far.</p>
+        </div>
+
+        <h3 id="cw-episodic">Step 2: Episodic Memory Class</h3>
+        <p>Now for the tier that gives agents cross-session continuity. The <code>EpisodicMemory</code> class wraps ChromaDB to store conversation summaries and retrieve them by semantic similarity. The core idea: after each conversation, you store a summary. Before each new conversation, you search for relevant past summaries and inject them into the prompt. Here's the dilemma with ChromaDB: its default mode is in-memory, which means all your carefully stored episodes vanish when the process restarts. That's why the constructor uses <code>PersistentClient</code> with a disk path &mdash; skip this and you'll spend hours debugging "why doesn't my agent remember anything?"</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs" role="tablist">
+            <button class="code-tab active" role="tab" aria-selected="true" onclick="switchTab(this, 'em-py')">Python</button>
+            <button class="code-tab" role="tab" aria-selected="false" onclick="switchTab(this, 'em-ts')">Node.js / TypeScript</button>
+          </div>
+          <div class="code-panel active" id="em-py">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy Python code">Copy</button>
+            <pre><code class="language-python">import chromadb  # pip install chromadb>=0.5.0
+import uuid
+from datetime import datetime, timezone
+
+
+class EpisodicMemory:
+    """Stores and retrieves conversation summaries via semantic search.
+
+    Uses ChromaDB with persistent storage so memories survive restarts.
+    """
+
+    def __init__(self, persist_dir: str = "./chroma_db", collection_name: str = "episodes"):
+        try:
+            self.client = chromadb.PersistentClient(path=persist_dir)
+            self.collection = self.client.get_or_create_collection(
+                name=collection_name,
+                metadata={"hnsw:space": "cosine"}  # cosine similarity
+            )
+        except Exception as e:
+            raise ConnectionError(
+                f"Failed to connect to ChromaDB at {persist_dir}: {e}"
+            ) from e
+
+    def store_episode(
+        self,
+        summary: str,
+        session_id: str,
+        user_id: str = "default",
+        topics: list[str] | None = None,
+    ) -> str:
+        """Store a conversation summary as an episode.
+
+        Returns the episode ID for later reference.
+        """
+        episode_id = f"ep_{uuid.uuid4().hex[:12]}"
+        metadata = {
+            "session_id": session_id,
+            "user_id": user_id,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "topics": ",".join(topics) if topics else "",
+        }
+
+        try:
+            self.collection.add(
+                documents=[summary],
+                metadatas=[metadata],
+                ids=[episode_id],
+            )
+        except Exception as e:
+            raise RuntimeError(f"Failed to store episode: {e}") from e
+
+        return episode_id
+
+    def retrieve(
+        self,
+        query: str,
+        n_results: int = 3,
+        user_id: str | None = None,
+    ) -> list[dict]:
+        """Find the most relevant past episodes for a query.
+
+        Returns a list of dicts with 'summary', 'session_id',
+        'timestamp', and 'similarity' keys.
+        """
+        where_filter = {"user_id": user_id} if user_id else None
+
+        try:
+            results = self.collection.query(
+                query_texts=[query],
+                n_results=min(n_results, self.collection.count() or 1),
+                where=where_filter,
+            )
+        except Exception as e:
+            # Return empty on search failure — don't crash the agent
+            print(f"Warning: episodic search failed: {e}")
+            return []
+
+        if not results["documents"] or not results["documents"][0]:
+            return []
+
+        episodes = []
+        for i, doc in enumerate(results["documents"][0]):
+            meta = results["metadatas"][0][i]
+            distance = results["distances"][0][i] if results["distances"] else 0
+            episodes.append({
+                "summary": doc,
+                "session_id": meta.get("session_id", ""),
+                "timestamp": meta.get("timestamp", ""),
+                "topics": meta.get("topics", "").split(","),
+                "similarity": round(1 - distance, 3),  # cosine distance → similarity
+            })
+
+        return episodes
+
+    def to_prompt(self, query: str, n_results: int = 3) -> str:
+        """Retrieve relevant episodes and format for prompt injection."""
+        episodes = self.retrieve(query, n_results)
+        if not episodes:
+            return "[Episodic Memory: no relevant past interactions found]"
+
+        lines = ["[Relevant Past Interactions]"]
+        for ep in episodes:
+            lines.append(
+                f"  - Session {ep['session_id']} ({ep['timestamp'][:10]}): "
+                f"{ep['summary']}"
+            )
+        return "\n".join(lines)
+
+
+# --- Usage ---
+em = EpisodicMemory(persist_dir="./memory_db")
+
+# Store a past conversation summary
+em.store_episode(
+    summary="User asked about deployment schedule. Decision: deploy moved to Friday due to QA delays.",
+    session_id="sess_042",
+    user_id="user_alice",
+    topics=["deployment", "scheduling"],
+)
+
+# Later, retrieve relevant episodes
+results = em.retrieve("When is the deployment?", user_id="user_alice")
+for r in results:
+    print(f"[{r['similarity']}] Session {r['session_id']}: {r['summary']}")</code></pre>
+          </div>
+          <div class="code-panel" id="em-ts">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy TypeScript code">Copy</button>
+            <pre><code class="language-typescript">// npm install chromadb@^1.9.0
+import { ChromaClient, Collection } from "chromadb";
+import { randomUUID } from "crypto";
+
+interface Episode {
+  summary: string;
+  sessionId: string;
+  timestamp: string;
+  topics: string[];
+  similarity: number;
+}
+
+class EpisodicMemory {
+  /** Stores and retrieves conversation summaries via semantic search. */
+
+  private client: ChromaClient;
+  private collection: Collection | null = null;
+  private collectionName: string;
+
+  constructor(collectionName: string = "episodes") {
+    this.client = new ChromaClient();
+    this.collectionName = collectionName;
+  }
+
+  async init(): Promise&lt;void&gt; {
+    try {
+      this.collection = await this.client.getOrCreateCollection({
+        name: this.collectionName,
+        metadata: { "hnsw:space": "cosine" },
+      });
+    } catch (error) {
+      throw new Error(`Failed to connect to ChromaDB: ${error}`);
+    }
+  }
+
+  async storeEpisode(
+    summary: string,
+    sessionId: string,
+    userId: string = "default",
+    topics: string[] = []
+  ): Promise&lt;string&gt; {
+    if (!this.collection) throw new Error("Call init() first");
+
+    const episodeId = `ep_${randomUUID().replace(/-/g, "").slice(0, 12)}`;
+    const metadata = {
+      session_id: sessionId,
+      user_id: userId,
+      timestamp: new Date().toISOString(),
+      topics: topics.join(","),
+    };
+
+    try {
+      await this.collection.add({
+        documents: [summary],
+        metadatas: [metadata],
+        ids: [episodeId],
+      });
+    } catch (error) {
+      throw new Error(`Failed to store episode: ${error}`);
+    }
+
+    return episodeId;
+  }
+
+  async retrieve(
+    query: string,
+    nResults: number = 3,
+    userId?: string
+  ): Promise&lt;Episode[]&gt; {
+    if (!this.collection) throw new Error("Call init() first");
+
+    const whereFilter = userId ? { user_id: userId } : undefined;
+
+    try {
+      const count = await this.collection.count();
+      const results = await this.collection.query({
+        queryTexts: [query],
+        nResults: Math.min(nResults, count || 1),
+        where: whereFilter,
+      });
+
+      if (!results.documents?.[0]?.length) return [];
+
+      return results.documents[0].map((doc, i) =&gt; ({
+        summary: doc ?? "",
+        sessionId: String(results.metadatas?.[0]?.[i]?.session_id ?? ""),
+        timestamp: String(results.metadatas?.[0]?.[i]?.timestamp ?? ""),
+        topics: String(results.metadatas?.[0]?.[i]?.topics ?? "")
+          .split(",")
+          .filter(Boolean),
+        similarity: results.distances?.[0]?.[i]
+          ? Math.round((1 - results.distances[0][i]) * 1000) / 1000
+          : 0,
+      }));
+    } catch (error) {
+      console.warn(`Episodic search failed: ${error}`);
+      return [];
+    }
+  }
+
+  async toPrompt(query: string, nResults: number = 3): Promise&lt;string&gt; {
+    const episodes = await this.retrieve(query, nResults);
+    if (!episodes.length) {
+      return "[Episodic Memory: no relevant past interactions found]";
+    }
+    const lines = ["[Relevant Past Interactions]"];
+    for (const ep of episodes) {
+      lines.push(
+        `  - Session ${ep.sessionId} (${ep.timestamp.slice(0, 10)}): ${ep.summary}`
+      );
+    }
+    return lines.join("\n");
+  }
+}
+
+// --- Usage ---
+const em = new EpisodicMemory("episodes");
+await em.init();
+
+await em.storeEpisode(
+  "User asked about deployment schedule. Decision: deploy moved to Friday.",
+  "sess_042",
+  "user_alice",
+  ["deployment", "scheduling"]
+);
+
+const results = await em.retrieve("When is the deployment?", 3, "user_alice");
+results.forEach((r) =&gt;
+  console.log(`[${r.similarity}] Session ${r.sessionId}: ${r.summary}`)
+);</code></pre>
+          </div>
+        </div>
+
+        <div class="checkpoint">
+          <div class="checkpoint-label">What Just Happened?</div>
+          <p>You built an <code>EpisodicMemory</code> class that stores conversation summaries in ChromaDB with metadata (session ID, user ID, timestamp, topics). The <code>retrieve()</code> method does semantic search &mdash; even if the user asks about &ldquo;deployment&rdquo; using different words, ChromaDB finds the matching episode. The <code>to_prompt()</code> method formats retrieved episodes for direct injection into Claude&rsquo;s prompt.</p>
+        </div>
+
+        <h3 id="cw-procedural">Step 3: Procedural Memory Class</h3>
+        <p>The third tier is where agents get faster over time. <code>ProceduralMemory</code> stores reusable action templates &mdash; proven sequences of tool calls &mdash; and retrieves them by matching user requests to trigger conditions via semantic similarity. The clever part is the <code>min_similarity</code> threshold (0.7 by default): if no stored procedure matches the user's request closely enough, the agent falls back to reasoning from scratch instead of executing an irrelevant template. This prevents the agent from re-planning the same multi-step workflow every time while avoiding false matches.</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs" role="tablist">
+            <button class="code-tab active" role="tab" aria-selected="true" onclick="switchTab(this, 'pm-py')">Python</button>
+            <button class="code-tab" role="tab" aria-selected="false" onclick="switchTab(this, 'pm-ts')">Node.js / TypeScript</button>
+          </div>
+          <div class="code-panel active" id="pm-py">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy Python code">Copy</button>
+            <pre><code class="language-python">import chromadb
+import json
+import uuid
+
+
+class ProceduralMemory:
+    """Stores and retrieves reusable action templates (tool-call sequences).
+
+    Trigger conditions are stored as embeddings for semantic matching.
+    Execution steps are stored as structured JSON.
+    """
+
+    def __init__(self, persist_dir: str = "./chroma_db"):
+        try:
+            self.client = chromadb.PersistentClient(path=persist_dir)
+            self.collection = self.client.get_or_create_collection(
+                name="procedures",
+                metadata={"hnsw:space": "cosine"},
+            )
+        except Exception as e:
+            raise ConnectionError(f"Failed to connect to ChromaDB: {e}") from e
+
+    def store_procedure(
+        self,
+        name: str,
+        trigger: str,
+        steps: list[dict],
+        success_count: int = 1,
+    ) -> str:
+        """Store a reusable procedure.
+
+        Args:
+            name: Human-readable procedure name (e.g., 'weekly_report')
+            trigger: Description of when this procedure applies
+            steps: Ordered list of step dicts with 'tool', 'params', 'description'
+            success_count: Number of times this procedure has succeeded
+        """
+        proc_id = f"proc_{uuid.uuid4().hex[:10]}"
+        metadata = {
+            "name": name,
+            "steps_json": json.dumps(steps),
+            "success_count": success_count,
+        }
+
+        try:
+            self.collection.add(
+                documents=[trigger],   # trigger is the searchable text
+                metadatas=[metadata],
+                ids=[proc_id],
+            )
+        except Exception as e:
+            raise RuntimeError(f"Failed to store procedure: {e}") from e
+
+        return proc_id
+
+    def find_procedure(
+        self,
+        query: str,
+        min_similarity: float = 0.7,
+    ) -> dict | None:
+        """Find the best matching procedure for a user request.
+
+        Returns None if no procedure matches above the similarity threshold.
+        """
+        try:
+            count = self.collection.count()
+            if count == 0:
+                return None
+
+            results = self.collection.query(
+                query_texts=[query],
+                n_results=1,
+            )
+        except Exception as e:
+            print(f"Warning: procedural search failed: {e}")
+            return None
+
+        if not results["documents"] or not results["documents"][0]:
+            return None
+
+        distance = results["distances"][0][0] if results["distances"] else 1.0
+        similarity = 1 - distance
+
+        if similarity < min_similarity:
+            return None
+
+        meta = results["metadatas"][0][0]
+        return {
+            "name": meta["name"],
+            "trigger": results["documents"][0][0],
+            "steps": json.loads(meta["steps_json"]),
+            "success_count": meta.get("success_count", 0),
+            "similarity": round(similarity, 3),
+        }
+
+    def to_prompt(self, query: str) -> str:
+        """Find a matching procedure and format it as a suggested plan."""
+        proc = self.find_procedure(query)
+        if not proc:
+            return "[Procedural Memory: no matching skill template found]"
+
+        lines = [
+            f"[Suggested Procedure: {proc['name']} (used {proc['success_count']}x)]",
+        ]
+        for i, step in enumerate(proc["steps"], 1):
+            lines.append(
+                f"  Step {i}: {step['description']} "
+                f"(tool: {step['tool']})"
+            )
+        return "\n".join(lines)
+
+
+# --- Usage ---
+pm = ProceduralMemory(persist_dir="./memory_db")
+
+# Store a proven procedure
+pm.store_procedure(
+    name="weekly_sales_report",
+    trigger="Generate a weekly sales report with charts and insights",
+    steps=[
+        {"tool": "query_db", "params": {"query": "sales_last_7_days"}, "description": "Fetch sales data"},
+        {"tool": "aggregate", "params": {"group_by": "region"}, "description": "Aggregate by region"},
+        {"tool": "chart_gen", "params": {"type": "bar"}, "description": "Generate bar chart"},
+        {"tool": "summarize", "params": {}, "description": "Extract key insights"},
+        {"tool": "format_pdf", "params": {}, "description": "Format as PDF report"},
+    ],
+    success_count=12,
+)
+
+# Later, find a matching procedure
+result = pm.find_procedure("Can you create the weekly sales report?")
+if result:
+    print(f"Found: {result['name']} (similarity: {result['similarity']})")
+    for step in result["steps"]:
+        print(f"  → {step['description']}")</code></pre>
+          </div>
+          <div class="code-panel" id="pm-ts">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy TypeScript code">Copy</button>
+            <pre><code class="language-typescript">import { ChromaClient, Collection } from "chromadb";
+import { randomUUID } from "crypto";
+
+interface ProcedureStep {
+  tool: string;
+  params: Record&lt;string, unknown&gt;;
+  description: string;
+}
+
+interface Procedure {
+  name: string;
+  trigger: string;
+  steps: ProcedureStep[];
+  successCount: number;
+  similarity: number;
+}
+
+class ProceduralMemory {
+  /** Stores and retrieves reusable action templates. */
+
+  private client: ChromaClient;
+  private collection: Collection | null = null;
+
+  constructor() {
+    this.client = new ChromaClient();
+  }
+
+  async init(): Promise&lt;void&gt; {
+    try {
+      this.collection = await this.client.getOrCreateCollection({
+        name: "procedures",
+        metadata: { "hnsw:space": "cosine" },
+      });
+    } catch (error) {
+      throw new Error(`Failed to connect to ChromaDB: ${error}`);
+    }
+  }
+
+  async storeProcedure(
+    name: string,
+    trigger: string,
+    steps: ProcedureStep[],
+    successCount: number = 1
+  ): Promise&lt;string&gt; {
+    if (!this.collection) throw new Error("Call init() first");
+
+    const procId = `proc_${randomUUID().replace(/-/g, "").slice(0, 10)}`;
+    try {
+      await this.collection.add({
+        documents: [trigger],
+        metadatas: [{
+          name,
+          steps_json: JSON.stringify(steps),
+          success_count: successCount,
+        }],
+        ids: [procId],
+      });
+    } catch (error) {
+      throw new Error(`Failed to store procedure: ${error}`);
+    }
+    return procId;
+  }
+
+  async findProcedure(
+    query: string,
+    minSimilarity: number = 0.7
+  ): Promise&lt;Procedure | null&gt; {
+    if (!this.collection) throw new Error("Call init() first");
+
+    try {
+      const count = await this.collection.count();
+      if (count === 0) return null;
+
+      const results = await this.collection.query({
+        queryTexts: [query],
+        nResults: 1,
+      });
+
+      if (!results.documents?.[0]?.length) return null;
+
+      const distance = results.distances?.[0]?.[0] ?? 1.0;
+      const similarity = 1 - distance;
+      if (similarity < minSimilarity) return null;
+
+      const meta = results.metadatas?.[0]?.[0] ?? {};
+      return {
+        name: String(meta.name ?? ""),
+        trigger: results.documents[0][0] ?? "",
+        steps: JSON.parse(String(meta.steps_json ?? "[]")),
+        successCount: Number(meta.success_count ?? 0),
+        similarity: Math.round(similarity * 1000) / 1000,
+      };
+    } catch (error) {
+      console.warn(`Procedural search failed: ${error}`);
+      return null;
+    }
+  }
+
+  async toPrompt(query: string): Promise&lt;string&gt; {
+    const proc = await this.findProcedure(query);
+    if (!proc) {
+      return "[Procedural Memory: no matching skill template found]";
+    }
+    const lines = [
+      `[Suggested Procedure: ${proc.name} (used ${proc.successCount}x)]`,
+    ];
+    proc.steps.forEach((step, i) =&gt; {
+      lines.push(`  Step ${i + 1}: ${step.description} (tool: ${step.tool})`);
+    });
+    return lines.join("\n");
+  }
+}
+
+// --- Usage ---
+const pm = new ProceduralMemory();
+await pm.init();
+
+await pm.storeProcedure(
+  "weekly_sales_report",
+  "Generate a weekly sales report with charts and insights",
+  [
+    { tool: "query_db", params: { query: "sales_last_7_days" }, description: "Fetch sales data" },
+    { tool: "aggregate", params: { group_by: "region" }, description: "Aggregate by region" },
+    { tool: "chart_gen", params: { type: "bar" }, description: "Generate bar chart" },
+    { tool: "summarize", params: {}, description: "Extract key insights" },
+    { tool: "format_pdf", params: {}, description: "Format as PDF report" },
+  ],
+  12
+);
+
+const result = await pm.findProcedure("Create the weekly sales report");
+if (result) {
+  console.log(`Found: ${result.name} (${result.similarity})`);
+  result.steps.forEach((s) =&gt; console.log(`  → ${s.description}`));
+}</code></pre>
+          </div>
+        </div>
+
+        <div class="checkpoint">
+          <div class="checkpoint-label">What Just Happened?</div>
+          <p>You built a <code>ProceduralMemory</code> class that stores skill templates as trigger-description/steps pairs. The trigger is stored as an embedding in ChromaDB, so when a user request comes in, semantic search finds the closest matching procedure. The steps are stored as JSON and loaded into the prompt as a suggested plan. The <code>min_similarity</code> threshold (0.7) prevents false matches &mdash; if no procedure is relevant enough, the agent falls back to reasoning from scratch.</p>
+        </div>
+      </section>
+
+      <!-- ========== INTEGRATION: MEMORY MANAGER ========== -->
+      <section class="section" id="integration">
+        <h2 id="integration-heading">Memory Manager &mdash; Orchestrating All Three Tiers</h2>
+
+        <h3 id="cw-summarizer">Step 4: Conversation Summarizer</h3>
+        <p>This is the bridge between short-term conversation and long-term memory. The <code>summarize_conversation</code> function takes a full conversation log and asks Claude a simple question: "What were the important parts of this conversation?" Claude extracts the essential information &mdash; topics discussed, decisions made, user preferences learned, and action items remaining &mdash; and returns it as a compact JSON record.</p>
+        <p>The output is ~200-400 tokens, which is 10-20x smaller than the raw conversation. That compression is what makes episodic memory economically viable. Without it, storing full transcripts for 500 daily conversations would blow through your storage budget within a week. The interesting design choice here is using Claude itself as the summarizer &mdash; it understands conversational nuance better than any rule-based approach, and the cost (~$0.002 per summary) is trivial compared to the savings on future prompt tokens.</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs" role="tablist">
+            <button class="code-tab active" role="tab" aria-selected="true" onclick="switchTab(this, 'sum-py')">Python</button>
+            <button class="code-tab" role="tab" aria-selected="false" onclick="switchTab(this, 'sum-ts')">Node.js / TypeScript</button>
+          </div>
+          <div class="code-panel active" id="sum-py">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy Python code">Copy</button>
+            <pre><code class="language-python">import anthropic  # pip install anthropic>=0.30.0
+import json
+
+
+async def summarize_conversation(
+    messages: list[dict],
+    client: anthropic.AsyncAnthropic | None = None,
+) -> dict:
+    """Summarize a conversation into a structured episode record.
+
+    Args:
+        messages: List of conversation messages (role + content dicts)
+        client: Anthropic client (creates one if not provided)
+
+    Returns:
+        Dict with: summary, topics, decisions, user_preferences, action_items
+    """
+    if client is None:
+        client = anthropic.AsyncAnthropic()  # reads ANTHROPIC_API_KEY env var
+
+    # Format the conversation for summarization
+    conversation_text = "\n".join(
+        f"{msg['role'].upper()}: {msg['content']}" for msg in messages
+    )
+
+    try:
+        response = await client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=500,
+            system=(
+                "You are a conversation summarizer. Extract the key information "
+                "from the conversation and return a JSON object with these fields:\n"
+                '- "summary": 1-2 sentence overview of the conversation\n'
+                '- "topics": list of main topics discussed\n'
+                '- "decisions": list of decisions made (empty if none)\n'
+                '- "user_preferences": any user preferences learned (empty if none)\n'
+                '- "action_items": pending items (empty if none)\n'
+                "Return ONLY valid JSON, no markdown fences."
+            ),
+            messages=[{"role": "user", "content": conversation_text}],
+        )
+
+        result = json.loads(response.content[0].text)
+        return result
+
+    except json.JSONDecodeError:
+        # Fallback: return raw summary if Claude didn't produce valid JSON
+        return {
+            "summary": response.content[0].text[:500],
+            "topics": [],
+            "decisions": [],
+            "user_preferences": [],
+            "action_items": [],
+        }
+    except anthropic.APIError as e:
+        raise RuntimeError(f"Summarization API call failed: {e}") from e</code></pre>
+          </div>
+          <div class="code-panel" id="sum-ts">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy TypeScript code">Copy</button>
+            <pre><code class="language-typescript">import Anthropic from "@anthropic-ai/sdk"; // npm install @anthropic-ai/sdk@^0.30.0
+
+interface EpisodeRecord {
+  summary: string;
+  topics: string[];
+  decisions: string[];
+  userPreferences: string[];
+  actionItems: string[];
+}
+
+async function summarizeConversation(
+  messages: Array&lt;{ role: string; content: string }&gt;,
+  client?: Anthropic
+): Promise&lt;EpisodeRecord&gt; {
+  const anthropic = client ?? new Anthropic(); // reads ANTHROPIC_API_KEY
+
+  const conversationText = messages
+    .map((msg) =&gt; `${msg.role.toUpperCase()}: ${msg.content}`)
+    .join("\n");
+
+  try {
+    const response = await anthropic.messages.create({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 500,
+      system:
+        "You are a conversation summarizer. Extract key information " +
+        "and return a JSON object with: summary, topics, decisions, " +
+        "user_preferences, action_items. Return ONLY valid JSON.",
+      messages: [{ role: "user", content: conversationText }],
+    });
+
+    const text =
+      response.content[0].type === "text" ? response.content[0].text : "";
+    const parsed = JSON.parse(text);
+    return {
+      summary: parsed.summary ?? "",
+      topics: parsed.topics ?? [],
+      decisions: parsed.decisions ?? [],
+      userPreferences: parsed.user_preferences ?? [],
+      actionItems: parsed.action_items ?? [],
+    };
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      return {
+        summary: "Summarization produced invalid JSON",
+        topics: [],
+        decisions: [],
+        userPreferences: [],
+        actionItems: [],
+      };
+    }
+    throw new Error(`Summarization failed: ${error}`);
+  }
+}</code></pre>
+          </div>
+        </div>
+
+        <h3 id="cw-manager">Step 5: Memory Manager</h3>
+        <p>Finally, the orchestrator that ties everything together. The <code>MemoryManager</code> has a clear lifecycle: <code>start_session()</code> creates fresh working memory and loads relevant episodes and procedures. During the conversation, you update working memory and log each turn. <code>end_session()</code> summarizes the conversation, stores the summary in episodic memory, and clears working memory. The interesting part is <code>build_memory_context()</code> &mdash; it combines all three tiers into a single formatted string that becomes part of Claude's system prompt. Individual memory classes are building blocks; the Memory Manager is the glue that makes them work as a coherent system.</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs" role="tablist">
+            <button class="code-tab active" role="tab" aria-selected="true" onclick="switchTab(this, 'mm-py')">Python</button>
+            <button class="code-tab" role="tab" aria-selected="false" onclick="switchTab(this, 'mm-ts')">Node.js / TypeScript</button>
+          </div>
+          <div class="code-panel active" id="mm-py">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy Python code">Copy</button>
+            <pre><code class="language-python">import anthropic
+
+
+class MemoryManager:
+    """Orchestrates all three memory tiers for a conversational agent.
+
+    Lifecycle:
+      1. start_session() — creates working memory, loads relevant episodes + procedures
+      2. During conversation — update working memory via set/get
+      3. end_session() — summarizes conversation, stores episode, clears working memory
+    """
+
+    def __init__(self, persist_dir: str = "./memory_db"):
+        self.episodic = EpisodicMemory(persist_dir=persist_dir)
+        self.procedural = ProceduralMemory(persist_dir=persist_dir)
+        self.working: WorkingMemory | None = None
+        self.client = anthropic.AsyncAnthropic()
+        self.conversation_log: list[dict] = []
+
+    def start_session(self, session_id: str, user_id: str = "default") -> str:
+        """Initialize a new session with fresh working memory.
+
+        Returns the formatted memory context for the first prompt.
+        """
+        self.working = WorkingMemory(session_id=session_id)
+        self.working.set("user_id", user_id)
+        self.conversation_log = []
+        return self.working.to_prompt()
+
+    def build_memory_context(self, user_message: str) -> str:
+        """Build the full memory context to inject into Claude's system prompt.
+
+        Combines all three tiers into a single formatted string.
+        """
+        if not self.working:
+            raise RuntimeError("No active session. Call start_session() first.")
+
+        sections = [
+            self.working.to_prompt(),
+            self.episodic.to_prompt(user_message, n_results=3),
+            self.procedural.to_prompt(user_message),
+        ]
+        return "\n\n".join(sections)
+
+    def log_turn(self, role: str, content: str) -> None:
+        """Log a conversation turn for later summarization."""
+        self.conversation_log.append({"role": role, "content": content})
+
+    async def end_session(self) -> str | None:
+        """End the session: summarize, store episode, clear working memory.
+
+        Returns the episode ID if a summary was stored, None otherwise.
+        """
+        if not self.working or not self.conversation_log:
+            return None
+
+        session_id = self.working.session_id
+        user_id = self.working.get("user_id", "default")
+
+        # Summarize the conversation
+        try:
+            summary_record = await summarize_conversation(
+                self.conversation_log, self.client
+            )
+        except Exception as e:
+            print(f"Warning: summarization failed: {e}")
+            summary_record = {
+                "summary": f"Session {session_id} — summarization failed",
+                "topics": [],
+            }
+
+        # Store in episodic memory
+        episode_id = self.episodic.store_episode(
+            summary=summary_record["summary"],
+            session_id=session_id,
+            user_id=user_id,
+            topics=summary_record.get("topics", []),
+        )
+
+        # Clear working memory
+        self.working.clear()
+        self.working = None
+        self.conversation_log = []
+
+        return episode_id
+
+
+# --- Usage: Full agent loop ---
+async def agent_loop():
+    """Demonstrates a full conversation with memory management."""
+    manager = MemoryManager(persist_dir="./memory_db")
+    client = anthropic.AsyncAnthropic()
+
+    # Start session
+    session_id = "sess_044"
+    manager.start_session(session_id, user_id="user_alice")
+
+    # Simulate a user message
+    user_msg = "What did we decide about the deployment schedule?"
+    manager.log_turn("user", user_msg)
+
+    # Build memory-enriched system prompt
+    memory_context = manager.build_memory_context(user_msg)
+    manager.working.set("intent", "recall_decision")
+    manager.working.set("topic", "deployment schedule")
+
+    system_prompt = f"""You are a helpful assistant with memory.
+
+{memory_context}
+
+Use the memory context above to provide informed, personalized responses.
+If you find relevant past interactions, reference them naturally."""
+
+    # Call Claude with memory context
+    response = await client.messages.create(
+        model="claude-sonnet-4-20250514",
+        max_tokens=1024,
+        system=system_prompt,
+        messages=[{"role": "user", "content": user_msg}],
+    )
+
+    assistant_msg = response.content[0].text
+    manager.log_turn("assistant", assistant_msg)
+    print(f"Agent: {assistant_msg}")
+
+    # End session — summarize and persist
+    episode_id = await manager.end_session()
+    print(f"Session saved as episode: {episode_id}")</code></pre>
+          </div>
+          <div class="code-panel" id="mm-ts">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy TypeScript code">Copy</button>
+            <pre><code class="language-typescript">import Anthropic from "@anthropic-ai/sdk";
+
+class MemoryManager {
+  /** Orchestrates all three memory tiers for a conversational agent. */
+
+  private episodic: EpisodicMemory;
+  private procedural: ProceduralMemory;
+  private working: WorkingMemory | null = null;
+  private client: Anthropic;
+  private conversationLog: Array&lt;{ role: string; content: string }&gt; = [];
+
+  constructor() {
+    this.episodic = new EpisodicMemory("episodes");
+    this.procedural = new ProceduralMemory();
+    this.client = new Anthropic();
+  }
+
+  async init(): Promise&lt;void&gt; {
+    await this.episodic.init();
+    await this.procedural.init();
+  }
+
+  startSession(sessionId: string, userId: string = "default"): string {
+    this.working = new WorkingMemory(sessionId);
+    this.working.set("user_id", userId);
+    this.conversationLog = [];
+    return this.working.toPrompt();
+  }
+
+  async buildMemoryContext(userMessage: string): Promise&lt;string&gt; {
+    if (!this.working) throw new Error("No active session");
+
+    const sections = [
+      this.working.toPrompt(),
+      await this.episodic.toPrompt(userMessage, 3),
+      await this.procedural.toPrompt(userMessage),
+    ];
+    return sections.join("\n\n");
+  }
+
+  logTurn(role: string, content: string): void {
+    this.conversationLog.push({ role, content });
+  }
+
+  async endSession(): Promise&lt;string | null&gt; {
+    if (!this.working || !this.conversationLog.length) return null;
+
+    const sessionId = this.working.sessionId;
+    const userId = String(this.working.get("user_id", "default"));
+
+    let summaryRecord: EpisodeRecord;
+    try {
+      summaryRecord = await summarizeConversation(
+        this.conversationLog,
+        this.client
+      );
+    } catch {
+      summaryRecord = {
+        summary: `Session ${sessionId} — summarization failed`,
+        topics: [],
+        decisions: [],
+        userPreferences: [],
+        actionItems: [],
+      };
+    }
+
+    const episodeId = await this.episodic.storeEpisode(
+      summaryRecord.summary,
+      sessionId,
+      userId,
+      summaryRecord.topics
+    );
+
+    this.working.clear();
+    this.working = null;
+    this.conversationLog = [];
+
+    return episodeId;
+  }
+}
+
+// --- Usage: Full agent loop ---
+async function agentLoop() {
+  const manager = new MemoryManager();
+  await manager.init();
+  const client = new Anthropic();
+
+  manager.startSession("sess_044", "user_alice");
+
+  const userMsg = "What did we decide about the deployment schedule?";
+  manager.logTurn("user", userMsg);
+
+  const memoryContext = await manager.buildMemoryContext(userMsg);
+
+  const systemPrompt = `You are a helpful assistant with memory.
+
+${memoryContext}
+
+Use the memory context above to provide informed, personalized responses.`;
+
+  const response = await client.messages.create({
+    model: "claude-sonnet-4-20250514",
+    max_tokens: 1024,
+    system: systemPrompt,
+    messages: [{ role: "user", content: userMsg }],
+  });
+
+  const text =
+    response.content[0].type === "text" ? response.content[0].text : "";
+  manager.logTurn("assistant", text);
+  console.log(`Agent: ${text}`);
+
+  const episodeId = await manager.endSession();
+  console.log(`Session saved as episode: ${episodeId}`);
+}</code></pre>
+          </div>
+        </div>
+
+        <div class="checkpoint">
+          <div class="checkpoint-label">What Just Happened?</div>
+          <p>You built a complete <code>MemoryManager</code> that orchestrates all three tiers. The lifecycle is: <strong>start_session()</strong> creates working memory &rarr; <strong>build_memory_context()</strong> combines all three tiers into a system prompt &rarr; during the conversation, you update working memory and log turns &rarr; <strong>end_session()</strong> summarizes the conversation, stores it in episodic memory, and clears working memory. Each Claude call gets a rich memory context that includes current task state, relevant past interactions, and matching skill templates &mdash; all in under 2,000 tokens of memory overhead.</p>
+        </div>
+
+        <div class="callout-cost">
+          <span class="box-label">Cost Consideration</span>
+          <p>The summarization call at session end uses ~500 input tokens + ~200 output tokens per conversation, costing roughly $0.002 per session with Claude Sonnet. For 500 sessions/day, that&rsquo;s $1/day in summarization costs. The savings from not replaying full conversation history (4,000+ tokens per session) far outweigh this cost &mdash; roughly $8/day saved on input tokens alone.</p>
+        </div>
+      </section>
+
+      <!-- ========== HANDS-ON EXERCISE ========== -->
+      <section class="section" id="exercise">
+        <h2 id="exercise-heading">Hands-On Exercise</h2>
+
+        <div style="background:var(--bg-card);border-radius:12px;padding:1.5rem;margin-bottom:1.5rem;">
+          <h3 style="margin-top:0;color:var(--accent-primary);">What You'll Build</h3>
+          <p>A 3-tier memory system (working, episodic, procedural) with a MemoryManager that wires them together. You'll run a multi-turn session, save it to episodic memory, start a new session, and verify the agent remembers key details from the first session.</p>
+          <p><strong>Time Estimate:</strong> 45&ndash;60 minutes</p>
+          <p><strong>Prerequisites:</strong> Python 3.10+, an Anthropic API key (<a href="https://console.anthropic.com/">console.anthropic.com</a>), and a terminal</p>
+          <p style="margin-bottom:0;"><strong>Files You'll Create:</strong></p>
+          <ul style="margin-top:0.25rem;margin-bottom:0;">
+            <li><code>memory_system.py</code> &mdash; All 3 memory tiers + MemoryManager + test harness</li>
+            <li><code>./memory_db/</code> &mdash; Auto-created ChromaDB persistent storage directory</li>
+          </ul>
+        </div>
+
+        <h3>Environment Setup</h3>
+        <div class="code-block-wrapper">
+          <div class="code-tabs" role="tablist"><button class="code-tab active" role="tab" data-lang="python">Python</button></div>
+          <div class="code-panel active">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code class="language-python">mkdir memory-lab && cd memory-lab
+python -m venv venv && source venv/bin/activate   # Windows: venv\Scripts\activate
+pip install anthropic>=0.30.0 chromadb>=0.4.0
+export ANTHROPIC_API_KEY=your-key-here             # Windows: set ANTHROPIC_API_KEY=your-key-here</code></pre>
+          </div>
+        </div>
+
+        <h3>Step 1: Build All 3 Memory Tiers + MemoryManager</h3>
+        <p>This step creates the complete memory system in one file: WorkingMemory (key-value scratchpad), EpisodicMemory (ChromaDB-backed past interactions), ProceduralMemory (reusable action templates), and a MemoryManager that wires them together and provides <code>build_context()</code> for injecting memory into prompts.</p>
+        <p><strong>Create a new file called <code>memory_system.py</code></strong> and add the following:</p>
+        <div class="code-block-wrapper">
+          <div class="code-tabs" role="tablist"><button class="code-tab active" role="tab" data-lang="python">Python</button></div>
+          <div class="code-panel active">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code class="language-python">import json
+import time
+import uuid
+import chromadb
+import anthropic
+
+client = anthropic.Anthropic()
+
+# ── Tier 1: Working Memory (key-value scratchpad) ───────────
+class WorkingMemory:
+    """Fast, mutable scratchpad for current task state."""
+
+    def __init__(self):
+        self._store: dict = {}
+        self.session_id = f"sess_{uuid.uuid4().hex[:8]}"
+        self.created_at = time.time()
+
+    def set(self, key: str, value) -> None:
+        self._store[key] = value
+
+    def get(self, key: str, default=None):
+        return self._store.get(key, default)
+
+    def delete(self, key: str) -> None:
+        self._store.pop(key, None)
+
+    def clear(self) -> None:
+        self._store.clear()
+
+    def to_prompt(self) -> str:
+        if not self._store:
+            return "[Working Memory: empty]"
+        lines = [f"[Working Memory — Session {self.session_id}]"]
+        for k, v in self._store.items():
+            lines.append(f"  {k}: {v}")
+        return "\n".join(lines)
+
+    def to_dict(self) -> dict:
+        return dict(self._store)
+
+
+# ── Tier 2: Episodic Memory (past interactions via ChromaDB) ─
+class EpisodicMemory:
+    """Searchable archive of past conversation summaries."""
+
+    def __init__(self, persist_dir: str = "./memory_db"):
+        self._client = chromadb.PersistentClient(path=persist_dir)
+        self._collection = self._client.get_or_create_collection(
+            name="episodes", metadata={"hnsw:space": "cosine"}
+        )
+
+    def store_episode(self, summary: str, session_id: str, metadata: dict = None) -> str:
+        episode_id = f"ep_{uuid.uuid4().hex[:12]}"
+        meta = {
+            "session_id": session_id,
+            "timestamp": time.time(),
+            **(metadata or {}),
+        }
+        self._collection.add(
+            ids=[episode_id],
+            documents=[summary],
+            metadatas=[meta],
+        )
+        return episode_id
+
+    def recall(self, query: str, top_k: int = 3) -> list[dict]:
+        if self._collection.count() == 0:
+            return []
+        results = self._collection.query(query_texts=[query], n_results=min(top_k, self._collection.count()))
+        episodes = []
+        for doc, meta in zip(results["documents"][0], results["metadatas"][0]):
+            episodes.append({"summary": doc, **meta})
+        return episodes
+
+    def to_prompt(self, query: str) -> str:
+        episodes = self.recall(query, top_k=2)
+        if not episodes:
+            return "[Past Interactions: none yet]"
+        lines = ["[Relevant Past Interactions]"]
+        for ep in episodes:
+            ts = time.strftime("%Y-%m-%d", time.localtime(ep.get("timestamp", 0)))
+            lines.append(f"  - Session {ep.get('session_id', '?')} ({ts}): {ep['summary']}")
+        return "\n".join(lines)
+
+    @property
+    def count(self) -> int:
+        return self._collection.count()
+
+
+# ── Tier 3: Procedural Memory (reusable action templates) ────
+class ProceduralMemory:
+    """Library of proven tool-call sequences."""
+
+    def __init__(self):
+        self._procedures: dict[str, dict] = {}
+
+    def store_procedure(self, name: str, description: str, steps: list[str]) -> None:
+        self._procedures[name] = {
+            "description": description,
+            "steps": steps,
+            "usage_count": 0,
+        }
+
+    def find_procedure(self, query: str) -> dict | None:
+        """Simple keyword matching (production: use embeddings)."""
+        query_lower = query.lower()
+        best_match, best_score = None, 0
+        for name, proc in self._procedures.items():
+            score = sum(1 for word in query_lower.split()
+                       if word in name.lower() or word in proc["description"].lower())
+            if score > best_score:
+                best_match, best_score = (name, proc), score
+        if best_match and best_score > 0:
+            best_match[1]["usage_count"] += 1
+            return {"name": best_match[0], **best_match[1]}
+        return None
+
+    def to_prompt(self, query: str) -> str:
+        proc = self.find_procedure(query)
+        if not proc:
+            return "[Procedures: no matching template]"
+        steps_str = "\n".join(f"    Step {i+1}: {s}" for i, s in enumerate(proc["steps"]))
+        return f"[Suggested Procedure: {proc['name']} (used {proc['usage_count']}x)]\n{steps_str}"
+
+
+# ── MemoryManager (wires all 3 tiers together) ───────────────
+class MemoryManager:
+    """Orchestrates all three memory tiers."""
+
+    def __init__(self, persist_dir: str = "./memory_db"):
+        self.working = WorkingMemory()
+        self.episodic = EpisodicMemory(persist_dir=persist_dir)
+        self.procedural = ProceduralMemory()
+        self.conversation_log: list[dict] = []
+
+    def build_context(self, current_query: str) -> str:
+        """Build combined memory context for injection into the LLM prompt."""
+        parts = [
+            self.working.to_prompt(),
+            self.episodic.to_prompt(current_query),
+            self.procedural.to_prompt(current_query),
+        ]
+        return "\n\n".join(parts)
+
+    def log_turn(self, role: str, content: str) -> None:
+        self.conversation_log.append({"role": role, "content": content})
+
+    def end_session(self, summary: str = None) -> str:
+        """Summarize and archive the session to episodic memory."""
+        if not summary and self.conversation_log:
+            # Auto-summarize with Claude
+            transcript = "\n".join(f"{m['role']}: {m['content']}" for m in self.conversation_log)
+            try:
+                response = client.messages.create(
+                    model="claude-sonnet-4-20250514", max_tokens=300,
+                    system="Summarize this conversation in 2-3 sentences. Preserve key decisions, preferences, and facts.",
+                    messages=[{"role": "user", "content": transcript}],
+                )
+                summary = response.content[0].text
+            except Exception:
+                summary = f"Session with {len(self.conversation_log)} turns."
+
+        episode_id = self.episodic.store_episode(
+            summary=summary,
+            session_id=self.working.session_id,
+            metadata={"turns": len(self.conversation_log)},
+        )
+        # Reset for next session
+        self.working.clear()
+        self.working = WorkingMemory()  # new session_id
+        self.conversation_log = []
+        return episode_id
+
+    def chat(self, user_message: str) -> str:
+        """Send a message with full memory context."""
+        self.log_turn("user", user_message)
+        memory_context = self.build_context(user_message)
+
+        response = client.messages.create(
+            model="claude-sonnet-4-20250514", max_tokens=1024,
+            system=(
+                "You are a helpful assistant with multi-session memory. "
+                "Use the memory context below to inform your responses.\n\n"
+                f"{memory_context}"
+            ),
+            messages=[{"role": m["role"], "content": m["content"]}
+                      for m in self.conversation_log],
+        )
+        reply = response.content[0].text
+        self.log_turn("assistant", reply)
+        return reply
+
+
+# ── Tests ────────────────────────────────────────────────────
+if __name__ == "__main__":
+    import shutil
+    # Clean up any previous test data
+    shutil.rmtree("./memory_db", ignore_errors=True)
+
+    print("═" * 55)
+    print("TEST 1: Individual Memory Tiers")
+    print("═" * 55)
+
+    # Working Memory
+    wm = WorkingMemory()
+    wm.set("intent", "schedule_meeting")
+    wm.set("date", "2026-04-05")
+    wm.set("attendees", ["Alice", "Bob"])
+    print("\n  Working Memory:")
+    print("  " + wm.to_prompt().replace("\n", "\n  "))
+
+    # Episodic Memory
+    em = EpisodicMemory(persist_dir="./memory_db")
+    em.store_episode("User prefers email over Slack for notifications.", "sess_001")
+    em.store_episode("Discussed deployment schedule. Decision: deploy Friday.", "sess_002")
+    em.store_episode("Reviewed API rate limits. Set max to 1000 req/min.", "sess_003")
+    print(f"\n  Episodic Memory: {em.count} episodes stored")
+    print("  " + em.to_prompt("deployment schedule").replace("\n", "\n  "))
+
+    # Procedural Memory
+    pm = ProceduralMemory()
+    pm.store_procedure("generate_report", "Generate a formatted report from data",
+                       ["Gather data from sources", "Analyze key metrics", "Format as markdown", "Send to user"])
+    pm.store_procedure("debug_api_error", "Debug and fix API errors",
+                       ["Check error code and message", "Search logs for context", "Identify root cause", "Suggest fix"])
+    print(f"\n  Procedural Memory:")
+    print("  " + pm.to_prompt("generate a report").replace("\n", "\n  "))
+
+    print(f"\n{'═' * 55}")
+    print("TEST 2: Cross-Session Memory (with Claude)")
+    print("═" * 55)
+
+    # Session 1
+    mm = MemoryManager(persist_dir="./memory_db")
+    mm.working.set("intent", "setup_preferences")
+
+    print("\n  Session 1:")
+    reply1 = mm.chat("Hi! I prefer getting notifications via email, not Slack.")
+    print(f"    Turn 1: {reply1[:120]}...")
+    reply2 = mm.chat("Also, let's plan to deploy the new API on Friday.")
+    print(f"    Turn 2: {reply2[:120]}...")
+
+    ep_id = mm.end_session()
+    print(f"    Session ended → episode {ep_id}")
+
+    # Session 2 — should remember preferences from Session 1
+    print("\n  Session 2:")
+    reply3 = mm.chat("Do you remember my notification preference?")
+    print(f"    Turn 1: {reply3[:150]}...")
+    print(f"\n  Memory context that was injected:")
+    print("    " + mm.build_context("notification preference").replace("\n", "\n    "))
+
+    # Cleanup
+    shutil.rmtree("./memory_db", ignore_errors=True)
+    print(f"\n{'═' * 55}")
+    print("✓ All tests complete.")
+    print("═" * 55)</code></pre>
+          </div>
+        </div>
+        <p><strong>Run it:</strong> This single command runs both Test 1 (individual tiers, no API calls) and Test 2 (cross-session memory with live Claude calls). Make sure your <code>ANTHROPIC_API_KEY</code> is set before running.</p>
+        <div class="output-label">Command</div>
+        <div class="output-block">python memory_system.py</div>
+        <div class="output-label">Expected Output (abbreviated)</div>
+        <div class="output-block">═══════════════════════════════════════════════════════
+TEST 1: Individual Memory Tiers
+═══════════════════════════════════════════════════════
+
+  Working Memory:
+  [Working Memory — Session sess_a3f2b1c9]
+    intent: schedule_meeting
+    date: 2026-04-05
+    attendees: ['Alice', 'Bob']
+
+  Episodic Memory: 3 episodes stored
+  [Relevant Past Interactions]
+    - Session sess_002 (2026-04-02): Discussed deployment schedule. Decision: deploy Friday.
+    - Session sess_001 (2026-04-02): User prefers email over Slack for notifications.
+
+  Procedural Memory:
+  [Suggested Procedure: generate_report (used 1x)]
+    Step 1: Gather data from sources
+    Step 2: Analyze key metrics
+    Step 3: Format as markdown
+    Step 4: Send to user
+
+═══════════════════════════════════════════════════════
+TEST 2: Cross-Session Memory (with Claude)
+═══════════════════════════════════════════════════════
+
+  Session 1:
+    Turn 1: I've noted your preference for email notifications...
+    Turn 2: Great! I'll plan for a Friday deployment of the new API...
+    Session ended → episode ep_a3f2b1c9d0e4
+
+  Session 2:
+    Turn 1: Yes! From our previous conversation, I can see you prefer
+    email notifications over Slack...
+
+  Memory context that was injected:
+    [Working Memory — Session sess_b4c3d2e1]
+      intent: setup_preferences
+    [Relevant Past Interactions]
+      - Session sess_a3f2b1c9 (2026-04-02): User prefers email...
+    [Procedures: no matching template]
+
+═══════════════════════════════════════════════════════
+✓ All tests complete.
+═══════════════════════════════════════════════════════</div>
+        <div class="callout-why" style="margin-top:1rem;">
+          <span class="box-label">&#9989; Checkpoint</span>
+          <p style="margin-bottom:0;">Look for these key behaviors:</p>
+          <ul style="margin-bottom:0;">
+            <li><strong>Test 1:</strong> All 3 tiers produce formatted prompt output &mdash; working memory shows key-value pairs, episodic shows matching summaries, procedural shows matching template</li>
+            <li><strong>Test 2, Session 1:</strong> Claude responds to preferences and deployment planning normally</li>
+            <li><strong>Test 2, Session 2:</strong> Claude should reference the email preference from Session 1 &mdash; this confirms episodic memory retrieval is working</li>
+            <li><strong>Memory context:</strong> Should show past interactions injected with the correct session ID and summary text</li>
+          </ul>
+        </div>
+        <div class="callout-warning" style="margin-top:0.75rem;">
+          <span class="box-label">Troubleshooting</span>
+          <ul style="margin-bottom:0;">
+            <li><strong><code>ModuleNotFoundError: No module named 'chromadb'</code></strong> &rarr; Run <code>pip install chromadb</code></li>
+            <li><strong>Episodic memory returns empty in Session 2</strong> &rarr; Make sure <code>end_session()</code> was called after Session 1. Check that the <code>./memory_db</code> directory was created (PersistentClient).</li>
+            <li><strong>Claude doesn't mention the preference in Session 2</strong> &rarr; Check the memory context output. If it shows "[Past Interactions: none yet]", the episode wasn't stored. Verify <code>end_session()</code> succeeded.</li>
+            <li><strong>Permission error on <code>./memory_db</code></strong> &rarr; Delete the <code>memory_db</code> folder and try again. On Windows, make sure no other process has the folder open.</li>
+          </ul>
+        </div>
+
+        <h3>Verify Everything Works</h3>
+        <p>Run the full test suite. Both tests should complete, with Session 2 demonstrating cross-session memory recall:</p>
+        <div class="output-label">Command</div>
+        <div class="output-block">python memory_system.py</div>
+        <p>If Claude references the email preference in Session 2 without being told again, your 3-tier memory system is working correctly.</p>
+        <div class="callout-why">
+          <span class="box-label">&#127881; Congratulations</span>
+          <p style="margin-bottom:0;">You've built a complete multi-layer memory system with working memory (in-session scratchpad), episodic memory (cross-session recall via ChromaDB), and procedural memory (reusable action templates). This is the architecture used by production agents that need to remember user preferences, past decisions, and learned workflows across sessions.</p>
+        </div>
+
+        <div class="callout-why" style="margin-top:1rem;">
+          <span class="box-label">Stretch Goals (Optional)</span>
+          <ul style="margin-bottom:0;">
+            <li><strong>Memory compaction:</strong> When episodic memory exceeds 100 entries, merge related episodes from the same week into consolidated records</li>
+            <li><strong><code>/memory</code> command:</strong> Add a command that lets the user inspect all three memory tiers in a formatted display</li>
+            <li><strong>Procedural learning:</strong> When the agent completes a multi-step task, automatically extract and store the tool sequence as a new procedure</li>
+          </ul>
+        </div>
+
+        <div class="callout-warning">
+          <span class="box-label">Common Mistakes</span>
+          <ul style="margin-bottom:0;">
+            <li><strong>Forgetting persistent storage:</strong> <code>chromadb.Client()</code> is in-memory only. Always use <code>PersistentClient(path="...")</code> for cross-session memory.</li>
+            <li><strong>Not handling empty retrieval:</strong> On the first session, episodic and procedural memory are empty. Your code must return graceful defaults, not crash.</li>
+            <li><strong>Overstuffing the prompt:</strong> Limit episodic retrieval to 2&ndash;3 episodes. More context &#x2260; better responses.</li>
+            <li><strong>Skipping summarization:</strong> Store summaries, not raw transcripts. Raw transcripts bloat retrieval and waste tokens.</li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- ========== KNOWLEDGE CHECK ========== -->
+      <section class="section" id="quiz">
+        <h2 id="quiz-heading">Knowledge Check</h2>
+
+        <!-- Q1: Matching -->
+        <div class="quiz-question" data-correct="1">
+          <h4>1. Match each scenario to the correct memory tier:</h4>
+          <p style="color:var(--text-secondary);font-size:0.9rem;margin-bottom:0.75rem;">Scenario: <em>&ldquo;The agent needs to store that the user&rsquo;s preferred output format is CSV, learned during last week&rsquo;s conversation.&rdquo;</em></p>
+          <div class="quiz-option" role="button" tabindex="0" aria-label="Option A" onclick="checkQuiz(this, true)">
+            <span class="quiz-marker">A</span>
+            <span>Episodic Memory &mdash; this is a user preference from a past interaction, stored as a conversation summary</span>
+          </div>
+          <div class="quiz-option" role="button" tabindex="0" aria-label="Option B" onclick="checkQuiz(this, false)">
+            <span class="quiz-marker">B</span>
+            <span>Working Memory &mdash; preferences are part of the current task state</span>
+          </div>
+          <div class="quiz-option" role="button" tabindex="0" aria-label="Option C" onclick="checkQuiz(this, false)">
+            <span class="quiz-marker">C</span>
+            <span>Procedural Memory &mdash; preferences are learned skills</span>
+          </div>
+          <div class="quiz-option" role="button" tabindex="0" aria-label="Option D" onclick="checkQuiz(this, false)">
+            <span class="quiz-marker">D</span>
+            <span>Context Window &mdash; just keep the old conversation in the prompt</span>
+          </div>
+          <div class="quiz-feedback correct-fb">Correct! User preferences from past conversations belong in episodic memory. They persist across sessions and are retrieved via semantic search when relevant.</div>
+          <div class="quiz-feedback incorrect-fb">Not quite. Working memory is for the current task only. Procedural memory stores action sequences, not preferences. And keeping old conversations in the context window wastes tokens. User preferences from past conversations belong in episodic memory, where they persist and are retrieved by relevance.</div>
+        </div>
+
+        <!-- Q2 -->
+        <div class="quiz-question" data-correct="2">
+          <h4>2. Why is it more efficient to store conversation summaries in episodic memory rather than full transcripts?</h4>
+          <div class="quiz-option" role="button" tabindex="0" aria-label="Option A" onclick="checkQuiz(this, false)">
+            <span class="quiz-marker">A</span>
+            <span>Full transcripts contain sensitive information that shouldn&rsquo;t be stored</span>
+          </div>
+          <div class="quiz-option" role="button" tabindex="0" aria-label="Option B" onclick="checkQuiz(this, true)">
+            <span class="quiz-marker">B</span>
+            <span>Summaries are 10&ndash;20x smaller, produce better embedding quality for retrieval, and cost less to inject into future prompts</span>
+          </div>
+          <div class="quiz-option" role="button" tabindex="0" aria-label="Option C" onclick="checkQuiz(this, false)">
+            <span class="quiz-marker">C</span>
+            <span>ChromaDB can only store documents under 500 characters</span>
+          </div>
+          <div class="quiz-option" role="button" tabindex="0" aria-label="Option D" onclick="checkQuiz(this, false)">
+            <span class="quiz-marker">D</span>
+            <span>Full transcripts cannot be embedded into vectors</span>
+          </div>
+          <div class="quiz-feedback correct-fb">Correct! Summaries compress ~4,000 tokens to ~300 tokens (93% reduction), embeddings of focused summaries match better than embeddings of rambling conversations, and injecting summaries into prompts uses far fewer tokens &mdash; saving cost and leaving more room for the actual task.</div>
+          <div class="quiz-feedback incorrect-fb">While security can be a consideration, the main reasons are efficiency: summaries are dramatically smaller (93% compression), produce better semantic embeddings for retrieval, and cost much less to inject into future prompts. Full transcripts CAN be embedded, and ChromaDB doesn&rsquo;t have a 500-char limit.</div>
+        </div>
+
+        <!-- Q3 -->
+        <div class="quiz-question" data-correct="3">
+          <h4>3. An agent keeps forgetting user preferences between sessions even though it uses a vector database. What is the most likely cause?</h4>
+          <div class="quiz-option" role="button" tabindex="0" aria-label="Option A" onclick="checkQuiz(this, false)">
+            <span class="quiz-marker">A</span>
+            <span>The embedding model is too small</span>
+          </div>
+          <div class="quiz-option" role="button" tabindex="0" aria-label="Option B" onclick="checkQuiz(this, false)">
+            <span class="quiz-marker">B</span>
+            <span>The agent is running out of RAM</span>
+          </div>
+          <div class="quiz-option" role="button" tabindex="0" aria-label="Option C" onclick="checkQuiz(this, true)">
+            <span class="quiz-marker">C</span>
+            <span>ChromaDB is running in default in-memory mode without persistent storage configured</span>
+          </div>
+          <div class="quiz-option" role="button" tabindex="0" aria-label="Option D" onclick="checkQuiz(this, false)">
+            <span class="quiz-marker">D</span>
+            <span>The summarization pipeline is using the wrong Claude model</span>
+          </div>
+          <div class="quiz-feedback correct-fb">Correct! ChromaDB&rsquo;s default mode stores everything in RAM, which is lost on process restart. The fix is to use <code>PersistentClient(path="./chroma_db")</code> so data is written to disk and survives restarts.</div>
+          <div class="quiz-feedback incorrect-fb">The most common cause of &ldquo;memory loss&rdquo; across sessions is ChromaDB running in its default in-memory mode. When the process restarts, all stored episodes are gone. Always configure persistent storage with <code>PersistentClient(path="./chroma_db")</code>.</div>
+        </div>
+
+        <!-- Q4 -->
+        <div class="quiz-question" data-correct="4">
+          <h4>4. What is the role of the summarization pipeline in the memory architecture?</h4>
+          <div class="quiz-option" role="button" tabindex="0" aria-label="Option A" onclick="checkQuiz(this, false)">
+            <span class="quiz-marker">A</span>
+            <span>It compresses the model weights so the agent runs faster</span>
+          </div>
+          <div class="quiz-option" role="button" tabindex="0" aria-label="Option B" onclick="checkQuiz(this, false)">
+            <span class="quiz-marker">B</span>
+            <span>It translates conversations between Python and TypeScript</span>
+          </div>
+          <div class="quiz-option" role="button" tabindex="0" aria-label="Option C" onclick="checkQuiz(this, false)">
+            <span class="quiz-marker">C</span>
+            <span>It generates embeddings for the context window</span>
+          </div>
+          <div class="quiz-option" role="button" tabindex="0" aria-label="Option D" onclick="checkQuiz(this, true)">
+            <span class="quiz-marker">D</span>
+            <span>It converts raw conversations into compact, structured episode records that are stored in episodic memory for cross-session retrieval</span>
+          </div>
+          <div class="quiz-feedback correct-fb">Correct! The summarization pipeline is the bridge between short-term conversation and long-term memory. It uses Claude to extract key decisions, preferences, topics, and outcomes from a conversation, compressing ~4,000 tokens into ~300. These compact records are then embedded and stored in the vector database for retrieval in future sessions.</div>
+          <div class="quiz-feedback incorrect-fb">The summarization pipeline converts raw conversations into compact, structured episode records. It uses Claude to extract key decisions, preferences, and outcomes, then stores these compressed summaries in episodic memory. It&rsquo;s the bridge between short-term conversation and long-term memory.</div>
+        </div>
+
+        <!-- Q5 -->
+        <div class="quiz-question" data-correct="5">
+          <h4>5. A customer support agent handles 500 conversations per day. Without any management, the episodic memory store will grow unbounded. Which approach best prevents this while preserving useful memories?</h4>
+          <div class="quiz-option" role="button" tabindex="0" aria-label="Option A" onclick="checkQuiz(this, false)">
+            <span class="quiz-marker">A</span>
+            <span>Delete all episodes older than 24 hours</span>
+          </div>
+          <div class="quiz-option" role="button" tabindex="0" aria-label="Option B" onclick="checkQuiz(this, true)">
+            <span class="quiz-marker">B</span>
+            <span>Implement memory compaction: periodically merge related episodes and remove entries below a relevance threshold, keeping the store under a configured limit</span>
+          </div>
+          <div class="quiz-option" role="button" tabindex="0" aria-label="Option C" onclick="checkQuiz(this, false)">
+            <span class="quiz-marker">C</span>
+            <span>Store only the first 100 episodes and ignore the rest</span>
+          </div>
+          <div class="quiz-option" role="button" tabindex="0" aria-label="Option D" onclick="checkQuiz(this, false)">
+            <span class="quiz-marker">D</span>
+            <span>Use a larger vector database instance and never delete anything</span>
+          </div>
+          <div class="quiz-feedback correct-fb">Correct! Memory compaction merges related episodes (e.g., all &ldquo;deployment&rdquo; conversations from one week become a single consolidated record), removes outdated entries, and keeps the store at a manageable size. Deleting everything after 24 hours loses valuable context. Capping at 100 is arbitrary. And &ldquo;never delete&rdquo; just delays the problem.</div>
+          <div class="quiz-feedback incorrect-fb">The best approach is memory compaction &mdash; periodically merging related episodes and removing low-relevance entries. Deleting after 24 hours loses important context. A hard cap of 100 is arbitrary and lossy. And &ldquo;never delete&rdquo; just delays the problem while increasing storage costs and degrading search quality.</div>
+        </div>
+
+        <!-- Q6 (Bonus — references M08) -->
+        <div class="quiz-question" data-correct="6">
+          <h4>6. In M08, you learned about conversation context management. How does multi-layer memory improve upon the basic approaches covered there?</h4>
+          <div class="quiz-option" role="button" tabindex="0" aria-label="Option A" onclick="checkQuiz(this, false)">
+            <span class="quiz-marker">A</span>
+            <span>It replaces the context window entirely &mdash; agents no longer need to send conversation history to Claude</span>
+          </div>
+          <div class="quiz-option" role="button" tabindex="0" aria-label="Option B" onclick="checkQuiz(this, false)">
+            <span class="quiz-marker">B</span>
+            <span>It uses a larger context window model, which solves all memory problems</span>
+          </div>
+          <div class="quiz-option" role="button" tabindex="0" aria-label="Option C" onclick="checkQuiz(this, true)">
+            <span class="quiz-marker">C</span>
+            <span>It adds persistent, cross-session memory (episodic + procedural) on top of the within-session conversation management, and uses structured working memory to reduce the amount of raw history needed in the context window</span>
+          </div>
+          <div class="quiz-option" role="button" tabindex="0" aria-label="Option D" onclick="checkQuiz(this, false)">
+            <span class="quiz-marker">D</span>
+            <span>It only works with RAG systems, not with basic conversation management</span>
+          </div>
+          <div class="quiz-feedback correct-fb">Correct! M08&rsquo;s context management handles within-session history (sliding windows, summarization). Multi-layer memory adds two new dimensions: <strong>cross-session persistence</strong> (episodic memory remembers past conversations) and <strong>skill reuse</strong> (procedural memory avoids re-planning). Working memory is a structured upgrade to &ldquo;just stuff the whole conversation into the prompt.&rdquo;</div>
+          <div class="quiz-feedback incorrect-fb">Multi-layer memory doesn&rsquo;t replace the context window &mdash; agents still send conversation history. It adds persistent, cross-session memory on top of within-session management. Episodic memory remembers past conversations (M08 only handles the current one). Procedural memory reuses proven skills. Working memory structures the current task state instead of relying on raw conversation history.</div>
+        </div>
+
+        <div class="quiz-score" id="quiz-score">
+          <p style="color:var(--text-secondary);margin-bottom:0.5rem;">Your Score</p>
+          <div class="score-num" id="score-display">0/0</div>
+          <p style="color:var(--text-muted);margin-top:0.5rem;" id="score-message"></p>
+        </div>
+      </section>
+
+      <!-- ========== MODULE SUMMARY ========== -->
+      <section class="section" id="summary">
+        <h2 id="summary-heading">Module Summary</h2>
+
+        <h3 id="key-concepts">Key Concepts Recap</h3>
+        <ul>
+          <li><strong>Multi-layer memory architecture:</strong> Separate memory into working (current task), episodic (past interactions), and procedural (learned skills) tiers</li>
+          <li><strong>Working memory:</strong> A mutable key-value scratchpad injected into every LLM call, cleared when the task completes</li>
+          <li><strong>Episodic memory:</strong> Conversation summaries stored in a vector database, retrieved by semantic search for cross-session continuity</li>
+          <li><strong>Procedural memory:</strong> Reusable action templates with trigger conditions, retrieved by similarity matching to avoid re-planning</li>
+          <li><strong>Summarization pipeline:</strong> Uses Claude to compress raw conversations into compact episode records (93% token reduction)</li>
+          <li><strong>Memory Manager:</strong> Orchestrates all three tiers &mdash; loads at session start, maintains during conversation, persists at session end</li>
+        </ul>
+
+        <h3 id="next-preview" style="color:var(--track-color);">Next: M12 &mdash; ReAct Agent Loop</h3>
+        <p>You&rsquo;ve given your agent a brain that remembers. Now it&rsquo;s time to give it the ability to <em>reason and act</em>. In M12, you&rsquo;ll implement the ReAct pattern &mdash; a structured loop where Claude thinks about what to do, takes an action (tool call), observes the result, and decides the next step. This is the foundation of autonomous agent behavior, and your multi-layer memory will play a key role in giving the agent context for its decisions.</p>
+      </section>
+
+      <div class="module-nav">
+        <a href="M10-advanced-rag-patterns.html" aria-label="Previous module: Advanced RAG Patterns">&larr; M10: Advanced RAG</a>
+          <a href="index.html" aria-label="Course Home" title="Course Home" style="font-size:1.2rem;">&#x1F3E0; Home</a>
+        <a href="M12-react-agent-loop.html" aria-label="Next module: ReAct Agent Loop">M12: ReAct Agent Loop &rarr;</a>
+      </div>
+    </main>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+  <script>
+    // ===== TAB SWITCHING =====
+    function switchTab(tabEl, panelId) {
+      const wrapper = tabEl.closest('.code-block-wrapper');
+      wrapper.querySelectorAll('.code-tab').forEach(t => { t.classList.remove('active'); t.setAttribute('aria-selected', 'false'); });
+      wrapper.querySelectorAll('.code-panel').forEach(p => p.classList.remove('active'));
+      tabEl.classList.add('active');
+      tabEl.setAttribute('aria-selected', 'true');
+      document.getElementById(panelId).classList.add('active');
+    }
+
+    // ===== COPY BUTTON =====
+    function copyCode(btn) {
+      const code = btn.parentElement.querySelector('code').textContent;
+      navigator.clipboard.writeText(code).then(() => {
+        btn.textContent = 'Copied!';
+        setTimeout(() => btn.textContent = 'Copy', 1500);
+      });
+    }
+
+    // ===== QUIZ LOGIC =====
+    let quizAnswered = 0, quizCorrect = 0;
+    const totalQuestions = document.querySelectorAll('.quiz-question').length;
+
+    function checkQuiz(optionEl, isCorrect) {
+      const question = optionEl.closest('.quiz-question');
+      if (question.classList.contains('answered')) return;
+      question.classList.add('answered');
+      quizAnswered++;
+
+      question.querySelectorAll('.quiz-option').forEach(o => o.classList.add('disabled'));
+
+      if (isCorrect) {
+        optionEl.classList.add('correct');
+        optionEl.querySelector('.quiz-marker').textContent = '✓';
+        question.querySelector('.correct-fb').classList.add('show');
+        quizCorrect++;
+      } else {
+        optionEl.classList.add('incorrect');
+        optionEl.querySelector('.quiz-marker').textContent = '✗';
+        question.querySelector('.incorrect-fb').classList.add('show');
+        // Highlight correct answer
+        question.querySelectorAll('.quiz-option').forEach((o, i) => {
+          if (!o.classList.contains('incorrect')) {
+            const handler = o.getAttribute('onclick');
+            if (handler && handler.includes('true')) {
+              o.classList.add('correct');
+              o.querySelector('.quiz-marker').textContent = '✓';
+            }
+          }
+        });
+      }
+
+      if (quizAnswered === totalQuestions) {
+        const scoreDisplay = document.getElementById('quiz-score');
+        scoreDisplay.style.display = 'block';
+        document.getElementById('score-display').textContent = `${quizCorrect}/${totalQuestions}`;
+        const pct = Math.round((quizCorrect / totalQuestions) * 100);
+        const msg = pct >= 80 ? 'Excellent! You have a strong understanding of multi-layer memory.' :
+                    pct >= 60 ? 'Good progress! Review the sections you missed.' :
+                    'Consider re-reading the module and trying again.';
+        document.getElementById('score-message').textContent = msg;
+      }
+    }
+
+    // ===== SIDEBAR ACTIVE STATE =====
+    const sidebarLinks = document.querySelectorAll('.sidebar-nav a');
+    const sections = document.querySelectorAll('.section');
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          sidebarLinks.forEach(a => a.classList.remove('active'));
+          const id = entry.target.id;
+          const link = document.querySelector(`.sidebar-nav a[href="#${id}"]`);
+          if (link) link.classList.add('active');
+        }
+      });
+    }, { rootMargin: '-20% 0px -70% 0px' });
+    sections.forEach(s => observer.observe(s));
+
+    // Smooth scroll
+    sidebarLinks.forEach(link => {
+      link.addEventListener('click', (e) => {
+        e.preventDefault();
+        const target = document.querySelector(link.getAttribute('href'));
+        if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
+    });
+
+    // ===== ANIMATION 1: MEMORY TIERS =====
+    const memTiersAnim = (() => {
+      let timer = null, step = 0, running = false;
+      const steps = [
+        () => { document.getElementById('mt-task').classList.add('visible'); },
+        () => { document.getElementById('mt-arrow1').classList.add('visible'); },
+        () => { document.getElementById('mt-working').classList.add('visible'); },
+        () => { document.getElementById('mt-working').classList.add('active'); document.getElementById('mt-wd').classList.add('visible'); },
+        () => { document.getElementById('mt-working').classList.remove('active'); document.getElementById('mt-episodic').classList.add('visible'); },
+        () => { document.getElementById('mt-episodic').classList.add('active'); document.getElementById('mt-ed').classList.add('visible'); },
+        () => { document.getElementById('mt-episodic').classList.remove('active'); document.getElementById('mt-procedural').classList.add('visible'); },
+        () => { document.getElementById('mt-procedural').classList.add('active'); document.getElementById('mt-pd').classList.add('visible'); },
+        () => { document.getElementById('mt-procedural').classList.remove('active'); },
+      ];
+
+      function reset() {
+        step = 0;
+        ['mt-task','mt-arrow1','mt-working','mt-episodic','mt-procedural'].forEach(id => {
+          const el = document.getElementById(id);
+          el.classList.remove('visible','active');
+        });
+        ['mt-wd','mt-ed','mt-pd'].forEach(id => document.getElementById(id).classList.remove('visible'));
+      }
+
+      function tick() {
+        if (step < steps.length) { steps[step](); step++; }
+        else { running = false; clearInterval(timer); }
+      }
+
+      return {
+        play() { if (!running) { running = true; timer = setInterval(tick, 800); } },
+        pause() { running = false; clearInterval(timer); },
+        restart() { this.pause(); reset(); setTimeout(() => this.play(), 200); }
+      };
+    })();
+
+    // ===== ANIMATION 2: SCRATCHPAD =====
+    const scratchAnim = (() => {
+      let timer = null, step = 0, running = false;
+      const stepIds = ['ss-1','ss-2','ss-3','ss-4','ss-5'];
+      const entryIds = ['se-1','se-2','se-3','se-4','se-5'];
+
+      function reset() {
+        step = 0;
+        stepIds.forEach(id => {
+          const el = document.getElementById(id);
+          el.classList.remove('visible','active','done');
+        });
+        entryIds.forEach(id => document.getElementById(id).classList.remove('visible'));
+      }
+
+      function tick() {
+        if (step < stepIds.length) {
+          // Deactivate previous
+          if (step > 0) document.getElementById(stepIds[step-1]).classList.replace('active','done');
+          // Activate current
+          const s = document.getElementById(stepIds[step]);
+          s.classList.add('visible','active');
+          // Show corresponding entry
+          document.getElementById(entryIds[step]).classList.add('visible');
+          step++;
+        } else {
+          if (step === stepIds.length) {
+            document.getElementById(stepIds[step-1]).classList.replace('active','done');
+          }
+          running = false;
+          clearInterval(timer);
+        }
+      }
+
+      return {
+        play() { if (!running) { running = true; timer = setInterval(tick, 1000); } },
+        pause() { running = false; clearInterval(timer); },
+        restart() { this.pause(); reset(); setTimeout(() => this.play(), 200); }
+      };
+    })();
+
+    // ===== ANIMATION 3: EPISODIC VECTOR SPACE =====
+    const episodicAnim = (() => {
+      let timer = null, step = 0, running = false;
+      const nodeIds = ['ep-n1','ep-n2','ep-n3','ep-n4','ep-n5','ep-n6'];
+
+      function reset() {
+        step = 0;
+        nodeIds.forEach(id => {
+          const el = document.getElementById(id);
+          el.classList.remove('visible','match');
+        });
+        document.getElementById('ep-query').classList.remove('visible');
+        document.getElementById('ep-line1').classList.remove('visible');
+        document.getElementById('ep-line2').classList.remove('visible');
+      }
+
+      const steps = [
+        () => { nodeIds.forEach(id => document.getElementById(id).classList.add('visible')); },
+        () => { document.getElementById('ep-query').classList.add('visible'); },
+        () => {
+          // Highlight matches — session #42 (deploy) is closest
+          document.getElementById('ep-n5').classList.add('match');
+          document.getElementById('ep-line1').classList.add('visible');
+        },
+        () => {
+          // Secondary match
+          document.getElementById('ep-n3').classList.add('match');
+          document.getElementById('ep-line2').classList.add('visible');
+        },
+      ];
+
+      function tick() {
+        if (step < steps.length) { steps[step](); step++; }
+        else { running = false; clearInterval(timer); }
+      }
+
+      return {
+        play() { if (!running) { running = true; timer = setInterval(tick, 1200); } },
+        pause() { running = false; clearInterval(timer); },
+        restart() { this.pause(); reset(); setTimeout(() => this.play(), 200); }
+      };
+    })();
+
+    // ===== ANIMATION 4: PIPELINE FLOW =====
+    const pipelineAnim = (() => {
+      let timer = null, step = 0, running = false;
+      const stageIds = ['pl-conv','pl-summ','pl-embed','pl-store','pl-retrieve'];
+      const arrowIds = ['pl-a1','pl-a2','pl-a3','pl-a4'];
+
+      function reset() {
+        step = 0;
+        stageIds.forEach(id => {
+          const el = document.getElementById(id);
+          el.classList.remove('visible','active','done');
+        });
+        arrowIds.forEach(id => document.getElementById(id).classList.remove('visible'));
+      }
+
+      function tick() {
+        if (step < stageIds.length) {
+          if (step > 0) {
+            document.getElementById(stageIds[step-1]).classList.remove('active');
+            document.getElementById(stageIds[step-1]).classList.add('done');
+            document.getElementById(arrowIds[step-1]).classList.add('visible');
+          }
+          const el = document.getElementById(stageIds[step]);
+          el.classList.add('visible','active');
+          step++;
+        } else {
+          if (step === stageIds.length) {
+            document.getElementById(stageIds[step-1]).classList.remove('active');
+            document.getElementById(stageIds[step-1]).classList.add('done');
+          }
+          running = false;
+          clearInterval(timer);
+        }
+      }
+
+      return {
+        play() { if (!running) { running = true; timer = setInterval(tick, 1000); } },
+        pause() { running = false; clearInterval(timer); },
+        restart() { this.pause(); reset(); setTimeout(() => this.play(), 200); }
+      };
+    })();
+
+    // ===== ANIMATION 5: DAG EXECUTION =====
+    const dagAnim = (() => {
+      let timer = null, step = 0, running = false;
+      const allIds = ['dag-trigger','dag-match','dag-s1','dag-s2','dag-s3a','dag-s3b','dag-s4'];
+
+      const steps = [
+        () => { document.getElementById('dag-trigger').classList.add('visible','active'); },
+        () => {
+          document.getElementById('dag-trigger').classList.replace('active','done');
+          document.getElementById('dag-match').classList.add('visible','active');
+        },
+        () => {
+          document.getElementById('dag-match').classList.replace('active','done');
+          document.getElementById('dag-s1').classList.add('visible','active');
+        },
+        () => {
+          document.getElementById('dag-s1').classList.replace('active','done');
+          document.getElementById('dag-s2').classList.add('visible','active');
+        },
+        () => {
+          document.getElementById('dag-s2').classList.replace('active','done');
+          document.getElementById('dag-s3a').classList.add('visible','active');
+          document.getElementById('dag-s3b').classList.add('visible','active');
+        },
+        () => {
+          document.getElementById('dag-s3a').classList.replace('active','done');
+          document.getElementById('dag-s3b').classList.replace('active','done');
+          document.getElementById('dag-s4').classList.add('visible','active');
+        },
+        () => { document.getElementById('dag-s4').classList.replace('active','done'); },
+      ];
+
+      function reset() {
+        step = 0;
+        allIds.forEach(id => {
+          const el = document.getElementById(id);
+          el.classList.remove('visible','active','done');
+        });
+      }
+
+      function tick() {
+        if (step < steps.length) { steps[step](); step++; }
+        else { running = false; clearInterval(timer); }
+      }
+
+      return {
+        play() { if (!running) { running = true; timer = setInterval(tick, 900); } },
+        pause() { running = false; clearInterval(timer); },
+        restart() { this.pause(); reset(); setTimeout(() => this.play(), 200); }
+      };
+    })();
+  </script>
+</body>
+</html>

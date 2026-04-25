@@ -1,0 +1,86 @@
+M22B: Deployment Comparison — Local Docker vs GCP Cloud Run vs AWS Lambda
+===========================================================================
+
+┌─────────────────┬──────────────────┬──────────────────────┬──────────────────────┐
+│ Feature         │ Local Docker     │ GCP Cloud Run        │ AWS Lambda           │
+├─────────────────┼──────────────────┼──────────────────────┼──────────────────────┤
+│ Container       │ Docker Desktop   │ Managed by Google    │ Managed by AWS       │
+│ Runtime         │ python:3.11-slim │ python:3.11-slim     │ python3.11 (Lambda)  │
+│ Entrypoint      │ uvicorn          │ uvicorn              │ Mangum + handler     │
+│ Port            │ 8000             │ 8080 (Cloud Run)     │ N/A (event-driven)   │
+│ HTTPS           │ No               │ Yes (auto)           │ Yes (API Gateway)    │
+│ Custom Domain   │ No               │ Cloud Run mapping    │ API Gateway domain   │
+├─────────────────┼──────────────────┼──────────────────────┼──────────────────────┤
+│ Cold Start      │ None             │ ~1-2 seconds         │ ~2-5 seconds         │
+│ Warm Response   │ ~5-50ms          │ ~20-100ms            │ ~50-200ms            │
+│ Max Timeout     │ Unlimited        │ 60 minutes           │ 15 minutes           │
+│ Max Memory      │ Your machine     │ 32 GiB               │ 10,240 MB            │
+│ Concurrency     │ 1 container      │ Up to 1000 instances │ Up to 1000 concurrent│
+├─────────────────┼──────────────────┼──────────────────────┼──────────────────────┤
+│ Cost: Idle      │ $0 (your HW)     │ $0 (scale to 0)      │ $0 (scale to 0)      │
+│ Cost: 100 req/d │ $0 (your HW)     │ ~$0 (free tier)      │ ~$0 (free tier)      │
+│ Cost: 10K req/d │ $0 (your HW)     │ ~$5-15/month         │ ~$3-10/month         │
+├─────────────────┼──────────────────┼──────────────────────┼──────────────────────┤
+│ Streaming (SSE) │ Full support     │ Full support         │ Not supported*       │
+│ WebSocket       │ Possible         │ Not supported        │ Via API Gateway WS   │
+│ File System     │ Read/Write       │ Read-only (tmpfs)    │ /tmp only (512MB)    │
+│ Background Jobs │ Yes              │ Cloud Tasks          │ Async invocation     │
+├─────────────────┼──────────────────┼──────────────────────┼──────────────────────┤
+│ Deploy Speed    │ ~30 seconds      │ ~2-3 minutes         │ ~2-5 minutes         │
+│ Rollback        │ Manual           │ Traffic splitting    │ Alias/version        │
+│ Monitoring      │ Docker logs      │ Cloud Logging        │ CloudWatch           │
+│ Auth            │ None (DIY)       │ IAM / IAP            │ IAM / Cognito        │
+└─────────────────┴──────────────────┴──────────────────────┴──────────────────────┘
+
+* AWS Lambda with API Gateway HTTP API does not natively support SSE.
+  Workarounds: Lambda Function URLs (streaming), WebSocket API, or
+  return the full response in a single payload.
+
+When to Use Each:
+─────────────────
+
+LOCAL DOCKER
+  + Development and testing
+  + Full control over the environment
+  + No cloud account needed
+  + Unlimited execution time
+  - Not accessible from the internet (without tunneling)
+  - No auto-scaling
+
+GCP CLOUD RUN
+  + Best for containerized web services
+  + Supports SSE/streaming natively
+  + Scale to zero (pay nothing when idle)
+  + Long timeout (60 min) for complex agent queries
+  + Simple deployment (one command)
+  - Cold starts (~1-2s)
+  - No WebSocket support
+
+AWS LAMBDA
+  + Lowest cost at low traffic
+  + Massive auto-scaling (1000 concurrent)
+  + Pay-per-request pricing
+  + Integrates deeply with AWS ecosystem
+  - Cold starts (~2-5s, worse with large packages)
+  - 15-minute max timeout
+  - No native SSE support
+  - More complex deployment (SAM/CloudFormation)
+
+Recommendation for Production Agent Deployment:
+────────────────────────────────────────────────
+
+For a UCC research agent that may run complex multi-turn queries:
+
+1. PRIMARY: GCP Cloud Run
+   - Best balance of simplicity, streaming support, and timeout limits
+   - 60-minute timeout accommodates complex agent workflows
+   - SSE streaming gives users real-time feedback
+
+2. ALTERNATIVE: AWS Lambda + Step Functions
+   - If already in the AWS ecosystem
+   - Use Step Functions for long-running agent workflows
+   - Lambda handles individual API requests
+
+3. DEVELOPMENT: Local Docker
+   - Always keep a local Docker setup for development
+   - Test everything locally before deploying to cloud

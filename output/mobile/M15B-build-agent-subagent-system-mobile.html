@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+  <title>M15B: Build Agent &amp; Subagent System | Mobile | Building AI Agents with Claude</title>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;700;800&family=Source+Sans+3:wght@400;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --mobile-max-width: 100vw; --mobile-padding: 1rem; --mobile-font-body: 16px; --mobile-font-heading: 22px;
+      --mobile-card-gap: 0.75rem; --mobile-code-font: 14px; --mobile-quiz-tap-size: 44px;
+      --bg-primary: #0a0a1a; --bg-card: rgba(255,255,255,0.03);
+      --text-primary: #E8ECF1; --text-secondary: #94A3B8; --text-muted: #64748B;
+      --accent-primary: #D4A843; --track-color: #F97316;
+      --success: #10B981; --error: #F43F5E; --info: #3B82F6;
+      --code-bg: rgba(99,102,241,0.08); --code-border: #F97316;
+    }
+    html { scroll-behavior: smooth; }
+    body { background: var(--bg-primary); color: var(--text-primary); font-family: 'Source Sans 3', sans-serif; font-size: var(--mobile-font-body); line-height: 1.6; overflow-x: hidden; }
+    .card-container { display: flex; overflow-x: auto; scroll-snap-type: x mandatory; -webkit-overflow-scrolling: touch; width: 100vw; height: calc(100vh - 48px); scrollbar-width: none; }
+    .card-container::-webkit-scrollbar { display: none; }
+    .mobile-card { flex: 0 0 100vw; width: 100vw; min-height: calc(100vh - 48px); scroll-snap-align: start; background: var(--bg-card); padding: 1.25rem var(--mobile-padding); overflow-y: auto; display: flex; flex-direction: column; }
+    h1 { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 26px; line-height: 1.2; margin-bottom: 0.5rem; }
+    h2 { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: var(--mobile-font-heading); line-height: 1.3; margin-bottom: 0.75rem; }
+    h3 { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 600; font-size: 18px; margin-bottom: 0.5rem; }
+    p { margin-bottom: 0.75rem; } strong { font-weight: 600; }
+    ul, ol { margin: 0.5rem 0 0.75rem 1.25rem; } li { margin-bottom: 0.35rem; }
+    .card-title { flex: 1; display: flex; flex-direction: column; justify-content: center; align-items: center; text-align: center; padding: 2rem 1rem; }
+    .track-badge { display: inline-flex; align-items: center; gap: 0.4rem; background: rgba(249,115,22,0.15); border: 1px solid var(--track-color); border-radius: 20px; padding: 0.25rem 0.75rem; font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.8rem; font-weight: 600; color: var(--track-color); margin-bottom: 1rem; }
+    .track-badge .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--track-color); }
+    .module-num { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.85rem; color: var(--text-muted); margin-bottom: 0.5rem; }
+    .card-title p.subtitle { color: var(--text-secondary); font-size: 1rem; max-width: 320px; margin-top: 0.75rem; }
+    .swipe-hint { color: var(--text-muted); font-size: 0.8rem; margin-top: 1.5rem; animation: pulse 2s ease-in-out infinite; }
+    @keyframes pulse { 0%, 100% { opacity: 0.5; } 50% { opacity: 1; } }
+    .pseudocode { background: var(--code-bg); border-left: 3px solid var(--code-border); font-family: 'JetBrains Mono', monospace; font-size: var(--mobile-code-font); line-height: 1.6; padding: 1rem; border-radius: 0 8px 8px 0; margin: 0.75rem 0; overflow-x: auto; white-space: pre; color: var(--text-primary); }
+    .takeaway { background: rgba(212,168,67,0.08); border: 1px solid rgba(212,168,67,0.3); border-radius: 12px; padding: 1.25rem; margin: 0.75rem 0; }
+    .takeaway h3 { color: var(--accent-primary); }
+    .misconception { background: rgba(244,63,94,0.06); border-left: 3px solid var(--error); border-radius: 0 8px 8px 0; padding: 1rem 1.25rem; margin-bottom: 0.75rem; }
+    .misconception strong { color: var(--error); }
+    .analogy-box { background: rgba(212,168,67,0.08); border-left: 3px solid var(--accent-primary); border-radius: 0 8px 8px 0; padding: 1rem 1.25rem; margin: 0.75rem 0; }
+    .analogy-label { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 0.85rem; color: var(--accent-primary); margin-bottom: 0.4rem; }
+    .step-list { list-style: none; margin-left: 0; counter-reset: steps; }
+    .step-list li { counter-increment: steps; position: relative; padding: 0.75rem 0.75rem 0.75rem 2.75rem; margin-bottom: 0.5rem; background: rgba(249,115,22,0.06); border-radius: 8px; border-left: 2px solid var(--track-color); }
+    .step-list li::before { content: counter(steps); position: absolute; left: 0.75rem; top: 0.75rem; width: 24px; height: 24px; border-radius: 50%; background: var(--track-color); color: #fff; font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.75rem; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+    .quiz-card { background: rgba(59,130,246,0.06); border: 1px solid rgba(59,130,246,0.2); border-radius: 12px; padding: 1rem 1.25rem; margin-bottom: 0.75rem; min-height: var(--mobile-quiz-tap-size); }
+    .quiz-card h4 { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 600; font-size: 1rem; margin-bottom: 0.75rem; }
+    .quiz-reveal-btn { display: block; width: 100%; min-height: var(--mobile-quiz-tap-size); background: rgba(59,130,246,0.1); border: 1px solid rgba(59,130,246,0.3); border-radius: 8px; color: var(--info); font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.9rem; font-weight: 600; cursor: pointer; padding: 0.75rem 1rem; text-align: left; transition: all 0.2s ease; }
+    .quiz-reveal-btn:hover, .quiz-reveal-btn:focus { background: rgba(59,130,246,0.18); border-color: var(--info); }
+    .quiz-answer { display: none; padding: 0.75rem 1rem; margin-top: 0.5rem; background: rgba(16,185,129,0.08); border-left: 3px solid var(--success); border-radius: 0 8px 8px 0; color: var(--text-primary); font-size: 0.95rem; line-height: 1.5; }
+    .quiz-answer.revealed { display: block; }
+    .desktop-link { display: flex; align-items: center; justify-content: center; min-height: var(--mobile-quiz-tap-size); padding: 1rem 1.25rem; background: rgba(249,115,22,0.1); border: 1px solid var(--track-color); border-radius: 12px; color: var(--track-color); font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 1rem; text-decoration: none; text-align: center; margin-top: 1rem; transition: all 0.2s ease; }
+    .desktop-link:hover, .desktop-link:focus { background: rgba(249,115,22,0.2); }
+    .module-nav { display: flex; justify-content: space-between; gap: 0.5rem; margin-top: auto; padding-top: 1rem; }
+    .module-nav a { display: flex; align-items: center; justify-content: center; min-height: var(--mobile-quiz-tap-size); padding: 0.5rem 1rem; border: 1px solid rgba(212,168,67,0.3); border-radius: 8px; color: var(--accent-primary); font-family: 'Bricolage Grotesque', sans-serif; font-weight: 600; font-size: 0.85rem; text-decoration: none; transition: all 0.2s ease; flex: 1; text-align: center; }
+    .module-nav a:hover, .module-nav a:focus { background: rgba(212,168,67,0.1); border-color: var(--accent-primary); }
+    .progress-bar { position: fixed; bottom: 0; left: 0; right: 0; height: 48px; background: rgba(10,10,26,0.95); border-top: 1px solid rgba(255,255,255,0.06); display: flex; align-items: center; justify-content: center; gap: 6px; z-index: 100; backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); }
+    .progress-dot { width: 10px; height: 10px; border-radius: 50%; background: rgba(255,255,255,0.12); transition: all 0.3s ease; }
+    .progress-dot.active { background: var(--track-color); box-shadow: 0 0 8px rgba(249,115,22,0.5); transform: scale(1.3); }
+    .progress-label { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.7rem; color: var(--text-muted); margin-left: 8px; }
+    .section-label { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em; color: var(--track-color); margin-bottom: 0.5rem; }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+      .swipe-hint { animation: none; opacity: 0.6; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="card-container" id="cardContainer" role="main" aria-label="Module cards">
+
+  <!-- CARD 1: Title -->
+  <article class="mobile-card card-title" id="card-1" aria-label="Card 1 of 9: Title">
+    <div class="module-num">Module 17 of 30</div>
+    <div class="track-badge" aria-label="Track 4: Architecture">
+      <span class="dot" aria-hidden="true"></span>
+      Track 4: Architecture
+    </div>
+    <h1>Build a Complete Agent &amp; Subagent System</h1>
+    <p class="subtitle" style="font-weight:700; color:var(--success); font-size:0.85rem; margin-top:0.5rem;">BUILD LAB</p>
+    <p class="subtitle">Hands-on: wire a coordinator, research subagent, and analysis subagent into a working system.</p>
+    <p class="swipe-hint" aria-label="Swipe left to continue">Swipe left to begin &rarr;</p>
+  </article>
+
+  <!-- CARD 2: Big Idea -->
+  <article class="mobile-card" id="card-2" aria-label="Card 2 of 9: The Big Idea">
+    <div class="section-label">The Big Idea</div>
+    <h2>Your Tools Are Other Agents</h2>
+    <p>This BUILD lab teaches you to assemble a complete multi-agent system using the <strong>hub-and-spoke architecture</strong>. You build a coordinator agent whose &ldquo;tools&rdquo; are not database queries &mdash; they are other agents.</p>
+    <p>The coordinator receives user queries and delegates to specialists: a <strong>research subagent</strong> that searches UCC filings, and an <strong>analysis subagent</strong> that computes risk scores.</p>
+    <p>The central insight: <strong>each subagent starts with a blank context window</strong>. It only knows what the coordinator explicitly passes. Context doesn&rsquo;t flow automatically &mdash; you must build the bridge.</p>
+    <p>The lab starts by building a single-agent version first, then refactors into multi-agent so you see exactly when and why the split helps. This progression is deliberate: you should always prove a single agent can&rsquo;t handle the complexity before splitting into multiple agents.</p>
+    <div class="module-nav" style="margin-top:auto;">
+      <a href="#card-1" aria-label="Previous card">&larr; Prev</a>
+      <a href="#card-3" aria-label="Next card">Next &rarr;</a>
+    </div>
+  </article>
+
+  <!-- CARD 3: Analogy -->
+  <article class="mobile-card" id="card-3" aria-label="Card 3 of 9: Analogy">
+    <div class="section-label">Analogy</div>
+    <h2>The Call Center</h2>
+    <div class="analogy-box">
+      <div class="analogy-label">Before &mdash; The Solo Operator</div>
+      <p style="margin-bottom:0;">A single call center operator answering every question &mdash; billing, tech support, returns, scheduling. One person knowing everything, callers waiting while they look things up across five different systems.</p>
+    </div>
+    <div class="analogy-box" style="border-color: var(--error); background: rgba(244,63,94,0.06);">
+      <div class="analogy-label" style="color: var(--error);">Pain &mdash; Constant Context-Switching</div>
+      <p style="margin-bottom:0;">The operator context-switches constantly, gives shallow answers because they can&rsquo;t deeply specialize, and the queue grows because only one person handles everything. Sound familiar? This is your single agent with too many tools and responsibilities.</p>
+    </div>
+    <div class="analogy-box">
+      <div class="analogy-label">Fix &mdash; Route to Specialists</div>
+      <p style="margin-bottom:0;">Modern call centers route you to a specialist. &ldquo;Press 1 for billing, press 2 for technical support.&rdquo; Each specialist knows their domain deeply and has the right tools on their screen. A supervisor can conference in multiple specialists for complex cases. Your agent system mirrors this: a coordinator reads the question and routes to the right subagent.</p>
+    </div>
+    <div class="module-nav" style="margin-top:auto;">
+      <a href="#card-2" aria-label="Previous card">&larr; Prev</a>
+      <a href="#card-4" aria-label="Next card">Next &rarr;</a>
+    </div>
+  </article>
+
+  <!-- CARD 4: How It Works -->
+  <article class="mobile-card" id="card-4" aria-label="Card 4 of 9: How It Works">
+    <div class="section-label">How It Works</div>
+    <h2>The 5-Step Pipeline</h2>
+    <ol class="step-list" aria-label="Five steps of the agent-subagent pipeline">
+      <li>
+        <strong>User asks a question</strong> (e.g., &ldquo;What&rsquo;s the lien risk for Acme Corp?&rdquo;). The coordinator agent receives it.
+      </li>
+      <li>
+        <strong>Coordinator decides which subagent(s) to invoke</strong> &mdash; it calls its &ldquo;meta-tools&rdquo; (<code>research_filings</code>, <code>analyze_risk</code>), which are actually other agents.
+      </li>
+      <li>
+        <strong>Research subagent runs its own ReAct loop</strong> with <code>search_filings</code> and <code>get_filing_details</code> tools. It returns structured JSON with findings.
+      </li>
+      <li>
+        <strong>Coordinator extracts key data</strong> from research results and builds a new task string for the analysis subagent, explicitly including debtor ID and filing summary.
+      </li>
+      <li>
+        <strong>Analysis subagent computes a risk score</strong> and returns it. The coordinator synthesizes both results into a final answer for the user.
+      </li>
+    </ol>
+    <div class="module-nav" style="margin-top:auto;">
+      <a href="#card-3" aria-label="Previous card">&larr; Prev</a>
+      <a href="#card-5" aria-label="Next card">Next &rarr;</a>
+    </div>
+  </article>
+
+  <!-- CARD 5: Pseudocode -->
+  <article class="mobile-card" id="card-5" aria-label="Card 5 of 9: Pseudocode">
+    <div class="section-label">Pseudocode</div>
+    <h2>The System in Plain Logic</h2>
+    <p style="color:var(--text-secondary);font-size:0.9rem;">No language-specific syntax &mdash; the architecture in pure logic.</p>
+    <pre class="pseudocode" aria-label="Agent-subagent system pseudocode">FUNCTION coordinator(user_question):
+  response = ASK Claude with meta-tools:
+    [research_filings, analyze_risk]
+
+  WHEN tool "research_filings" called:
+    findings = run_research_subagent(task)
+    // subagent has: search_filings, get_details
+    RETURN findings as JSON
+
+  WHEN tool "analyze_risk" called:
+    // MUST pass context explicitly!
+    task = "Analyze {debtor_id}, {filing_count}
+            filings totaling {amount}"
+    score = run_analysis_subagent(task)
+    RETURN score as JSON
+
+  RETURN coordinator's final synthesis</pre>
+    <p style="color:var(--text-secondary);font-size:0.88rem;margin-top:0.25rem;">Notice the comment on line 10: the coordinator <strong>must</strong> explicitly pass context. The analysis subagent has a blank context window &mdash; it cannot see what the research subagent found unless the coordinator includes it in the task string.</p>
+    <div class="module-nav" style="margin-top:auto;">
+      <a href="#card-4" aria-label="Previous card">&larr; Prev</a>
+      <a href="#card-6" aria-label="Next card">Next &rarr;</a>
+    </div>
+  </article>
+
+  <!-- CARD 6: Misconceptions -->
+  <article class="mobile-card" id="card-6" aria-label="Card 6 of 9: Common Misconceptions">
+    <div class="section-label">Common Misconceptions</div>
+    <h2>Three Things People Get Wrong</h2>
+    <div class="misconception">
+      <strong>&ldquo;Subagents share the coordinator&rsquo;s memory&rdquo;</strong>
+      <p style="margin-top:0.5rem;margin-bottom:0;color:var(--text-secondary);">Each subagent starts with a completely empty context window. It only knows what the coordinator explicitly passes in the task description. If the coordinator forgets to include the debtor_id, the subagent cannot look it up &mdash; it simply doesn&rsquo;t have that information.</p>
+    </div>
+    <div class="misconception">
+      <strong>&ldquo;More subagents = better system&rdquo;</strong>
+      <p style="margin-top:0.5rem;margin-bottom:0;color:var(--text-secondary);">The coordinator treats subagents as tools. Just like tool selection degrades above 5 tools, coordinator routing degrades above 5 subagents. If you need more, use hierarchical coordination &mdash; intermediate coordinators managing smaller groups of specialists.</p>
+    </div>
+    <div class="misconception">
+      <strong>&ldquo;I should use multi-agent for everything now&rdquo;</strong>
+      <p style="margin-top:0.5rem;margin-bottom:0;color:var(--text-secondary);">A single agent with 2&ndash;3 tools is simpler, cheaper, and often good enough. Multi-agent pays off with 5+ tools, context isolation needs, or separation of concerns. The lab builds single-agent first to prove this point deliberately.</p>
+    </div>
+    <div class="module-nav" style="margin-top:auto;">
+      <a href="#card-5" aria-label="Previous card">&larr; Prev</a>
+      <a href="#card-7" aria-label="Next card">Next &rarr;</a>
+    </div>
+  </article>
+
+  <!-- CARD 7: Key Takeaway -->
+  <article class="mobile-card" id="card-7" aria-label="Card 7 of 9: Key Takeaway">
+    <div class="section-label">Key Takeaway</div>
+    <h2>What to Remember</h2>
+    <div class="takeaway">
+      <h3>The Coordinator&rsquo;s Tools ARE Other Agents</h3>
+      <p>That&rsquo;s the key architectural insight of this entire module. Each subagent gets its own focused prompt, narrow tool set, and blank context window.</p>
+    </div>
+    <p>The design principles that make this work:</p>
+    <ul>
+      <li><strong>Context must be explicitly passed</strong> between agents &mdash; nothing flows automatically from coordinator to subagent.</li>
+      <li><strong>Always return structured JSON</strong> from subagents so results can be programmatically chained and parsed by the coordinator.</li>
+      <li><strong>Start with a single agent</strong> and split into multi-agent only when complexity demands it &mdash; more agents means more coordination overhead.</li>
+      <li><strong>Each subagent owns its domain completely</strong> &mdash; focused prompt, focused tools, focused output format.</li>
+    </ul>
+    <div class="module-nav" style="margin-top:auto;">
+      <a href="#card-6" aria-label="Previous card">&larr; Prev</a>
+      <a href="#card-8" aria-label="Next card">Next &rarr;</a>
+    </div>
+  </article>
+
+  <!-- CARD 8: Quiz -->
+  <article class="mobile-card" id="card-8" aria-label="Card 8 of 9: Quiz">
+    <div class="section-label">Quick Quiz</div>
+    <h2>Check Your Understanding</h2>
+    <p style="color:var(--text-secondary);font-size:0.9rem;margin-bottom:1rem;">Think through each question, then tap to reveal the answer.</p>
+
+    <div class="quiz-card">
+      <h4>Q1: How does the coordinator pass context to the analysis subagent?</h4>
+      <button class="quiz-reveal-btn" onclick="revealAnswer(this)" aria-expanded="false" aria-controls="a1">
+        Tap to Reveal Answer
+      </button>
+      <div class="quiz-answer" id="a1" role="region" aria-live="polite">
+        Explicitly in the <strong>task description string</strong>, including the debtor_id and filing summary extracted from the research results. Subagents have isolated context windows and do <strong>not</strong> inherit the coordinator&rsquo;s conversation history. If the coordinator doesn&rsquo;t include a piece of data, the subagent simply doesn&rsquo;t have it.
+      </div>
+    </div>
+
+    <div class="quiz-card">
+      <h4>Q2: What does stop_reason &ldquo;tool_use&rdquo; mean in the agent loop?</h4>
+      <button class="quiz-reveal-btn" onclick="revealAnswer(this)" aria-expanded="false" aria-controls="a2">
+        Tap to Reveal Answer
+      </button>
+      <div class="quiz-answer" id="a2" role="region" aria-live="polite">
+        It means Claude wants to call a tool &mdash; execute the requested tool and continue the loop. When stop_reason changes to <strong>&ldquo;end_turn,&rdquo;</strong> Claude is done and has produced its final response. The agent loop keeps running as long as it sees &ldquo;tool_use.&rdquo;
+      </div>
+    </div>
+
+    <div class="quiz-card">
+      <h4>Q3: You have a coordinator with 15 subagents. What is the problem?</h4>
+      <button class="quiz-reveal-btn" onclick="revealAnswer(this)" aria-expanded="false" aria-controls="a3">
+        Tap to Reveal Answer
+      </button>
+      <div class="quiz-answer" id="a3" role="region" aria-live="polite">
+        Same problem as too many tools &mdash; the coordinator cannot reliably pick which subagent(s) to call when there are 15 options. <strong>Solution:</strong> hierarchical coordination with intermediate coordinators, each managing a smaller group of 3&ndash;5 specialized subagents.
+      </div>
+    </div>
+
+    <div class="module-nav" style="margin-top:auto;">
+      <a href="#card-7" aria-label="Previous card">&larr; Prev</a>
+      <a href="#card-9" aria-label="Next card">Next &rarr;</a>
+    </div>
+  </article>
+
+  <!-- CARD 9: Desktop Link + Nav -->
+  <article class="mobile-card" id="card-9" aria-label="Card 9 of 9: Navigation">
+    <div class="section-label">Continue Learning</div>
+    <h2>View Full Desktop Module</h2>
+    <p style="color:var(--text-secondary);">The full desktop module is a complete hands-on BUILD lab &mdash; you&rsquo;ll wire the coordinator, both subagents, the context-passing logic, and the structured JSON handoffs from scratch, in both Python and Node.js.</p>
+    <a class="desktop-link" href="../M15B-build-agent-subagent-system.html" aria-label="Open full desktop lab version of M15B">
+      View Full Desktop Module &rarr;
+    </a>
+    <div style="margin-top:1.5rem;">
+      <p style="color:var(--text-muted);font-size:0.85rem;text-align:center;">Continue the course</p>
+      <div class="module-nav">
+        <a href="M15-code-interpreter-sandbox-mobile.html" aria-label="Previous module: M15 Code Interpreter">&larr; M15: Code Interpreter</a>
+        <a href="M16-input-guardrails-mobile.html" aria-label="Next module: M16 Input Guardrails">M16: Input Guardrails &rarr;</a>
+      </div>
+    </div>
+    <div style="margin-top:2rem;padding-top:1rem;border-top:1px solid rgba(255,255,255,0.06);text-align:center;">
+      <p style="color:var(--text-muted);font-size:0.75rem;">Module 17 of 30 &bull; Track 4: Architecture</p>
+      <p style="color:var(--text-muted);font-size:0.75rem;margin-top:0.25rem;">Building AI Agents with Claude</p>
+    </div>
+  </article>
+
+</div><!-- end .card-container -->
+
+<!-- Progress Bar -->
+<nav class="progress-bar" id="progressBar" aria-label="Card progress">
+  <div class="progress-dot active" id="dot-0" aria-label="Card 1 of 9"></div>
+  <div class="progress-dot" id="dot-1" aria-label="Card 2 of 9"></div>
+  <div class="progress-dot" id="dot-2" aria-label="Card 3 of 9"></div>
+  <div class="progress-dot" id="dot-3" aria-label="Card 4 of 9"></div>
+  <div class="progress-dot" id="dot-4" aria-label="Card 5 of 9"></div>
+  <div class="progress-dot" id="dot-5" aria-label="Card 6 of 9"></div>
+  <div class="progress-dot" id="dot-6" aria-label="Card 7 of 9"></div>
+  <div class="progress-dot" id="dot-7" aria-label="Card 8 of 9"></div>
+  <div class="progress-dot" id="dot-8" aria-label="Card 9 of 9"></div>
+  <span class="progress-label" id="progressLabel" aria-live="polite">1 / 9</span>
+</nav>
+
+<script>
+  // Progress dot updater
+  (function () {
+    var container = document.getElementById('cardContainer');
+    var dots = document.querySelectorAll('.progress-dot');
+    var label = document.getElementById('progressLabel');
+    var totalCards = dots.length;
+
+    function updateProgress() {
+      var scrollLeft = container.scrollLeft;
+      var cardWidth = container.offsetWidth;
+      var idx = Math.round(scrollLeft / cardWidth);
+      if (idx < 0) idx = 0;
+      if (idx >= totalCards) idx = totalCards - 1;
+      dots.forEach(function (d, i) {
+        d.classList.toggle('active', i === idx);
+      });
+      label.textContent = (idx + 1) + ' / ' + totalCards;
+    }
+
+    container.addEventListener('scroll', updateProgress, { passive: true });
+    updateProgress();
+  })();
+
+  // Quiz reveal
+  function revealAnswer(btn) {
+    var answerId = btn.getAttribute('aria-controls');
+    var answer = document.getElementById(answerId);
+    if (!answer) return;
+    var isRevealed = answer.classList.contains('revealed');
+    answer.classList.toggle('revealed', !isRevealed);
+    btn.setAttribute('aria-expanded', String(!isRevealed));
+    btn.textContent = isRevealed ? 'Tap to Reveal Answer' : 'Hide Answer';
+  }
+</script>
+
+</body>
+</html>

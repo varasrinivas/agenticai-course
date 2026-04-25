@@ -1,0 +1,229 @@
+{
+  "exam_id": "mock_exam_a",
+  "title": "Mock Exam A — Agentic Architecture & Multi-Agent Systems",
+  "description": "Covers Domains 1, 2, and 5 through Scenarios 1 (Customer Support) and 3 (Multi-Agent Research)",
+  "passing_score": 72,
+  "time_limit_minutes": 30,
+  "questions": [
+    {
+      "id": "A1",
+      "domain": 1,
+      "domain_name": "Agentic Architecture",
+      "scenario": 1,
+      "difficulty": "medium",
+      "question": "You are building a customer support agent that handles UCC filing inquiries. The agent uses tools to look up filings and check risk profiles. How should the agent determine when to stop its reasoning loop?",
+      "options": {
+        "A": "Parse the agent's text output for phrases like 'I'm done' or 'Here is your answer'",
+        "B": "Check the stop_reason field: continue on 'tool_use', stop on 'end_turn'",
+        "C": "Set a fixed iteration count of 5 and always stop after 5 turns",
+        "D": "Monitor the token count and stop when 80% of the context window is used"
+      },
+      "correct_answer": "B",
+      "explanations": {
+        "A": "WRONG — Natural language parsing is non-deterministic. The model might say 'done' mid-conversation or forget to say it when actually finished. This is Anti-Pattern #1.",
+        "B": "CORRECT — stop_reason is the ONLY reliable termination signal. 'tool_use' means Claude wants to call a tool (continue), 'end_turn' means Claude considers the task complete (stop).",
+        "C": "WRONG — Arbitrary iteration caps as the PRIMARY stop mechanism is Anti-Pattern #2. Use max_turns as a safety net, not the main termination signal.",
+        "D": "WRONG — Token count monitoring is a resource management concern, not a semantic completion signal. The agent should stop when the TASK is done, not when resources are low."
+      },
+      "related_module": "M26"
+    },
+    {
+      "id": "A2",
+      "domain": 1,
+      "domain_name": "Agentic Architecture",
+      "scenario": 1,
+      "difficulty": "hard",
+      "question": "Your customer support agent needs to enforce a policy that refunds over $500 require human approval. A prompt instructs: 'Never issue refunds over $500 without human approval.' During testing, the agent occasionally processes $600 refunds when customers provide compelling stories. What is the correct fix?",
+      "options": {
+        "A": "Strengthen the prompt: 'ABSOLUTELY NEVER issue refunds over $500. This is a strict rule.'",
+        "B": "Add a second check by asking the model to verify its own output before executing",
+        "C": "Implement a PreToolUse hook on the issue_refund tool that programmatically blocks amounts > $500",
+        "D": "Reduce the model temperature to 0 to make outputs more deterministic"
+      },
+      "correct_answer": "C",
+      "explanations": {
+        "A": "WRONG — Stronger prompts are still probabilistic. ALL-CAPS and emphasis help but cannot guarantee 100% compliance. This is still Anti-Pattern #3 (prompt-based enforcement for critical rules).",
+        "B": "WRONG — Self-verification is another probabilistic check. If the model was persuaded once, it can be persuaded again during verification.",
+        "C": "CORRECT — Hooks provide 100% deterministic enforcement. A PreToolUse hook runs BEFORE the tool executes and can block the call programmatically. This is the 'lock on the liquor cabinet' approach.",
+        "D": "WRONG — Temperature 0 makes outputs more consistent but does NOT make them deterministic in terms of rule-following. The model can still be influenced by context at temperature 0."
+      },
+      "related_module": "M26"
+    },
+    {
+      "id": "A3",
+      "domain": 1,
+      "domain_name": "Agentic Architecture",
+      "scenario": 1,
+      "difficulty": "medium",
+      "question": "A customer is extremely angry and using profanity, but their actual request is a simple password reset. Another customer is calm and polite, but their request involves a policy gap where the agent doesn't have authority to act. Which customer should be escalated to a human agent?",
+      "options": {
+        "A": "The angry customer, because strong negative sentiment indicates the agent cannot handle the situation",
+        "B": "Both customers, because any unusual situation warrants human review",
+        "C": "The calm customer with the policy gap, because escalation should be triggered by capability limits, not sentiment",
+        "D": "Neither customer — the agent should attempt to resolve both cases autonomously"
+      },
+      "correct_answer": "C",
+      "explanations": {
+        "A": "WRONG — Sentiment-based escalation is Anti-Pattern #4. Angry customers with simple requests waste human agent time. The password reset can be handled automatically regardless of tone.",
+        "B": "WRONG — Escalating everything defeats the purpose of automation. Escalation should be reserved for genuine capability or policy limits.",
+        "C": "CORRECT — Escalation triggers should be: policy gaps, capability limits, explicit user request, or business thresholds. The calm customer's policy gap is a legitimate trigger. The angry customer's simple request is not.",
+        "D": "WRONG — The agent CANNOT resolve the policy gap autonomously because it doesn't have the authority. Attempting to do so would either fail or violate policy."
+      },
+      "related_module": "M26"
+    },
+    {
+      "id": "A4",
+      "domain": 2,
+      "domain_name": "Tool Design & MCP",
+      "scenario": 1,
+      "difficulty": "medium",
+      "question": "Your filing lookup tool returns an empty result when queried for filing UCC-2024-TX-0000001. What is the correct way to handle this?",
+      "options": {
+        "A": "Return an empty JSON object: {}",
+        "B": "Return {\"results\": [], \"count\": 0} to indicate no filings found",
+        "C": "Return {\"error\": \"No filings found\", \"isError\": true}",
+        "D": "Return {\"results\": [], \"count\": 0, \"access_verified\": true, \"query\": \"UCC-2024-TX-0000001\"} to distinguish 'no results' from 'access denied'"
+      },
+      "correct_answer": "D",
+      "explanations": {
+        "A": "WRONG — An empty object gives the model no information about why the result is empty. Was the query invalid? Was access denied? Did the search work but find nothing?",
+        "B": "PARTIALLY CORRECT but incomplete — This tells the model the search found nothing, but doesn't confirm whether the search actually executed successfully. Anti-Pattern #7: empty results for access failures.",
+        "C": "WRONG — 'No filings found' is NOT an error. It's a valid result. Using isError: true would cause the model to think something went wrong and retry unnecessarily.",
+        "D": "CORRECT — This distinguishes between 'the search worked and found nothing' (access_verified: true, results: []) vs 'the search couldn't execute' (access_verified: false). This prevents Anti-Pattern #7."
+      },
+      "related_module": "M05"
+    },
+    {
+      "id": "A5",
+      "domain": 2,
+      "domain_name": "Tool Design & MCP",
+      "scenario": 3,
+      "difficulty": "hard",
+      "question": "You are designing a multi-agent research system where the coordinator agent needs to delegate tasks to specialist subagents. The coordinator currently has 22 tools available. Performance has degraded and the model frequently selects the wrong tool. What is the best architectural fix?",
+      "options": {
+        "A": "Add more detailed descriptions to each of the 22 tools to help the model distinguish between them",
+        "B": "Reduce to 4-5 tools on the coordinator and distribute the rest to specialist subagents via the Task tool",
+        "C": "Use tool_choice: 'any' to force the model to always use a tool rather than responding with text",
+        "D": "Create a meta-tool called 'select_tool' that first decides which tool to use, then executes it"
+      },
+      "correct_answer": "B",
+      "explanations": {
+        "A": "WRONG — Better descriptions help marginally, but 22 tools still exceeds the recommended limit. Research shows model accuracy degrades significantly beyond ~8-10 tools. Anti-Pattern #8.",
+        "B": "CORRECT — The coordinator should have high-level orchestration tools (delegate_research, delegate_entity_resolution, delegate_risk_scoring, aggregate_results). Each subagent gets 4-5 domain-specific tools. This is the proven pattern for scaling tool count.",
+        "C": "WRONG — tool_choice: 'any' forces tool use but doesn't help the model pick the RIGHT tool. It would still struggle with 22 options.",
+        "D": "WRONG — A meta-tool adds latency and complexity without reducing the core problem. The model still needs to reason over 22 options to feed the meta-tool."
+      },
+      "related_module": "M14"
+    },
+    {
+      "id": "A6",
+      "domain": 5,
+      "domain_name": "Context & Reliability",
+      "scenario": 3,
+      "difficulty": "medium",
+      "question": "In your multi-agent research system, three subagents return conflicting information about a debtor's filing history. Subagent A (state database) says 2 active filings. Subagent B (federal records) says 3 active filings. Subagent C (third-party data vendor) says 1 active filing. How should the coordinator present this to the user?",
+      "options": {
+        "A": "Average the results and report '2 active filings' as the best estimate",
+        "B": "Use the highest number (3) to be conservative and report '3 active filings'",
+        "C": "Report all three results with source attribution and confidence classification: 'Contested — sources disagree (State: 2, Federal: 3, Vendor: 1)'",
+        "D": "Re-run all three subagents and use the majority result"
+      },
+      "correct_answer": "C",
+      "explanations": {
+        "A": "WRONG — Averaging factual data is meaningless. Filing counts are discrete integers that should be reconciled, not averaged.",
+        "B": "WRONG — Using the highest number is a heuristic, not a principled approach. It hides the disagreement from the user who needs to know that sources conflict.",
+        "C": "CORRECT — Multi-source synthesis should classify findings as 'Well-established' (sources agree), 'Contested' (sources disagree), or 'Single-source' (only one source). Each finding must include provenance: source, confidence, timestamp, agent ID. Anti-Pattern #18 addresses missing provenance.",
+        "D": "WRONG — Re-running subagents wastes resources and likely produces the same conflicting results. The conflict is in the data sources, not the agents."
+      },
+      "related_module": "M14"
+    },
+    {
+      "id": "A7",
+      "domain": 5,
+      "domain_name": "Context & Reliability",
+      "scenario": 3,
+      "difficulty": "hard",
+      "question": "Your multi-agent system has been running for 45 minutes on a complex research task. The coordinator's context window is 85% full with accumulated tool results and subagent responses. Critical case facts from the initial query are being summarized and compressed. What is the best mitigation strategy?",
+      "options": {
+        "A": "Use /compact to summarize the context and free up space for new information",
+        "B": "Increase the max_tokens parameter to give the model more room",
+        "C": "Place critical case facts in an immutable block at the start and use scratchpad files for persistent state that survives context compression",
+        "D": "Start a fresh session and paste the key findings so far into the new context"
+      },
+      "correct_answer": "C",
+      "explanations": {
+        "A": "PARTIALLY CORRECT — /compact helps free space, but it's lossy. Critical details from the original query may be summarized away. Anti-Pattern #16 warns against progressive summarization of critical details.",
+        "B": "WRONG — max_tokens controls output length, not context window size. The context window is model-dependent and cannot be increased by parameter.",
+        "C": "CORRECT — Two-pronged approach: (1) Immutable case facts blocks keep critical information from being compressed. (2) Scratchpad files provide lossless persistent state that survives context compression because they're stored on disk, not in the context window.",
+        "D": "PARTIALLY CORRECT — Fresh sessions help but require manual transfer of findings, which is error-prone. Scratchpad files + crash recovery manifests are more robust."
+      },
+      "related_module": "M11"
+    },
+    {
+      "id": "A8",
+      "domain": 1,
+      "domain_name": "Agentic Architecture",
+      "scenario": 3,
+      "difficulty": "easy",
+      "question": "What does stop_reason: 'tool_use' indicate in a Claude API response?",
+      "options": {
+        "A": "The model has finished using all required tools and is ready to give a final answer",
+        "B": "The model wants to call a tool and is waiting for the tool result before continuing",
+        "C": "The model encountered an error while trying to use a tool",
+        "D": "The model is suggesting a tool the user should run manually"
+      },
+      "correct_answer": "B",
+      "explanations": {
+        "A": "WRONG — This is the opposite. 'tool_use' means the model wants to START using a tool, not that it's finished.",
+        "B": "CORRECT — stop_reason: 'tool_use' means Claude has decided to call a tool. The response includes tool_use content blocks specifying which tool and with what parameters. You execute the tool and send the result back as a tool_result message.",
+        "C": "WRONG — Tool errors are reported in the tool_result message you send back, not in stop_reason. stop_reason: 'tool_use' is a normal flow signal, not an error.",
+        "D": "WRONG — In the API, tool_use is a request for automatic execution in the agentic loop, not a suggestion for manual action."
+      },
+      "related_module": "M05"
+    },
+    {
+      "id": "A9",
+      "domain": 2,
+      "domain_name": "Tool Design & MCP",
+      "scenario": 3,
+      "difficulty": "medium",
+      "question": "Your MCP server configuration in .mcp.json contains: {\"env\": {\"DB_PASSWORD\": \"prod_secret_123\"}}. What is wrong with this configuration?",
+      "options": {
+        "A": "Nothing — .mcp.json is typically gitignored so credentials are safe",
+        "B": "The password should be Base64 encoded for security",
+        "C": "Hardcoded credentials should be replaced with environment variable references: ${DB_PASSWORD}",
+        "D": "The env section should be moved to a separate secrets.json file"
+      },
+      "correct_answer": "C",
+      "explanations": {
+        "A": "WRONG — .mcp.json is often committed to version control alongside the project. Even if gitignored, hardcoded secrets in config files are a security anti-pattern. Anti-Pattern #9.",
+        "B": "WRONG — Base64 is encoding, not encryption. It provides zero security. Anyone can decode Base64.",
+        "C": "CORRECT — Use ${DB_PASSWORD} syntax to reference environment variables. The actual secret lives in your environment (set via .env, CI secrets, or a secrets manager), never in config files. This is Anti-Pattern #9.",
+        "D": "WRONG — Moving to a separate file doesn't solve the problem if that file also contains plaintext secrets. The fix is environment variable references, not file reorganization."
+      },
+      "related_module": "M07"
+    },
+    {
+      "id": "A10",
+      "domain": 5,
+      "domain_name": "Context & Reliability",
+      "scenario": 3,
+      "difficulty": "hard",
+      "question": "You are evaluating your multi-agent research system's accuracy. Across 1,000 test queries, the system achieves 94% accuracy overall. However, when you break down by filing type, UCC-1 filings are at 98% accuracy while UCC-3 amendments are at 71% accuracy. Which metric should drive your improvement priorities?",
+      "options": {
+        "A": "The 94% overall accuracy — it shows the system is performing well above the typical 90% target",
+        "B": "The 71% UCC-3 accuracy — per-document-type stratified metrics reveal the real performance gaps hidden by aggregate numbers",
+        "C": "Neither — you need at least 10,000 test queries for statistically significant results",
+        "D": "The 98% UCC-1 accuracy — focus on maintaining the highest-performing category"
+      },
+      "correct_answer": "B",
+      "explanations": {
+        "A": "WRONG — Aggregate metrics hide critical failures. If 80% of your filings are UCC-1 (easy), the 94% is misleading. Anti-Pattern #17: aggregate-only accuracy metrics.",
+        "B": "CORRECT — Per-document-type stratified metrics are essential. The 71% UCC-3 accuracy means nearly 1 in 3 amendment queries are wrong — likely unacceptable for legal/financial use. Anti-Pattern #17 specifically warns against relying on aggregate numbers.",
+        "C": "WRONG — 1,000 queries is sufficient for directional analysis, especially when the per-type breakdown reveals a 27-point accuracy gap. Statistical significance is important but shouldn't delay acting on obvious gaps.",
+        "D": "WRONG — Maintaining 98% is good but the 71% category is where users are being harmed. Improvement effort should target the weakest performance."
+      },
+      "related_module": "M18"
+    }
+  ]
+}

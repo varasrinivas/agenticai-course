@@ -1,0 +1,212 @@
+======================================================================
+REASONING TRACE — Healthcare Pre-Auth Decision Support Agent
+Query: Process pre-authorization for Maria Gonzalez, CPT 27447, Dx M17.11
+======================================================================
+
+--- Step 1 ---
+[THINK] I need to process this pre-authorization request for a Total Knee
+Arthroplasty (CPT 27447). Let me start by looking up the clinical criteria
+for this procedure to understand what is required for approval.
+
+[ACT] Calling tool: lookup_clinical_criteria
+      Args: {"cpt_code": "27447"}
+
+[OBSERVE] lookup_clinical_criteria returned:
+{
+  "cpt_code": "27447",
+  "procedure_name": "Total Knee Arthroplasty (TKA)",
+  "category": "Orthopedic Surgery",
+  "required_diagnoses": ["M17.0", "M17.11", "M17.12", "M17.9"],
+  "criteria": [
+    "Documented failure of at least 3 months of conservative treatment",
+    "Conservative treatments must include physical therapy, NSAIDs, and at least one corticosteroid injection",
+    "Radiographic evidence of moderate to severe joint space narrowing (Kellgren-Lawrence grade 3 or 4)",
+    "Functional impairment documented by validated outcome measure (e.g., WOMAC score >= 39)",
+    "BMI < 40 or documentation of weight management programme enrollment"
+  ],
+  "required_documentation": [
+    "Office visit notes from the past 6 months",
+    "Imaging reports (X-ray or MRI within 12 months)",
+    "Physical therapy progress notes",
+    "Conservative treatment log"
+  ],
+  "approval_validity_days": 90,
+  "peer_review_threshold": "auto_approve_if_all_criteria_met"
+}
+
+--- Step 2 ---
+[THINK] Good. I now have the clinical criteria for CPT 27447 (Total Knee
+Arthroplasty). The required diagnoses include M17.11, which is the
+submitted diagnosis code. Let me verify the diagnosis match formally.
+
+[ACT] Calling tool: verify_diagnosis_match
+      Args: {"cpt_code": "27447", "submitted_diagnosis_codes": ["M17.11"]}
+
+[OBSERVE] verify_diagnosis_match returned:
+{
+  "match": true,
+  "matched_codes": ["M17.11"],
+  "unmatched_codes": [],
+  "required_codes": ["M17.0", "M17.11", "M17.12", "M17.9"],
+  "details": {
+    "M17.11": "Primary osteoarthritis, right knee"
+  },
+  "procedure_name": "Total Knee Arthroplasty (TKA)"
+}
+
+--- Step 3 ---
+[THINK] Diagnosis M17.11 (Primary osteoarthritis, right knee) is a valid
+match for CPT 27447. Now I need to check the network status of the provider
+(NPI-1234567890) and facility (FAC-001) under the patient's plan
+(PLAN-PPO-GOLD).
+
+[ACT] Calling tool: check_network_status
+      Args: {
+        "provider_npi": "NPI-1234567890",
+        "facility_id": "FAC-001",
+        "plan_id": "PLAN-PPO-GOLD"
+      }
+
+[OBSERVE] check_network_status returned:
+{
+  "combined_status": "in_network",
+  "status_detail": "Both provider and facility are in-network.",
+  "provider": {
+    "npi": "NPI-1234567890",
+    "name": "Dr. Sarah Chen",
+    "specialty": "Orthopedic Surgery",
+    "network_status": "in_network",
+    "network_tier": "preferred",
+    "board_certified": true,
+    "quality_score": 4.7
+  },
+  "facility": {
+    "id": "FAC-001",
+    "name": "Valley Medical Center",
+    "network_status": "in_network",
+    "type": "Hospital — Acute Care"
+  },
+  "plan_type": "PPO"
+}
+
+--- Step 4 ---
+[THINK] Excellent. Dr. Sarah Chen is an in-network, preferred-tier,
+board-certified orthopedic surgeon with a quality score of 4.7. Valley
+Medical Center is an in-network acute care hospital. Both are in-network
+for the PPO Gold Plus plan. Now let me check the benefit summary to
+confirm the Orthopedic Surgery category is covered and review the
+patient's cost sharing details.
+
+[ACT] Calling tool: get_benefit_summary
+      Args: {
+        "plan_id": "PLAN-PPO-GOLD",
+        "procedure_category": "Orthopedic Surgery"
+      }
+
+[OBSERVE] get_benefit_summary returned:
+{
+  "plan_name": "PPO Gold Plus",
+  "plan_type": "PPO",
+  "category_covered": true,
+  "category_excluded": false,
+  "in_network": {
+    "deductible": 500,
+    "deductible_met": 500,
+    "remaining_deductible": 0,
+    "coinsurance": "10%",
+    "oop_max": 4000,
+    "current_oop_spent": 1200,
+    "remaining_oop": 2800
+  },
+  "out_of_network": {
+    "deductible": 2000,
+    "deductible_met": 750,
+    "remaining_deductible": 1250,
+    "coinsurance": "40%",
+    "oop_max": 12000
+  },
+  "pre_auth_required": true,
+  "notes": "Standard employer group plan with comprehensive surgical coverage."
+}
+
+--- Step 5 ---
+[THINK] All evidence gathered so far is favorable:
+- Diagnosis M17.11 matches the required codes for CPT 27447
+- Provider and facility are both in-network (preferred tier)
+- Orthopedic Surgery is a covered category under PPO Gold Plus
+- The in-network deductible ($500) has already been met
+- Patient cost sharing: 10% coinsurance, with $2,800 remaining toward OOP max
+
+Now let me review the clinical notes against the criteria:
+1. Conservative treatment > 3 months: YES — 6 months documented
+2. PT + NSAIDs + corticosteroid injection: YES — 12 PT sessions, naproxen,
+   2 corticosteroid injections
+3. Kellgren-Lawrence grade 3 or 4: YES — grade 3 on X-ray
+4. WOMAC >= 39: YES — WOMAC score 52
+5. BMI < 40: YES — BMI 32.1
+
+All clinical criteria appear to be met. I will now generate the
+authorization recommendation.
+
+[ACT] Calling tool: generate_auth_recommendation
+      Args: {
+        "cpt_code": "27447",
+        "diagnosis_match": true,
+        "network_status": "in_network",
+        "benefit_covered": true,
+        "clinical_notes_summary": "68-year-old female with 2-year progressive right knee OA. KL grade 3, WOMAC 52. Failed 6 months conservative tx (PT x12, naproxen, 2 corticosteroid injections). BMI 32.1. All 5 clinical criteria met."
+      }
+
+[OBSERVE] generate_auth_recommendation returned:
+{
+  "recommendation": "APPROVED",
+  "reason": "All clinical criteria are met. Diagnosis matches required codes. Provider and facility are in-network. Benefit coverage is confirmed. Clinical summary: 68-year-old female with 2-year progressive right knee OA. KL grade 3, WOMAC 52. Failed 6 months conservative tx (PT x12, naproxen, 2 corticosteroid injections). BMI 32.1. All 5 clinical criteria met.",
+  "conditions": [
+    "Authorization valid for 90 days",
+    "Pre-operative clearance must be completed before scheduling",
+    "Facility must submit claim with this authorization number"
+  ],
+  "peer_review_required": false,
+  "approval_validity_days": 90
+}
+
+--- Step 6 ---
+[ANSWER]
+
+PRE-AUTHORIZATION DECISION
+==========================
+
+Request: CPT 27447 — Total Knee Arthroplasty (TKA)
+Patient: Maria Gonzalez (DOB: 1958-03-14)
+Provider: Dr. Sarah Chen (NPI-1234567890) — In-Network, Preferred Tier
+Facility: Valley Medical Center (FAC-001) — In-Network
+
+RECOMMENDATION: APPROVED
+
+Justification:
+1. Diagnosis Verified: M17.11 (Primary osteoarthritis, right knee) is an
+   approved diagnosis for Total Knee Arthroplasty.
+
+2. Clinical Criteria Met:
+   - Conservative treatment failure > 3 months: 6 months documented
+   - PT + NSAIDs + steroid injection: 12 PT sessions, naproxen 500mg BID,
+     2 corticosteroid injections with minimal relief
+   - Kellgren-Lawrence grade 3 on X-ray (meets grade 3-4 requirement)
+   - WOMAC score 52 (exceeds threshold of 39)
+   - BMI 32.1 (below maximum of 40)
+
+3. Network Status: Both provider (preferred tier) and facility are in-network
+   under PPO Gold Plus plan.
+
+4. Benefit Coverage: Orthopedic Surgery is a covered category. In-network
+   deductible fully met. Patient responsibility: 10% coinsurance.
+
+Conditions:
+- Authorization valid for 90 days from date of approval
+- Pre-operative clearance must be completed before scheduling
+- Facility must submit claim with this authorization number
+
+Estimated Patient Cost Sharing:
+- Deductible: $0 remaining (fully met)
+- Coinsurance: 10% of allowed amount
+- Remaining out-of-pocket maximum: $2,800

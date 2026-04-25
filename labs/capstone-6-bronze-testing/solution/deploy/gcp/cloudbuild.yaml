@@ -1,0 +1,59 @@
+##############################################################################
+# Cloud Build configuration for Bronze Table Validation Agent
+#
+# Triggered by: manual or CI/CD push
+# Steps: build image -> push to Artifact Registry -> deploy to Cloud Run
+##############################################################################
+
+steps:
+  # Step 1: Build the Docker image
+  - name: "gcr.io/cloud-builders/docker"
+    args:
+      - "build"
+      - "-t"
+      - "us-docker.pkg.dev/${PROJECT_ID}/bronze-validator-repo/bronze-validator:${SHORT_SHA}"
+      - "-t"
+      - "us-docker.pkg.dev/${PROJECT_ID}/bronze-validator-repo/bronze-validator:latest"
+      - "."
+    dir: "."
+
+  # Step 2: Push the image to Artifact Registry
+  - name: "gcr.io/cloud-builders/docker"
+    args:
+      - "push"
+      - "us-docker.pkg.dev/${PROJECT_ID}/bronze-validator-repo/bronze-validator:${SHORT_SHA}"
+
+  - name: "gcr.io/cloud-builders/docker"
+    args:
+      - "push"
+      - "us-docker.pkg.dev/${PROJECT_ID}/bronze-validator-repo/bronze-validator:latest"
+
+  # Step 3: Deploy to Cloud Run
+  - name: "gcr.io/google.com/cloudsdktool/cloud-sdk"
+    entrypoint: "gcloud"
+    args:
+      - "run"
+      - "deploy"
+      - "bronze-validator"
+      - "--image"
+      - "us-docker.pkg.dev/${PROJECT_ID}/bronze-validator-repo/bronze-validator:${SHORT_SHA}"
+      - "--region"
+      - "us-central1"
+      - "--memory"
+      - "1Gi"
+      - "--timeout"
+      - "300"
+      - "--max-instances"
+      - "1"
+      - "--set-secrets"
+      - "ANTHROPIC_API_KEY=anthropic-api-key:latest"
+      - "--no-allow-unauthenticated"
+      - "--platform"
+      - "managed"
+
+images:
+  - "us-docker.pkg.dev/${PROJECT_ID}/bronze-validator-repo/bronze-validator:${SHORT_SHA}"
+  - "us-docker.pkg.dev/${PROJECT_ID}/bronze-validator-repo/bronze-validator:latest"
+
+options:
+  logging: CLOUD_LOGGING_ONLY

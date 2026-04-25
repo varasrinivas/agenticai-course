@@ -1,0 +1,148 @@
+================================================================================
+M05 Lab — Expected Output (approximate)
+================================================================================
+Claude's exact wording will vary between runs. What matters is the STRUCTURE:
+the tool calls, tool results, and final answers should match these patterns.
+
+================================================================================
+STEP 1: single_tool.py / single_tool.js
+================================================================================
+
+>>> Test 1: Known city
+============================================================
+[QUERY] What's the weather in Tokyo?
+============================================================
+
+============================================================
+[THINKING] Calling Claude with get_weather tool...
+============================================================
+
+────────────────────────────────────────────────────────────
+[USING TOOL] get_weather
+[INPUT]      {
+  "city": "Tokyo"
+}
+────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────
+[TOOL RESULT]
+{
+  "city": "Tokyo",
+  "temp_f": 85,
+  "condition": "Sunny",
+  "humidity": 45
+}
+────────────────────────────────────────────────────────────
+
+============================================================
+[RESPONSE] The current weather in Tokyo is sunny with a temperature of 85°F
+and 45% humidity. It's a warm, clear day!
+============================================================
+
+FINAL ANSWER: The current weather in Tokyo is sunny with a temperature of 85°F
+and 45% humidity. It's a warm, clear day!
+
+
+>>> Test 2: Unknown city (error case)
+
+────────────────────────────────────────────────────────────
+[USING TOOL] get_weather
+[INPUT]      {
+  "city": "Atlantis"
+}
+────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────
+[TOOL RESULT]
+{
+  "error": "No weather data available for 'Atlantis'. Available cities: new york, london, tokyo, sydney, paris"
+}
+────────────────────────────────────────────────────────────
+
+FINAL ANSWER: I'm sorry, but I don't have weather data for Atlantis. The
+cities I can look up weather for are: New York, London, Tokyo, Sydney, and
+Paris. Would you like me to check the weather for one of those?
+
+
+>>> Test 3: No tool needed
+(Claude responds directly without calling any tool)
+
+FINAL ANSWER: Hello! I can help you check the weather for various cities.
+Just ask me something like "What's the weather in Tokyo?" and I'll look it up!
+
+
+================================================================================
+STEP 2: multi_tool.py / multi_tool.js
+================================================================================
+
+>>> Test 1: Single tool (weather)
+[USING TOOL] get_weather  ->  Paris: 68°F, Overcast, 70% humidity
+FINAL ANSWER: The weather in Paris is currently 68°F and overcast with 70% humidity.
+
+>>> Test 2: Single tool (calculate)
+[USING TOOL] calculate  ->  expression: "15 * 340 / 100" (or similar), result: 51.0
+FINAL ANSWER: 15% of 340 is 51.
+
+>>> Test 3: Multi-tool (weather + time)
+[USING TOOL] get_weather  ->  Tokyo: 85°F, Sunny, 45% humidity
+[USING TOOL] get_time     ->  JST: 2024-03-16 04:30:00 JST
+(NOTE: Claude may call both tools in a SINGLE response — that's parallel tool use!)
+FINAL ANSWER: The weather in Tokyo is currently 85°F and sunny with 45% humidity.
+The current time in Japan (JST) is 4:30 AM on March 16, 2024.
+
+>>> Test 4: No tool needed
+(Claude responds directly — stop_reason is "end_turn" on the FIRST call)
+FINAL ANSWER: Hello! I'm doing well, thank you! How can I help you today?
+
+
+================================================================================
+STEP 3: error_handling.py / error_handling.js
+================================================================================
+
+>>> Test 1: Unknown city
+[USING TOOL] get_weather -> {"error": "No weather data available for 'Atlantis'..."}
+(Error is sent back as tool_result — Claude explains gracefully)
+FINAL ANSWER: I don't have weather data for Atlantis. Available cities are:
+New York, London, Tokyo, Sydney, and Paris.
+
+>>> Test 2: Division by zero
+[USING TOOL] calculate -> {"error": "Calculation failed: division by zero"}
+(Error is sent back as tool_result — Claude explains gracefully)
+FINAL ANSWER: The calculation 1/0 results in a division by zero error.
+Division by zero is mathematically undefined.
+
+>>> Test 3: Multi-tool with mixed results
+[USING TOOL] get_weather -> Tokyo: 85°F, Sunny
+[USING TOOL] calculate   -> 25 * 4 = 100
+FINAL ANSWER: The weather in Tokyo is 85°F and sunny. 25 times 4 equals 100.
+
+>>> Test 4: Normal query
+[USING TOOL] get_time -> EST: 2024-03-15 14:30:00 EST
+FINAL ANSWER: The current time in EST is 2:30 PM on March 15, 2024.
+
+
+================================================================================
+KEY PATTERNS TO VERIFY
+================================================================================
+
+1. TOOL CALL FLOW:
+   Your code calls Claude -> Claude returns stop_reason="tool_use" ->
+   Your code executes the tool -> Your code sends tool_result back ->
+   Claude returns stop_reason="end_turn" with final text
+
+2. MULTI-TOOL:
+   Claude may request MULTIPLE tools in a single response.
+   Your code must process ALL tool_use blocks and send ALL results back.
+
+3. ERROR RECOVERY:
+   When a tool returns an error (unknown city, division by zero),
+   the error is sent back as a tool_result. Claude reads it and
+   explains the problem in natural language. The agent does NOT crash.
+
+4. NO-TOOL CASE:
+   When no tool is needed, Claude responds directly with stop_reason="end_turn"
+   on the very first call. The agent loop exits immediately.
+
+5. AGENT LOOP:
+   The while loop runs until Claude says "end_turn" or MAX_TURNS is reached.
+   Each iteration: API call -> check stop_reason -> act accordingly.

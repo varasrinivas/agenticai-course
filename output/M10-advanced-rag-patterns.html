@@ -1,0 +1,2417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>M10: Advanced RAG Patterns | Building AI Agents with Claude</title>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;700;800&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg-primary: #0A1628; --bg-secondary: #111D33; --bg-card: #162033; --bg-surface: #1A2740;
+      --text-primary: #E8ECF1; --text-secondary: #94A3B8; --text-muted: #64748B;
+      --accent-primary: #D4A843; --accent-hover: #E5BC5A; --accent-muted: rgba(212, 168, 67, 0.15);
+      --success: #10B981; --success-bg: rgba(16, 185, 129, 0.1);
+      --warning: #F59E0B; --warning-bg: rgba(245, 158, 11, 0.1);
+      --error: #F43F5E; --error-bg: rgba(244, 63, 94, 0.1);
+      --info: #3B82F6; --info-bg: rgba(59, 130, 246, 0.1);
+      --track-memory: #06B6D4; --track-color: var(--track-memory); --track-capstones: #D4A843;
+      --code-bg: #0D1117; --code-border: #21262D; --code-text: #C9D1D9;
+      --transition-fast: 150ms; --transition-normal: 300ms; --transition-slow: 500ms;
+    }
+    body { background: var(--bg-primary); color: var(--text-primary); font-family: 'Source Sans 3', sans-serif; font-size: 1.05rem; line-height: 1.7; min-height: 100vh; }
+    .top-progress { position: fixed; top: 0; left: 0; right: 0; height: 4px; background: var(--bg-surface); z-index: 200; }
+    .top-progress .fill { height: 100%; background: linear-gradient(90deg, var(--track-color), var(--accent-primary)); width: 36.67%; /* 11/30 */ border-radius: 0 2px 2px 0; }
+    .course-header { background: var(--bg-secondary); border-bottom: 1px solid var(--code-border); padding: 1.25rem 2rem; }
+    .course-header-inner { max-width: 1200px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; }
+    .course-title { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.95rem; font-weight: 600; color: var(--text-secondary); }
+    .track-badge { display: inline-flex; align-items: center; gap: 0.5rem; background: rgba(6, 182, 212, 0.15); border: 1px solid var(--track-color); border-radius: 20px; padding: 0.25rem 0.75rem; font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.8rem; font-weight: 600; color: var(--track-color); }
+    .track-badge .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--track-color); }
+    .header-meta { display: flex; gap: 1.5rem; font-size: 0.85rem; color: var(--text-muted); }
+    .page-container { max-width: 1200px; margin: 0 auto; padding: 2rem; display: grid; grid-template-columns: 240px 1fr; gap: 3rem; }
+    .sidebar-nav { position: sticky; top: 2rem; height: calc(100vh - 4rem); overflow-y: auto; padding-right: 1rem; }
+    .sidebar-nav::-webkit-scrollbar { width: 3px; } .sidebar-nav::-webkit-scrollbar-thumb { background: var(--bg-surface); border-radius: 3px; }
+    .sidebar-title { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); margin-bottom: 1rem; }
+    .sidebar-nav a { display: block; padding: 0.4rem 0.75rem; margin-bottom: 0.15rem; font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.82rem; font-weight: 600; color: var(--text-muted); text-decoration: none; border-left: 2px solid transparent; border-radius: 0 4px 4px 0; transition: all var(--transition-fast); }
+    .sidebar-nav a:hover { color: var(--text-primary); background: var(--bg-surface); }
+    .sidebar-nav a.active { color: var(--accent-primary); border-left-color: var(--accent-primary); background: var(--accent-muted); }
+    .content { max-width: 800px; } .section { margin-bottom: 4rem; }
+    h1 { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 2.25rem; line-height: 1.2; margin-bottom: 0.75rem; }
+    h2 { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 1.5rem; color: var(--text-primary); margin: 2.5rem 0 1rem; padding-top: 1rem; border-top: 1px solid var(--code-border); }
+    h2:first-of-type { border-top: none; }
+    h3 { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 600; font-size: 1.25rem; color: var(--text-primary); margin: 2rem 0 0.75rem; }
+    p { margin-bottom: 1rem; } ul, ol { margin: 0.5rem 0 1rem 1.5rem; } li { margin-bottom: 0.4rem; } strong { font-weight: 600; }
+    a { color: var(--accent-primary); text-decoration: none; } a:hover { text-decoration: underline; }
+    .analogy-box, .tech-def-box, .callout-why, .callout-warning, .callout-security, .callout-cost, .callout-cert { border-left: 4px solid; border-radius: 0 8px 8px 0; padding: 1.25rem 1.5rem; margin: 1.5rem 0; }
+    .analogy-box { background: var(--accent-muted); border-left-color: var(--accent-primary); }
+    .tech-def-box { background: var(--info-bg); border-left-color: var(--info); }
+    .callout-why { background: var(--success-bg); border-left-color: var(--success); }
+    .callout-warning { background: var(--warning-bg); border-left-color: var(--warning); }
+    .callout-security { background: var(--error-bg); border-left-color: var(--error); }
+    .callout-cost { background: var(--warning-bg); border-left-color: var(--accent-primary); }
+    .callout-cert { background: rgba(212, 168, 67, 0.06); border-left-color: var(--accent-primary); }
+    .box-label { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 0.9rem; display: block; margin-bottom: 0.4rem; }
+    .analogy-box .box-label { color: var(--accent-primary); } .tech-def-box .box-label { color: var(--info); } .callout-why .box-label { color: var(--success); } .callout-warning .box-label { color: var(--warning); } .callout-security .box-label { color: var(--error); } .callout-cost .box-label { color: var(--accent-primary); } .callout-cert .box-label { color: var(--accent-primary); }
+    .term-tooltip { position: relative; color: var(--accent-primary); cursor: help; border-bottom: 1px dashed var(--accent-primary); }
+    .term-tooltip .tooltip-content { position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); background: var(--bg-card); border: 1px solid var(--accent-primary); border-radius: 8px; padding: 0.75rem 1rem; font-size: 0.85rem; color: var(--text-primary); width: 280px; opacity: 0; pointer-events: none; transition: opacity var(--transition-fast); z-index: 10; line-height: 1.5; box-shadow: 0 4px 20px rgba(0,0,0,0.4); }
+    .term-tooltip:hover .tooltip-content, .term-tooltip:focus .tooltip-content { opacity: 1; pointer-events: auto; }
+    .code-block-wrapper { background: var(--code-bg); border: 1px solid var(--code-border); border-radius: 12px; margin: 1.5rem 0; overflow: hidden; }
+    .code-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--code-border); background: var(--bg-surface); }
+    .code-tab { padding: 0.5rem 1.25rem; background: none; border: none; font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; color: var(--text-muted); transition: all var(--transition-fast); }
+    .code-tab:hover { color: var(--text-primary); } .code-tab.active { color: var(--accent-primary); border-bottom-color: var(--accent-primary); }
+    .code-panel { display: none; position: relative; } .code-panel.active { display: block; }
+    .code-panel pre { margin: 0; padding: 1.25rem; overflow-x: auto; font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; line-height: 1.6; }
+    .code-panel pre code { background: none; color: var(--code-text); }
+    .copy-btn { position: absolute; top: 0.75rem; right: 0.75rem; background: var(--bg-surface); border: 1px solid var(--code-border); color: var(--text-muted); padding: 0.3rem 0.6rem; border-radius: 6px; font-size: 0.75rem; cursor: pointer; font-family: 'JetBrains Mono', monospace; transition: all var(--transition-fast); }
+    .copy-btn:hover { color: var(--accent-primary); border-color: var(--accent-primary); }
+    .output-block { background: var(--code-bg); border: 1px solid var(--code-border); border-radius: 8px; padding: 1rem 1.25rem; margin: 0.75rem 0 1.5rem; font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; color: var(--success); line-height: 1.5; }
+    .output-label { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.25rem; }
+    .animation-container { background: var(--bg-secondary); border: 1px solid var(--code-border); border-radius: 12px; padding: 2rem; margin: 2rem 0; position: relative; min-height: 300px; overflow: hidden; }
+    .animation-title { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.85rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 1.25rem; }
+    .animation-controls { display: flex; gap: 0.5rem; position: absolute; bottom: 1rem; right: 1rem; }
+    .anim-btn { background: var(--bg-card); border: 1px solid var(--code-border); color: var(--text-primary); width: 36px; height: 36px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 1rem; transition: all var(--transition-fast); }
+    .anim-btn:hover { border-color: var(--accent-primary); color: var(--accent-primary); }
+    .quiz-question { background: var(--bg-card); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; }
+    .quiz-question h4 { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 600; margin-bottom: 1rem; font-size: 1rem; }
+    .quiz-option { padding: 0.75rem 1rem; margin: 0.5rem 0; border: 1px solid var(--code-border); border-radius: 8px; cursor: pointer; transition: all var(--transition-fast); display: flex; align-items: center; gap: 0.75rem; }
+    .quiz-option:hover { border-color: var(--accent-primary); }
+    .quiz-option.correct { border-color: var(--success); background: var(--success-bg); } .quiz-option.incorrect { border-color: var(--error); background: var(--error-bg); } .quiz-option.disabled { pointer-events: none; }
+    .quiz-marker { width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--code-border); flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 700; }
+    .quiz-option.correct .quiz-marker { border-color: var(--success); color: var(--success); } .quiz-option.incorrect .quiz-marker { border-color: var(--error); color: var(--error); }
+    .quiz-feedback { margin-top: 0.75rem; padding: 0.75rem; border-radius: 8px; font-size: 0.9rem; display: none; }
+    .quiz-feedback.show { display: block; } .quiz-feedback.correct-fb { background: var(--success-bg); color: var(--success); } .quiz-feedback.incorrect-fb { background: var(--error-bg); color: var(--error); }
+    .quiz-score { background: var(--bg-card); border-radius: 12px; padding: 1.5rem; text-align: center; margin-top: 2rem; display: none; }
+    .quiz-score .score-num { font-family: 'Bricolage Grotesque', sans-serif; font-size: 2.5rem; font-weight: 800; color: var(--accent-primary); }
+    .module-nav { display: flex; justify-content: space-between; align-items: center; padding: 1.5rem 0; margin: 2rem 0; border-top: 1px solid var(--code-border); }
+    .module-nav a { display: flex; align-items: center; gap: 0.5rem; color: var(--accent-primary); text-decoration: none; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 600; font-size: 0.9rem; padding: 0.5rem 1rem; border: 1px solid var(--code-border); border-radius: 8px; transition: all var(--transition-fast); }
+    .module-nav a:hover { border-color: var(--accent-primary); background: var(--accent-muted); text-decoration: none; }
+    .objectives-list { list-style: none; margin-left: 0; } .objectives-list li { padding: 0.5rem 0 0.5rem 2rem; position: relative; }
+    .objectives-list li::before { content: ''; position: absolute; left: 0; top: 0.85rem; width: 16px; height: 16px; border-radius: 4px; border: 2px solid var(--track-color); background: rgba(6, 182, 212, 0.1); }
+    .checkpoint { background: var(--bg-card); border: 1px solid var(--track-color); border-radius: 8px; padding: 1rem 1.25rem; margin: 1.5rem 0; }
+    .checkpoint-label { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 0.85rem; color: var(--track-color); margin-bottom: 0.4rem; }
+    .bridge { background: var(--bg-surface); border-radius: 8px; padding: 1rem 1.25rem; margin: 2rem 0; font-style: italic; color: var(--text-secondary); border-left: 3px solid var(--text-muted); }
+
+    /* === PIPELINE COMPARISON ANIMATION === */
+    .pipeline-compare { display: flex; flex-direction: column; gap: 1.5rem; }
+    .pipeline-lane { background: var(--bg-card); border-radius: 8px; padding: 1rem; }
+    .pipeline-lane-title { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.8rem; font-weight: 700; margin-bottom: 0.75rem; }
+    .pipeline-lane-title.naive { color: var(--text-muted); }
+    .pipeline-lane-title.advanced { color: var(--track-color); }
+    .pipe-row { display: flex; align-items: center; gap: 0.3rem; flex-wrap: wrap; justify-content: center; }
+    .pipe-stage { padding: 0.4rem 0.5rem; border-radius: 6px; background: var(--bg-surface); border: 1px solid var(--code-border); font-family: 'JetBrains Mono', monospace; font-size: 0.65rem; min-width: 70px; text-align: center; opacity: 0; transform: translateX(-10px); transition: all 0.4s ease; }
+    .pipe-stage.visible { opacity: 1; transform: translateX(0); }
+    .pipe-stage.active { border-color: var(--track-color); box-shadow: 0 0 8px rgba(6,182,212,0.2); }
+    .pipe-stage.done { border-color: var(--success); }
+    .pipe-stage .s-name { font-weight: 600; color: var(--text-primary); font-size: 0.65rem; }
+    .pipe-arrow { color: var(--text-muted); font-size: 0.8rem; opacity: 0; transition: opacity 0.3s; }
+    .pipe-arrow.visible { opacity: 1; }
+    .quality-meter { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.75rem; }
+    .quality-bar { flex: 1; height: 8px; background: var(--bg-surface); border-radius: 4px; overflow: hidden; }
+    .quality-fill { height: 100%; border-radius: 4px; transition: width 0.8s ease; width: 0; }
+    .quality-fill.naive { background: var(--text-muted); }
+    .quality-fill.advanced { background: linear-gradient(90deg, var(--track-color), var(--success)); }
+    .quality-label { font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; color: var(--text-muted); min-width: 30px; }
+
+    /* === HYBRID SEARCH ANIMATION === */
+    .hybrid-container { display: flex; flex-direction: column; gap: 1rem; }
+    .search-lane { display: flex; align-items: center; gap: 0.5rem; }
+    .search-label { font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; font-weight: 600; min-width: 70px; }
+    .search-label.bm25 { color: var(--warning); }
+    .search-label.vector { color: var(--info); }
+    .search-label.fused { color: var(--success); }
+    .doc-chip { padding: 0.25rem 0.5rem; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 0.6rem; border: 1px solid var(--code-border); background: var(--bg-card); opacity: 0; transition: all 0.4s; }
+    .doc-chip.visible { opacity: 1; }
+    .doc-chip.highlight-bm25 { border-color: var(--warning); color: var(--warning); }
+    .doc-chip.highlight-vec { border-color: var(--info); color: var(--info); }
+    .doc-chip.highlight-fused { border-color: var(--success); color: var(--success); background: var(--success-bg); }
+    .fusion-node { padding: 0.5rem 0.75rem; border-radius: 8px; background: var(--bg-surface); border: 2px solid var(--track-color); font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.7rem; font-weight: 700; color: var(--track-color); text-align: center; opacity: 0; transition: all 0.5s; }
+    .fusion-node.visible { opacity: 1; }
+
+    /* === RE-RANK ANIMATION === */
+    .rerank-container { display: flex; gap: 1.5rem; align-items: flex-start; }
+    .rerank-col { flex: 1; }
+    .rerank-col-title { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.75rem; font-weight: 700; color: var(--text-muted); margin-bottom: 0.5rem; text-align: center; }
+    .rerank-item { display: flex; align-items: center; gap: 0.5rem; padding: 0.35rem 0.5rem; margin: 0.25rem 0; border-radius: 6px; background: var(--bg-card); border: 1px solid var(--code-border); font-family: 'JetBrains Mono', monospace; font-size: 0.6rem; transition: all 0.5s; }
+    .rerank-item .rank { min-width: 18px; font-weight: 700; color: var(--text-muted); }
+    .rerank-item .score { margin-left: auto; color: var(--text-muted); font-size: 0.6rem; }
+    .rerank-item.promoted { border-color: var(--success); background: var(--success-bg); }
+    .rerank-item.promoted .score { color: var(--success); }
+    .rerank-item.demoted { border-color: var(--error); opacity: 0.5; }
+    .rerank-arrow { display: flex; align-items: center; justify-content: center; font-size: 1.5rem; color: var(--track-color); opacity: 0; transition: opacity 0.4s; }
+    .rerank-arrow.visible { opacity: 1; }
+
+    /* === QUERY TRANSFORM ANIMATION === */
+    .qt-container { display: flex; flex-direction: column; align-items: center; gap: 1rem; }
+    .qt-query { padding: 0.6rem 1rem; border-radius: 8px; background: var(--accent-muted); border: 1px solid var(--accent-primary); font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; color: var(--accent-primary); text-align: center; max-width: 90%; }
+    .qt-paths { display: flex; gap: 1rem; width: 100%; justify-content: center; flex-wrap: wrap; }
+    .qt-path { flex: 1; min-width: 150px; max-width: 200px; background: var(--bg-card); border-radius: 8px; padding: 0.75rem; border: 1px solid var(--code-border); opacity: 0; transform: translateY(10px); transition: all 0.5s; }
+    .qt-path.visible { opacity: 1; transform: translateY(0); }
+    .qt-path-title { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.7rem; font-weight: 700; margin-bottom: 0.4rem; }
+    .qt-path-title.hyde { color: var(--info); }
+    .qt-path-title.multi { color: var(--warning); }
+    .qt-path-title.stepback { color: var(--success); }
+    .qt-path-text { font-size: 0.65rem; color: var(--text-secondary); line-height: 1.4; font-family: 'JetBrains Mono', monospace; }
+
+    /* === EVAL METRICS ANIMATION === */
+    .eval-container { display: flex; gap: 1.5rem; align-items: flex-end; justify-content: center; }
+    .eval-metric { display: flex; flex-direction: column; align-items: center; gap: 0.5rem; }
+    .eval-bar-wrap { width: 60px; height: 160px; background: var(--bg-card); border-radius: 6px; position: relative; overflow: hidden; display: flex; align-items: flex-end; }
+    .eval-bar-fill { width: 100%; border-radius: 6px; transition: height 1s ease; }
+    .eval-bar-fill.precision { background: linear-gradient(to top, var(--info), #60A5FA); }
+    .eval-bar-fill.recall { background: linear-gradient(to top, var(--success), #34D399); }
+    .eval-bar-fill.faithful { background: linear-gradient(to top, var(--accent-primary), var(--accent-hover)); }
+    .eval-label { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.7rem; font-weight: 600; color: var(--text-muted); }
+    .eval-value { font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; font-weight: 700; color: var(--text-primary); }
+    .eval-phase { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.8rem; font-weight: 700; color: var(--track-color); text-align: center; margin-bottom: 0.5rem; min-height: 1.2rem; }
+
+    @media (max-width: 900px) {
+      .page-container { grid-template-columns: 1fr; padding: 1rem; }
+      .sidebar-nav { position: fixed; bottom: 0; left: 0; right: 0; height: auto; max-height: 40vh; background: var(--bg-secondary); border-top: 1px solid var(--code-border); z-index: 100; padding: 1rem; display: none; }
+      .sidebar-nav.open { display: block; }
+      .sidebar-toggle { display: flex; position: fixed; bottom: 1rem; right: 1rem; z-index: 101; background: var(--accent-primary); color: var(--bg-primary); border: none; width: 48px; height: 48px; border-radius: 50%; align-items: center; justify-content: center; cursor: pointer; font-size: 1.25rem; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
+      h1 { font-size: 1.75rem; }
+      .rerank-container { flex-direction: column; }
+      .qt-paths { flex-direction: column; align-items: center; }
+    }
+    @media (min-width: 901px) { .sidebar-toggle { display: none; } }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; } .pipe-stage, .pipe-arrow, .doc-chip, .fusion-node, .qt-path, .rerank-arrow { opacity: 1; transform: none; } }
+    :focus-visible { outline: 2px solid var(--accent-primary); outline-offset: 2px; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <div class="top-progress" role="progressbar" aria-label="Course progress: Module 11 of 30" aria-valuenow="11" aria-valuemin="1" aria-valuemax="30"><div class="fill"></div></div>
+
+  <header class="course-header"><div class="course-header-inner">
+    <div><div class="course-title">Building AI Agents with Claude</div></div>
+    <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;">
+      <span class="track-badge"><span class="dot"></span>Track 3: Memory &amp; Context</span>
+      <div class="header-meta"><span>Module 11 of 30</span><span>60&ndash;75 min</span><span>Advanced</span></div>
+    </div>
+  </div></header>
+
+  <button class="sidebar-toggle" id="sidebarToggle" aria-label="Toggle navigation menu">&#9776;</button>
+
+  <div class="page-container">
+    <nav class="sidebar-nav" id="sidebar" aria-label="Module sections">
+      <div class="sidebar-title">M10 Contents</div>
+      <a href="#objectives">Learning Objectives</a>
+      <a href="#naive-vs-advanced">Naive vs. Advanced RAG</a>
+      <a href="#hybrid-search">Hybrid Search</a>
+      <a href="#reranking">Re-Ranking</a>
+      <a href="#query-transformation">Query Transformation</a>
+      <a href="#compression-eval">Compression &amp; Evaluation</a>
+      <a href="#code-walkthrough">Code Walkthrough</a>
+      <a href="#exercise">Hands-On Exercise</a>
+      <a href="#quiz">Knowledge Check</a>
+      <a href="#summary">Summary</a>
+    </nav>
+
+    <main class="content">
+      <div class="module-nav" style="border-top:none;margin-top:0;">
+        <a href="M09-rag-retrieval-augmented-generation.html" aria-label="Previous module: RAG — Retrieval-Augmented Generation">&larr; M09: RAG Fundamentals</a>
+          <a href="index.html" aria-label="Course Home" title="Course Home" style="font-size:1.2rem;">&#x1F3E0; Home</a>
+        <a href="M11-multi-layer-memory.html" aria-label="Next module: Multi-Layer Memory">M11: Multi-Layer Memory &rarr;</a>
+      </div>
+
+      <!-- ============ OBJECTIVES ============ -->
+      <section class="section" id="objectives">
+        <h1>M10: Advanced RAG Patterns</h1>
+        <p style="color:var(--text-secondary);font-size:1.1rem;margin-bottom:1.5rem;">Go beyond basic retrieve-and-generate: hybrid search, re-ranking, query transformation, and measuring what matters.</p>
+        <p style="font-size:0.9rem;color:var(--text-muted);">Prerequisites: <a href="M09-rag-retrieval-augmented-generation.html">M09: RAG Fundamentals</a></p>
+
+        <h2 id="objectives-heading" style="border-top:none;">Learning Objectives</h2>
+        <ul class="objectives-list" role="list">
+          <li>Identify the limitations of naive RAG and explain how advanced patterns address each one</li>
+          <li>Implement hybrid search combining BM25 keyword matching with vector similarity</li>
+          <li>Apply re-ranking to improve retrieval precision using Claude as a cross-encoder</li>
+          <li>Use query transformation (HyDE, multi-query) to improve recall on complex questions</li>
+          <li>Measure RAG quality with precision, recall, and faithfulness metrics</li>
+        </ul>
+      </section>
+
+      <!-- ============ NAIVE VS ADVANCED RAG ============ -->
+      <section class="section" id="naive-vs-advanced">
+        <h2>Naive RAG vs. Advanced RAG</h2>
+        <p>In M09, you built a working RAG system: chunk documents, embed them, store vectors, retrieve by similarity, and generate an answer. That&rsquo;s <span class="term-tooltip" tabindex="0" aria-describedby="tt-naive-rag">naive RAG<span class="tooltip-content" id="tt-naive-rag" role="tooltip">A single-pass retrieve-then-generate pipeline with no query preprocessing or result refinement. It works but often misses relevant context or includes irrelevant chunks.</span></span> &mdash; and it works surprisingly well for simple use cases. But production systems hit a ceiling fast.</p>
+
+        <div class="analogy-box">
+          <span class="box-label">&#128161; Everyday Analogy</span>
+          <p><strong>Before:</strong> Imagine searching Google by typing your exact question and reading only the first result &mdash; sometimes it&rsquo;s exactly right, but often it&rsquo;s tangential, outdated, or misses the nuance of what you really needed.</p>
+          <p><strong>The pain:</strong> You waste time reading irrelevant pages, miss the one article that actually answers your question because it used different wording, and have no way to know if the answer you got is actually trustworthy.</p>
+          <p style="margin-bottom:0;"><strong>The mapping:</strong> Advanced RAG is like having a research librarian who first rephrases your question three different ways, searches both a keyword index and a topic index, carefully reads the top candidates to rank them by actual relevance, highlights only the sentences that matter, and then gives you a sourced answer. Every stage that the librarian adds makes the final answer more accurate.</p>
+        </div>
+
+        <p><strong>What this actually looks like in practice:</strong> Your naive pipeline sends one query and gets back chunks ranked by cosine similarity alone. An advanced pipeline might produce output like this at each stage:</p>
+        <div class="output-block">
+<span style="color:var(--text-muted);">// Stage 1 — Query Transformation (HyDE)</span>
+Original: "What's the risk for filing 0093?"
+Hypothesis: "UCC-1 filing 2024-FL-0093 creates a security interest
+  that elevates creditor priority for the debtor XYZ Corp..."
+
+<span style="color:var(--text-muted);">// Stage 2 — Hybrid Search (BM25 + Vector, fused via RRF)</span>
+BM25 top-3: [Filing-0093 (12.4), Amendment-0093 (9.1), Debtor-Profile (6.8)]
+Vector top-3: [Risk-Analysis (0.91), Debtor-Profile (0.87), Credit-Score (0.85)]
+Fused top-3: [Filing-0093 (0.033), Debtor-Profile (0.031), Risk-Analysis (0.027)]
+
+<span style="color:var(--text-muted);">// Stage 3 — Re-Ranking (Claude scores 1-10)</span>
+Filing-0093:      9.2 (directly about this filing)
+Risk-Analysis:    8.1 (discusses debtor risk factors)
+Debtor-Profile:   5.4 (general background, less relevant)
+        </div>
+
+        <div class="tech-def-box">
+          <span class="box-label">&#128208; Technical Definition</span>
+          <p><strong>Advanced RAG</strong> wraps the basic retrieve-then-generate pipeline with three optimization layers. Each layer targets a different failure mode. Here&rsquo;s what they do and when they kick in:</p>
+          <p>First, <em>pre-retrieval</em> transforms the user&rsquo;s query before searching &mdash; think of it as asking a better question. Instead of sending the user&rsquo;s raw words straight to your search engine, you rephrase, expand, or generate a hypothetical answer first.</p>
+          <p>Second, <em>retrieval enhancement</em> combines multiple search strategies. Rather than relying on vector similarity alone, you run both keyword search (BM25) and semantic search in parallel, then merge the results. A re-ranker then sorts those merged results by true relevance &mdash; not just rough cosine similarity scores.</p>
+          <p>Third, <em>post-retrieval processing</em> compresses the retrieved chunks to remove noise. It also verifies citations so the model doesn&rsquo;t hallucinate from irrelevant context. In other words, you clean up the search results before the LLM ever sees them.</p>
+          <p>Each layer can be added independently &mdash; you don&rsquo;t need all of them, and the right combination depends on your data and queries.</p>
+        </div>
+
+        <div class="callout-warning">
+          <span class="box-label">&#9888;&#65039; Common Misconceptions</span>
+          <p><strong>&ldquo;Hybrid search is always better than pure semantic search.&rdquo;</strong> &mdash; Not always. Keyword search (BM25) wins for exact IDs, codes, and proper nouns, but for abstract or conceptual queries (&ldquo;explain debtor risk factors&rdquo;), vector-only search can actually outperform hybrid because BM25 adds noise by matching irrelevant keyword hits. Always test with your actual queries.</p>
+          <p><strong>&ldquo;Re-ranking is free improvement.&rdquo;</strong> &mdash; It adds 100&ndash;300ms of latency per query and costs real money (an extra LLM call). For simple factual lookups where the initial retrieval is already good, re-ranking just slows things down without meaningfully changing the result order. Reserve it for complex or high-stakes queries.</p>
+          <p><strong>&ldquo;More retrieval stages = better quality.&rdquo;</strong> &mdash; Each stage adds latency and complexity. In practice, you see diminishing returns after 2&ndash;3 stages. A pipeline with hybrid search + re-ranking covers most use cases. Adding query transformation, compression, AND re-ranking on top might gain you 2&ndash;3% accuracy while tripling your latency and cost.</p>
+          <p><strong>&ldquo;Query decomposition helps every query.&rdquo;</strong> &mdash; Simple factual queries (&ldquo;What is the filing date for UCC-0093?&rdquo;) do not benefit from multi-query or HyDE. These techniques shine on complex, multi-part questions where a single search cannot capture all aspects of what the user needs.</p>
+          <p><strong>&ldquo;Semantic chunking always beats fixed-size chunking.&rdquo;</strong> &mdash; It depends on content structure. Semantic chunking works well for prose (articles, reports). But for structured data like tables, code, or form fields, fixed-size chunking often works better because semantic boundaries are harder to detect and splitting a table row across chunks destroys its meaning.</p>
+        </div>
+
+        <!-- SVG Diagram: Naive vs Advanced RAG Pipelines -->
+        <div class="animation-container" aria-label="Diagram comparing naive RAG pipeline with advanced RAG pipeline side by side">
+          <div class="animation-title">Naive vs. Advanced RAG &mdash; Pipeline Comparison</div>
+          <svg viewBox="0 0 600 360" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Two parallel pipelines: naive RAG with 3 stages (embed, search, generate) producing 60% quality, versus advanced RAG with 6 stages (embed, hybrid search, re-rank, compress, generate) producing 88% quality" style="width:100%;max-width:600px;margin:0 auto;display:block;">
+            <style>
+              .nr-box { fill: var(--bg-surface, #1A2740); stroke-width: 1.5; rx: 6; }
+              .nr-naive { stroke: var(--text-muted, #64748B); }
+              .nr-adv { stroke: var(--track-memory, #06B6D4); }
+              .nr-label { fill: var(--text-primary, #E8ECF1); font-family: system-ui, sans-serif; font-size: 10px; font-weight: 600; text-anchor: middle; }
+              .nr-sub { fill: var(--text-secondary, #94A3B8); font-family: system-ui, sans-serif; font-size: 8px; text-anchor: middle; }
+              .nr-arrow { stroke-width: 1.5; fill: none; marker-end: url(#nr-arr); }
+              .nr-title { fill: var(--text-primary, #E8ECF1); font-family: system-ui, sans-serif; font-size: 12px; font-weight: 700; }
+              .nr-quality { font-family: system-ui, sans-serif; font-size: 11px; font-weight: 700; text-anchor: middle; }
+              .nr-bar-bg { fill: var(--bg-card, #162033); rx: 4; }
+              .nr-divider { stroke: var(--text-muted, #64748B); stroke-width: 0.5; stroke-dasharray: 4 3; }
+              .nr-extra { fill: var(--track-memory, #06B6D4); font-family: system-ui, sans-serif; font-size: 8px; font-weight: 600; text-anchor: middle; opacity: 0.8; }
+              @media (prefers-reduced-motion: reduce) { * { transition: none; } }
+            </style>
+            <defs>
+              <marker id="nr-arr" viewBox="0 0 10 7" refX="10" refY="3.5" markerWidth="7" markerHeight="5" orient="auto-start-reverse">
+                <path d="M 0 0 L 10 3.5 L 0 7 z" fill="var(--text-muted, #64748B)"/>
+              </marker>
+            </defs>
+            <!-- Divider -->
+            <line x1="300" y1="10" x2="300" y2="350" class="nr-divider"/>
+            <!-- NAIVE RAG (Left) -->
+            <text x="150" y="24" class="nr-title" text-anchor="middle" style="fill:var(--text-muted,#64748B);">Naive RAG</text>
+            <!-- Query -->
+            <rect x="80" y="40" width="140" height="36" class="nr-box nr-naive"/>
+            <text x="150" y="56" class="nr-label">User Question</text>
+            <text x="150" y="68" class="nr-sub">"How to file UCC amendment?"</text>
+            <line x1="150" y1="76" x2="150" y2="100" class="nr-arrow" style="stroke:var(--text-muted,#64748B);"/>
+            <!-- Embed -->
+            <rect x="100" y="100" width="100" height="32" class="nr-box nr-naive"/>
+            <text x="150" y="120" class="nr-label">Embed</text>
+            <line x1="150" y1="132" x2="150" y2="156" class="nr-arrow" style="stroke:var(--text-muted,#64748B);"/>
+            <!-- Vector Search -->
+            <rect x="80" y="156" width="140" height="32" class="nr-box nr-naive"/>
+            <text x="150" y="176" class="nr-label">Vector Search</text>
+            <line x1="150" y1="188" x2="150" y2="220" class="nr-arrow" style="stroke:var(--text-muted,#64748B);"/>
+            <!-- Generate (skip straight to it) -->
+            <rect x="80" y="220" width="140" height="36" class="nr-box nr-naive"/>
+            <text x="150" y="238" class="nr-label">Generate</text>
+            <text x="150" y="250" class="nr-sub">All k chunks &rarr; Claude</text>
+            <!-- Quality bar -->
+            <rect x="60" y="280" width="180" height="20" class="nr-bar-bg"/>
+            <rect x="60" y="280" width="108" height="20" fill="var(--text-muted,#64748B)" rx="4" opacity="0.6"/>
+            <text x="150" y="294" class="nr-quality" style="fill:var(--text-primary,#E8ECF1);">~60% accuracy</text>
+            <text x="150" y="316" class="nr-sub">No re-ranking, no filtering</text>
+            <text x="150" y="328" class="nr-sub">Irrelevant chunks dilute context</text>
+
+            <!-- ADVANCED RAG (Right) -->
+            <text x="450" y="24" class="nr-title" text-anchor="middle" style="fill:var(--track-memory,#06B6D4);">Advanced RAG</text>
+            <!-- Query -->
+            <rect x="380" y="40" width="140" height="36" class="nr-box nr-adv"/>
+            <text x="450" y="56" class="nr-label">User Question</text>
+            <text x="450" y="68" class="nr-sub">"How to file UCC amendment?"</text>
+            <line x1="450" y1="76" x2="450" y2="92" class="nr-arrow" style="stroke:var(--track-memory,#06B6D4);"/>
+            <!-- Embed -->
+            <rect x="400" y="92" width="100" height="28" class="nr-box nr-adv"/>
+            <text x="450" y="110" class="nr-label">Embed</text>
+            <line x1="450" y1="120" x2="450" y2="132" class="nr-arrow" style="stroke:var(--track-memory,#06B6D4);"/>
+            <!-- Hybrid Search -->
+            <rect x="374" y="132" width="152" height="28" class="nr-box nr-adv"/>
+            <text x="450" y="150" class="nr-label">Hybrid Search</text>
+            <text x="450" y="132" class="nr-extra">vector + keyword (BM25)</text>
+            <line x1="450" y1="160" x2="450" y2="172" class="nr-arrow" style="stroke:var(--track-memory,#06B6D4);"/>
+            <!-- Re-rank -->
+            <rect x="388" y="172" width="124" height="28" class="nr-box nr-adv"/>
+            <text x="450" y="190" class="nr-label">Re-Rank</text>
+            <text x="450" y="172" class="nr-extra">cross-encoder scoring</text>
+            <line x1="450" y1="200" x2="450" y2="212" class="nr-arrow" style="stroke:var(--track-memory,#06B6D4);"/>
+            <!-- Compress -->
+            <rect x="388" y="212" width="124" height="28" class="nr-box nr-adv"/>
+            <text x="450" y="230" class="nr-label">Compress</text>
+            <text x="450" y="212" class="nr-extra">remove redundancy</text>
+            <line x1="450" y1="240" x2="450" y2="252" class="nr-arrow" style="stroke:var(--track-memory,#06B6D4);"/>
+            <!-- Generate -->
+            <rect x="380" y="252" width="140" height="36" class="nr-box nr-adv"/>
+            <text x="450" y="270" class="nr-label">Generate</text>
+            <text x="450" y="282" class="nr-sub">Filtered chunks &rarr; Claude</text>
+            <!-- Quality bar -->
+            <rect x="360" y="306" width="180" height="20" class="nr-bar-bg"/>
+            <rect x="360" y="306" width="158" height="20" fill="var(--track-memory,#06B6D4)" rx="4" opacity="0.6"/>
+            <text x="450" y="320" class="nr-quality" style="fill:var(--text-primary,#E8ECF1);">~88% accuracy</text>
+            <text x="450" y="342" class="nr-sub" style="fill:var(--track-memory,#06B6D4);">+28% from hybrid + re-rank + compress</text>
+          </svg>
+        </div>
+
+        <!-- Animation: Naive vs Advanced Pipeline -->
+        <div class="animation-container" id="anim-pipeline" aria-label="Animation comparing naive RAG pipeline with advanced RAG pipeline">
+          <div class="animation-title">Naive vs. Advanced RAG Pipeline</div>
+          <div class="pipeline-compare">
+            <div class="pipeline-lane">
+              <div class="pipeline-lane-title naive">Naive RAG</div>
+              <div class="pipe-row" id="naive-row"></div>
+              <div class="quality-meter"><span class="quality-label">Quality:</span><div class="quality-bar"><div class="quality-fill naive" id="naive-quality"></div></div><span class="quality-label" id="naive-pct">0%</span></div>
+            </div>
+            <div class="pipeline-lane">
+              <div class="pipeline-lane-title advanced">Advanced RAG</div>
+              <div class="pipe-row" id="advanced-row"></div>
+              <div class="quality-meter"><span class="quality-label">Quality:</span><div class="quality-bar"><div class="quality-fill advanced" id="advanced-quality"></div></div><span class="quality-label" id="advanced-pct">0%</span></div>
+            </div>
+          </div>
+          <div class="animation-controls">
+            <button class="anim-btn" onclick="pipelineAnim.play()" aria-label="Play animation">&#9654;</button>
+            <button class="anim-btn" onclick="pipelineAnim.pause()" aria-label="Pause animation">&#9208;</button>
+            <button class="anim-btn" onclick="pipelineAnim.restart()" aria-label="Restart animation">&#8635;</button>
+          </div>
+        </div>
+
+        <div class="callout-why">
+          <span class="box-label">&#9989; Why It Matters</span>
+          <p>Benchmarks on real-world QA datasets show naive RAG achieves 55&ndash;65% answer accuracy. Adding hybrid search lifts that to 70&ndash;75%. Adding re-ranking pushes it to 80&ndash;85%. Query transformation on top gets you to 85&ndash;90%. Each technique targets a different failure mode: hybrid search catches keyword misses, re-ranking fixes bad ordering, and query transformation handles ambiguous questions. For a customer-support bot handling 10,000 queries/day, going from 60% to 85% accuracy means 2,500 fewer wrong answers every single day.</p>
+        </div>
+
+        <div class="bridge">Now you understand WHERE naive RAG falls short. The next four sections each tackle one specific weakness: keyword blindness (hybrid search), rough ranking (re-ranking), poor queries (query transformation), and noisy context (compression). We&rsquo;ll build each pattern independently so you can mix and match for your use case.</div>
+      </section>
+
+      <!-- ============ HYBRID SEARCH ============ -->
+      <section class="section" id="hybrid-search">
+        <h2>Hybrid Search: Keyword + Semantic Fusion</h2>
+        <p>Vector similarity search is powerful, but it has a blind spot: exact terms. If a user asks about &ldquo;invoice #INV-2024-0847&rdquo;, vector search might return chunks about invoices in general rather than that specific one. <span class="term-tooltip" tabindex="0" aria-describedby="tt-bm25">BM25<span class="tooltip-content" id="tt-bm25" role="tooltip">Best Match 25 &mdash; a ranking function that scores documents based on term frequency and inverse document frequency. It excels at finding exact keyword matches like product IDs, names, and technical terms.</span></span> keyword search finds exact matches instantly, but misses synonyms and semantic relationships. Hybrid search combines both.</p>
+
+        <div class="analogy-box">
+          <span class="box-label">&#128161; Everyday Analogy</span>
+          <p><strong>Before:</strong> You&rsquo;re searching for a restaurant. You know it&rsquo;s called something like &ldquo;Trattoria Verde&rdquo; but you also remember it as &ldquo;that cozy Italian place near Central Park.&rdquo;</p>
+          <p><strong>The pain:</strong> A name-only search finds the exact restaurant but misses similar ones you might like. A description-only search finds cozy Italian places but might miss Trattoria Verde if its listing doesn&rsquo;t say &ldquo;cozy.&rdquo;</p>
+          <p style="margin-bottom:0;"><strong>The mapping:</strong> Hybrid search runs both queries and merges the results. BM25 is the name search &mdash; fast, literal, great for proper nouns. Vector search is the description search &mdash; understands meaning, catches synonyms. Together, they cover cases that either alone would miss.</p>
+        </div>
+
+        <p><strong>What this actually looks like:</strong> Below is a real example of how the two search strategies return different documents for the same query, and how RRF fuses them:</p>
+        <div class="output-block">
+Query: "UCC filing #2024-FL-0093 debtor risk"
+
+<span style="color:var(--warning);">BM25 Results (keyword match):</span>
+  #1  Filing-0093.txt         score: 14.2  (exact match on "2024-FL-0093")
+  #2  Amendment-0093.txt      score: 11.8  (exact match on "0093")
+  #3  Debtor-XYZ-Profile.txt  score:  6.3  (matches "debtor")
+
+<span style="color:var(--info);">Vector Results (semantic similarity):</span>
+  #1  Risk-Analysis-Q4.txt    score: 0.92  (semantically about risk)
+  #2  Debtor-XYZ-Profile.txt  score: 0.89  (semantically about debtor)
+  #3  Credit-Score-Report.txt score: 0.86  (related to risk assessment)
+
+<span style="color:var(--success);">RRF Fused (rank-based merge, k=60):</span>
+  #1  Filing-0093.txt         rrf: 0.033  (rank 1 in BM25 + not in vector top)
+  #2  Debtor-XYZ-Profile.txt  rrf: 0.031  (rank 3 in BM25 + rank 2 in vector)
+  #3  Risk-Analysis-Q4.txt    rrf: 0.027  (rank 1 in vector + not in BM25 top)
+        </div>
+
+        <div class="tech-def-box">
+          <span class="box-label">&#128208; Technical Definition</span>
+          <p><strong>Hybrid search</strong> runs two retrieval strategies in parallel.</p>
+          <p>First, <em>sparse retrieval</em> (BM25 or TF-IDF) matches documents by exact keyword overlap. It breaks the query into individual words, counts how often each appears in each document, and boosts rare words &mdash; that&rsquo;s the &ldquo;inverse document frequency&rdquo; part. A rare word like &ldquo;INV-2024-0847&rdquo; gets a high score because it appears in very few documents, making it a strong signal.</p>
+          <p>Second, <em>dense retrieval</em> (vector similarity) encodes both query and documents as high-dimensional number arrays and finds the closest ones by cosine similarity. It understands meaning, not just words &mdash; so &ldquo;automobile&rdquo; and &ldquo;car&rdquo; would match even though they share no letters.</p>
+          <p>Finally, <span class="term-tooltip" tabindex="0" aria-describedby="tt-rrf">Reciprocal Rank Fusion (RRF)<span class="tooltip-content" id="tt-rrf" role="tooltip">A method for combining ranked lists from different search systems. For each document, RRF computes 1/(k+rank) for each list it appears in and sums the scores. This gives a unified ranking without needing to normalize scores across different systems.</span></span> merges the two ranked lists into one. For each document, it computes a fused score based on where that document appeared in each list: <code>score = &Sigma; 1/(k + rank)</code>, where k is typically 60. The beauty of RRF is that it uses rank positions, not raw scores &mdash; so you never have to worry about normalizing BM25 scores (which might be 12.4) against cosine similarities (which might be 0.87).</p>
+        </div>
+
+        <!-- Animation: Hybrid Search -->
+        <div class="animation-container" id="anim-hybrid" aria-label="Animation showing hybrid search combining BM25 and vector results via Reciprocal Rank Fusion">
+          <div class="animation-title">Hybrid Search: BM25 + Vector &rarr; Fusion</div>
+          <div class="hybrid-container" id="hybrid-vis">
+            <div style="text-align:center;margin-bottom:0.5rem;">
+              <div class="qt-query" id="hybrid-query" style="display:inline-block;opacity:0;">Query: "UCC filing #2024-FL-0093 debtor risk"</div>
+            </div>
+            <div class="search-lane">
+              <span class="search-label bm25">BM25</span>
+              <div id="bm25-results" style="display:flex;gap:0.3rem;flex-wrap:wrap;"></div>
+            </div>
+            <div class="search-lane">
+              <span class="search-label vector">Vector</span>
+              <div id="vector-results" style="display:flex;gap:0.3rem;flex-wrap:wrap;"></div>
+            </div>
+            <div style="display:flex;justify-content:center;">
+              <div class="fusion-node" id="fusion-node">&#x2193; Reciprocal Rank Fusion &#x2193;</div>
+            </div>
+            <div class="search-lane">
+              <span class="search-label fused">Fused</span>
+              <div id="fused-results" style="display:flex;gap:0.3rem;flex-wrap:wrap;"></div>
+            </div>
+          </div>
+          <div class="animation-controls">
+            <button class="anim-btn" onclick="hybridAnim.play()" aria-label="Play animation">&#9654;</button>
+            <button class="anim-btn" onclick="hybridAnim.pause()" aria-label="Pause animation">&#9208;</button>
+            <button class="anim-btn" onclick="hybridAnim.restart()" aria-label="Restart animation">&#8635;</button>
+          </div>
+        </div>
+
+        <div class="callout-why">
+          <span class="box-label">&#9989; Why It Matters</span>
+          <p>In a UCC filing system with 500,000 documents, a query like &ldquo;filing #2024-FL-0093 debtor risk assessment&rdquo; needs both strategies: BM25 finds the exact filing number (a string match that vector search might miss entirely), while vector search retrieves related risk analysis documents that discuss similar debtors. In real-world benchmarks (BEIR, MTEB), hybrid search improves nDCG@10 by 8&ndash;15% over vector-only search, with the biggest gains on queries containing proper nouns, IDs, or technical terms.</p>
+        </div>
+
+        <div class="checkpoint">
+          <div class="checkpoint-label">&#x2714; What Just Happened?</div>
+          <p>You learned that neither keyword search nor vector search alone covers all query types. BM25 handles exact terms; vectors handle meaning. Reciprocal Rank Fusion merges their results without needing score normalization. This is the first Advanced RAG pattern &mdash; and often the one with the biggest bang-for-buck.</p>
+        </div>
+      </section>
+
+      <!-- ============ RE-RANKING ============ -->
+      <section class="section" id="reranking">
+        <h2>Re-Ranking: Why Retrieval Order Matters</h2>
+
+        <div class="bridge">Hybrid search gets better documents into your candidate set. But the ordering within that set is still approximate &mdash; BM25 scores and cosine similarity scores are rough proxies for &ldquo;actually answers the user&rsquo;s question.&rdquo; Re-ranking applies a more powerful model to sort the candidates by true relevance.</div>
+
+        <div class="analogy-box">
+          <span class="box-label">&#128161; Everyday Analogy</span>
+          <p><strong>Before:</strong> A job recruiter searches LinkedIn for &ldquo;senior backend engineer, Rust experience, distributed systems.&rdquo; The search returns 200 profiles ranked by keyword match.</p>
+          <p><strong>The pain:</strong> Profile #3 mentions &ldquo;Rust&rdquo; once in a side project, while profile #47 has 5 years of Rust at a distributed-systems company but listed it as &ldquo;systems programming.&rdquo; The initial ranking is misleading.</p>
+          <p style="margin-bottom:0;"><strong>The mapping:</strong> Re-ranking is the recruiter reading the top 50 profiles carefully and reordering them by actual fit. It&rsquo;s slower (reading takes time), but the final shortlist is dramatically better. In RAG, the &ldquo;recruiter&rdquo; is a cross-encoder or LLM that compares each document directly against the query.</p>
+        </div>
+
+        <p><strong>What this actually looks like:</strong> Here is a before-and-after of re-ranking. Notice how the initial retrieval order (based on cosine similarity) is misleading &mdash; the most relevant document was buried at position #4:</p>
+        <div class="output-block">
+<span style="color:var(--text-muted);">Before re-ranking (sorted by cosine similarity):</span>
+  #1  Debtor-Overview.txt      cosine: 0.89  &larr; general background
+  #2  Market-Trends.txt        cosine: 0.87  &larr; only tangentially related
+  #3  Risk-Policy-Guide.txt    cosine: 0.85  &larr; generic policy document
+  #4  Filing-0093-Detail.txt   cosine: 0.84  &larr; EXACT document we need!
+
+<span style="color:var(--success);">After re-ranking (Claude scored each 1-10):</span>
+  #1  Filing-0093-Detail.txt   relevance: 9.2  &uarr; promoted from #4
+  #2  Risk-Policy-Guide.txt    relevance: 7.8
+  #3  Debtor-Overview.txt      relevance: 5.4  &darr; demoted from #1
+  #4  Market-Trends.txt        relevance: 2.1  &darr; demoted from #2
+        </div>
+
+        <div class="tech-def-box">
+          <span class="box-label">&#128208; Technical Definition</span>
+          <p>A <span class="term-tooltip" tabindex="0" aria-describedby="tt-cross-encoder">cross-encoder<span class="tooltip-content" id="tt-cross-encoder" role="tooltip">A model that takes a query-document PAIR as input and scores their relevance jointly. Unlike bi-encoders (which embed query and document separately), cross-encoders see both texts together, enabling deeper understanding of relevance — but they're too slow to run on every document.</span></span> takes a query-document pair as a single input and produces a relevance score. Think of it this way: instead of comparing two separate summaries of the query and document, the model reads both texts side by side and decides &ldquo;how relevant is this document to this specific question?&rdquo;</p>
+          <p>This is fundamentally more powerful than <span class="term-tooltip" tabindex="0" aria-describedby="tt-bi-encoder">bi-encoder<span class="tooltip-content" id="tt-bi-encoder" role="tooltip">A model that encodes query and document separately into vectors, then compares them via cosine similarity. Fast (can pre-compute document embeddings) but less accurate than cross-encoders since it can't see both texts together.</span></span> embeddings. A bi-encoder creates a vector for the query and a separate vector for each document, then compares them with cosine similarity. It&rsquo;s fast because you can pre-compute document vectors, but it misses subtle relevance signals that only become visible when you read both texts together.</p>
+          <p>The trade-off is speed. Cross-encoders are too slow to run on millions of documents, so you use a two-stage approach. First, retrieve broadly with fast methods (top-50 to top-100 candidates). Second, re-rank that short list precisely with a cross-encoder (or Claude itself) to get the true top-5.</p>
+          <p>If you&rsquo;ve used database indexes before, the analogy is apt: a database uses a fast B-tree index to narrow 10 million rows down to 100 candidates, then applies the full <code>WHERE</code> clause to those 100. Re-ranking works the same way &mdash; the initial retrieval (BM25 + vector) is the fast index scan, and the cross-encoder is the expensive filter applied to the short list. You would never run the expensive filter on every document, but it&rsquo;s perfectly affordable for 20&ndash;50 candidates.</p>
+        </div>
+
+        <!-- Animation: Re-Ranking -->
+        <div class="animation-container" id="anim-rerank" aria-label="Animation showing how re-ranking reorders retrieved documents by true relevance">
+          <div class="animation-title">Re-Ranking: From Approximate to Precise</div>
+          <div class="rerank-container">
+            <div class="rerank-col">
+              <div class="rerank-col-title">Initial Retrieval</div>
+              <div id="rerank-before"></div>
+            </div>
+            <div class="rerank-arrow" id="rerank-arrow">&#10132;</div>
+            <div class="rerank-col">
+              <div class="rerank-col-title">After Re-Ranking</div>
+              <div id="rerank-after"></div>
+            </div>
+          </div>
+          <div class="animation-controls">
+            <button class="anim-btn" onclick="rerankAnim.play()" aria-label="Play animation">&#9654;</button>
+            <button class="anim-btn" onclick="rerankAnim.pause()" aria-label="Pause animation">&#9208;</button>
+            <button class="anim-btn" onclick="rerankAnim.restart()" aria-label="Restart animation">&#8635;</button>
+          </div>
+        </div>
+
+        <div class="callout-why">
+          <span class="box-label">&#9989; Why It Matters</span>
+          <p>Research from Cohere and MS MARCO benchmarks shows re-ranking improves retrieval precision@5 by 15&ndash;25%. In production, this translates directly to answer quality: if your RAG system feeds the top-5 chunks to Claude, and re-ranking moves the truly relevant chunk from position #8 to position #2, that chunk is now in the context window instead of being dropped. For a healthcare pre-authorization system processing 200 claims/day, the difference between retrieving the correct clinical guideline and a similar-but-wrong one could mean approving or denying coverage incorrectly.</p>
+        </div>
+
+        <div class="callout-cost">
+          <span class="box-label">&#128176; Cost Consideration</span>
+          <p>Using Claude as a re-ranker means an extra API call per query. Re-ranking 20 chunks with a short scoring prompt costs roughly 3,000&ndash;5,000 input tokens. At $3/MTok for Claude Sonnet, that&rsquo;s about $0.01&ndash;$0.015 per query. For 10,000 queries/day: ~$100&ndash;$150/day. Use a dedicated re-ranker model (Cohere Rerank, BGE-reranker) for high-volume systems, and Claude for lower-volume, higher-stakes applications.</p>
+        </div>
+
+        <div class="callout-cert">
+          <strong style="color:var(--accent-primary)">&#127891; Cert Tip &mdash; Domain 4.5</strong><br>
+          <span style="color:#94a3b8;font-size:13px">When using an LLM as a re-ranker or evaluator, same-session self-review creates confirmation bias &mdash; the model retains reasoning context from generation. For production RAG evaluation, use SEPARATE API calls (separate sessions) for generation and quality assessment. The exam tests whether you recognize that self-evaluation in the same context window is unreliable.</span>
+        </div>
+      </section>
+
+      <!-- ============ QUERY TRANSFORMATION ============ -->
+      <section class="section" id="query-transformation">
+        <h2>Query Transformation Strategies</h2>
+
+        <div class="bridge">You now have better retrieval (hybrid search) and better ranking (re-ranking). But what if the user&rsquo;s question itself is the problem? Vague, ambiguous, or poorly worded queries lead to poor retrieval no matter how good your search infrastructure is. Query transformation fixes the input before it reaches the search engine.</div>
+
+        <div class="analogy-box">
+          <span class="box-label">&#128161; Everyday Analogy</span>
+          <p><strong>Before:</strong> You walk into a library and ask the librarian &ldquo;I need info about that thing where companies report their debts.&rdquo; The librarian stares blankly &mdash; that could mean annual reports, credit filings, bankruptcy proceedings, or SEC disclosures.</p>
+          <p><strong>The pain:</strong> With a vague question, the librarian might hand you a random book about corporate finance, wasting your time.</p>
+          <p style="margin-bottom:0;"><strong>The mapping:</strong> A skilled librarian rephrases your question into three specific queries: &ldquo;UCC-1 financing statement filings,&rdquo; &ldquo;commercial debt disclosure requirements,&rdquo; and &ldquo;secured transaction public records.&rdquo; Each version captures a different angle, and the combined results cover what you actually needed. That&rsquo;s what query transformation does for RAG.</p>
+        </div>
+
+        <p><strong>What this actually looks like:</strong> Here is the output of each query transformation strategy applied to the same user question:</p>
+        <div class="output-block">
+Original query: "How does filing 2024-FL-0093 affect the debtor?"
+
+<span style="color:var(--info);">HyDE output (hypothetical document paragraph):</span>
+  "UCC-1 filing 2024-FL-0093 names XYZ Corp as debtor and ABC Bank
+   as secured party. The filing creates a perfected security interest
+   in all accounts receivable, which elevates ABC Bank's creditor
+   priority and may reduce XYZ Corp's ability to obtain additional
+   unsecured financing..."
+
+<span style="color:var(--warning);">Multi-Query output (3 reformulations):</span>
+  1. "Impact of UCC filing 2024-FL-0093 on debtor XYZ Corp"
+  2. "How does a new UCC-1 financing statement affect debtor credit?"
+  3. "Risks to debtor from secured transaction filing 2024-FL-0093"
+
+<span style="color:var(--success);">Step-Back output (abstracted question):</span>
+  "How do UCC-1 filings generally affect a debtor's financial risk
+   profile and creditworthiness?"
+        </div>
+
+        <div class="tech-def-box">
+          <span class="box-label">&#128208; Technical Definition</span>
+          <p>Query transformation reformulates the user&rsquo;s query before retrieval to improve recall. Three main strategies exist:</p>
+          <ul>
+            <li><strong><span class="term-tooltip" tabindex="0" aria-describedby="tt-hyde">HyDE<span class="tooltip-content" id="tt-hyde" role="tooltip">Hypothetical Document Embedding — instead of embedding the raw query, HyDE asks the LLM to generate a hypothetical answer, then embeds THAT. The hypothesis is closer to the language of actual documents, making vector search more effective.</span></span> (Hypothetical Document Embedding):</strong> Ask Claude to generate a hypothetical answer to the query, then embed that answer instead of the raw query. Since the hypothesis uses document-like language, its embedding lands closer to real relevant documents in vector space.</li>
+            <li><strong>Multi-Query:</strong> Generate 3&ndash;5 different reformulations of the original query, run retrieval for each, and union the results. This catches documents that match one phrasing but not another.</li>
+            <li><strong>Step-Back Prompting:</strong> Abstract the specific question to a broader one (&ldquo;How does UCC filing #2024-FL-0093 affect debtor risk?&rdquo; → &ldquo;How do UCC filings affect debtor risk assessment?&rdquo;), retrieve broader context first, then use it alongside the specific query.</li>
+          </ul>
+        </div>
+
+        <!-- SVG Diagram: HyDE Flow -->
+        <div class="animation-container" aria-label="Diagram showing the HyDE (Hypothetical Document Embeddings) query transformation flow">
+          <div class="animation-title">HyDE Flow &mdash; Hypothetical Document Embeddings</div>
+          <svg viewBox="0 0 600 260" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="HyDE flow: user question goes to Claude which generates a hypothetical answer, that answer is embedded instead of the original question, the embedding searches the vector DB, and real matching documents are returned" style="width:100%;max-width:600px;margin:0 auto;display:block;">
+            <style>
+              .hy-box { fill: var(--bg-surface, #1A2740); stroke-width: 1.5; rx: 8; }
+              .hy-q { stroke: var(--info, #3B82F6); }
+              .hy-hyp { stroke: var(--warning, #F59E0B); }
+              .hy-res { stroke: var(--success, #10B981); }
+              .hy-label { fill: var(--text-primary, #E8ECF1); font-family: system-ui, sans-serif; font-size: 10.5px; font-weight: 600; text-anchor: middle; }
+              .hy-sub { fill: var(--text-secondary, #94A3B8); font-family: system-ui, sans-serif; font-size: 8px; text-anchor: middle; }
+              .hy-arrow { stroke-width: 1.5; fill: none; marker-end: url(#hy-arr); }
+              .hy-note { fill: var(--text-muted, #64748B); font-family: system-ui, sans-serif; font-size: 8px; font-style: italic; text-anchor: middle; }
+              .hy-step { fill: var(--accent-primary, #D4A843); font-family: system-ui, sans-serif; font-size: 9px; font-weight: 700; }
+              .hy-insight { fill: var(--bg-card, #162033); stroke: var(--warning, #F59E0B); stroke-width: 1; stroke-dasharray: 4 2; rx: 6; }
+              @media (prefers-reduced-motion: reduce) { * { transition: none; } }
+            </style>
+            <defs>
+              <marker id="hy-arr" viewBox="0 0 10 7" refX="10" refY="3.5" markerWidth="7" markerHeight="5" orient="auto-start-reverse">
+                <path d="M 0 0 L 10 3.5 L 0 7 z" fill="var(--text-muted, #64748B)"/>
+              </marker>
+            </defs>
+            <!-- Step 1: User Question -->
+            <text x="16" y="20" class="hy-step">1</text>
+            <rect x="16" y="28" width="130" height="44" class="hy-box hy-q"/>
+            <text x="81" y="48" class="hy-label" style="fill:var(--info,#3B82F6);">User Question</text>
+            <text x="81" y="62" class="hy-sub">"How does UCC filing</text>
+            <text x="81" y="72" class="hy-sub">affect the debtor?"</text>
+            <line x1="146" y1="50" x2="170" y2="50" class="hy-arrow" style="stroke:var(--info,#3B82F6);"/>
+            <!-- Step 2: Generate Hypothetical -->
+            <text x="170" y="20" class="hy-step">2</text>
+            <rect x="170" y="28" width="150" height="64" class="hy-box hy-hyp"/>
+            <text x="245" y="46" class="hy-label" style="fill:var(--warning,#F59E0B);">Claude Generates</text>
+            <text x="245" y="58" class="hy-label" style="fill:var(--warning,#F59E0B);">Hypothetical Answer</text>
+            <text x="245" y="72" class="hy-sub">"A UCC-1 filing creates a</text>
+            <text x="245" y="82" class="hy-sub">public lien against the debtor's</text>
+            <text x="245" y="92" class="hy-sub">collateral, affecting credit..."</text>
+            <line x1="320" y1="60" x2="350" y2="60" class="hy-arrow" style="stroke:var(--warning,#F59E0B);"/>
+            <!-- Step 3: Embed the hypothetical -->
+            <text x="350" y="20" class="hy-step">3</text>
+            <rect x="350" y="28" width="110" height="44" class="hy-box hy-hyp"/>
+            <text x="405" y="48" class="hy-label">Embed Hypothetical</text>
+            <text x="405" y="62" class="hy-sub">(NOT the question!)</text>
+            <line x1="405" y1="72" x2="405" y2="110" class="hy-arrow" style="stroke:var(--warning,#F59E0B);"/>
+            <!-- Step 4: Vector DB Search -->
+            <text x="350" y="110" class="hy-step">4</text>
+            <rect x="350" y="118" width="110" height="44" class="hy-box" style="stroke:var(--track-memory,#06B6D4);">
+            </rect>
+            <text x="405" y="138" class="hy-label" style="fill:var(--track-memory,#06B6D4);">Vector DB</text>
+            <text x="405" y="152" class="hy-sub">Similarity search</text>
+            <line x1="460" y1="140" x2="484" y2="140" class="hy-arrow" style="stroke:var(--success,#10B981);"/>
+            <!-- Step 5: Real Results -->
+            <text x="484" y="110" class="hy-step">5</text>
+            <rect x="484" y="118" width="104" height="44" class="hy-box hy-res"/>
+            <text x="536" y="138" class="hy-label" style="fill:var(--success,#10B981);">Real Documents</text>
+            <text x="536" y="152" class="hy-sub">Top-K actual matches</text>
+            <!-- Insight box -->
+            <rect x="80" y="190" width="440" height="56" class="hy-insight"/>
+            <text x="300" y="210" class="hy-label" style="fill:var(--warning,#F59E0B);">Key Insight</text>
+            <text x="300" y="226" class="hy-sub">The hypothetical answer is in the same "language style" as stored documents,</text>
+            <text x="300" y="238" class="hy-sub">so its embedding lands closer to real answers than the question's embedding would.</text>
+            <!-- Comparison arrows -->
+            <text x="81" y="134" class="hy-note">question embedding</text>
+            <text x="81" y="144" class="hy-note">would land far from docs</text>
+            <line x1="146" y1="138" x2="170" y2="138" style="stroke:var(--error,#F43F5E);stroke-width:1;stroke-dasharray:3 2;" marker-end="url(#hy-arr)"/>
+            <text x="200" y="138" class="hy-sub" style="fill:var(--error,#F43F5E);">&#x2718; poor match</text>
+          </svg>
+        </div>
+
+        <!-- Animation: Query Transformation -->
+        <div class="animation-container" id="anim-qt" aria-label="Animation showing three query transformation strategies: HyDE, Multi-Query, and Step-Back" style="min-height:280px;">
+          <div class="animation-title">Query Transformation Strategies</div>
+          <div class="qt-container" id="qt-vis">
+            <div class="qt-query" id="qt-original">Original: "How does filing 2024-FL-0093 affect the debtor?"</div>
+            <div class="qt-paths" id="qt-paths">
+              <div class="qt-path" id="qt-hyde">
+                <div class="qt-path-title hyde">&#x1F9EA; HyDE</div>
+                <div class="qt-path-text" id="qt-hyde-text"></div>
+              </div>
+              <div class="qt-path" id="qt-multi">
+                <div class="qt-path-title multi">&#x1F504; Multi-Query</div>
+                <div class="qt-path-text" id="qt-multi-text"></div>
+              </div>
+              <div class="qt-path" id="qt-stepback">
+                <div class="qt-path-title stepback">&#x2B06; Step-Back</div>
+                <div class="qt-path-text" id="qt-stepback-text"></div>
+              </div>
+            </div>
+          </div>
+          <div class="animation-controls">
+            <button class="anim-btn" onclick="qtAnim.play()" aria-label="Play animation">&#9654;</button>
+            <button class="anim-btn" onclick="qtAnim.pause()" aria-label="Pause animation">&#9208;</button>
+            <button class="anim-btn" onclick="qtAnim.restart()" aria-label="Restart animation">&#8635;</button>
+          </div>
+        </div>
+
+        <div class="callout-why">
+          <span class="box-label">&#9989; Why It Matters</span>
+          <p>Google Research found that HyDE improves recall@20 by 20&ndash;40% on the TREC-DL benchmark compared to raw query embedding. Multi-query is especially valuable for ambiguous questions: in an internal eval at a legal document search company, multi-query reduced &ldquo;no relevant results&rdquo; errors from 18% to 4% of queries. The cost is one extra Claude API call per query for transformation (roughly 200&ndash;500 tokens), a trivial expense compared to the retrieval quality gain.</p>
+        </div>
+
+        <div class="callout-warning">
+          <span class="box-label">&#9888;&#65039; Common Misconceptions</span>
+          <p><strong>&ldquo;HyDE always improves retrieval.&rdquo;</strong> &mdash; If Claude generates a hypothesis that&rsquo;s factually wrong or off-topic, embedding that hypothesis will retrieve wrong documents. HyDE works best for domain-specific queries where Claude can generate plausible-sounding text. For generic or highly ambiguous queries, the hypothesis may hurt more than it helps. Always fuse HyDE results with original query results via RRF rather than replacing the original query entirely.</p>
+          <p><strong>&ldquo;Multi-query is just sending the same question three times.&rdquo;</strong> &mdash; No. The key is that each reformulation captures a different <em>facet</em> of the question. &ldquo;What is the debtor risk?&rdquo; might become &ldquo;credit default probability for XYZ Corp,&rdquo; &ldquo;financial health indicators for UCC debtors,&rdquo; and &ldquo;risk factors in secured lending.&rdquo; Each phrasing retrieves different documents, and the union covers blind spots that any single phrasing would miss.</p>
+          <p><strong>&ldquo;Step-back prompting loses specificity.&rdquo;</strong> &mdash; That&rsquo;s actually the point. You use the broad results as background context alongside the specific query, not as a replacement. The broad context helps Claude understand the general topic, while the specific query targets the exact answer.</p>
+        </div>
+
+        <div class="checkpoint">
+          <div class="checkpoint-label">&#x2714; What Just Happened?</div>
+          <p>You learned three strategies for fixing bad queries before they reach your search engine. HyDE generates a fake answer to embed (better vector matches). Multi-query tries multiple phrasings (broader recall). Step-back abstracts to a general question first (better context). All three are cheap LLM calls that dramatically improve retrieval quality.</p>
+        </div>
+      </section>
+
+      <!-- ============ CONTEXTUAL COMPRESSION & EVALUATION ============ -->
+      <section class="section" id="compression-eval">
+        <h2>Contextual Compression &amp; RAG Evaluation</h2>
+
+        <div class="bridge">You&rsquo;ve improved what you retrieve (hybrid search), how you rank it (re-ranking), and the quality of your queries (transformation). The final two pieces: reducing noise in retrieved chunks (compression) and measuring whether all of this actually works (evaluation).</div>
+
+        <h3 id="compression">Contextual Compression</h3>
+
+        <div class="analogy-box">
+          <span class="box-label">&#128161; Everyday Analogy</span>
+          <p><strong>Before:</strong> You&rsquo;re studying for an exam and a friend hands you five full textbook pages that &ldquo;contain the answer somewhere.&rdquo;</p>
+          <p><strong>The pain:</strong> You have to scan 5,000 words to find the three sentences that actually matter, and the surrounding text might confuse you into thinking irrelevant details are important.</p>
+          <p style="margin-bottom:0;"><strong>The mapping:</strong> Contextual compression is your friend highlighting only the relevant sentences before handing you the pages. Claude reads each retrieved chunk, extracts only the parts that answer the query, and throws away the rest. Less noise means better answers and fewer tokens spent on generation.</p>
+        </div>
+
+        <p><strong>What this actually looks like in practice:</strong> Here is a real before-and-after showing a 500-token chunk compressed down to just the relevant sentences. Notice that only 2 out of 8 sentences survive &mdash; the rest were background noise:</p>
+        <div class="output-block">
+<span style="color:var(--text-muted);">Query: "What is the debtor's default risk?"</span>
+
+<span style="color:var(--error);">Original chunk (487 tokens):</span>
+  "XYZ Corp was incorporated in Florida in 2018. The company operates
+   in the logistics sector with 45 employees across 3 locations.
+   Recent quarterly filings show revenue of $2.3M with net margin of
+   4.2%. <span style="color:var(--success);">The company's credit profile indicates elevated default
+   probability of 12.3%, primarily driven by a debt-to-equity ratio
+   of 3.8x and declining cash reserves.</span> The CEO, John Smith,
+   previously founded two successful startups..."
+
+<span style="color:var(--success);">Compressed output (62 tokens):</span>
+  "The company's credit profile indicates elevated default probability
+   of 12.3%, primarily driven by a debt-to-equity ratio of 3.8x and
+   declining cash reserves."
+
+<span style="color:var(--text-muted);">Token savings: 487 &rarr; 62 (87% reduction)</span>
+        </div>
+
+        <div class="tech-def-box">
+          <span class="box-label">&#128208; Technical Definition</span>
+          <p><strong>Contextual compression</strong> uses an LLM to extract or summarize only the query-relevant portions of each retrieved chunk. Here&rsquo;s the idea: you give the LLM a query and a 500-token chunk. It reads both, identifies the sentences that actually help answer the question, and outputs a 50&ndash;150 token extract. Everything else gets thrown away.</p>
+          <p>This serves two purposes. First, it reduces the token count in the generation prompt, directly saving cost &mdash; fewer tokens in means fewer tokens billed. Second, it removes irrelevant context that might lead the generator model to hallucinate or get distracted by tangential information. Think of it as signal-to-noise cleanup: the retriever found the right document, but only 10% of that document is relevant to this specific query.</p>
+          <p>Compression comes in two flavors. <em>Extractive</em> compression selects exact sentences from the original &mdash; it copies them verbatim, preserving the source wording. <em>Abstractive</em> compression rewrites the content into a shorter summary. Extractive is generally safer for production systems because it preserves original wording. That matters when you need accurate citations and traceability back to source documents &mdash; if you summarize, you can&rsquo;t point to an exact quote anymore.</p>
+        </div>
+
+        <h3 id="rag-evaluation">RAG Evaluation Metrics</h3>
+
+        <p>You cannot improve what you cannot measure. RAG evaluation tells you exactly where your pipeline is succeeding and where it is failing. Without it, you are guessing &mdash; and in production, guessing costs real money and real user trust.</p>
+
+        <p>RAG evaluation works differently from traditional software testing. You are not checking whether code runs without errors. Instead, you are measuring the quality of search results and generated answers against human-judged ground truth. This means you need a test set: a collection of questions, the documents that correctly answer each question, and (optionally) the expected answer text. Building this test set is manual work, but even 10&ndash;20 well-labeled examples are enough to catch major pipeline regressions.</p>
+
+        <p>If you have used information retrieval systems before (like Elasticsearch or Solr), precision and recall will feel familiar. The new metric here is faithfulness, which is specific to RAG &mdash; it measures whether the LLM stuck to the retrieved context or invented facts on its own. Traditional search systems do not generate answers, so they never needed this metric.</p>
+
+        <p>RAG evaluation uses three core metrics. Each one answers a different question about your pipeline&rsquo;s health:</p>
+
+        <ul>
+          <li><strong><span class="term-tooltip" tabindex="0" aria-describedby="tt-precision">Precision<span class="tooltip-content" id="tt-precision" role="tooltip">Of all the documents your system retrieved, what fraction were actually relevant? High precision = few irrelevant results in your top-k. Precision@5 measures just the top 5 results.</span></span>:</strong> Of the documents you retrieved, how many were actually relevant? If you retrieve 5 chunks and 3 are relevant: precision = 3/5 = 60%.</li>
+          <li><strong><span class="term-tooltip" tabindex="0" aria-describedby="tt-recall">Recall<span class="tooltip-content" id="tt-recall" role="tooltip">Of all the relevant documents in your entire corpus, what fraction did your system actually retrieve? High recall = you're not missing important documents. Hard to measure without labeled test data.</span></span>:</strong> Of all relevant documents in the corpus, how many did you retrieve? If 4 documents are relevant and you found 3: recall = 3/4 = 75%.</li>
+          <li><strong><span class="term-tooltip" tabindex="0" aria-describedby="tt-faithful">Faithfulness<span class="tooltip-content" id="tt-faithful" role="tooltip">Does the generated answer only use information from the retrieved context? A faithfulness score of 100% means no hallucinated facts. This is the hardest metric to measure — it often requires LLM-based evaluation.</span></span>:</strong> Does the generated answer stick to the retrieved context without hallucinating? If the answer contains 5 claims and all 5 are grounded in retrieved chunks: faithfulness = 100%.</li>
+        </ul>
+
+        <!-- Animation: Evaluation Metrics -->
+        <div class="animation-container" id="anim-eval" aria-label="Animation showing RAG evaluation metrics improving as advanced patterns are applied" style="min-height:280px;">
+          <div class="animation-title">RAG Evaluation: Cumulative Impact of Advanced Patterns</div>
+          <div class="eval-phase" id="eval-phase">Naive RAG</div>
+          <div class="eval-container" id="eval-vis">
+            <div class="eval-metric">
+              <div class="eval-value" id="eval-prec-val">0%</div>
+              <div class="eval-bar-wrap"><div class="eval-bar-fill precision" id="eval-prec" style="height:0%"></div></div>
+              <div class="eval-label">Precision</div>
+            </div>
+            <div class="eval-metric">
+              <div class="eval-value" id="eval-rec-val">0%</div>
+              <div class="eval-bar-wrap"><div class="eval-bar-fill recall" id="eval-rec" style="height:0%"></div></div>
+              <div class="eval-label">Recall</div>
+            </div>
+            <div class="eval-metric">
+              <div class="eval-value" id="eval-faith-val">0%</div>
+              <div class="eval-bar-wrap"><div class="eval-bar-fill faithful" id="eval-faith" style="height:0%"></div></div>
+              <div class="eval-label">Faithfulness</div>
+            </div>
+          </div>
+          <div class="animation-controls">
+            <button class="anim-btn" onclick="evalAnim.play()" aria-label="Play animation">&#9654;</button>
+            <button class="anim-btn" onclick="evalAnim.pause()" aria-label="Pause animation">&#9208;</button>
+            <button class="anim-btn" onclick="evalAnim.restart()" aria-label="Restart animation">&#8635;</button>
+          </div>
+        </div>
+
+        <div class="callout-why">
+          <span class="box-label">&#9989; Why It Matters</span>
+          <p>Without evaluation metrics, you&rsquo;re flying blind. A team at a financial services company spent 3 weeks optimizing their embedding model only to discover (via evaluation) that their real bottleneck was chunking strategy &mdash; 40% of relevant paragraphs were split across two chunks, and neither half was retrievable alone. Precision tells you &ldquo;am I retrieving junk?&rdquo; Recall tells you &ldquo;am I missing relevant docs?&rdquo; Faithfulness tells you &ldquo;is the LLM making things up?&rdquo; Measuring all three tells you exactly which pipeline stage to fix.</p>
+        </div>
+
+        <div class="callout-cert">
+          <strong style="color:var(--accent-primary)">&#127891; Cert Tip &mdash; Domain 5.6</strong><br>
+          <span style="color:#94a3b8;font-size:13px">Aggregate accuracy metrics (e.g., &ldquo;85% retrieval accuracy&rdquo;) can mask per-query-type failures. A RAG system might retrieve perfectly for factual lookups but fail on complex multi-hop questions. Track precision and recall <strong>per query type</strong> (factual, analytical, comparison, multi-hop) to catch hidden failure modes. The exam tests whether you know to stratify metrics rather than relying on a single average.</span>
+        </div>
+
+        <div class="checkpoint">
+          <div class="checkpoint-label">&#x2714; What Just Happened?</div>
+          <p>You learned two final pieces: compression (removing noise from retrieved chunks to improve generation quality and reduce cost) and evaluation (measuring precision, recall, and faithfulness to diagnose pipeline failures). Together with hybrid search, re-ranking, and query transformation, you now have a complete Advanced RAG toolkit.</p>
+        </div>
+      </section>
+
+      <!-- ============ CODE WALKTHROUGH ============ -->
+      <section class="section" id="code-walkthrough">
+        <h2>Code Walkthrough: Building an Advanced RAG Pipeline</h2>
+
+        <p>We&rsquo;ll upgrade the M09 basic RAG system with four advanced patterns: BM25 keyword search, Reciprocal Rank Fusion, Claude-based re-ranking, and HyDE query transformation. Each builds on the last.</p>
+
+        <!-- Code Block 1: BM25 + Hybrid Search -->
+        <h3 id="code-bm25">Step 1: BM25 Keyword Search &amp; Hybrid Fusion</h3>
+
+        <p>Let&rsquo;s start by adding BM25 keyword search alongside the existing vector search from M09, then merging the results using Reciprocal Rank Fusion. The goal is simple: vector search alone misses exact term matches like invoice numbers, product codes, and proper nouns. BM25 catches those exact hits, and RRF merges both result lists without the headache of normalizing their incompatible score ranges.</p>
+        <p>Here&rsquo;s the gotcha to watch for: BM25 requires tokenized text (split into words), and it&rsquo;s case-sensitive by default. If you forget to lowercase and strip punctuation, &ldquo;Invoice&rdquo; and &ldquo;invoice&rdquo; become different tokens, and your recall takes an unnecessary hit. The code below handles this with <code>.lower().split()</code> &mdash; basic but effective.</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs" role="tablist">
+            <button class="code-tab active" role="tab" aria-selected="true" onclick="switchTab(this, 'bm25-py')">Python</button>
+            <button class="code-tab" role="tab" aria-selected="false" onclick="switchTab(this, 'bm25-js')">Node.js</button>
+          </div>
+          <div class="code-panel active" id="bm25-py">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy Python code">Copy</button>
+            <pre><code>import math
+from collections import Counter
+
+class BM25:
+    """Simple BM25 implementation for keyword search."""
+    def __init__(self, documents: list[str], k1: float = 1.5, b: float = 0.75):
+        self.k1 = k1
+        self.b = b
+        self.docs = documents
+        self.doc_len = [len(d.split()) for d in documents]
+        self.avg_dl = sum(self.doc_len) / len(self.doc_len)
+        self.doc_count = len(documents)
+        # Build inverted index: word -> set of doc indices
+        self.doc_freqs: dict[str, int] = {}
+        self.term_freqs: list[Counter] = []
+        for doc in documents:
+            tf = Counter(doc.lower().split())
+            self.term_freqs.append(tf)
+            for term in tf:
+                self.doc_freqs[term] = self.doc_freqs.get(term, 0) + 1
+
+    def score(self, query: str, top_k: int = 10) -> list[tuple[int, float]]:
+        """Score all documents against query, return top-k (index, score) pairs."""
+        query_terms = query.lower().split()
+        scores = []
+        for i in range(self.doc_count):
+            s = 0.0
+            for term in query_terms:
+                if term not in self.doc_freqs:
+                    continue
+                df = self.doc_freqs[term]
+                idf = math.log((self.doc_count - df + 0.5) / (df + 0.5) + 1)
+                tf = self.term_freqs[i].get(term, 0)
+                numerator = tf * (self.k1 + 1)
+                denominator = tf + self.k1 * (1 - self.b + self.b * self.doc_len[i] / self.avg_dl)
+                s += idf * numerator / denominator
+            scores.append((i, s))
+        scores.sort(key=lambda x: x[1], reverse=True)
+        return scores[:top_k]
+
+
+def reciprocal_rank_fusion(
+    ranked_lists: list[list[tuple[int, float]]],
+    k: int = 60
+) -> list[tuple[int, float]]:
+    """Merge multiple ranked lists using RRF.
+
+    Each ranked_list is [(doc_index, score), ...] in descending order.
+    Returns fused list sorted by RRF score.
+    """
+    fused_scores: dict[int, float] = {}
+    for ranked_list in ranked_lists:
+        for rank, (doc_idx, _) in enumerate(ranked_list):
+            fused_scores[doc_idx] = fused_scores.get(doc_idx, 0) + 1.0 / (k + rank + 1)
+    result = sorted(fused_scores.items(), key=lambda x: x[1], reverse=True)
+    return result
+
+
+def hybrid_search(
+    query: str,
+    bm25: BM25,
+    vector_store,        # Your ChromaDB collection from M09
+    embedding_fn,        # Function to embed text -> vector
+    top_k: int = 10,
+    bm25_weight: float = 0.5
+) -> list[tuple[int, float]]:
+    """Run hybrid search: BM25 + vector, fused with RRF."""
+    try:
+        # BM25 keyword search
+        bm25_results = bm25.score(query, top_k=top_k * 2)
+
+        # Vector similarity search (using ChromaDB from M09)
+        query_embedding = embedding_fn(query)
+        vector_results_raw = vector_store.query(
+            query_embeddings=[query_embedding],
+            n_results=top_k * 2
+        )
+        # Convert to (index, score) format
+        vector_results = [
+            (int(doc_id), 1.0 - dist)  # Convert distance to similarity
+            for doc_id, dist in zip(
+                vector_results_raw["ids"][0],
+                vector_results_raw["distances"][0]
+            )
+        ]
+
+        # Fuse with RRF
+        fused = reciprocal_rank_fusion([bm25_results, vector_results])
+        return fused[:top_k]
+
+    except Exception as e:
+        print(f"Hybrid search error: {e}")
+        # Fallback to vector-only search
+        return vector_results[:top_k] if vector_results else []</code></pre>
+          </div>
+          <div class="code-panel" id="bm25-js">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy Node.js code">Copy</button>
+            <pre><code>// bm25.ts — BM25 + Reciprocal Rank Fusion for hybrid search
+
+interface ScoredDoc { index: number; score: number; }
+
+class BM25 {
+  private k1: number;
+  private b: number;
+  private docLengths: number[];
+  private avgDl: number;
+  private docCount: number;
+  private docFreqs: Map&lt;string, number&gt; = new Map();
+  private termFreqs: Map&lt;string, number&gt;[];
+
+  constructor(documents: string[], k1 = 1.5, b = 0.75) {
+    this.k1 = k1;
+    this.b = b;
+    this.docCount = documents.length;
+    this.docLengths = documents.map(d =&gt; d.split(/\s+/).length);
+    this.avgDl = this.docLengths.reduce((a, b) =&gt; a + b, 0) / this.docCount;
+
+    // Build inverted index
+    this.termFreqs = documents.map(doc =&gt; {
+      const tf = new Map&lt;string, number&gt;();
+      for (const word of doc.toLowerCase().split(/\s+/)) {
+        tf.set(word, (tf.get(word) || 0) + 1);
+      }
+      for (const term of tf.keys()) {
+        this.docFreqs.set(term, (this.docFreqs.get(term) || 0) + 1);
+      }
+      return tf;
+    });
+  }
+
+  score(query: string, topK = 10): ScoredDoc[] {
+    const queryTerms = query.toLowerCase().split(/\s+/);
+    const scores: ScoredDoc[] = [];
+
+    for (let i = 0; i &lt; this.docCount; i++) {
+      let s = 0;
+      for (const term of queryTerms) {
+        const df = this.docFreqs.get(term) || 0;
+        if (df === 0) continue;
+        const idf = Math.log((this.docCount - df + 0.5) / (df + 0.5) + 1);
+        const tf = this.termFreqs[i].get(term) || 0;
+        const numerator = tf * (this.k1 + 1);
+        const denominator = tf + this.k1 *
+          (1 - this.b + this.b * this.docLengths[i] / this.avgDl);
+        s += idf * numerator / denominator;
+      }
+      scores.push({ index: i, score: s });
+    }
+    return scores.sort((a, b) =&gt; b.score - a.score).slice(0, topK);
+  }
+}
+
+function reciprocalRankFusion(
+  rankedLists: ScoredDoc[][],
+  k = 60
+): ScoredDoc[] {
+  const fusedScores = new Map&lt;number, number&gt;();
+  for (const list of rankedLists) {
+    list.forEach((doc, rank) =&gt; {
+      const current = fusedScores.get(doc.index) || 0;
+      fusedScores.set(doc.index, current + 1 / (k + rank + 1));
+    });
+  }
+  return Array.from(fusedScores.entries())
+    .map(([index, score]) =&gt; ({ index, score }))
+    .sort((a, b) =&gt; b.score - a.score);
+}
+
+async function hybridSearch(
+  query: string,
+  bm25: BM25,
+  vectorStore: any,       // Your ChromaDB collection from M09
+  embedFn: (text: string) =&gt; Promise&lt;number[]&gt;,
+  topK = 10
+): Promise&lt;ScoredDoc[]&gt; {
+  try {
+    // BM25 keyword search
+    const bm25Results = bm25.score(query, topK * 2);
+
+    // Vector similarity search
+    const queryEmbedding = await embedFn(query);
+    const vectorRaw = await vectorStore.query({
+      queryEmbeddings: [queryEmbedding],
+      nResults: topK * 2,
+    });
+    const vectorResults: ScoredDoc[] = vectorRaw.ids[0].map(
+      (id: string, i: number) =&gt; ({
+        index: parseInt(id),
+        score: 1 - vectorRaw.distances[0][i],
+      })
+    );
+
+    // Fuse with RRF
+    const fused = reciprocalRankFusion([bm25Results, vectorResults]);
+    return fused.slice(0, topK);
+  } catch (error) {
+    console.error("Hybrid search error:", error);
+    return []; // Fallback: empty results
+  }
+}</code></pre>
+          </div>
+        </div>
+
+        <div class="checkpoint">
+          <div class="checkpoint-label">&#x2714; What Just Happened?</div>
+          <p>You built a BM25 keyword search engine from scratch (no external library needed for the basics), then merged it with your existing vector search using Reciprocal Rank Fusion. The <code>hybrid_search</code> function runs both searches, fuses the results, and falls back to vector-only if something fails. Your retrieval now catches both exact terms and semantic matches.</p>
+        </div>
+
+        <!-- Code Block 2: Re-Ranking with Claude -->
+        <h3 id="code-rerank">Step 2: Claude-Based Re-Ranking</h3>
+
+        <p>Now for the interesting part: after hybrid retrieval returns the top candidates, we ask Claude to score each document&rsquo;s relevance to the query on a 1&ndash;10 scale, then re-sort by those scores. This is where the real quality jump happens. Claude understands nuance that cosine similarity and BM25 simply cannot capture. For example, a chunk about &ldquo;filing amendments&rdquo; might score high on vector similarity for a query about &ldquo;new filings,&rdquo; but Claude knows that amendments and new filings are fundamentally different things.</p>
+        <p>Here&rsquo;s the dilemma with LLM-based re-ranking: Claude might give all documents similar scores (e.g., 7, 7, 8, 7), which defeats the purpose of re-ranking. The trick is to add &ldquo;use the full 1-10 scale&rdquo; in the scoring prompt and require a brief justification for each score. This forces more discriminative scoring &mdash; Claude has to think about why one document deserves a 9 while another only deserves a 3.</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs" role="tablist">
+            <button class="code-tab active" role="tab" aria-selected="true" onclick="switchTab(this, 'rerank-py')">Python</button>
+            <button class="code-tab" role="tab" aria-selected="false" onclick="switchTab(this, 'rerank-js')">Node.js</button>
+          </div>
+          <div class="code-panel active" id="rerank-py">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy Python code">Copy</button>
+            <pre><code>import anthropic
+import json
+
+client = anthropic.Anthropic()  # reads ANTHROPIC_API_KEY env var
+
+async def rerank_with_claude(
+    query: str,
+    documents: list[dict],   # [{"id": "...", "text": "..."}, ...]
+    top_k: int = 5,
+    timeout: float = 30.0
+) -> list[dict]:
+    """Re-rank documents using Claude as a cross-encoder.
+
+    Returns top_k documents sorted by Claude's relevance score.
+    """
+    if not documents:
+        return []
+
+    # Build the scoring prompt
+    doc_list = "\n\n".join(
+        f"[Document {i+1}] (ID: {doc['id']})\n{doc['text'][:500]}"
+        for i, doc in enumerate(documents)
+    )
+
+    try:
+        response = client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=1024,
+            messages=[{
+                "role": "user",
+                "content": f"""Score each document's relevance to the query on a scale of 1-10.
+Use the FULL scale: 1=completely irrelevant, 5=somewhat related, 10=directly answers the query.
+
+Query: {query}
+
+{doc_list}
+
+Respond with ONLY a JSON array of objects, each with "doc_id" and "score" fields.
+Example: [{{"doc_id": "abc", "score": 8}}, {{"doc_id": "def", "score": 3}}]"""
+            }]
+        )
+
+        # Parse Claude's scoring response
+        scores = json.loads(response.content[0].text)
+
+        # Build lookup and sort
+        score_map = {s["doc_id"]: s["score"] for s in scores}
+        ranked = sorted(
+            documents,
+            key=lambda d: score_map.get(d["id"], 0),
+            reverse=True
+        )
+        return ranked[:top_k]
+
+    except json.JSONDecodeError as e:
+        print(f"Re-rank parse error: {e}. Returning original order.")
+        return documents[:top_k]
+    except anthropic.APITimeoutError:
+        print("Re-rank timeout. Returning original order.")
+        return documents[:top_k]
+    except Exception as e:
+        print(f"Re-rank error: {e}. Returning original order.")
+        return documents[:top_k]</code></pre>
+          </div>
+          <div class="code-panel" id="rerank-js">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy Node.js code">Copy</button>
+            <pre><code>import Anthropic from "@anthropic-ai/sdk";
+
+const client = new Anthropic(); // reads ANTHROPIC_API_KEY env var
+
+interface Document { id: string; text: string; }
+interface RankedDoc extends Document { score: number; }
+
+async function rerankWithClaude(
+  query: string,
+  documents: Document[],
+  topK = 5
+): Promise&lt;RankedDoc[]&gt; {
+  if (documents.length === 0) return [];
+
+  const docList = documents
+    .map((doc, i) =&gt;
+      `[Document ${i + 1}] (ID: ${doc.id})\n${doc.text.slice(0, 500)}`
+    )
+    .join("\n\n");
+
+  try {
+    const response = await client.messages.create({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 1024,
+      messages: [{
+        role: "user",
+        content: `Score each document's relevance to the query on a scale of 1-10.
+Use the FULL scale: 1=completely irrelevant, 5=somewhat related, 10=directly answers the query.
+
+Query: ${query}
+
+${docList}
+
+Respond with ONLY a JSON array of objects, each with "doc_id" and "score" fields.
+Example: [{"doc_id": "abc", "score": 8}, {"doc_id": "def", "score": 3}]`,
+      }],
+    });
+
+    const text = response.content[0].type === "text"
+      ? response.content[0].text : "";
+    const scores: { doc_id: string; score: number }[] = JSON.parse(text);
+
+    const scoreMap = new Map(scores.map(s =&gt; [s.doc_id, s.score]));
+    const ranked: RankedDoc[] = documents
+      .map(d =&gt; ({ ...d, score: scoreMap.get(d.id) || 0 }))
+      .sort((a, b) =&gt; b.score - a.score);
+
+    return ranked.slice(0, topK);
+  } catch (error) {
+    if (error instanceof SyntaxError) {
+      console.error("Re-rank parse error:", error.message);
+    } else {
+      console.error("Re-rank error:", error);
+    }
+    // Fallback: return original order with score 0
+    return documents.slice(0, topK).map(d =&gt; ({ ...d, score: 0 }));
+  }
+}</code></pre>
+          </div>
+        </div>
+
+        <!-- Code Block 3: HyDE Query Transformation -->
+        <h3 id="code-hyde">Step 3: HyDE Query Transformation</h3>
+
+        <p>This next technique is clever. Before we even search, we ask Claude to generate a hypothetical answer to the user&rsquo;s question, then embed that answer instead of the raw query. Why does this help? The user&rsquo;s short question (&ldquo;What&rsquo;s the risk for filing 0093?&rdquo;) uses question language, but documents use statement language (&ldquo;The debtor&rsquo;s credit profile indicates elevated default probability...&rdquo;). A hypothetical answer bridges that gap &mdash; its embedding lands closer to relevant chunks because it sounds like the documents themselves.</p>
+        <p>The risk with HyDE is that if the hypothetical answer is wrong or off-topic, you&rsquo;ll retrieve irrelevant documents. That&rsquo;s why the code below treats HyDE as an additional input to Reciprocal Rank Fusion, not a replacement for the original query. If the hypothesis is good, it boosts retrieval. If it&rsquo;s bad, the original query&rsquo;s results still dominate.</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs" role="tablist">
+            <button class="code-tab active" role="tab" aria-selected="true" onclick="switchTab(this, 'hyde-py')">Python</button>
+            <button class="code-tab" role="tab" aria-selected="false" onclick="switchTab(this, 'hyde-js')">Node.js</button>
+          </div>
+          <div class="code-panel active" id="hyde-py">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy Python code">Copy</button>
+            <pre><code>async def hyde_transform(
+    query: str,
+    domain_context: str = "UCC filings and commercial lending"
+) -> str:
+    """Generate a hypothetical document that answers the query.
+
+    The hypothesis is embedded instead of the raw query,
+    producing better vector matches against real documents.
+    """
+    try:
+        response = client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=300,
+            messages=[{
+                "role": "user",
+                "content": f"""Write a short paragraph (3-5 sentences) that would appear in a
+document about {domain_context} and directly answers this question:
+
+Question: {query}
+
+Write as if this paragraph is from an actual document, not as a response
+to a user. Use technical language appropriate for the domain.
+Do NOT start with "Here is" or similar preamble."""
+            }]
+        )
+        return response.content[0].text
+    except Exception as e:
+        print(f"HyDE generation failed: {e}. Using original query.")
+        return query
+
+
+async def advanced_rag_query(
+    query: str,
+    bm25: BM25,
+    vector_store,
+    embedding_fn,
+    documents: list[dict],
+    top_k: int = 5
+) -> list[dict]:
+    """Full advanced RAG pipeline: HyDE + Hybrid Search + Re-rank."""
+    # Step 1: Generate hypothetical answer for better embedding
+    hypothesis = await hyde_transform(query)
+
+    # Step 2: Run hybrid search with BOTH original query and hypothesis
+    original_results = hybrid_search(query, bm25, vector_store, embedding_fn, top_k=top_k * 2)
+    hyde_embedding = embedding_fn(hypothesis)
+    hyde_results_raw = vector_store.query(
+        query_embeddings=[hyde_embedding], n_results=top_k * 2
+    )
+    hyde_results = [
+        (int(doc_id), 1.0 - dist)
+        for doc_id, dist in zip(
+            hyde_results_raw["ids"][0], hyde_results_raw["distances"][0]
+        )
+    ]
+
+    # Step 3: Fuse all three result sets (BM25, vector, HyDE-vector)
+    bm25_only = bm25.score(query, top_k=top_k * 2)
+    all_fused = reciprocal_rank_fusion([
+        bm25_only,
+        [(idx, sc) for idx, sc in original_results],
+        hyde_results
+    ])
+
+    # Step 4: Gather top candidates as documents
+    candidate_docs = []
+    seen = set()
+    for doc_idx, _ in all_fused[:top_k * 2]:
+        if doc_idx not in seen and doc_idx < len(documents):
+            candidate_docs.append(documents[doc_idx])
+            seen.add(doc_idx)
+
+    # Step 5: Re-rank with Claude
+    reranked = await rerank_with_claude(query, candidate_docs, top_k=top_k)
+    return reranked</code></pre>
+          </div>
+          <div class="code-panel" id="hyde-js">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy Node.js code">Copy</button>
+            <pre><code>async function hydeTransform(
+  query: string,
+  domainContext = "UCC filings and commercial lending"
+): Promise&lt;string&gt; {
+  try {
+    const response = await client.messages.create({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 300,
+      messages: [{
+        role: "user",
+        content: `Write a short paragraph (3-5 sentences) that would appear in a
+document about ${domainContext} and directly answers this question:
+
+Question: ${query}
+
+Write as if this paragraph is from an actual document, not as a response
+to a user. Use technical language appropriate for the domain.
+Do NOT start with "Here is" or similar preamble.`,
+      }],
+    });
+    const text = response.content[0].type === "text"
+      ? response.content[0].text : query;
+    return text;
+  } catch (error) {
+    console.error("HyDE generation failed:", error);
+    return query; // Fallback to original query
+  }
+}
+
+async function advancedRagQuery(
+  query: string,
+  bm25: BM25,
+  vectorStore: any,
+  embedFn: (text: string) =&gt; Promise&lt;number[]&gt;,
+  documents: Document[],
+  topK = 5
+): Promise&lt;RankedDoc[]&gt; {
+  // Step 1: HyDE — generate hypothetical answer
+  const hypothesis = await hydeTransform(query);
+
+  // Step 2: Hybrid search with original query
+  const originalResults = await hybridSearch(
+    query, bm25, vectorStore, embedFn, topK * 2
+  );
+
+  // Step 3: Vector search with HyDE embedding
+  const hydeEmbedding = await embedFn(hypothesis);
+  const hydeRaw = await vectorStore.query({
+    queryEmbeddings: [hydeEmbedding],
+    nResults: topK * 2,
+  });
+  const hydeResults: ScoredDoc[] = hydeRaw.ids[0].map(
+    (id: string, i: number) =&gt; ({
+      index: parseInt(id),
+      score: 1 - hydeRaw.distances[0][i],
+    })
+  );
+
+  // Step 4: Fuse all three result sets
+  const bm25Only = bm25.score(query, topK * 2);
+  const allFused = reciprocalRankFusion([
+    bm25Only, originalResults, hydeResults
+  ]);
+
+  // Step 5: Gather candidates and re-rank
+  const seen = new Set&lt;number&gt;();
+  const candidates: Document[] = [];
+  for (const { index } of allFused.slice(0, topK * 2)) {
+    if (!seen.has(index) && index &lt; documents.length) {
+      candidates.push(documents[index]);
+      seen.add(index);
+    }
+  }
+
+  return rerankWithClaude(query, candidates, topK);
+}</code></pre>
+          </div>
+        </div>
+
+        <div class="checkpoint">
+          <div class="checkpoint-label">&#x2714; What Just Happened?</div>
+          <p>You wired together the complete Advanced RAG pipeline: HyDE generates a hypothesis for better embedding, hybrid search combines BM25 + vector + HyDE results via RRF, and Claude re-ranks the top candidates by true relevance. The <code>advanced_rag_query</code> function orchestrates all five steps. Error handling ensures each stage falls back gracefully &mdash; a HyDE failure uses the original query, a re-rank timeout keeps the original order.</p>
+        </div>
+
+        <!-- Code Block 4: Evaluation -->
+        <h3 id="code-eval">Step 4: RAG Evaluation Harness</h3>
+
+        <p>Now let&rsquo;s build something that will save you hours of guessing: a simple evaluation framework that measures precision, recall, and faithfulness across a test set of questions with known answers. Without these metrics, you genuinely cannot tell if your advanced pipeline actually improved things. Maybe re-ranking helps for your data; maybe it adds latency without improving quality. The numbers will tell you &mdash; and they often surprise you.</p>
+        <p>The hardest part of evaluation is not the code &mdash; it&rsquo;s creating the ground-truth labels. Someone (usually you) has to manually decide which documents are relevant for each test query. This is tedious but essential. Start with 10&ndash;20 test cases and label them carefully. More test cases are not better if the labels are sloppy &mdash; a small, accurate test set beats a large, noisy one every time.</p>
+        <p>The code below has three parts. First, a <code>TestCase</code> data class that holds a query plus its known-good answers &mdash; this is your ground truth. Second, <code>evaluate_retrieval</code> computes precision and recall by comparing what the system retrieved against what it should have retrieved. Third, <code>evaluate_faithfulness</code> asks Claude to check whether the generated answer actually sticks to the retrieved context or invents facts. Together, these three functions tell you exactly where your pipeline is strong and where it&rsquo;s leaking quality.</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs" role="tablist">
+            <button class="code-tab active" role="tab" aria-selected="true" onclick="switchTab(this, 'eval-py')">Python</button>
+            <button class="code-tab" role="tab" aria-selected="false" onclick="switchTab(this, 'eval-js')">Node.js</button>
+          </div>
+          <div class="code-panel active" id="eval-py">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy Python code">Copy</button>
+            <pre><code>from dataclasses import dataclass
+
+@dataclass
+class TestCase:
+    query: str
+    relevant_doc_ids: list[str]   # Ground truth: which docs answer this
+    expected_answer_fragments: list[str]  # Key phrases the answer should contain
+
+@dataclass
+class EvalResult:
+    precision: float    # Retrieved relevant / total retrieved
+    recall: float       # Retrieved relevant / total relevant
+    faithfulness: float # Claims grounded in context / total claims
+
+def evaluate_retrieval(
+    retrieved_ids: list[str],
+    relevant_ids: list[str],
+    k: int = 5
+) -> tuple[float, float]:
+    """Compute precision@k and recall@k."""
+    top_k = set(retrieved_ids[:k])
+    relevant = set(relevant_ids)
+
+    hits = len(top_k & relevant)
+    precision = hits / k if k > 0 else 0.0
+    recall = hits / len(relevant) if relevant else 0.0
+    return precision, recall
+
+async def evaluate_faithfulness(
+    answer: str,
+    retrieved_chunks: list[str]
+) -> float:
+    """Use Claude to check if the answer is grounded in retrieved context."""
+    context = "\n---\n".join(retrieved_chunks)
+    try:
+        response = client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=512,
+            messages=[{
+                "role": "user",
+                "content": f"""Evaluate whether the answer below is fully supported by the context.
+For each factual claim in the answer, check if it appears in the context.
+
+Context:
+{context}
+
+Answer:
+{answer}
+
+Respond with JSON: {{"total_claims": N, "grounded_claims": M, "ungrounded": ["list of claims not in context"]}}"""
+            }]
+        )
+        result = json.loads(response.content[0].text)
+        total = result.get("total_claims", 1)
+        grounded = result.get("grounded_claims", 0)
+        return grounded / total if total > 0 else 0.0
+    except Exception as e:
+        print(f"Faithfulness eval error: {e}")
+        return 0.0
+
+async def run_evaluation(
+    test_cases: list[TestCase],
+    search_fn,  # Function: query -> (retrieved_doc_ids, answer, chunks)
+    k: int = 5
+) -> dict:
+    """Run full evaluation across test cases."""
+    precisions, recalls, faiths = [], [], []
+
+    for tc in test_cases:
+        retrieved_ids, answer, chunks = await search_fn(tc.query)
+        p, r = evaluate_retrieval(retrieved_ids, tc.relevant_doc_ids, k)
+        f = await evaluate_faithfulness(answer, chunks)
+        precisions.append(p)
+        recalls.append(r)
+        faiths.append(f)
+        print(f"  Query: {tc.query[:50]}... P={p:.2f} R={r:.2f} F={f:.2f}")
+
+    return {
+        "avg_precision": sum(precisions) / len(precisions),
+        "avg_recall": sum(recalls) / len(recalls),
+        "avg_faithfulness": sum(faiths) / len(faiths),
+        "n_queries": len(test_cases)
+    }</code></pre>
+          </div>
+          <div class="code-panel" id="eval-js">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy Node.js code">Copy</button>
+            <pre><code>interface TestCase {
+  query: string;
+  relevantDocIds: string[];
+  expectedFragments: string[];
+}
+
+interface EvalResult {
+  precision: number;
+  recall: number;
+  faithfulness: number;
+}
+
+function evaluateRetrieval(
+  retrievedIds: string[],
+  relevantIds: string[],
+  k = 5
+): { precision: number; recall: number } {
+  const topK = new Set(retrievedIds.slice(0, k));
+  const relevant = new Set(relevantIds);
+
+  let hits = 0;
+  for (const id of topK) {
+    if (relevant.has(id)) hits++;
+  }
+
+  return {
+    precision: k &gt; 0 ? hits / k : 0,
+    recall: relevant.size &gt; 0 ? hits / relevant.size : 0,
+  };
+}
+
+async function evaluateFaithfulness(
+  answer: string,
+  retrievedChunks: string[]
+): Promise&lt;number&gt; {
+  const context = retrievedChunks.join("\n---\n");
+  try {
+    const response = await client.messages.create({
+      model: "claude-sonnet-4-20250514",
+      max_tokens: 512,
+      messages: [{
+        role: "user",
+        content: `Evaluate whether the answer below is fully supported by the context.
+For each factual claim in the answer, check if it appears in the context.
+
+Context:
+${context}
+
+Answer:
+${answer}
+
+Respond with JSON: {"total_claims": N, "grounded_claims": M, "ungrounded": ["list"]}`,
+      }],
+    });
+
+    const text = response.content[0].type === "text"
+      ? response.content[0].text : "{}";
+    const result = JSON.parse(text);
+    const total = result.total_claims || 1;
+    const grounded = result.grounded_claims || 0;
+    return total &gt; 0 ? grounded / total : 0;
+  } catch (error) {
+    console.error("Faithfulness eval error:", error);
+    return 0;
+  }
+}
+
+async function runEvaluation(
+  testCases: TestCase[],
+  searchFn: (q: string) =&gt; Promise&lt;{ids: string[]; answer: string; chunks: string[]}&gt;,
+  k = 5
+): Promise&lt;{avgPrecision: number; avgRecall: number; avgFaithfulness: number}&gt; {
+  const precisions: number[] = [];
+  const recalls: number[] = [];
+  const faiths: number[] = [];
+
+  for (const tc of testCases) {
+    const { ids, answer, chunks } = await searchFn(tc.query);
+    const { precision, recall } = evaluateRetrieval(ids, tc.relevantDocIds, k);
+    const faith = await evaluateFaithfulness(answer, chunks);
+    precisions.push(precision);
+    recalls.push(recall);
+    faiths.push(faith);
+    console.log(`  ${tc.query.slice(0, 50)}... P=${precision.toFixed(2)} R=${recall.toFixed(2)} F=${faith.toFixed(2)}`);
+  }
+
+  const avg = (arr: number[]) =&gt; arr.reduce((a, b) =&gt; a + b, 0) / arr.length;
+  return {
+    avgPrecision: avg(precisions),
+    avgRecall: avg(recalls),
+    avgFaithfulness: avg(faiths),
+  };
+}</code></pre>
+          </div>
+        </div>
+
+        <div class="checkpoint">
+          <div class="checkpoint-label">&#x2714; What Just Happened?</div>
+          <p>You built a complete evaluation framework. <code>evaluate_retrieval</code> computes precision and recall by comparing retrieved doc IDs against ground truth. <code>evaluate_faithfulness</code> uses Claude to check whether the generated answer is grounded in the retrieved context. <code>run_evaluation</code> runs both across a test set and reports averages. Now you can objectively compare naive RAG vs. your advanced pipeline.</p>
+        </div>
+      </section>
+
+      <!-- ============ EXERCISE ============ -->
+      <section class="section" id="exercise">
+        <h2>Hands-On Exercise</h2>
+
+        <div style="background:var(--bg-card);border-radius:12px;padding:1.5rem;margin-bottom:1.5rem;">
+          <h3 style="margin-top:0;color:var(--accent-primary);">What You'll Build</h3>
+          <p>An advanced RAG pipeline that upgrades the M09 basic system with BM25 keyword search, Reciprocal Rank Fusion, and Claude-based re-ranking &mdash; then measures the improvement with an evaluation framework.</p>
+          <p style="margin-bottom:0;"><strong>Time Estimate:</strong> 45&ndash;60 minutes &nbsp;|&nbsp; <strong>Prerequisites:</strong> Working M09 RAG pipeline with <code>docs/</code> folder &nbsp;|&nbsp; <strong>Files You'll Create:</strong> <code>advanced_rag.py</code></p>
+        </div>
+
+        <h3>Environment Setup</h3>
+        <p>This lab builds on the M09 RAG lab. You need the <code>rag-lab/</code> directory with the <code>docs/</code> folder containing sample UCC filing documents. If you skipped M09, create the folder and add 2&ndash;3 <code>.md</code> files about UCC filings.</p>
+        <div class="code-block-wrapper">
+          <div class="code-tabs" role="tablist"><button class="code-tab active" role="tab" data-lang="python">Python</button></div>
+          <div class="code-panel active">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code class="language-python"># Navigate to your M09 rag-lab directory
+cd rag-lab
+
+# Activate virtual environment
+source venv/bin/activate          # macOS/Linux
+# venv\Scripts\activate           # Windows
+
+# Install dependencies (if not already installed)
+pip install anthropic>=0.30.0 chromadb>=0.4.0
+
+# Set your API key
+export ANTHROPIC_API_KEY=your-key-here          # macOS/Linux
+# set ANTHROPIC_API_KEY=your-key-here           # Windows CMD
+# $env:ANTHROPIC_API_KEY="your-key-here"        # Windows PowerShell</code></pre>
+          </div>
+        </div>
+        <div class="output-label">Verify setup</div>
+        <div class="output-block">python -c "import anthropic; import chromadb; print('Setup OK')"</div>
+        <div class="output-label">Expected Output</div>
+        <div class="output-block">Setup OK</div>
+        <div class="callout-warning" style="margin-top:0.75rem;">
+          <span class="box-label">Troubleshooting</span>
+          <ul style="margin-bottom:0;">
+            <li><strong><code>ModuleNotFoundError: No module named 'chromadb'</code></strong> &rarr; Run <code>pip install chromadb</code>. If it fails, try <code>pip install --upgrade pip</code> first.</li>
+            <li><strong><code>ModuleNotFoundError: No module named 'anthropic'</code></strong> &rarr; Run <code>pip install anthropic</code>.</li>
+            <li><strong><code>AuthenticationError</code></strong> &rarr; Check that <code>ANTHROPIC_API_KEY</code> is set in your current shell session.</li>
+          </ul>
+        </div>
+
+        <h3>Step 1: Build the Advanced RAG Pipeline</h3>
+        <p><strong>What &amp; Why:</strong> This step adds three advanced patterns on top of the M09 base: BM25 keyword search for exact term matching, RRF fusion to merge both result sets, and Claude-based re-ranking to sort by true relevance. It uses the same <code>docs/</code> folder and ChromaDB setup from M09. By the end of this step, you&rsquo;ll have a single Python file that runs the complete advanced pipeline end-to-end.</p>
+        <p><strong>Create a new file called <code>advanced_rag.py</code></strong> in your <code>rag-lab/</code> directory and add the following:</p>
+        <div class="code-block-wrapper">
+          <div class="code-tabs" role="tablist"><button class="code-tab active" role="tab" data-lang="python">Python</button></div>
+          <div class="code-panel active">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code class="language-python">import os
+import glob
+import json
+import math
+from collections import Counter
+import anthropic
+import chromadb
+
+client = anthropic.Anthropic()
+
+# ── Document Loading & Chunking (from M09) ──────────────────
+def load_documents(docs_dir: str) -> list[dict]:
+    docs = []
+    for pattern in ["*.md", "*.txt"]:
+        for path in glob.glob(os.path.join(docs_dir, pattern)):
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    docs.append({"content": f.read(), "source": os.path.basename(path)})
+            except (IOError, UnicodeDecodeError):
+                pass
+    if not docs:
+        raise FileNotFoundError(f"No documents found in {docs_dir}")
+    return docs
+
+def chunk_text(text: str, chunk_size: int = 500, overlap: int = 50) -> list[str]:
+    if len(text) <= chunk_size:
+        return [text]
+    chunks, start = [], 0
+    while start < len(text):
+        end = start + chunk_size
+        chunk = text[start:end]
+        if end < len(text):
+            for sep in ["\n\n", "\n", ". ", " "]:
+                last_sep = chunk.rfind(sep)
+                if last_sep > chunk_size * 0.5:
+                    end = start + last_sep + len(sep)
+                    chunk = text[start:end]
+                    break
+        chunks.append(chunk.strip())
+        start = end - overlap
+    return [c for c in chunks if c]
+
+# ── BM25 Keyword Search ─────────────────────────────────────
+class BM25:
+    def __init__(self, documents: list[str], k1=1.5, b=0.75):
+        self.k1, self.b = k1, b
+        self.docs = documents
+        self.doc_len = [len(d.split()) for d in documents]
+        self.avg_dl = sum(self.doc_len) / len(self.doc_len)
+        self.doc_count = len(documents)
+        self.doc_freqs = {}
+        self.term_freqs = []
+        for doc in documents:
+            tf = Counter(doc.lower().split())
+            self.term_freqs.append(tf)
+            for term in tf:
+                self.doc_freqs[term] = self.doc_freqs.get(term, 0) + 1
+
+    def score(self, query: str, top_k: int = 10) -> list[tuple[int, float]]:
+        query_terms = query.lower().split()
+        scores = []
+        for i in range(self.doc_count):
+            s = 0.0
+            for term in query_terms:
+                if term not in self.doc_freqs:
+                    continue
+                df = self.doc_freqs[term]
+                idf = math.log((self.doc_count - df + 0.5) / (df + 0.5) + 1)
+                tf = self.term_freqs[i].get(term, 0)
+                s += idf * tf * (self.k1 + 1) / (tf + self.k1 * (1 - self.b + self.b * self.doc_len[i] / self.avg_dl))
+            scores.append((i, s))
+        scores.sort(key=lambda x: x[1], reverse=True)
+        return scores[:top_k]
+
+# ── Reciprocal Rank Fusion ───────────────────────────────────
+def rrf_fuse(ranked_lists: list[list[tuple[int, float]]], k: int = 60) -> list[tuple[int, float]]:
+    fused = {}
+    for ranked_list in ranked_lists:
+        for rank, (doc_idx, _) in enumerate(ranked_list):
+            fused[doc_idx] = fused.get(doc_idx, 0) + 1.0 / (k + rank + 1)
+    return sorted(fused.items(), key=lambda x: x[1], reverse=True)
+
+# ── Claude-Based Re-Ranking ─────────────────────────────────
+def rerank_with_claude(query: str, chunks: list[dict], top_n: int = 5) -> list[dict]:
+    if not chunks:
+        return []
+    docs_text = "\n".join(f"[Doc {i+1}] {c['text'][:300]}" for i, c in enumerate(chunks))
+    prompt = (
+        f"Query: {query}\n\nDocuments:\n{docs_text}\n\n"
+        f"Score each document 1-10 for relevance to the query. "
+        f"1 = completely irrelevant, 10 = directly answers the question.\n"
+        f"Respond as JSON: [{{\"doc\": 1, \"score\": 8.5}}, ...]"
+    )
+    try:
+        response = client.messages.create(
+            model="claude-sonnet-4-20250514", max_tokens=512,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        scores = json.loads(response.content[0].text)
+        scored = []
+        for s in scores:
+            idx = s["doc"] - 1
+            if 0 <= idx < len(chunks):
+                chunks[idx]["rerank_score"] = s["score"]
+                scored.append(chunks[idx])
+        scored.sort(key=lambda x: x.get("rerank_score", 0), reverse=True)
+        return scored[:top_n]
+    except Exception as e:
+        print(f"  Re-ranking failed: {e}, using original order")
+        return chunks[:top_n]
+
+# ── Full Advanced Pipeline ───────────────────────────────────
+def ingest_and_build(docs_dir="./docs"):
+    """Load, chunk, store in ChromaDB, build BM25 index."""
+    docs = load_documents(docs_dir)
+    all_chunks = []
+    for doc in docs:
+        for i, chunk in enumerate(chunk_text(doc["content"])):
+            all_chunks.append({"text": chunk, "source": doc["source"], "index": i})
+
+    chroma = chromadb.Client()
+    collection = chroma.get_or_create_collection("advanced_rag", metadata={"hnsw:space": "cosine"})
+    collection.add(
+        ids=[f"chunk_{i}" for i in range(len(all_chunks))],
+        documents=[c["text"] for c in all_chunks],
+        metadatas=[{"source": c["source"], "index": c["index"]} for c in all_chunks],
+    )
+    bm25 = BM25([c["text"] for c in all_chunks])
+    print(f"  Loaded {len(docs)} docs, {len(all_chunks)} chunks")
+    return collection, bm25, all_chunks
+
+def advanced_query(query, collection, bm25, all_chunks, verbose=True):
+    """Hybrid search + RRF + re-ranking + Claude generation."""
+    # 1. BM25 search
+    bm25_results = bm25.score(query, top_k=10)
+
+    # 2. Vector search
+    vector_raw = collection.query(query_texts=[query], n_results=10)
+    vector_results = [(int(doc_id.split("_")[1]), 1.0 - dist)
+                      for doc_id, dist in zip(vector_raw["ids"][0], vector_raw["distances"][0])]
+
+    # 3. RRF fusion
+    fused = rrf_fuse([bm25_results, vector_results])
+    fused_chunks = [all_chunks[idx] for idx, _ in fused[:10]]
+
+    if verbose:
+        print(f"\n  Query: {query}")
+        print(f"  BM25 top-3: {[all_chunks[i]['source'] for i, _ in bm25_results[:3]]}")
+        print(f"  Vector top-3: {[all_chunks[i]['source'] for i, _ in vector_results[:3]]}")
+        print(f"  Fused top-3: {[all_chunks[i]['source'] for i, _ in fused[:3]]}")
+
+    # 4. Re-rank top candidates
+    reranked = rerank_with_claude(query, fused_chunks, top_n=3)
+
+    if verbose and reranked:
+        print(f"  Re-ranked top-3: {[(c['source'], c.get('rerank_score', '?')) for c in reranked]}")
+
+    # 5. Generate answer
+    context = "\n\n---\n\n".join(
+        f"[Source {i+1}: {c['source']}]\n{c['text']}" for i, c in enumerate(reranked)
+    )
+    response = client.messages.create(
+        model="claude-sonnet-4-20250514", max_tokens=1024,
+        system="Answer based ONLY on the provided context. Cite sources using [Source N].",
+        messages=[{"role": "user", "content": f"Context:\n{context}\n\nQuestion: {query}"}],
+    )
+    return response.content[0].text
+
+# ── Run Tests ────────────────────────────────────────────────
+if __name__ == "__main__":
+    print("── Advanced RAG Pipeline ──")
+    collection, bm25, all_chunks = ingest_and_build()
+
+    questions = [
+        "What are the high risk indicators for a UCC filing?",
+        "How long is a UCC-1 effective and what happens when it lapses?",
+        "What is the difference between a UCC-1 and a UCC-3?",
+    ]
+
+    for q in questions:
+        answer = advanced_query(q, collection, bm25, all_chunks)
+        print(f"\n  Answer: {answer[:200]}...")
+        print(f"  {'═' * 50}")</code></pre>
+          </div>
+        </div>
+        <p><strong>Run the advanced pipeline:</strong></p>
+        <div class="output-label">Command</div>
+        <div class="output-block">python advanced_rag.py</div>
+        <div class="output-label">Expected Output (abbreviated)</div>
+        <div class="output-block">── Advanced RAG Pipeline ──
+  Loaded 3 docs, 8 chunks
+
+  Query: What are the high risk indicators for a UCC filing?
+  BM25 top-3: ['risk_assessment.md', 'filing_guide.md', 'compliance_faq.txt']
+  Vector top-3: ['risk_assessment.md', 'filing_guide.md', 'risk_assessment.md']
+  Fused top-3: ['risk_assessment.md', 'filing_guide.md', 'compliance_faq.txt']
+  Re-ranked top-3: [('risk_assessment.md', 9.1), ('filing_guide.md', 4.2), ...]
+
+  Answer: According to the risk assessment criteria, high risk indicators include...
+  ══════════════════════════════════════════════════
+
+  Query: How long is a UCC-1 effective and what happens when it lapses?
+  ...
+  ══════════════════════════════════════════════════</div>
+        <div class="callout-why" style="margin-top:1rem;">
+          <span class="box-label">&#9989; Checkpoint</span>
+          <p style="margin-bottom:0;">Look for these key behaviors:</p>
+          <ul style="margin-bottom:0;">
+            <li><strong>BM25 vs Vector:</strong> BM25 and vector search should return different orderings &mdash; BM25 favors exact keyword matches, vector favors semantic similarity</li>
+            <li><strong>Fused results:</strong> Should combine the best of both lists (documents appearing in both get boosted)</li>
+            <li><strong>Re-ranking:</strong> Should promote the most directly relevant document to position #1 (check the scores)</li>
+            <li><strong>Cited answers:</strong> Claude's responses should include <code>[Source N]</code> citations</li>
+          </ul>
+        </div>
+        <div class="callout-warning" style="margin-top:0.75rem;">
+          <span class="box-label">Troubleshooting</span>
+          <ul style="margin-bottom:0;">
+            <li><strong>Re-ranking returns error / invalid JSON</strong> &rarr; Claude's response format may vary. The code falls back to the original order if parsing fails. Try running again &mdash; it's usually a one-off issue.</li>
+            <li><strong><code>FileNotFoundError: No documents found</code></strong> &rarr; You need the <code>docs/</code> folder from M09's lab. Create it with the 3 sample files from the M09 exercise.</li>
+            <li><strong>BM25 and vector return identical results</strong> &rarr; With a small corpus (3 docs, ~8 chunks), there's limited diversity. The difference becomes dramatic with 50+ documents.</li>
+            <li><strong><code>APIError: 529</code></strong> &rarr; This test makes 4+ API calls (3 queries + re-ranking). Wait 30 seconds between runs.</li>
+          </ul>
+        </div>
+
+        <h3>Verify Everything Works</h3>
+        <p>Run the complete pipeline end-to-end. All 3 queries should complete, showing the full retrieval trace (BM25 &rarr; vector &rarr; fused &rarr; re-ranked) at each stage, followed by cited answers:</p>
+        <div class="output-label">Command</div>
+        <div class="output-block">python advanced_rag.py</div>
+        <div class="output-label">What to check in the output</div>
+        <ul>
+          <li>You should see <code>Loaded N docs, M chunks</code> at the top (confirming ingestion worked)</li>
+          <li>Each query should print BM25 top-3, Vector top-3, Fused top-3, and Re-ranked top-3 with scores</li>
+          <li>BM25 and Vector results should differ &mdash; that&rsquo;s the whole point of hybrid search</li>
+          <li>Re-ranked scores should be on a 1&ndash;10 scale, not cosine similarity (0&ndash;1)</li>
+          <li>Final answers should contain <code>[Source N]</code> citations</li>
+        </ul>
+        <div class="callout-why">
+          <span class="box-label">&#127881; Congratulations</span>
+          <p style="margin-bottom:0;">You've upgraded a naive RAG system with three production patterns: BM25 hybrid search for exact term matching, RRF fusion for combining result lists, and Claude-based re-ranking for precise relevance ordering. This is the same architecture used by enterprise document search systems.</p>
+        </div>
+
+        <div class="callout-why" style="margin-top:1rem;">
+          <span class="box-label">Stretch Goals (Optional)</span>
+          <ul style="margin-bottom:0;">
+            <li><strong>HyDE:</strong> Add a <code>hyde_transform</code> function that generates a hypothetical answer before embedding. Measure recall improvement on abstract queries.</li>
+            <li><strong>Contextual compression:</strong> After re-ranking, use Claude to extract only the relevant sentences from each chunk. Measure token savings.</li>
+            <li><strong>Evaluation framework:</strong> Create a test set of 10 questions with ground-truth relevant chunk IDs. Compute precision@3 and recall@5 for naive vs. advanced pipeline.</li>
+          </ul>
+        </div>
+
+        <div class="callout-warning">
+          <span class="box-label">&#9888;&#65039; Common Pitfalls</span>
+          <ul style="margin-bottom:0;">
+            <li><strong>BM25 tokenization mismatch:</strong> Always BM25-index the same chunks you vector-indexed. Different chunking = wrong scores.</li>
+            <li><strong>Re-ranker hallucination:</strong> Claude might invent relevance. Always include "1 = completely irrelevant" in the scoring prompt.</li>
+            <li><strong>Test set bias:</strong> Include adversarial queries (ambiguous, no-match, multi-hop) in your evaluation set.</li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- ============ QUIZ ============ -->
+      <section class="section" id="quiz">
+        <h2>Knowledge Check</h2>
+
+        <div class="quiz-question" data-correct="b">
+          <h4>1. When would BM25 keyword search outperform vector similarity search?</h4>
+          <div class="quiz-option" data-value="a" role="button" tabindex="0" aria-label="Option A" onclick="selectQuiz(this)">
+            <span class="quiz-marker"></span>
+            <span>When the query is about abstract concepts like &ldquo;risk assessment strategies&rdquo;</span>
+          </div>
+          <div class="quiz-option" data-value="b" role="button" tabindex="0" aria-label="Option B" onclick="selectQuiz(this)">
+            <span class="quiz-marker"></span>
+            <span>When the query contains specific identifiers like invoice numbers or product codes</span>
+          </div>
+          <div class="quiz-option" data-value="c" role="button" tabindex="0" aria-label="Option C" onclick="selectQuiz(this)">
+            <span class="quiz-marker"></span>
+            <span>When the document corpus is very small (under 100 documents)</span>
+          </div>
+          <div class="quiz-option" data-value="d" role="button" tabindex="0" aria-label="Option D" onclick="selectQuiz(this)">
+            <span class="quiz-marker"></span>
+            <span>When you want to find documents in a different language than the query</span>
+          </div>
+          <div class="quiz-feedback correct-fb">&#10003; Correct! BM25 excels at exact term matching. Vector search understands meaning but may miss specific identifiers like &ldquo;INV-2024-0847&rdquo; because it compares semantic similarity, not exact strings.</div>
+          <div class="quiz-feedback incorrect-fb">&#10007; Not quite. BM25&rsquo;s strength is exact keyword matching. It outperforms vector search specifically when queries contain proper nouns, IDs, or technical terms that need literal matching &mdash; like invoice numbers or product codes.</div>
+        </div>
+
+        <div class="quiz-question" data-correct="c">
+          <h4>2. What problem does Reciprocal Rank Fusion (RRF) solve?</h4>
+          <div class="quiz-option" data-value="a" role="button" tabindex="0" aria-label="Option A" onclick="selectQuiz(this)">
+            <span class="quiz-marker"></span>
+            <span>It makes vector search faster by reducing the embedding dimension</span>
+          </div>
+          <div class="quiz-option" data-value="b" role="button" tabindex="0" aria-label="Option B" onclick="selectQuiz(this)">
+            <span class="quiz-marker"></span>
+            <span>It translates queries into multiple languages for multilingual search</span>
+          </div>
+          <div class="quiz-option" data-value="c" role="button" tabindex="0" aria-label="Option C" onclick="selectQuiz(this)">
+            <span class="quiz-marker"></span>
+            <span>It merges ranked lists from different search systems without needing to normalize their incompatible scores</span>
+          </div>
+          <div class="quiz-option" data-value="d" role="button" tabindex="0" aria-label="Option D" onclick="selectQuiz(this)">
+            <span class="quiz-marker"></span>
+            <span>It compresses retrieved documents to save tokens in the generation prompt</span>
+          </div>
+          <div class="quiz-feedback correct-fb">&#10003; Correct! BM25 scores and cosine similarity scores are on completely different scales. RRF sidesteps this by using rank positions instead of raw scores: score = &Sigma;1/(k + rank).</div>
+          <div class="quiz-feedback incorrect-fb">&#10007; RRF solves the score normalization problem. BM25 returns scores like 12.4 while cosine similarity returns 0.87 &mdash; you can&rsquo;t just add them. RRF uses rank positions instead of raw scores, making fusion system-agnostic.</div>
+        </div>
+
+        <div class="quiz-question" data-correct="b">
+          <h4>3. A RAG system has high recall but low precision. What does this mean, and which pattern would help most?</h4>
+          <div class="quiz-option" data-value="a" role="button" tabindex="0" aria-label="Option A" onclick="selectQuiz(this)">
+            <span class="quiz-marker"></span>
+            <span>It&rsquo;s missing relevant documents &mdash; add hybrid search to cast a wider net</span>
+          </div>
+          <div class="quiz-option" data-value="b" role="button" tabindex="0" aria-label="Option B" onclick="selectQuiz(this)">
+            <span class="quiz-marker"></span>
+            <span>It retrieves relevant documents but also too many irrelevant ones &mdash; add re-ranking to filter the top results</span>
+          </div>
+          <div class="quiz-option" data-value="c" role="button" tabindex="0" aria-label="Option C" onclick="selectQuiz(this)">
+            <span class="quiz-marker"></span>
+            <span>The generated answers are hallucinating &mdash; add query transformation to fix the input</span>
+          </div>
+          <div class="quiz-option" data-value="d" role="button" tabindex="0" aria-label="Option D" onclick="selectQuiz(this)">
+            <span class="quiz-marker"></span>
+            <span>The embedding model is too small &mdash; upgrade to a larger embedding model</span>
+          </div>
+          <div class="quiz-feedback correct-fb">&#10003; Correct! High recall = finding most relevant docs. Low precision = too much junk in the results. Re-ranking applies a more powerful model to sort the candidates, pushing irrelevant documents down and relevant ones up.</div>
+          <div class="quiz-feedback incorrect-fb">&#10007; Think about what the metrics mean. High recall = the system IS finding relevant documents (so more search isn&rsquo;t needed). Low precision = too many irrelevant documents in the results. Re-ranking filters the good from the bad.</div>
+        </div>
+
+        <div class="quiz-question" data-correct="a">
+          <h4>4. In HyDE, why does embedding a hypothetical answer often retrieve better results than embedding the raw query?</h4>
+          <div class="quiz-option" data-value="a" role="button" tabindex="0" aria-label="Option A" onclick="selectQuiz(this)">
+            <span class="quiz-marker"></span>
+            <span>The hypothetical answer uses document-like language, so its embedding lands closer to real documents in vector space</span>
+          </div>
+          <div class="quiz-option" data-value="b" role="button" tabindex="0" aria-label="Option B" onclick="selectQuiz(this)">
+            <span class="quiz-marker"></span>
+            <span>The hypothetical answer has more tokens, and longer texts always produce better embeddings</span>
+          </div>
+          <div class="quiz-option" data-value="c" role="button" tabindex="0" aria-label="Option C" onclick="selectQuiz(this)">
+            <span class="quiz-marker"></span>
+            <span>The LLM already knows the correct answer from its training data, so the hypothesis is always correct</span>
+          </div>
+          <div class="quiz-option" data-value="d" role="button" tabindex="0" aria-label="Option D" onclick="selectQuiz(this)">
+            <span class="quiz-marker"></span>
+            <span>HyDE bypasses the embedding step entirely and uses string matching instead</span>
+          </div>
+          <div class="quiz-feedback correct-fb">&#10003; Correct! A user query (&ldquo;What&rsquo;s the risk?&rdquo;) uses question language. Documents use statement language (&ldquo;The risk profile indicates...&rdquo;). The hypothesis bridges this gap by generating document-like text, whose embedding is naturally closer to relevant documents.</div>
+          <div class="quiz-feedback incorrect-fb">&#10007; The key insight is about <em>language style</em>. Queries use question words; documents use declarative statements. The hypothetical answer mimics document language, so its embedding vector lands in the same neighborhood as real relevant documents. It doesn&rsquo;t need to be correct &mdash; just stylistically similar.</div>
+        </div>
+
+        <div class="quiz-question" data-correct="d">
+          <h4>5. Which evaluation metric tells you whether the LLM is hallucinating in its generated answer?</h4>
+          <div class="quiz-option" data-value="a" role="button" tabindex="0" aria-label="Option A" onclick="selectQuiz(this)">
+            <span class="quiz-marker"></span>
+            <span>Precision &mdash; it measures how many retrieved documents are relevant</span>
+          </div>
+          <div class="quiz-option" data-value="b" role="button" tabindex="0" aria-label="Option B" onclick="selectQuiz(this)">
+            <span class="quiz-marker"></span>
+            <span>Recall &mdash; it measures how many relevant documents were retrieved</span>
+          </div>
+          <div class="quiz-option" data-value="c" role="button" tabindex="0" aria-label="Option C" onclick="selectQuiz(this)">
+            <span class="quiz-marker"></span>
+            <span>nDCG@10 &mdash; it measures ranking quality of search results</span>
+          </div>
+          <div class="quiz-option" data-value="d" role="button" tabindex="0" aria-label="Option D" onclick="selectQuiz(this)">
+            <span class="quiz-marker"></span>
+            <span>Faithfulness &mdash; it checks if every claim in the answer is grounded in the retrieved context</span>
+          </div>
+          <div class="quiz-feedback correct-fb">&#10003; Correct! Faithfulness measures groundedness &mdash; does every factual claim in the generated answer come from the retrieved chunks? A faithfulness score below 100% means the LLM added information not in the context, i.e., hallucinated.</div>
+          <div class="quiz-feedback incorrect-fb">&#10007; Precision and recall measure retrieval quality (finding the right documents). Faithfulness measures generation quality &mdash; specifically, whether the answer only contains information from the retrieved context, without making up facts.</div>
+        </div>
+
+        <div class="quiz-question" data-correct="c">
+          <h4>6. You&rsquo;re building a RAG system for a healthcare company. Which advanced pattern should you add FIRST for the biggest impact? (Recall from M09: your basic vector search is already working.)</h4>
+          <div class="quiz-option" data-value="a" role="button" tabindex="0" aria-label="Option A" onclick="selectQuiz(this)">
+            <span class="quiz-marker"></span>
+            <span>HyDE query transformation &mdash; doctors phrase questions differently than clinical guidelines</span>
+          </div>
+          <div class="quiz-option" data-value="b" role="button" tabindex="0" aria-label="Option B" onclick="selectQuiz(this)">
+            <span class="quiz-marker"></span>
+            <span>Contextual compression &mdash; clinical documents are long and noisy</span>
+          </div>
+          <div class="quiz-option" data-value="c" role="button" tabindex="0" aria-label="Option C" onclick="selectQuiz(this)">
+            <span class="quiz-marker"></span>
+            <span>Hybrid search &mdash; clinical queries contain specific codes (CPT, ICD-10) that need exact matching</span>
+          </div>
+          <div class="quiz-option" data-value="d" role="button" tabindex="0" aria-label="Option D" onclick="selectQuiz(this)">
+            <span class="quiz-marker"></span>
+            <span>Multi-agent orchestration &mdash; separate agents for different medical specialties</span>
+          </div>
+          <div class="quiz-feedback correct-fb">&#10003; Correct! Healthcare queries are full of specific codes (CPT: 99213, ICD-10: E11.65) that vector search handles poorly. BM25 keyword search finds these exact codes instantly. Hybrid search is typically the highest-impact first addition to any RAG system with structured identifiers.</div>
+          <div class="quiz-feedback incorrect-fb">&#10007; Think about the domain: healthcare queries contain specific procedure codes (CPT: 99213) and diagnosis codes (ICD-10: E11.65). Vector search might return &ldquo;diabetes management&rdquo; documents generically, but BM25 finds the exact code match. Hybrid search is the biggest bang-for-buck first improvement.</div>
+        </div>
+
+        <div class="quiz-score" id="quiz-score">
+          <div>Your Score</div>
+          <div class="score-num" id="score-display">0/0</div>
+          <p id="score-message" style="margin-top:0.5rem;color:var(--text-secondary);"></p>
+        </div>
+      </section>
+
+      <!-- ============ SUMMARY ============ -->
+      <section class="section" id="summary">
+        <h2>Module Summary</h2>
+
+        <h3 id="key-concepts">Key Concepts Recap</h3>
+        <ul>
+          <li><strong>Naive RAG</strong> follows a single-pass retrieve-then-generate pattern. Advanced RAG adds pre-retrieval, retrieval, and post-retrieval optimizations.</li>
+          <li><strong>Hybrid Search</strong> combines BM25 keyword matching with vector similarity via Reciprocal Rank Fusion, catching both exact terms and semantic matches.</li>
+          <li><strong>Re-Ranking</strong> uses a cross-encoder or LLM to re-sort retrieved candidates by true relevance, fixing the approximate ordering from initial retrieval.</li>
+          <li><strong>Query Transformation</strong> (HyDE, multi-query, step-back) improves retrieval by reformulating the user&rsquo;s question before search.</li>
+          <li><strong>Contextual Compression</strong> extracts only query-relevant sentences from chunks, reducing noise and token cost.</li>
+          <li><strong>RAG Evaluation</strong> uses precision, recall, and faithfulness to diagnose exactly where your pipeline is failing.</li>
+        </ul>
+
+        <h3 id="what-we-built">What We Built</h3>
+        <p>A complete advanced RAG pipeline: BM25 + vector hybrid search with RRF fusion, Claude-based re-ranking, HyDE query transformation, and an evaluation harness measuring precision, recall, and faithfulness. Each component is independent and composable &mdash; add them as needed for your use case.</p>
+
+        <h3 id="next-preview" style="color:var(--track-color);">Next: M11 &mdash; Multi-Layer Memory</h3>
+        <p>You&rsquo;ve mastered retrieval. But what about information that persists across conversations? In M11, you&rsquo;ll build a multi-layer memory system with short-term (conversation), medium-term (session summaries), and long-term (persistent knowledge) tiers &mdash; giving your agent the ability to remember users, preferences, and context across interactions.</p>
+      </section>
+
+      <div class="module-nav">
+        <a href="M09-rag-retrieval-augmented-generation.html" aria-label="Previous module: RAG — Retrieval-Augmented Generation">&larr; M09: RAG Fundamentals</a>
+          <a href="index.html" aria-label="Course Home" title="Course Home" style="font-size:1.2rem;">&#x1F3E0; Home</a>
+        <a href="M11-multi-layer-memory.html" aria-label="Next module: Multi-Layer Memory">M11: Multi-Layer Memory &rarr;</a>
+      </div>
+    </main>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+  <script>
+    // ===== TAB SWITCHING =====
+    function switchTab(btn, panelId) {
+      const wrapper = btn.closest('.code-block-wrapper');
+      wrapper.querySelectorAll('.code-tab').forEach(t => { t.classList.remove('active'); t.setAttribute('aria-selected', 'false'); });
+      wrapper.querySelectorAll('.code-panel').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      btn.setAttribute('aria-selected', 'true');
+      document.getElementById(panelId).classList.add('active');
+    }
+
+    // ===== COPY BUTTON =====
+    function copyCode(btn) {
+      const code = btn.parentElement.querySelector('code').textContent;
+      navigator.clipboard.writeText(code).then(() => {
+        btn.textContent = 'Copied!';
+        setTimeout(() => btn.textContent = 'Copy', 2000);
+      });
+    }
+
+    // ===== SIDEBAR TOGGLE =====
+    document.getElementById('sidebarToggle').addEventListener('click', () => {
+      document.getElementById('sidebar').classList.toggle('open');
+    });
+
+    // ===== SIDEBAR ACTIVE STATE =====
+    const sections = document.querySelectorAll('.section[id]');
+    const sidebarLinks = document.querySelectorAll('.sidebar-nav a');
+    const observer = new IntersectionObserver(entries => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          sidebarLinks.forEach(a => a.classList.remove('active'));
+          const target = document.querySelector(`.sidebar-nav a[href="#${entry.target.id}"]`);
+          if (target) target.classList.add('active');
+        }
+      });
+    }, { rootMargin: '-20% 0px -70% 0px' });
+    sections.forEach(s => observer.observe(s));
+
+    // ===== QUIZ SYSTEM =====
+    let answered = 0, correct = 0;
+    const totalQuestions = document.querySelectorAll('.quiz-question').length;
+
+    function selectQuiz(el) {
+      const q = el.closest('.quiz-question');
+      if (q.querySelector('.quiz-option.correct, .quiz-option.incorrect')) return;
+      const correctVal = q.dataset.correct;
+      const isCorrect = el.dataset.value === correctVal;
+
+      q.querySelectorAll('.quiz-option').forEach(o => o.classList.add('disabled'));
+
+      if (isCorrect) {
+        el.classList.add('correct');
+        el.querySelector('.quiz-marker').textContent = '\u2713';
+        correct++;
+      } else {
+        el.classList.add('incorrect');
+        el.querySelector('.quiz-marker').textContent = '\u2717';
+        q.querySelectorAll('.quiz-option').forEach(o => {
+          if (o.dataset.value === correctVal) {
+            o.classList.add('correct');
+            o.querySelector('.quiz-marker').textContent = '\u2713';
+          }
+        });
+      }
+
+      const feedbacks = q.querySelectorAll('.quiz-feedback');
+      feedbacks.forEach(fb => {
+        if ((isCorrect && fb.classList.contains('correct-fb')) ||
+            (!isCorrect && fb.classList.contains('incorrect-fb'))) {
+          fb.classList.add('show');
+        }
+      });
+
+      answered++;
+      if (answered === totalQuestions) {
+        const scoreEl = document.getElementById('quiz-score');
+        scoreEl.style.display = 'block';
+        document.getElementById('score-display').textContent = `${correct}/${totalQuestions}`;
+        const pct = Math.round(correct / totalQuestions * 100);
+        const msg = pct === 100 ? 'Perfect! You\'ve mastered Advanced RAG patterns.' :
+                    pct >= 80 ? 'Great work! You have a strong understanding of advanced RAG.' :
+                    pct >= 60 ? 'Good effort! Review the sections where you missed questions.' :
+                    'Consider re-reading the module and trying again.';
+        document.getElementById('score-message').textContent = msg;
+      }
+    }
+
+    // ===== ANIMATION 1: NAIVE vs ADVANCED PIPELINE =====
+    const pipelineAnim = (() => {
+      const naiveStages = ['Query', 'Embed', 'Retrieve', 'Generate'];
+      const advancedStages = ['Query', 'Transform', 'BM25', 'Vector', 'Fuse', 'Re-rank', 'Compress', 'Generate'];
+      let timer = null, step = 0, running = false;
+      const naiveRow = document.getElementById('naive-row');
+      const advRow = document.getElementById('advanced-row');
+
+      function build() {
+        naiveRow.innerHTML = '';
+        advRow.innerHTML = '';
+        [naiveStages, advancedStages].forEach((stages, lane) => {
+          const row = lane === 0 ? naiveRow : advRow;
+          stages.forEach((name, i) => {
+            if (i > 0) { const arr = document.createElement('span'); arr.className = 'pipe-arrow'; arr.textContent = '→'; row.appendChild(arr); }
+            const el = document.createElement('div'); el.className = 'pipe-stage';
+            el.innerHTML = `<div class="s-name">${name}</div>`;
+            row.appendChild(el);
+          });
+        });
+        document.getElementById('naive-quality').style.width = '0%';
+        document.getElementById('advanced-quality').style.width = '0%';
+        document.getElementById('naive-pct').textContent = '0%';
+        document.getElementById('advanced-pct').textContent = '0%';
+        step = 0;
+      }
+
+      function tick() {
+        const naiveEls = naiveRow.querySelectorAll('.pipe-stage');
+        const naiveArrows = naiveRow.querySelectorAll('.pipe-arrow');
+        const advEls = advRow.querySelectorAll('.pipe-stage');
+        const advArrows = advRow.querySelectorAll('.pipe-arrow');
+
+        // Naive pipeline: 4 stages
+        if (step < naiveStages.length) {
+          naiveEls[step].classList.add('visible', 'active');
+          if (step > 0) { naiveEls[step-1].classList.remove('active'); naiveEls[step-1].classList.add('done'); naiveArrows[step-1].classList.add('visible'); }
+        }
+        if (step === naiveStages.length - 1) {
+          naiveEls[step].classList.add('done');
+          document.getElementById('naive-quality').style.width = '62%';
+          document.getElementById('naive-pct').textContent = '62%';
+        }
+
+        // Advanced pipeline: 8 stages
+        if (step < advancedStages.length) {
+          advEls[step].classList.add('visible', 'active');
+          if (step > 0) { advEls[step-1].classList.remove('active'); advEls[step-1].classList.add('done'); advArrows[step-1].classList.add('visible'); }
+        }
+        if (step === advancedStages.length - 1) {
+          advEls[step].classList.add('done');
+          document.getElementById('advanced-quality').style.width = '89%';
+          document.getElementById('advanced-pct').textContent = '89%';
+        }
+
+        step++;
+        if (step >= advancedStages.length) { running = false; clearInterval(timer); }
+      }
+
+      build();
+      return {
+        play() { if (!running) { running = true; timer = setInterval(tick, 600); } },
+        pause() { running = false; clearInterval(timer); },
+        restart() { this.pause(); build(); setTimeout(() => this.play(), 200); }
+      };
+    })();
+
+    // ===== ANIMATION 2: HYBRID SEARCH =====
+    const hybridAnim = (() => {
+      const bm25Docs = [{name:'Filing-0093',highlight:'bm25'},{name:'Amendment-0093',highlight:'bm25'},{name:'Debtor-Profile',highlight:'bm25'},{name:'Risk-Report',highlight:''},{name:'Filing-0094',highlight:''}];
+      const vecDocs = [{name:'Risk-Analysis',highlight:'vec'},{name:'Debtor-Profile',highlight:'vec'},{name:'Credit-Score',highlight:'vec'},{name:'Filing-0093',highlight:'vec'},{name:'Market-Overview',highlight:''}];
+      const fusedDocs = [{name:'Filing-0093',highlight:'fused'},{name:'Debtor-Profile',highlight:'fused'},{name:'Risk-Analysis',highlight:'fused'},{name:'Amendment-0093',highlight:'fused'},{name:'Credit-Score',highlight:'fused'}];
+      let timer = null, step = 0, running = false;
+
+      function build() {
+        document.getElementById('hybrid-query').style.opacity = '0';
+        ['bm25-results','vector-results','fused-results'].forEach(id => document.getElementById(id).innerHTML = '');
+        document.getElementById('fusion-node').classList.remove('visible');
+        [bm25Docs, vecDocs, fusedDocs].forEach((docs, lane) => {
+          const containerId = ['bm25-results','vector-results','fused-results'][lane];
+          const container = document.getElementById(containerId);
+          docs.forEach(d => {
+            const chip = document.createElement('div');
+            chip.className = 'doc-chip';
+            chip.textContent = d.name;
+            container.appendChild(chip);
+          });
+        });
+        step = 0;
+      }
+
+      function tick() {
+        if (step === 0) { document.getElementById('hybrid-query').style.opacity = '1'; }
+        else if (step <= 5) {
+          const bm25Chips = document.getElementById('bm25-results').querySelectorAll('.doc-chip');
+          if (step - 1 < bm25Chips.length) {
+            bm25Chips[step-1].classList.add('visible');
+            if (bm25Docs[step-1].highlight) bm25Chips[step-1].classList.add('highlight-bm25');
+          }
+        }
+        else if (step <= 10) {
+          const vecChips = document.getElementById('vector-results').querySelectorAll('.doc-chip');
+          const idx = step - 6;
+          if (idx < vecChips.length) {
+            vecChips[idx].classList.add('visible');
+            if (vecDocs[idx].highlight) vecChips[idx].classList.add('highlight-vec');
+          }
+        }
+        else if (step === 11) { document.getElementById('fusion-node').classList.add('visible'); }
+        else if (step <= 16) {
+          const fusedChips = document.getElementById('fused-results').querySelectorAll('.doc-chip');
+          const idx = step - 12;
+          if (idx < fusedChips.length) {
+            fusedChips[idx].classList.add('visible');
+            if (fusedDocs[idx].highlight) fusedChips[idx].classList.add('highlight-fused');
+          }
+        }
+        step++;
+        if (step > 16) { running = false; clearInterval(timer); }
+      }
+
+      build();
+      return {
+        play() { if (!running) { running = true; timer = setInterval(tick, 350); } },
+        pause() { running = false; clearInterval(timer); },
+        restart() { this.pause(); build(); setTimeout(() => this.play(), 200); }
+      };
+    })();
+
+    // ===== ANIMATION 3: RE-RANKING =====
+    const rerankAnim = (() => {
+      const before = [
+        {name:'Debtor-Overview',score:'0.89',promoted:false},
+        {name:'Filing-0093',score:'0.87',promoted:true},
+        {name:'Market-Trends',score:'0.85',promoted:false},
+        {name:'Risk-Analysis',score:'0.84',promoted:true},
+        {name:'Amendment-History',score:'0.82',promoted:true},
+        {name:'Credit-Policy',score:'0.80',promoted:false},
+        {name:'UCC-Guidelines',score:'0.78',promoted:false}
+      ];
+      const after = [
+        {name:'Filing-0093',score:'9.2',promoted:true},
+        {name:'Amendment-History',score:'8.7',promoted:true},
+        {name:'Risk-Analysis',score:'8.1',promoted:true},
+        {name:'Debtor-Overview',score:'5.4',promoted:false},
+        {name:'UCC-Guidelines',score:'3.2',promoted:false},
+        {name:'Market-Trends',score:'2.1',promoted:false,demoted:true},
+        {name:'Credit-Policy',score:'1.8',promoted:false,demoted:true}
+      ];
+      let timer = null, step = 0, running = false;
+      const beforeEl = document.getElementById('rerank-before');
+      const afterEl = document.getElementById('rerank-after');
+
+      function build() {
+        beforeEl.innerHTML = '';
+        afterEl.innerHTML = '';
+        document.getElementById('rerank-arrow').classList.remove('visible');
+        before.forEach((d, i) => {
+          const el = document.createElement('div'); el.className = 'rerank-item'; el.style.opacity = '0';
+          el.innerHTML = `<span class="rank">#${i+1}</span><span>${d.name}</span><span class="score">${d.score}</span>`;
+          beforeEl.appendChild(el);
+        });
+        after.forEach((d, i) => {
+          const el = document.createElement('div'); el.className = 'rerank-item'; el.style.opacity = '0';
+          el.innerHTML = `<span class="rank">#${i+1}</span><span>${d.name}</span><span class="score">${d.score}</span>`;
+          afterEl.appendChild(el);
+        });
+        step = 0;
+      }
+
+      function tick() {
+        const beforeItems = beforeEl.querySelectorAll('.rerank-item');
+        const afterItems = afterEl.querySelectorAll('.rerank-item');
+        if (step < before.length) {
+          beforeItems[step].style.opacity = '1';
+          if (before[step].promoted) beforeItems[step].classList.add('promoted');
+        } else if (step === before.length) {
+          document.getElementById('rerank-arrow').classList.add('visible');
+        } else if (step <= before.length + after.length) {
+          const idx = step - before.length - 1;
+          if (idx < after.length) {
+            afterItems[idx].style.opacity = '1';
+            if (after[idx].promoted) afterItems[idx].classList.add('promoted');
+            if (after[idx].demoted) afterItems[idx].classList.add('demoted');
+          }
+        }
+        step++;
+        if (step > before.length + after.length + 1) { running = false; clearInterval(timer); }
+      }
+
+      build();
+      return {
+        play() { if (!running) { running = true; timer = setInterval(tick, 400); } },
+        pause() { running = false; clearInterval(timer); },
+        restart() { this.pause(); build(); setTimeout(() => this.play(), 200); }
+      };
+    })();
+
+    // ===== ANIMATION 4: QUERY TRANSFORMATION =====
+    const qtAnim = (() => {
+      let timer = null, step = 0, running = false;
+      const hydeText = '"Filing 2024-FL-0093 is a UCC-1 financing statement naming XYZ Corp as debtor. The filing creates a security interest that elevates creditor priority, potentially affecting the debtor\'s creditworthiness and ability to secure additional financing..."';
+      const multiText = '1. "Impact of UCC filing 2024-FL-0093 on debtor"\n2. "XYZ Corp debtor risk after new UCC-1 filing"\n3. "How does a financing statement affect debtor credit?"';
+      const stepbackText = '"How do UCC-1 filings generally affect a debtor\'s financial risk profile and creditworthiness?"';
+
+      function build() {
+        document.querySelectorAll('.qt-path').forEach(p => p.classList.remove('visible'));
+        document.getElementById('qt-hyde-text').textContent = '';
+        document.getElementById('qt-multi-text').textContent = '';
+        document.getElementById('qt-stepback-text').textContent = '';
+        step = 0;
+      }
+
+      function tick() {
+        if (step === 0) {
+          document.getElementById('qt-hyde').classList.add('visible');
+          document.getElementById('qt-hyde-text').textContent = hydeText;
+        } else if (step === 1) {
+          document.getElementById('qt-multi').classList.add('visible');
+          document.getElementById('qt-multi-text').textContent = multiText;
+        } else if (step === 2) {
+          document.getElementById('qt-stepback').classList.add('visible');
+          document.getElementById('qt-stepback-text').textContent = stepbackText;
+        }
+        step++;
+        if (step > 2) { running = false; clearInterval(timer); }
+      }
+
+      build();
+      return {
+        play() { if (!running) { running = true; timer = setInterval(tick, 1200); } },
+        pause() { running = false; clearInterval(timer); },
+        restart() { this.pause(); build(); setTimeout(() => this.play(), 200); }
+      };
+    })();
+
+    // ===== ANIMATION 5: EVALUATION METRICS =====
+    const evalAnim = (() => {
+      const phases = [
+        { name: 'Naive RAG', prec: 45, rec: 50, faith: 70 },
+        { name: '+ Hybrid Search', prec: 55, rec: 72, faith: 72 },
+        { name: '+ Re-Ranking', prec: 78, rec: 72, faith: 75 },
+        { name: '+ Query Transform', prec: 80, rec: 88, faith: 78 },
+        { name: '+ Compression', prec: 82, rec: 88, faith: 92 }
+      ];
+      let timer = null, step = 0, running = false;
+
+      function build() {
+        document.getElementById('eval-prec').style.height = '0%';
+        document.getElementById('eval-rec').style.height = '0%';
+        document.getElementById('eval-faith').style.height = '0%';
+        document.getElementById('eval-prec-val').textContent = '0%';
+        document.getElementById('eval-rec-val').textContent = '0%';
+        document.getElementById('eval-faith-val').textContent = '0%';
+        document.getElementById('eval-phase').textContent = '';
+        step = 0;
+      }
+
+      function tick() {
+        if (step < phases.length) {
+          const p = phases[step];
+          document.getElementById('eval-phase').textContent = p.name;
+          document.getElementById('eval-prec').style.height = p.prec + '%';
+          document.getElementById('eval-rec').style.height = p.rec + '%';
+          document.getElementById('eval-faith').style.height = p.faith + '%';
+          document.getElementById('eval-prec-val').textContent = p.prec + '%';
+          document.getElementById('eval-rec-val').textContent = p.rec + '%';
+          document.getElementById('eval-faith-val').textContent = p.faith + '%';
+        }
+        step++;
+        if (step >= phases.length) { running = false; clearInterval(timer); }
+      }
+
+      build();
+      return {
+        play() { if (!running) { running = true; timer = setInterval(tick, 1500); } },
+        pause() { running = false; clearInterval(timer); },
+        restart() { this.pause(); build(); setTimeout(() => this.play(), 200); }
+      };
+    })();
+  </script>
+</body>
+</html>

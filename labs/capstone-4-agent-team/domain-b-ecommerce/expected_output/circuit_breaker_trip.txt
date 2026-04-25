@@ -1,0 +1,37 @@
+======================================================================
+CIRCUIT BREAKER TRIP — B2B Ecommerce Pipeline
+Scenario: 4 consecutive SLA violations
+======================================================================
+
+--- Order PO-2024-5009 (past-due delivery) ---
+[ExceptionMonitorAgent] SLA status: violated (requested 2024-11-19, already past)
+  Circuit breaker: consecutive_failures = 1
+
+--- Order PO-2024-5009 (reprocessed) ---
+[ExceptionMonitorAgent] SLA status: violated
+  Circuit breaker: consecutive_failures = 2
+
+--- Order PO-2024-5009 (reprocessed) ---
+[ExceptionMonitorAgent] SLA status: violated
+  Circuit breaker: consecutive_failures = 3
+
+--- Order PO-2024-5002 (expedited, tight deadline) ---
+[ExceptionMonitorAgent] SLA status: at_risk
+  Circuit breaker: consecutive_failures = 4
+  [CIRCUIT BREAKER 'sla_violations'] TRIPPED after 4 consecutive failures!
+
+--- Order PO-2024-5001 (should be fine, but blocked) ---
+  Circuit breaker is_tripped() = True
+  Pipeline HALTED: Circuit breaker OPEN
+
+Results:
+  PO-2024-5009: COMPLETED (but SLA violated)
+  PO-2024-5009: COMPLETED (but SLA violated)
+  PO-2024-5009: COMPLETED (but SLA violated)
+  PO-2024-5002: HALTED (breaker tripped)
+  PO-2024-5001: HALTED (breaker still open)
+
+NOTE: The consecutive-failure circuit breaker differs from the
+rate-based breaker in Domain A. Here, a single success resets the
+counter to zero. The breaker only trips when failures are consecutive,
+making it appropriate for detecting systemic issues vs. isolated errors.

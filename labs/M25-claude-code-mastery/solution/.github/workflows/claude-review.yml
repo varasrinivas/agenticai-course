@@ -1,0 +1,43 @@
+name: Claude PR Review
+on:
+  pull_request:
+    types: [opened, synchronize]
+    paths:
+      - 'src/**'
+      - 'tests/**'
+
+jobs:
+  claude-review:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Review PR for code quality
+        id: review
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          # Use a FRESH session for review (never reuse the generation session)
+          claude -p "Review this PR. Check for:
+          1. UCC domain rule violations (filing number format, state codes)
+          2. Missing error handling in API endpoints
+          3. SQL injection or other security issues
+          4. Missing test coverage for new code
+
+          Output a JSON summary with: passed (bool), issues (array), suggestions (array)" \
+            --output-format json \
+            --session "pr-review-${{ github.event.pull_request.number }}" \
+            > review_result.json
+
+      - name: Post review comment
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh pr comment ${{ github.event.pull_request.number }} \
+            --body "## Claude Code Review\n\n$(cat review_result.json | jq -r '.result')"

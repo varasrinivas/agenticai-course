@@ -1,0 +1,367 @@
+================================================================================
+M11 Lab — Expected Output (approximate)
+================================================================================
+Claude's exact wording will vary between runs. What matters is the STRUCTURE:
+the memory state updates, episodic recalls, and procedural pattern matches
+should match these patterns.
+
+================================================================================
+STEP 1: working_memory.py / working_memory.js
+================================================================================
+
+>>> Turn 1: Start research
+============================================================
+[QUERY] Research Greenfield Logistics LLC. Find all their UCC filings and tell me about any liens.
+============================================================
+
+──────────────────────────────────────────────────────────────
+[USING TOOL] update_working_memory
+[INPUT]      {
+  "key": "current_debtor",
+  "value": "Greenfield Logistics LLC"
+}
+──────────────────────────────────────────────────────────────
+
+──────────────────────────────────────────────────────────────
+[TOOL RESULT]
+{"status": "ok", "key": "current_debtor", "value": "Greenfield Logistics LLC"}
+──────────────────────────────────────────────────────────────
+
+──────────────────────────────────────────────────────────────
+[USING TOOL] search_ucc_filings
+[INPUT]      {
+  "debtor_name": "Greenfield"
+}
+──────────────────────────────────────────────────────────────
+
+──────────────────────────────────────────────────────────────
+[TOOL RESULT]
+[
+  {
+    "filing_number": "UCC-2024-NY-0012847",
+    "debtor": "Greenfield Logistics LLC",
+    "secured_party": "Atlantic Capital Partners",
+    "state": "New York",
+    "status": "Active",
+    "collateral": "All accounts receivable, inventory, equipment, and general intangibles now owned or hereafter acqu..."
+  },
+  {
+    "filing_number": "UCC-2024-NY-0012847",
+    "debtor": "Greenfield Logistics LLC",
+    "secured_party": "Second National Bank",
+    "state": "New York",
+    "status": "Active",
+    "collateral": "All inventory and equipment...."
+  }
+]
+──────────────────────────────────────────────────────────────
+
+──────────────────────────────────────────────────────────────
+[USING TOOL] update_working_memory
+[INPUT]      {
+  "key": "search_history",
+  "value": "Searched by debtor name 'Greenfield'"
+}
+──────────────────────────────────────────────────────────────
+
+──────────────────────────────────────────────────────────────
+[USING TOOL] update_working_memory
+[INPUT]      {
+  "key": "findings_so_far",
+  "value": "Found 2 active filings for Greenfield Logistics LLC in NY"
+}
+──────────────────────────────────────────────────────────────
+
+──────────────────────────────────────────────────────────────
+[WORKING MEMORY STATE]
+  current_debtor: Greenfield Logistics LLC
+  findings_so_far: [2 items]
+    - Found 2 active filings for Greenfield Logistics LLC in NY
+    - Atlantic Capital Partners holds blanket lien on all assets
+  search_history: [1 items]
+    - Searched by debtor name 'Greenfield'
+──────────────────────────────────────────────────────────────
+
+FINAL ANSWER: I found 2 UCC filings for Greenfield Logistics LLC, both in
+New York. Atlantic Capital Partners holds a blanket lien covering all accounts
+receivable, inventory, equipment, and general intangibles. Second National Bank
+also has a lien on inventory and equipment. The presence of multiple secured
+parties with overlapping collateral indicates elevated risk.
+
+
+>>> Working Memory after Turn 1:
+──────────────────────────────────────────────────────────────
+[WORKING MEMORY STATE]
+  current_debtor: Greenfield Logistics LLC
+  findings_so_far: [2+ items]
+    - Found 2 active filings for Greenfield Logistics LLC in NY
+    - Atlantic Capital holds blanket lien, Second National Bank holds equipment lien
+  search_history: [1+ items]
+    - Searched by debtor name 'Greenfield'
+──────────────────────────────────────────────────────────────
+
+
+>>> Turn 2: Follow-up question (memory carries forward)
+(The agent sees the working memory context in its system prompt and knows
+we are already researching Greenfield Logistics LLC. It continues without
+needing to re-search.)
+
+FINAL ANSWER: Based on my research of Greenfield Logistics LLC, there are two
+secured parties: Atlantic Capital Partners (blanket lien on all assets) and
+Second National Bank (inventory and equipment). Yes, there is a blanket lien —
+Atlantic Capital's filing covers "all accounts receivable, inventory, equipment,
+and general intangibles now owned or hereafter acquired." This is a comprehensive
+blanket lien that could create priority issues with Second National Bank's filing.
+
+
+>>> Persistence Test: Serialize and restore
+Saved memory: {
+  "current_debtor": "Greenfield Logistics LLC",
+  "findings_so_far": ["Found 2 active filings...", "Atlantic Capital holds blanket lien..."],
+  "search_history": ["Searched by debtor name 'Greenfield'"]
+}
+Restored memory context:
+## Current Working Memory
+- current_debtor: Greenfield Logistics LLC
+- findings_so_far:
+  1. Found 2 active filings for Greenfield Logistics LLC in NY
+  2. Atlantic Capital holds blanket lien, Second National Bank holds equipment lien
+- search_history:
+  1. Searched by debtor name 'Greenfield'
+
+
+================================================================================
+STEP 2: episodic_memory.py / episodic_memory.js
+================================================================================
+
+[EPISODIC MEMORY] Loading mock episodes...
+  Stored: episode_0 — Researched Greenfield Logistics — found active filing in N...
+  Stored: episode_1 — Investigated Pacific Ridge Technologies — DE incorporation...
+  Stored: episode_2 — Searched for Lone Star Energy — found equipment-specific l...
+  Stored: episode_3 — Looked into Sunshine Medical Group — found UCC-3 amendment...
+  Stored: episode_4 — Checked Nextera Holdings — massive blanket lien by JPMorga...
+[EPISODIC MEMORY] 5 episodes loaded.
+
+
+>>> Test 1: Query about a previously researched debtor
+──────────────────────────────────────────────────────────────
+[USING TOOL] recall_similar_research
+[INPUT]      {
+  "query": "Greenfield Logistics UCC filings"
+}
+──────────────────────────────────────────────────────────────
+
+──────────────────────────────────────────────────────────────
+[EPISODIC MEMORY RECALL] Found 3 similar episodes
+  1. [score=0.782] Researched Greenfield Logistics — found active filing in NY, blanket lien by Atlantic Capital Partners...
+     metadata: {"debtor": "Greenfield Logistics LLC", "state": "New York", "risk_level": "high"}
+  2. [score=0.543] Checked Nextera Holdings — massive blanket lien by JPMorgan Chase...
+     metadata: {"debtor": "Nextera Holdings Corp", "state": "Delaware", "risk_level": "critical"}
+  3. [score=0.521] Investigated Pacific Ridge Technologies — DE incorporation but CA filing...
+     metadata: {"debtor": "Pacific Ridge Technologies Inc", "state": "California", "risk_level": "medium"}
+──────────────────────────────────────────────────────────────
+
+FINAL ANSWER: Based on our past research, we have extensive records on
+Greenfield Logistics LLC. In a previous session, we found an active UCC filing
+in New York with a blanket lien by Atlantic Capital Partners covering all
+accounts receivable, inventory, equipment, and general intangibles. This was
+assessed as a HIGH risk situation. Let me search for any updates...
+
+
+>>> Test 2: Query about a new debtor (should find similar past research)
+(Agent recalls episodes about equipment liens — Lone Star Energy and Sunshine
+Medical Group are the most similar, since both involve equipment collateral.)
+
+──────────────────────────────────────────────────────────────
+[EPISODIC MEMORY RECALL] Found 3 similar episodes
+  1. [score=0.6xx] Searched for Lone Star Energy — found equipment-specific lien on Caterpillar excavators...
+  2. [score=0.5xx] Looked into Sunshine Medical Group — found UCC-3 amendment adding MRI equipment...
+  3. [score=0.4xx] Researched Greenfield Logistics — found active filing in NY...
+──────────────────────────────────────────────────────────────
+
+FINAL ANSWER: Based on past research, we've seen equipment liens in other cases
+(Lone Star Energy had Caterpillar excavators, Sunshine Medical Group had MRI
+equipment). For Midwest Agricultural Cooperative, I found an active filing in
+Illinois with Farm Credit Services as the secured party. The collateral covers
+all farm products including crops, livestock, and farm equipment.
+
+
+>>> Recent Episodes:
+  1. Researched Midwest Agricultural Cooperative — found active filing in IL, fa...
+     {"debtor": "Midwest Agricultural Cooperative", "state": "Illinois", "risk_level": "medium"}
+  2. Checked Nextera Holdings — massive blanket lien by JPMorgan Chase covering ...
+     {"debtor": "Nextera Holdings Corp", "state": "Delaware", "risk_level": "critical"}
+  3. Looked into Sunshine Medical Group — found UCC-3 amendment adding MRI equip...
+     {"debtor": "Sunshine Medical Group PA", "state": "Florida", "risk_level": "medium"}
+
+
+================================================================================
+STEP 3: memory_agent.py / memory_agent.js
+================================================================================
+
+>>> Session 1: Research Greenfield Logistics
+
+──────────────────────────────────────────────────────────────
+[USING TOOL] get_procedural_pattern
+[INPUT]      {
+  "task_description": "research entity and assess lien risk"
+}
+──────────────────────────────────────────────────────────────
+
+──────────────────────────────────────────────────────────────
+[PROCEDURAL MEMORY MATCH]
+  patterns: [2 items]
+    - {"pattern": "entity_search", "description": "Standard entity research workflow", "steps": ["search by debtor name", "get filing details", "check for amendments", "assess risk"]}
+    - {"pattern": "risk_assessment", "description": "Lien risk evaluation pattern", "steps": ["count active filings", "check for blanket liens", "check expiration dates", "flag multiple secured parties"]}
+──────────────────────────────────────────────────────────────
+
+──────────────────────────────────────────────────────────────
+[USING TOOL] recall_similar_research
+[INPUT]      {
+  "query": "Greenfield Logistics UCC filings lien risk"
+}
+──────────────────────────────────────────────────────────────
+
+(Agent finds the pre-loaded episode about Greenfield from mock data)
+
+──────────────────────────────────────────────────────────────
+[USING TOOL] update_working_memory
+[INPUT]      {
+  "key": "current_debtor",
+  "value": "Greenfield Logistics LLC"
+}
+──────────────────────────────────────────────────────────────
+
+(Agent follows the entity_search procedural pattern:
+ 1. search by debtor name -> finds 2 filings
+ 2. get filing details -> gets full details
+ 3. check for amendments -> no UCC-3 amendments found
+ 4. assess risk -> blanket lien = high risk)
+
+(Agent follows the risk_assessment procedural pattern:
+ 1. count active filings -> 2
+ 2. check for blanket liens -> Atlantic Capital blanket lien
+ 3. check expiration dates -> 2029
+ 4. flag multiple secured parties -> Atlantic Capital + Second National Bank)
+
+──────────────────────────────────────────────────────────────
+[WORKING MEMORY]
+  current_debtor: Greenfield Logistics LLC
+  findings_so_far: [4+ items]
+    - Found 2 active filings in NY
+    - Atlantic Capital Partners holds blanket lien on all assets
+    - Second National Bank holds lien on inventory and equipment
+    - Multiple secured parties = elevated risk
+  search_history: [2+ items]
+    - Searched by debtor name 'Greenfield'
+    - Retrieved details for UCC-2024-NY-0012847
+──────────────────────────────────────────────────────────────
+
+FINAL ANSWER: Following the entity research and risk assessment workflows,
+here's my analysis of Greenfield Logistics LLC:
+
+**Filings Found:** 2 active UCC filings in New York
+- Atlantic Capital Partners: Blanket lien on ALL assets (accounts receivable,
+  inventory, equipment, general intangibles) — expires 2029
+- Second National Bank: Lien on inventory and equipment — expires 2029
+
+**Risk Assessment: HIGH**
+- Blanket lien present (Atlantic Capital)
+- Multiple secured parties with overlapping collateral
+- No amendments or terminations found
+- Previous research confirms this assessment
+
+>>> Storing Session 1 as episode...
+============================================================
+[EPISODE STORED] episode_5: Researched Greenfield Logistics LLC — Found 2 active filings in NY; Atlantic C...
+============================================================
+Stored as: episode_5
+
+
+>>> Session 2: Research Peachtree Ventures (should recall past sessions)
+
+(Agent checks procedural memory -> entity_search + risk_assessment patterns)
+(Agent checks episodic memory -> recalls Greenfield research from Session 1
+ plus other relevant past sessions)
+
+──────────────────────────────────────────────────────────────
+[USING TOOL] recall_similar_research
+[INPUT]      {
+  "query": "Peachtree Ventures lien risk company research"
+}
+──────────────────────────────────────────────────────────────
+
+(Agent finds relevant past episodes including the freshly stored Session 1)
+
+FINAL ANSWER: Following the entity research and risk assessment workflows,
+here's my analysis of Peachtree Ventures LLC:
+
+**Filings Found:** 1 active UCC filing in Georgia
+- Truist Financial Corporation: Lien on inventory at warehouse locations in
+  Fulton, DeKalb, and Gwinnett counties + accounts receivable from wholesale
+  distribution — expires 2029
+
+**Risk Assessment: MEDIUM**
+- Single filing, single secured party
+- Not a blanket lien (limited to inventory + AR)
+- No amendments or terminations
+
+**Comparison to Previous Research:**
+- vs. Greenfield Logistics (HIGH risk): Greenfield had 2 secured parties with
+  blanket lien coverage; Peachtree has single party with limited collateral
+- vs. Nextera Holdings (CRITICAL risk): Nextera had JPMorgan blanket lien on
+  ALL assets; Peachtree's exposure is much more limited
+- Peachtree is in a healthier position than most companies we've researched
+
+
+>>> Final Memory Summary:
+──────────────────────────────────────────────────────────────
+[WORKING MEMORY]
+  current_debtor: Peachtree Ventures LLC
+  findings_so_far: [3+ items]
+    - Found 1 active filing in Georgia
+    - Truist Financial holds lien on inventory and AR
+    - Single secured party, limited collateral scope
+  search_history: [1+ items]
+    - Searched by debtor name 'Peachtree'
+──────────────────────────────────────────────────────────────
+
+[EPISODIC MEMORY] Total episodes: 7
+  1. Researched Peachtree Ventures LLC — Found 1 active filing in Georgia; Trui...
+  2. Researched Greenfield Logistics LLC — Found 2 active filings in NY; Atlant...
+  3. Checked Nextera Holdings — massive blanket lien by JPMorgan Chase covering ...
+  4. Looked into Sunshine Medical Group — found UCC-3 amendment adding MRI equip...
+  5. Searched for Lone Star Energy — found equipment-specific lien on Caterpilla...
+
+
+================================================================================
+KEY PATTERNS TO VERIFY
+================================================================================
+
+1. WORKING MEMORY:
+   - Memory persists across turns within a session
+   - get_context() correctly formats all entries for the system prompt
+   - Append-style keys (findings_so_far, search_history) accumulate items
+   - to_dict() / from_dict() enable serialization/deserialization
+
+2. EPISODIC MEMORY:
+   - ChromaDB stores episode summaries as vectors
+   - recall() finds semantically similar past research
+   - Similarity scores show the most relevant episodes first
+   - New episodes can be stored and immediately recalled
+
+3. PROCEDURAL MEMORY:
+   - Pattern matching identifies relevant workflows based on triggers
+   - Agent follows the procedural steps in order
+   - Multiple patterns can match a single task (e.g., entity_search + risk_assessment)
+
+4. ORCHESTRATION:
+   - The agent checks procedural memory FIRST for workflow guidance
+   - Then checks episodic memory for relevant past experience
+   - Uses working memory throughout to track state
+   - Stores completed sessions as new episodes for future recall
+
+5. CROSS-SESSION LEARNING:
+   - Session 2 recalls Session 1 as relevant past experience
+   - The agent compares current findings to historical data
+   - Each session enriches the episodic memory for future sessions

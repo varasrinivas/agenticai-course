@@ -1,0 +1,2185 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>M19: Tracing &amp; Logging | Building AI Agents with Claude</title>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;700;800&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg-primary: #0A1628; --bg-secondary: #111D33; --bg-card: #162033; --bg-surface: #1A2740;
+      --text-primary: #E8ECF1; --text-secondary: #94A3B8; --text-muted: #64748B;
+      --accent-primary: #D4A843; --accent-hover: #E5BC5A; --accent-muted: rgba(212, 168, 67, 0.15);
+      --success: #10B981; --success-bg: rgba(16, 185, 129, 0.1);
+      --warning: #F59E0B; --warning-bg: rgba(245, 158, 11, 0.1);
+      --error: #F43F5E; --error-bg: rgba(244, 63, 94, 0.1);
+      --info: #3B82F6; --info-bg: rgba(59, 130, 246, 0.1);
+      --track-observability: #22C55E; --track-color: var(--track-observability); --track-capstones: #D4A843;
+      --code-bg: #0D1117; --code-border: #21262D; --code-text: #C9D1D9;
+      --transition-fast: 150ms; --transition-normal: 300ms; --transition-slow: 500ms;
+    }
+    body { background: var(--bg-primary); color: var(--text-primary); font-family: 'Source Sans 3', sans-serif; font-size: 1.05rem; line-height: 1.7; min-height: 100vh; }
+    .top-progress { position: fixed; top: 0; left: 0; right: 0; height: 4px; background: var(--bg-surface); z-index: 200; }
+    .top-progress .fill { height: 100%; background: linear-gradient(90deg, var(--track-color), var(--accent-primary)); width: 66.67%; border-radius: 0 2px 2px 0; }
+    .course-header { background: var(--bg-secondary); border-bottom: 1px solid var(--code-border); padding: 1.25rem 2rem; }
+    .course-header-inner { max-width: 1200px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; }
+    .course-title { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.95rem; font-weight: 600; color: var(--text-secondary); }
+    .track-badge { display: inline-flex; align-items: center; gap: 0.5rem; background: rgba(34, 197, 94, 0.15); border: 1px solid var(--track-color); border-radius: 20px; padding: 0.25rem 0.75rem; font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.8rem; font-weight: 600; color: var(--track-color); }
+    .track-badge .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--track-color); }
+    .header-meta { display: flex; gap: 1.5rem; font-size: 0.85rem; color: var(--text-muted); }
+    .page-container { max-width: 1200px; margin: 0 auto; padding: 2rem; display: grid; grid-template-columns: 240px 1fr; gap: 3rem; }
+    .sidebar-nav { position: sticky; top: 2rem; height: calc(100vh - 4rem); overflow-y: auto; padding-right: 1rem; }
+    .sidebar-nav::-webkit-scrollbar { width: 3px; } .sidebar-nav::-webkit-scrollbar-thumb { background: var(--bg-surface); border-radius: 3px; }
+    .sidebar-title { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); margin-bottom: 1rem; }
+    .sidebar-nav a { display: block; padding: 0.4rem 0.75rem; margin-bottom: 0.15rem; font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.82rem; font-weight: 600; color: var(--text-muted); text-decoration: none; border-left: 2px solid transparent; border-radius: 0 4px 4px 0; transition: all var(--transition-fast); }
+    .sidebar-nav a:hover { color: var(--text-primary); background: var(--bg-surface); }
+    .sidebar-nav a.active { color: var(--accent-primary); border-left-color: var(--accent-primary); background: var(--accent-muted); }
+    .content { max-width: 800px; } .section { margin-bottom: 4rem; }
+    h1 { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 2.25rem; line-height: 1.2; margin-bottom: 0.75rem; }
+    h2 { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 1.5rem; color: var(--text-primary); margin: 2.5rem 0 1rem; padding-top: 1rem; border-top: 1px solid var(--code-border); }
+    h2:first-of-type { border-top: none; }
+    h3 { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 600; font-size: 1.25rem; color: var(--text-primary); margin: 2rem 0 0.75rem; }
+    p { margin-bottom: 1rem; } ul, ol { margin: 0.5rem 0 1rem 1.5rem; } li { margin-bottom: 0.4rem; } strong { font-weight: 600; }
+    a { color: var(--accent-primary); text-decoration: none; } a:hover { text-decoration: underline; }
+    .analogy-box, .tech-def-box, .callout-why, .callout-warning, .callout-security, .callout-cost, .callout-cert { border-left: 4px solid; border-radius: 0 8px 8px 0; padding: 1.25rem 1.5rem; margin: 1.5rem 0; }
+    .analogy-box { background: var(--accent-muted); border-left-color: var(--accent-primary); }
+    .tech-def-box { background: var(--info-bg); border-left-color: var(--info); }
+    .callout-why { background: var(--success-bg); border-left-color: var(--success); }
+    .callout-warning { background: var(--warning-bg); border-left-color: var(--warning); }
+    .callout-security { background: var(--error-bg); border-left-color: var(--error); }
+    .callout-cost { background: var(--warning-bg); border-left-color: var(--accent-primary); }
+    .callout-cert { background: rgba(212, 168, 67, 0.06); border-left-color: var(--accent-primary); }
+    .box-label { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 0.9rem; display: block; margin-bottom: 0.4rem; }
+    .analogy-box .box-label { color: var(--accent-primary); } .tech-def-box .box-label { color: var(--info); } .callout-why .box-label { color: var(--success); } .callout-warning .box-label { color: var(--warning); } .callout-security .box-label { color: var(--error); } .callout-cost .box-label { color: var(--accent-primary); } .callout-cert .box-label { color: var(--accent-primary); }
+    .term-tooltip { position: relative; color: var(--accent-primary); cursor: help; border-bottom: 1px dashed var(--accent-primary); }
+    .term-tooltip .tooltip-content { position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); background: var(--bg-card); border: 1px solid var(--accent-primary); border-radius: 8px; padding: 0.75rem 1rem; font-size: 0.85rem; color: var(--text-primary); width: 280px; opacity: 0; pointer-events: none; transition: opacity var(--transition-fast); z-index: 10; line-height: 1.5; box-shadow: 0 4px 20px rgba(0,0,0,0.4); }
+    .term-tooltip:hover .tooltip-content, .term-tooltip:focus .tooltip-content { opacity: 1; pointer-events: auto; }
+    .code-block-wrapper { background: var(--code-bg); border: 1px solid var(--code-border); border-radius: 12px; margin: 1.5rem 0; overflow: hidden; }
+    .code-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--code-border); background: var(--bg-surface); }
+    .code-tab { padding: 0.5rem 1.25rem; background: none; border: none; font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; color: var(--text-muted); transition: all var(--transition-fast); }
+    .code-tab:hover { color: var(--text-primary); } .code-tab.active { color: var(--accent-primary); border-bottom-color: var(--accent-primary); }
+    .code-panel { display: none; position: relative; } .code-panel.active { display: block; }
+    .code-panel pre { margin: 0; padding: 1.25rem; overflow-x: auto; font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; line-height: 1.6; }
+    .code-panel pre code { background: none; color: var(--code-text); }
+    .copy-btn { position: absolute; top: 0.75rem; right: 0.75rem; background: var(--bg-surface); border: 1px solid var(--code-border); color: var(--text-muted); padding: 0.3rem 0.6rem; border-radius: 6px; font-size: 0.75rem; cursor: pointer; font-family: 'JetBrains Mono', monospace; transition: all var(--transition-fast); }
+    .copy-btn:hover { color: var(--accent-primary); border-color: var(--accent-primary); }
+    .output-block { background: var(--code-bg); border: 1px solid var(--code-border); border-radius: 8px; padding: 1rem 1.25rem; margin: 0.75rem 0 1.5rem; font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; color: var(--success); line-height: 1.5; white-space: pre-wrap; }
+    .output-label { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.25rem; }
+    .animation-container { background: var(--bg-secondary); border: 1px solid var(--code-border); border-radius: 12px; padding: 2rem; margin: 2rem 0; position: relative; min-height: 300px; overflow: hidden; }
+    .animation-title { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.85rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 1.25rem; }
+    .animation-controls { display: flex; gap: 0.5rem; position: absolute; bottom: 1rem; right: 1rem; }
+    .anim-btn { background: var(--bg-card); border: 1px solid var(--code-border); color: var(--text-primary); width: 36px; height: 36px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 1rem; transition: all var(--transition-fast); }
+    .anim-btn:hover { border-color: var(--accent-primary); color: var(--accent-primary); }
+    .quiz-question { background: var(--bg-card); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; }
+    .quiz-question h4 { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 600; margin-bottom: 1rem; font-size: 1rem; }
+    .quiz-option { padding: 0.75rem 1rem; margin: 0.5rem 0; border: 1px solid var(--code-border); border-radius: 8px; cursor: pointer; transition: all var(--transition-fast); display: flex; align-items: flex-start; gap: 0.75rem; }
+    .quiz-option:hover { border-color: var(--accent-primary); }
+    .quiz-option.correct { border-color: var(--success); background: var(--success-bg); } .quiz-option.incorrect { border-color: var(--error); background: var(--error-bg); } .quiz-option.disabled { pointer-events: none; }
+    .quiz-marker { width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--code-border); flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 700; margin-top: 2px; }
+    .quiz-option.correct .quiz-marker { border-color: var(--success); color: var(--success); } .quiz-option.incorrect .quiz-marker { border-color: var(--error); color: var(--error); }
+    .quiz-feedback { margin-top: 0.75rem; padding: 0.75rem; border-radius: 8px; font-size: 0.9rem; display: none; }
+    .quiz-feedback.show { display: block; } .quiz-feedback.correct-fb { background: var(--success-bg); color: var(--success); } .quiz-feedback.incorrect-fb { background: var(--error-bg); color: var(--error); }
+    .quiz-score { background: var(--bg-card); border-radius: 12px; padding: 1.5rem; text-align: center; margin-top: 2rem; display: none; }
+    .quiz-score .score-num { font-family: 'Bricolage Grotesque', sans-serif; font-size: 2.5rem; font-weight: 800; color: var(--accent-primary); }
+    .module-nav { display: flex; justify-content: space-between; align-items: center; padding: 1.5rem 0; margin: 2rem 0; border-top: 1px solid var(--code-border); }
+    .module-nav a { display: flex; align-items: center; gap: 0.5rem; color: var(--accent-primary); text-decoration: none; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 600; font-size: 0.9rem; padding: 0.5rem 1rem; border: 1px solid var(--code-border); border-radius: 8px; transition: all var(--transition-fast); }
+    .module-nav a:hover { border-color: var(--accent-primary); background: var(--accent-muted); text-decoration: none; }
+    .objectives-list { list-style: none; margin-left: 0; } .objectives-list li { padding: 0.5rem 0 0.5rem 2rem; position: relative; }
+    .objectives-list li::before { content: ''; position: absolute; left: 0; top: 0.85rem; width: 16px; height: 16px; border-radius: 4px; border: 2px solid var(--track-color); background: rgba(34, 197, 94, 0.1); }
+    .checkpoint { background: var(--bg-card); border: 1px solid var(--track-color); border-radius: 8px; padding: 1rem 1.25rem; margin: 1.5rem 0; }
+    .checkpoint-label { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 0.85rem; color: var(--track-color); margin-bottom: 0.4rem; }
+    .bridge { background: var(--bg-surface); border-radius: 8px; padding: 1rem 1.25rem; margin: 2rem 0; font-style: italic; color: var(--text-secondary); border-left: 3px solid var(--text-muted); }
+
+    /* === OBSERVABILITY COMPARISON ANIMATION === */
+    .obs-wrap { display: flex; gap: 1.5rem; }
+    .obs-side { flex: 1; }
+    .obs-label { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); margin-bottom: 0.5rem; }
+    .obs-line { display: flex; align-items: center; gap: 0.4rem; margin-bottom: 0.3rem; opacity: 0; transition: all 0.3s; font-family: 'JetBrains Mono', monospace; font-size: 0.6rem; }
+    .obs-line.visible { opacity: 1; }
+    .obs-icon { width: 20px; height: 20px; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 0.65rem; font-weight: 700; color: white; flex-shrink: 0; }
+    .obs-icon.ok { background: var(--success); }
+    .obs-icon.bad { background: var(--error); }
+    .obs-icon.warn { background: var(--warning); }
+    .obs-icon.info { background: var(--info); }
+    .obs-text { color: var(--text-secondary); }
+    .obs-result { background: var(--bg-card); border: 1px solid var(--code-border); border-radius: 6px; padding: 0.5rem 0.75rem; margin-top: 0.5rem; font-family: 'JetBrains Mono', monospace; font-size: 0.6rem; color: var(--text-muted); opacity: 0; transition: all 0.4s; }
+    .obs-result.visible { opacity: 1; }
+    .obs-result.good { border-color: var(--success); color: var(--success); }
+    .obs-result.poor { border-color: var(--error); color: var(--error); }
+
+    /* === TRACE WATERFALL ANIMATION === */
+    .tw-wrap { display: flex; flex-direction: column; gap: 0.3rem; position: relative; padding-left: 90px; }
+    .tw-header { display: flex; align-items: center; position: relative; margin-bottom: 0.5rem; }
+    .tw-time-axis { position: absolute; left: 90px; right: 0; top: -15px; display: flex; justify-content: space-between; font-family: 'JetBrains Mono', monospace; font-size: 0.5rem; color: var(--text-muted); }
+    .tw-row { display: flex; align-items: center; height: 28px; position: relative; opacity: 0; transition: all 0.4s; }
+    .tw-row.visible { opacity: 1; }
+    .tw-row-label { position: absolute; left: -90px; width: 85px; text-align: right; font-family: 'JetBrains Mono', monospace; font-size: 0.6rem; color: var(--text-secondary); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .tw-bar { height: 20px; border-radius: 3px; position: absolute; display: flex; align-items: center; justify-content: center; font-family: 'JetBrains Mono', monospace; font-size: 0.5rem; color: white; font-weight: 600; min-width: 20px; transition: width 0.6s; }
+    .tw-bar.trace { background: var(--track-color); opacity: 0.3; }
+    .tw-bar.llm { background: var(--info); }
+    .tw-bar.tool { background: #8B5CF6; }
+    .tw-bar.parse { background: var(--warning); }
+    .tw-bar.guard { background: var(--error); }
+    .tw-bar.embed { background: #06B6D4; }
+    .tw-connector { position: absolute; left: -5px; top: 0; bottom: 0; width: 2px; }
+    .tw-detail { background: var(--bg-card); border: 1px solid var(--code-border); border-radius: 6px; padding: 0.4rem 0.6rem; margin-top: 0.3rem; font-family: 'JetBrains Mono', monospace; font-size: 0.55rem; color: var(--text-secondary); opacity: 0; transition: all 0.3s; }
+    .tw-detail.visible { opacity: 1; }
+
+    /* === STRUCTURED LOGGING PIPELINE ANIMATION === */
+    .sl-wrap { display: flex; flex-direction: column; gap: 0.5rem; align-items: center; }
+    .sl-stage { display: flex; gap: 1rem; align-items: center; width: 100%; }
+    .sl-box { background: var(--bg-card); border: 1px solid var(--code-border); border-radius: 8px; padding: 0.4rem 0.75rem; font-family: 'JetBrains Mono', monospace; font-size: 0.6rem; color: var(--text-secondary); opacity: 0; transition: all 0.4s; flex: 1; max-width: 250px; }
+    .sl-box.visible { opacity: 1; }
+    .sl-box.raw { border-color: var(--text-muted); }
+    .sl-box.structured { border-color: var(--info); color: var(--info); }
+    .sl-box.redacted { border-color: var(--success); color: var(--success); }
+    .sl-box.danger { border-color: var(--error); color: var(--error); }
+    .sl-arrow { color: var(--text-muted); font-size: 1.2rem; opacity: 0; transition: opacity 0.3s; flex-shrink: 0; }
+    .sl-arrow.visible { opacity: 1; }
+    .sl-gate { width: 60px; height: 60px; border: 2px solid var(--code-border); border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.5rem; font-weight: 700; color: var(--text-muted); gap: 0.1rem; transition: all 0.3s; flex-shrink: 0; opacity: 0; }
+    .sl-gate.visible { opacity: 1; }
+    .sl-gate.active { border-color: var(--error); color: var(--error); box-shadow: 0 0 12px rgba(244,63,94,0.2); }
+    .sl-gate .sl-icon { font-size: 1rem; }
+    .sl-field { display: inline-block; background: var(--bg-surface); border-radius: 3px; padding: 0.1rem 0.3rem; margin: 0.1rem; font-family: 'JetBrains Mono', monospace; font-size: 0.55rem; }
+    .sl-field.safe { color: var(--success); }
+    .sl-field.pii { color: var(--error); text-decoration: line-through; }
+
+    /* === TOOL COMPARISON ANIMATION === */
+    .tc-wrap { display: grid; grid-template-columns: repeat(4, 1fr); gap: 0.75rem; }
+    .tc-card { background: var(--bg-card); border: 1px solid var(--code-border); border-radius: 8px; padding: 0.75rem; text-align: center; opacity: 0; transition: all 0.4s; }
+    .tc-card.visible { opacity: 1; }
+    .tc-card-name { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.75rem; font-weight: 700; color: var(--text-primary); margin-bottom: 0.4rem; }
+    .tc-card-type { font-family: 'JetBrains Mono', monospace; font-size: 0.55rem; color: var(--text-muted); margin-bottom: 0.3rem; }
+    .tc-feature { display: flex; align-items: center; gap: 0.3rem; font-family: 'JetBrains Mono', monospace; font-size: 0.55rem; color: var(--text-secondary); margin-bottom: 0.2rem; }
+    .tc-check { color: var(--success); font-weight: 700; }
+    .tc-partial { color: var(--warning); font-weight: 700; }
+    .tc-miss { color: var(--text-muted); font-weight: 700; }
+
+    .anim-static-fallback { display: none; padding: 1rem; font-size: 0.9rem; color: var(--text-secondary); }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+      .animation-controls { display: none; }
+      .anim-static-fallback { display: block; }
+    }
+    @media (max-width: 900px) {
+      .page-container { grid-template-columns: 1fr; }
+      .sidebar-nav { position: fixed; bottom: 0; left: 0; right: 0; height: auto; z-index: 100; background: var(--bg-secondary); border-top: 1px solid var(--code-border); padding: 0.75rem; display: flex; gap: 0.25rem; overflow-x: auto; }
+      .sidebar-title { display: none; }
+      .sidebar-nav a { white-space: nowrap; font-size: 0.75rem; }
+      .obs-wrap { flex-direction: column; }
+      .tc-wrap { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="top-progress" role="progressbar" aria-valuenow="21" aria-valuemin="1" aria-valuemax="30" aria-label="Course progress: Module 21 of 30"><div class="fill"></div></div>
+
+  <header class="course-header">
+    <div class="course-header-inner">
+      <div>
+        <div class="course-title">Building AI Agents with Claude</div>
+        <div style="display:flex;align-items:center;gap:1rem;margin-top:0.5rem;flex-wrap:wrap;">
+          <span class="track-badge"><span class="dot"></span> Track 6: Observability</span>
+          <span style="font-size:0.85rem;color:var(--text-muted);">Module 21 of 30</span>
+        </div>
+      </div>
+      <div class="header-meta">
+        <span>&#9201; 55 min</span>
+        <span>&#128202; Intermediate</span>
+      </div>
+    </div>
+  </header>
+
+  <div class="page-container">
+    <nav class="sidebar-nav" aria-label="Module sections">
+      <div class="sidebar-title">On This Page</div>
+      <a href="#objectives">Learning Objectives</a>
+      <a href="#why-observability">Why Observability Matters</a>
+      <a href="#agent-traces">Agent Traces</a>
+      <a href="#spans">Spans: Nesting &amp; Timing</a>
+      <a href="#structured-logging">Structured Logging</a>
+      <a href="#tools-landscape">Observability Tools</a>
+      <a href="#code-walkthrough">Code Walkthrough</a>
+      <a href="#compliance-logging">Compliance &amp; Audit Logging</a>
+      <a href="#prompt-management">Prompt Management</a>
+      <a href="#hands-on">Hands-On Exercise</a>
+      <a href="#quiz">Knowledge Check</a>
+      <a href="#summary">Summary</a>
+    </nav>
+
+    <main class="content">
+      <div class="module-nav" style="border-top:none;margin-top:0;">
+        <a href="M18-evaluation-testing.html">&larr; M18: Evaluation &amp; Testing</a>
+        <a href="index.html" aria-label="Course Home" title="Course Home" style="font-size:1.2rem;">&#x1F3E0; Home</a>
+        <a href="M20-monitoring-continuous-improvement.html">M20: Monitoring &amp; CI &rarr;</a>
+      </div>
+      <h1>M19: Tracing &amp; Logging</h1>
+      <p style="font-size:1.1rem;color:var(--text-secondary);margin-bottom:2rem;">See inside your agent's decision-making with distributed traces, structured logs, and production-ready observability pipelines.</p>
+
+      <!-- Objectives -->
+      <section class="section" id="objectives">
+        <h2 id="objectives-heading">Learning Objectives</h2>
+        <ul class="objectives-list" aria-label="Learning objectives">
+          <li>Explain why traditional logging is insufficient for AI agents and what observability adds</li>
+          <li>Create end-to-end traces that capture every decision an agent makes</li>
+          <li>Nest spans to show parent-child relationships and timing breakdowns</li>
+          <li>Implement structured JSON logging with PII redaction</li>
+          <li>Compare observability tools (Langfuse, OpenTelemetry, LangSmith, Arize) and choose the right one</li>
+        </ul>
+      </section>
+
+      <!-- Why Observability Matters -->
+      <section class="section" id="why-observability">
+        <h2 id="why-observability-heading">Why Observability Matters for Agents</h2>
+
+        <div class="analogy-box">
+          <span class="box-label">Analogy: Driving at Night</span>
+          <strong>Before:</strong> Imagine driving a car at night with no headlights, no dashboard gauges, and no GPS. You press the accelerator and hope you are going the right speed, in the right direction, on the right road. If something goes wrong, you have no way to know what happened until you crash.<br><br>
+          <strong>The pain:</strong> This is exactly what running an AI agent without observability feels like. A user reports "it gave me the wrong answer," and you have no trace of which tools were called, what the model reasoning was, or where the chain broke. You are debugging blind, guessing at causes, and wasting hours reproducing issues that may be non-deterministic.<br><br>
+          <strong>The mapping:</strong> Observability is your headlights, dashboard, and GPS combined. Traces show you the road your agent took (every step in sequence). Spans show you timing for each turn and acceleration. Structured logs are your gauges &mdash; real-time readings of speed, fuel, and engine temperature. With these instruments, you can see exactly what happened, when, and why.
+        </div>
+
+        <p>Here is what observability data actually looks like in practice. This is a single structured log entry from an agent run &mdash; the "dashboard reading" from the analogy above:</p>
+        <div class="output-block">{"timestamp":"2025-03-15T14:32:02.694Z","level":"info","event":"llm_call","trace_id":"tr_a1b2c3d4","step":1,"model":"claude-sonnet-4-20250514","input_tokens":1840,"output_tokens":89,"latency_ms":847,"stop_reason":"tool_use"}</div>
+        <p>Every field is a "gauge" you can query. The <code>trace_id</code> links this entry to all other entries from the same request. The <code>latency_ms</code> tells you how fast the engine is running. The <code>stop_reason</code> tells you what the agent decided to do next (in this case, call a tool).</p>
+
+        <div class="tech-def-box">
+          <span class="box-label">Technical Definition: Observability</span>
+          <span class="term-tooltip" tabindex="0">Observability<span class="tooltip-content" role="tooltip">The ability to understand a system's internal state by examining its external outputs: traces, logs, and metrics. Unlike simple monitoring (which tells you THAT something broke), observability tells you WHY it broke.</span></span> is the practice of instrumenting your system so you can answer any question about its behavior after the fact, without deploying new code. In other words: when a user reports a bug, you can pull up the exact execution record and see what happened &mdash; without adding new logging, without asking the user to reproduce the issue, and without guessing.
+
+          <p>For AI agents, observability is especially critical because agents are <strong>non-deterministic</strong>. The same input can produce different outputs depending on model temperature, tool availability, and conversation context. Traditional debugging &mdash; set a breakpoint, reproduce the issue, step through the code &mdash; often fails because you simply cannot reproduce the exact same conditions twice. Observability sidesteps this problem entirely: it captures every execution as it happens, giving you a permanent, queryable record to analyze after the fact.</p>
+        </div>
+
+        <p>Why is agent observability different from traditional application observability? Three reasons:</p>
+        <ol>
+          <li><strong>Non-determinism:</strong> The same prompt can yield different tool calls and reasoning paths on each run. Unlike a REST API that returns the same JSON for the same input, Claude might call <code>search_orders</code> on one run and <code>check_inventory</code> on another. You need traces to see which path was taken for each specific request.</li>
+          <li><strong>Multi-step chains:</strong> Agents make 5-20 decisions per request. Each decision is its own step: call a tool, parse the result, decide the next action. A bug in step 7 may only manifest as a wrong answer in step 12, with 5 correct steps in between hiding the root cause.</li>
+          <li><strong>Cost visibility:</strong> Each LLM call costs money &mdash; typically $0.003 to $0.015 per call depending on the model and token count. Without token-level tracking, a runaway loop (where the agent calls Claude 50 times instead of 3) can burn through your budget before anyone notices. Traces show you exactly how many calls each request consumed.</li>
+        </ol>
+
+        <!-- Animation 1: Agent Without vs With Observability -->
+        <div class="animation-container" id="anim-observability" aria-label="Animation comparing agent without and with observability">
+          <div class="animation-title">Agent Without vs With Observability</div>
+          <div class="obs-wrap">
+            <div class="obs-side">
+              <div class="obs-label">Without Observability</div>
+              <div id="obs-without"></div>
+              <div id="obs-without-result" class="obs-result"></div>
+            </div>
+            <div class="obs-side">
+              <div class="obs-label">With Observability</div>
+              <div id="obs-with"></div>
+              <div id="obs-with-result" class="obs-result"></div>
+            </div>
+          </div>
+          <div class="anim-static-fallback">Left: Agent runs with no visibility &mdash; user reports "wrong answer," developer has no data. Right: Agent runs with traces and logs &mdash; developer instantly sees the tool returned stale data at step 3, causing the wrong answer at step 5.</div>
+          <div class="animation-controls">
+            <button class="anim-btn" onclick="animObs.play()" aria-label="Play animation">&#9654;</button>
+            <button class="anim-btn" onclick="animObs.pause()" aria-label="Pause animation">&#10074;&#10074;</button>
+            <button class="anim-btn" onclick="animObs.restart()" aria-label="Restart animation">&#8635;</button>
+          </div>
+        </div>
+
+        <div class="callout-why">
+          <span class="box-label">Why It Matters</span>
+          Teams without observability spend an average of 4-8 hours debugging a single agent failure. Teams with proper tracing resolve the same issues in 10-15 minutes because they can see the exact sequence of decisions, tool calls, and model outputs that led to the problem. At scale (1,000+ agent runs per day), that difference is the difference between a sustainable product and a team drowning in support tickets.
+        </div>
+
+        <div class="callout-warning">
+          <span class="box-label">&#9888;&#65039; Common Misconceptions</span>
+          <p><strong>"Observability is just logging with a fancier name."</strong> &mdash; Not quite. Logging captures individual events as text lines. Observability combines three pillars &mdash; traces (structured execution records), logs (machine-parseable event entries), and metrics (aggregated measurements) &mdash; into a system where you can answer questions you did not anticipate when you wrote the code. Logs alone cannot show you causal relationships between steps.</p>
+          <p><strong>"I only need observability when something breaks."</strong> &mdash; Observability is most valuable for understanding normal behavior so you can spot anomalies. If you do not know that your P50 latency is normally 1.2 seconds, you cannot detect when it creeps to 3.5 seconds. Baseline data is the foundation of anomaly detection.</p>
+          <p><strong>"Adding tracing will slow down my agent."</strong> &mdash; Modern tracing libraries (Langfuse, OpenTelemetry) use asynchronous batching &mdash; spans are queued in memory and flushed in background threads. The overhead is typically under 5ms per request. The performance insight you gain (finding a 3-second database bottleneck, for example) far outweighs the microsecond cost of recording it.</p>
+          <p><strong>"I can just use print() statements and grep the output."</strong> &mdash; This works for local debugging with one user. It collapses at scale. When your agent handles 1,000 concurrent requests, print output from different requests interleaves randomly. Without trace_id correlation, you cannot reconstruct which log lines belong to which request. Structured logging with trace IDs solves this.</p>
+          <p><strong>"More data is always better &mdash; log everything."</strong> &mdash; Over-logging creates two problems. First, cost: shipping 10 GB/day of logs to a cloud aggregator is expensive. Second, noise: when every line is logged, finding the important signals requires complex queries. Log the right things (decisions, errors, timing, token counts) rather than everything.</p>
+        </div>
+
+        <p>In the UCC filing pipeline, observability would capture every step of a filing analysis: the initial query to BigQuery for debtor records, the entity resolution call that matches "ACME CORP" to "Acme Corporation Inc," the risk scoring computation, and the final report generation. If a filing risk score seems wrong, you pull up the trace and immediately see whether the entity resolution matched the wrong company or the risk model received stale collateral data.</p>
+
+        <div class="bridge">Now that you understand why observability is essential, let's look at the primary building block: the trace. A trace captures the complete story of a single agent execution from start to finish.</div>
+      </section>
+
+      <!-- Agent Traces -->
+      <section class="section" id="agent-traces">
+        <h2 id="agent-traces-heading">Agent Traces</h2>
+
+        <div class="analogy-box">
+          <span class="box-label">Analogy: Flight Recorder (Black Box)</span>
+          <strong>Before:</strong> After a plane lands safely, nobody needs the flight recorder. But when something goes wrong &mdash; a near-miss, a mechanical failure, an unexpected diversion &mdash; the flight recorder is the single most valuable piece of evidence. It captures every input (altitude, speed, control inputs) and every output (engine response, heading changes) in a continuous timeline.<br><br>
+          <strong>The pain:</strong> Without a flight recorder, investigators would have to rely on pilot memory and guesswork. For AI agents, "pilot memory" is your application logs, which typically only say "request received" and "response sent" with nothing in between. When a user says "the agent told me to cancel my order but I asked for a refund," you have no record of the reasoning chain.<br><br>
+          <strong>The mapping:</strong> A <span class="term-tooltip" tabindex="0">trace<span class="tooltip-content" role="tooltip">A complete record of a single agent execution, identified by a unique trace ID. Contains all spans (units of work), their timing, and metadata. Think of it as the flight recorder for one agent run.</span></span> is your agent's flight recorder. It captures every decision, tool call, and model invocation from the moment a user request arrives to the moment the response is sent. Each trace has a unique <strong>trace_id</strong> that lets you pull up the complete story of any execution, even months later.
+        </div>
+
+        <p>Here is what a trace object actually looks like as a data structure &mdash; the "flight recorder" in JSON form:</p>
+        <div class="output-block">{
+  "trace_id": "tr_a1b2c3d4e5f6",
+  "name": "order-agent",
+  "start_time": "2025-03-15T14:32:01.847Z",
+  "end_time": "2025-03-15T14:32:03.454Z",
+  "duration_ms": 1607,
+  "user_id": "usr_8f14e45fce",
+  "input": "Where is my order ORD-12345?",
+  "output": "Your order ORD-12345 shipped via FedEx...",
+  "status": "ok",
+  "spans": [
+    { "span_id": "sp_001", "name": "llm.chat", "duration_ms": 847 },
+    { "span_id": "sp_002", "name": "tool.search_orders", "duration_ms": 47 },
+    { "span_id": "sp_003", "name": "llm.chat", "duration_ms": 712 }
+  ]
+}</div>
+        <p>Notice how the trace is a single JSON object that tells the complete story: who asked, what the agent did (three spans), how long each step took, and what it answered. This is the data structure you will build in the code walkthrough below.</p>
+
+        <div class="tech-def-box">
+          <span class="box-label">Technical Definition: Trace</span>
+          A trace is a data structure that represents the complete lifecycle of a single request through your agent. Think of it as a container with four key pieces. First, a globally unique <strong>trace_id</strong> &mdash; typically a UUID &mdash; that identifies this specific execution. Second, a start timestamp and end timestamp so you know exactly how long the request took. Third, metadata about the request: who made it (user_id), which conversation it belongs to (session_id), and a summary of the input. Fourth, a tree of <strong>spans</strong> representing individual units of work &mdash; we will cover spans in detail in the next section.
+
+          <p>Traces follow the <a href="https://opentelemetry.io/" target="_blank" rel="noopener noreferrer">OpenTelemetry</a> standard. That means they work across languages (Python, TypeScript, Go) and across tools (Langfuse, Jaeger, Datadog). You write your tracing code once, and any OpenTelemetry-compatible backend can ingest it. In short: the trace is the top-level container, and spans are the building blocks inside it.</p>
+        </div>
+
+        <h3>What a Trace Captures</h3>
+        <p>Every trace for an AI agent should record:</p>
+        <ul>
+          <li><strong>Input:</strong> The user's message (or a hash/summary if it contains PII)</li>
+          <li><strong>Model calls:</strong> Which model was invoked, what prompt was sent, tokens used, latency</li>
+          <li><strong>Tool calls:</strong> Which tools were invoked, their inputs and outputs, success/failure</li>
+          <li><strong>Decisions:</strong> The agent's reasoning at each step (what it chose to do and why)</li>
+          <li><strong>Output:</strong> The final response delivered to the user</li>
+          <li><strong>Metadata:</strong> Total cost, total latency, error status, user satisfaction signal</li>
+        </ul>
+
+        <!-- Trace Waterfall SVG Diagram -->
+        <div class="animation-container" aria-label="Diagram showing a trace waterfall with nested horizontal bars representing spans and their durations">
+          <div class="animation-title">Trace Waterfall &mdash; Nested Span Timing</div>
+          <svg viewBox="0 0 580 240" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Horizontal bars showing nested trace spans. Total request 2400ms contains: coordinator 100ms, agent 1 with LLM call 300ms and tool call 50ms, agent 2 with RAG search 400ms taking 1800ms total." style="width:100%;max-width:580px;margin:0 auto;display:block;">
+            <style>
+              .tw-text { font-family: 'Inter', system-ui, sans-serif; fill: #e0e0e0; }
+              .tw-bar { rx: 3; ry: 3; opacity: 0.85; }
+              .tw-time { font-size: 9px; fill: #888; font-family: 'Inter', system-ui, sans-serif; }
+              .tw-lbl { font-size: 10px; fill: #e0e0e0; font-family: 'Inter', system-ui, sans-serif; }
+              .tw-dur { font-size: 9px; fill: #aaa; font-family: 'Inter', system-ui, sans-serif; }
+              @media (prefers-reduced-motion: reduce) { .tw-highlight { animation: none !important; } }
+            </style>
+            <!-- Time axis -->
+            <line x1="130" y1="20" x2="560" y2="20" stroke="#444" stroke-width="1"/>
+            <text x="130" y="14" class="tw-time">0ms</text>
+            <text x="220" y="14" class="tw-time">500ms</text>
+            <text x="310" y="14" class="tw-time">1000ms</text>
+            <text x="400" y="14" class="tw-time">1500ms</text>
+            <text x="490" y="14" class="tw-time">2000ms</text>
+            <text x="545" y="14" class="tw-time">2400ms</text>
+            <!-- Tick marks -->
+            <line x1="130" y1="18" x2="130" y2="22" stroke="#666" stroke-width="1"/>
+            <line x1="220" y1="18" x2="220" y2="22" stroke="#666" stroke-width="1"/>
+            <line x1="310" y1="18" x2="310" y2="22" stroke="#666" stroke-width="1"/>
+            <line x1="400" y1="18" x2="400" y2="22" stroke="#666" stroke-width="1"/>
+            <line x1="490" y1="18" x2="490" y2="22" stroke="#666" stroke-width="1"/>
+            <line x1="560" y1="18" x2="560" y2="22" stroke="#666" stroke-width="1"/>
+            <!-- Row 0: Total Request (full width) -->
+            <text x="10" y="44" class="tw-lbl" font-weight="600">Total Request</text>
+            <rect x="130" y="32" width="430" height="20" class="tw-bar" fill="#4a4a6a" stroke="#818cf8" stroke-width="1"/>
+            <text x="340" y="46" class="tw-dur" fill="#c4b5fd">2400ms</text>
+            <!-- Row 1: Coordinator -->
+            <text x="20" y="72" class="tw-lbl">Coordinator</text>
+            <rect x="130" y="60" width="18" height="18" class="tw-bar" fill="#2dd4bf"/>
+            <text x="152" y="73" class="tw-dur">100ms</text>
+            <!-- Row 2: Agent 1 -->
+            <text x="20" y="100" class="tw-lbl">Agent 1</text>
+            <rect x="148" y="88" width="54" height="18" class="tw-bar" fill="#818cf8"/>
+            <text x="206" y="101" class="tw-dur">300ms</text>
+            <!-- Row 3: LLM Call (nested in Agent 1) -->
+            <text x="35" y="126" class="tw-lbl" fill="#aaa">&#x21B3; LLM Call</text>
+            <rect x="150" y="114" width="45" height="16" class="tw-bar" fill="#a78bfa" opacity="0.6"/>
+            <text x="199" y="126" class="tw-dur">250ms</text>
+            <!-- Row 4: Tool Call (nested in Agent 1) -->
+            <text x="35" y="148" class="tw-lbl" fill="#aaa">&#x21B3; Tool Call</text>
+            <rect x="195" y="138" width="9" height="16" class="tw-bar" fill="#7c6fe0" opacity="0.6"/>
+            <text x="208" y="149" class="tw-dur">50ms</text>
+            <!-- Row 5: Agent 2 (long bar — bottleneck) -->
+            <text x="20" y="176" class="tw-lbl" fill="#f87171" font-weight="600">Agent 2</text>
+            <rect x="204" y="164" width="324" height="18" class="tw-bar" fill="#f87171" stroke="#fca5a5" stroke-width="1"/>
+            <text x="532" y="177" class="tw-dur" fill="#fca5a5">1800ms &#9888;</text>
+            <!-- Row 6: RAG Search (nested in Agent 2) -->
+            <text x="35" y="202" class="tw-lbl" fill="#aaa">&#x21B3; RAG Search</text>
+            <rect x="220" y="192" width="72" height="16" class="tw-bar" fill="#fb923c" opacity="0.6"/>
+            <text x="296" y="203" class="tw-dur">400ms</text>
+            <!-- Row 7: LLM Call 2 (nested in Agent 2) -->
+            <text x="35" y="224" class="tw-lbl" fill="#aaa">&#x21B3; LLM Call</text>
+            <rect x="295" y="214" width="233" height="16" class="tw-bar" fill="#f87171" opacity="0.4"/>
+            <text x="532" y="225" class="tw-dur" fill="#fca5a5">1300ms</text>
+          </svg>
+        </div>
+
+        <!-- Animation 2: Trace Waterfall -->
+        <div class="animation-container" id="anim-waterfall" aria-label="Animation showing trace waterfall with nested spans and timing">
+          <div class="animation-title">Trace Waterfall &mdash; Nested Spans with Timing</div>
+          <div class="tw-time-axis" style="margin-left:90px;">
+            <span>0ms</span><span>500ms</span><span>1000ms</span><span>1500ms</span><span>2000ms</span><span>2500ms</span>
+          </div>
+          <div class="tw-wrap" id="tw-container" style="margin-top:1.5rem;"></div>
+          <div id="tw-detail" class="tw-detail"></div>
+          <div class="anim-static-fallback">A horizontal waterfall chart showing a trace with nested spans: the full trace spans 2400ms. Inside it, an LLM call (800ms), a tool call to search_orders (450ms), another LLM call (600ms), a guardrail check (120ms), and a final response assembly (200ms). Parent-child nesting shows which spans are contained within others.</div>
+          <div class="animation-controls">
+            <button class="anim-btn" onclick="animWaterfall.play()" aria-label="Play animation">&#9654;</button>
+            <button class="anim-btn" onclick="animWaterfall.pause()" aria-label="Pause animation">&#10074;&#10074;</button>
+            <button class="anim-btn" onclick="animWaterfall.restart()" aria-label="Restart animation">&#8635;</button>
+          </div>
+        </div>
+
+        <div class="checkpoint">
+          <div class="checkpoint-label">What Just Happened?</div>
+          The waterfall animation showed a single trace with multiple spans. Notice how the LLM calls take the most time (800ms and 600ms), while guardrail checks are fast (120ms). The tool call to <code>search_orders</code> took 450ms &mdash; if this suddenly jumped to 3000ms in production, the trace would immediately show you where the bottleneck is. That is the power of traces: instant root-cause visibility.
+        </div>
+
+        <div class="callout-warning">
+          <span class="box-label">Common Misconception</span>
+          "Traces are just fancy logs." No. Logs are individual lines of text with timestamps. Traces are <em>structured, hierarchical records</em> with parent-child relationships, timing data, and cross-service correlation. A log says "tool called at 14:32:01." A trace says "this tool call was the 3rd step in trace abc-123, took 450ms, was a child of the LLM reasoning span, and returned 3 results." Traces connect the dots; logs are the individual dots.
+        </div>
+
+        <div class="bridge">Each trace is made up of spans &mdash; the individual units of work. Understanding how spans nest inside each other is the key to reading (and building) effective traces.</div>
+      </section>
+
+      <!-- Spans: Nesting and Timing -->
+      <section class="section" id="spans">
+        <h2 id="spans-heading">Spans: Nesting &amp; Timing</h2>
+
+        <div class="analogy-box">
+          <span class="box-label">Analogy: Recipe Steps</span>
+          <strong>Before:</strong> Think about following a complex recipe. "Make lasagna" is the top-level task. Inside it, you have "make sauce" (which contains "chop onions," "brown meat," "simmer"), "make pasta layers" (which contains "boil noodles," "drain"), and "assemble and bake." Each sub-step is nested inside a larger step, and each has its own start time and end time.<br><br>
+          <strong>The pain:</strong> If your lasagna tastes wrong, you need to know which sub-step failed. Was it the sauce (burnt onions)? The noodles (overcooked)? The baking (too long)? Without timing each step, you are tasting the final product and guessing backwards.<br><br>
+          <strong>The mapping:</strong> A <span class="term-tooltip" tabindex="0">span<span class="tooltip-content" role="tooltip">A single unit of work within a trace, identified by a span_id. Spans have parent-child relationships (a tool call span is a child of the agent loop span) and record start time, end time, status, and metadata.</span></span> is one step in the recipe. The root span ("handle user request") contains child spans ("call LLM," "execute tool," "validate output"). Each child can have its own children ("parse JSON response" inside "execute tool"). The nesting shows you exactly where time is spent and where errors originate.
+        </div>
+
+        <p>Here is what a single span looks like as a data structure &mdash; the "recipe step card" from the analogy above. Just as a recipe step has a name ("brown the meat"), a start time, an end time, and belongs to a larger step ("make sauce"), a span has all the same pieces in JSON form:</p>
+        <div class="output-block">{
+  "span_id": "sp_7g8h9i0j",
+  "parent_span_id": "sp_root_001",
+  "trace_id": "tr_a1b2c3d4e5f6",
+  "name": "llm.chat",
+  "start_time": "2025-03-15T14:32:01.850Z",
+  "end_time": "2025-03-15T14:32:02.697Z",
+  "status": "ok",
+  "attributes": {
+    "model": "claude-sonnet-4-20250514",
+    "input_tokens": 1840,
+    "output_tokens": 89,
+    "latency_ms": 847,
+    "stop_reason": "tool_use"
+  }
+}</div>
+        <p>The <code>parent_span_id</code> is the key field &mdash; it links this LLM call to its parent (the root agent span), creating the tree structure you see in waterfall visualizations.</p>
+
+        <div class="tech-def-box">
+          <span class="box-label">Technical Definition: Span</span>
+          A span represents a single unit of work within a trace. Every span carries six pieces of information. First, a unique <strong>span_id</strong> that identifies this specific operation. Second, a <strong>parent_span_id</strong> that links it to the span that triggered it &mdash; if this is the top-level span (the root), the parent is null. Third, a <strong>name</strong> describing the operation, like "llm.chat" or "tool.search_orders."
+
+          <p>Fourth, <strong>start_time</strong> and <strong>end_time</strong> timestamps &mdash; these let you calculate exactly how long this unit of work took. Fifth, a <strong>status</strong> field (ok or error) telling you whether the operation succeeded. And sixth, <strong>attributes</strong> &mdash; key-value metadata specific to this span. For an LLM span, attributes might include <code>model: "claude-sonnet-4-20250514"</code> and <code>tokens_used: 1240</code>. For a tool span, you might store <code>tool_name: "search_orders"</code> and <code>success: true</code>.</p>
+
+          <p>The parent-child relationships between spans create a tree structure that mirrors the actual execution flow of your agent. When you visualize this tree as a waterfall chart, you can instantly see which operations are slow, which ones failed, and how they depend on each other.</p>
+        </div>
+
+        <h3>Span Types for AI Agents</h3>
+        <p>When instrumenting an agent, you will typically create five types of spans. Each type captures different information, and together they give you a complete picture of every decision the agent made.</p>
+        <ul>
+          <li><strong>Root span (agent):</strong> The entire request lifecycle, from the moment a user message arrives to the moment a response is sent. This is the top-level container &mdash; every other span is a child (or grandchild) of this one. It captures total latency, overall status (success or error), and the final output summary.</li>
+          <li><strong>LLM span (generation):</strong> Each call to Claude. This is usually the most expensive span in terms of both time and money. Key attributes to record: model name, prompt tokens, completion tokens, latency in milliseconds, cost in USD, and <code>stop_reason</code> (which tells you whether Claude wants to call a tool or is finished).</li>
+          <li><strong>Tool span (tool):</strong> Each tool invocation &mdash; database queries, API calls, file reads. Attributes: tool name, input parameters, output summary (truncated to avoid storing large payloads), success/failure status, and latency. Tool spans are where you most often find performance bottlenecks.</li>
+          <li><strong>Retrieval span:</strong> RAG lookups, where you search a vector database for relevant context. Attributes: the search query, number of results returned, relevance scores, and which documents were selected. This is critical for debugging "the agent gave a wrong answer" issues &mdash; often the retriever found the wrong documents.</li>
+          <li><strong>Guardrail span:</strong> Input/output validation checks. Attributes: check name (e.g., "pii_output_check"), pass/fail result, and the reason for failure. These spans are typically very fast (under 10ms) but their pass/fail status is essential for compliance auditing.</li>
+        </ul>
+
+        <h3>Timing and Performance Analysis</h3>
+        <p>The timing data in spans is where observability pays for itself. Without spans, you know the total request took 5 seconds. With spans, you know exactly where those 5 seconds went. Here are the three performance questions that span timing answers:</p>
+        <ul>
+          <li><strong>Where is time spent?</strong> If your agent takes 5 seconds, is it 3 seconds in LLM calls, 1.5 seconds in tool calls, and 0.5 seconds in processing? Or is one tool call taking 4 seconds while everything else is fast? The waterfall chart makes this immediately visual &mdash; long bars are slow operations.</li>
+          <li><strong>Are there sequential bottlenecks?</strong> Two independent tool calls running sequentially instead of in parallel would show up as back-to-back spans instead of overlapping ones. For example, if your agent looks up order status and checks inventory, those two lookups can run at the same time. Sequential spans tell you "these could be parallelized for a 2x speedup."</li>
+          <li><strong>Is there a slow dependency?</strong> A database lookup that takes 2000ms+ consistently is immediately visible in the waterfall. More importantly, you can track this over time: if the database call was 50ms last week and is 2000ms today, something changed in your database &mdash; not your agent code.</li>
+        </ul>
+        <p>The key insight is that optimization without span data is guesswork. Developers often assume the LLM call is the bottleneck (because "AI is slow"), but in practice, database queries, API calls to third-party services, and large payload serialization are frequently the real culprits.</p>
+
+        <div class="callout-why">
+          <span class="box-label">Why It Matters</span>
+          A production agent handling 10,000 requests/day with an average latency of 3 seconds generates 30,000 seconds of execution time daily. If spans reveal that 40% of that time is spent in a single tool call that could be cached, you can cut your P50 latency from 3s to 1.8s &mdash; and your compute costs drop proportionally. Without span-level timing, you would never know where to optimize.
+        </div>
+
+        <div class="bridge">You now understand the structure of traces and spans. But raw trace data is only useful if it is paired with well-structured logs. Next, we will cover how to log the right fields in the right format &mdash; and, critically, what to never log.</div>
+      </section>
+
+      <!-- Structured Logging -->
+      <section class="section" id="structured-logging">
+        <h2 id="structured-logging-heading">Structured Logging</h2>
+
+        <div class="analogy-box">
+          <span class="box-label">Analogy: Filing Cabinet vs Junk Drawer</span>
+          <strong>Before:</strong> Imagine two ways to store receipts. In the junk drawer approach, you toss every receipt into a single drawer in whatever order they arrive. To find a specific receipt, you dump out the entire drawer and read every piece of paper. In the filing cabinet approach, every receipt goes into a labeled folder, sorted by date, category, and amount.<br><br>
+          <strong>The pain:</strong> Most application logs are the junk drawer. Lines like <code>INFO: Processing request...</code> and <code>DEBUG: Tool called successfully</code> tell you almost nothing when you are searching through 10 million log lines for the one request that failed at 3:47 AM. You end up writing fragile regex patterns to parse free-form text, and half your queries return false matches.<br><br>
+          <strong>The mapping:</strong> <span class="term-tooltip" tabindex="0">Structured logging<span class="tooltip-content" role="tooltip">Writing log entries as machine-parseable key-value pairs (typically JSON) instead of free-form text strings. Enables filtering, aggregation, and alerting without regex parsing. Example: {"level":"error","trace_id":"abc","tool":"search","latency_ms":2100}</span></span> is the filing cabinet. Every log entry is a JSON object &mdash; not a free-form text string. Each object has consistent keys like <code>trace_id</code>, <code>span_id</code>, <code>timestamp</code>, <code>level</code>, and <code>message</code>, plus domain-specific fields relevant to your agent. The payoff is queryability: instead of writing fragile regex, you can ask precise questions like "show me all ERROR logs where tool_name=search_orders and latency_ms > 2000." That query takes seconds, even across millions of entries, because every field is a first-class key that your log aggregator can index and filter on.
+        </div>
+
+        <p>How does structured logging work under the hood? When your agent calls <code>logger.info("tool_call", tool_name="search_orders", latency_ms=47)</code>, the logging library does three things. First, it creates a dictionary with your key-value pairs. Second, it adds automatic fields like the ISO timestamp, log level, and process ID. Third, it serializes the entire dictionary to a JSON string and writes it to the output stream (stdout, a file, or a log aggregation service). The result is a single line of JSON per event &mdash; no multi-line stack traces breaking your parsers, no free-form messages with inconsistent formats.</p>
+
+        <p>How does structured logging differ from the <code>print()</code> statements and <code>logging.info("some message")</code> calls you have used before? Traditional logging outputs human-readable text: <code>"2025-03-15 Tool search_orders called, took 47ms, found 3 results"</code>. That is easy to read in a terminal, but impossible to query at scale. Structured logging outputs machine-readable JSON: <code>{"tool_name":"search_orders","latency_ms":47,"result_count":3}</code>. That is slightly harder to read in a terminal (though tools like <code>jq</code> help), but trivially easy to query, filter, aggregate, and alert on. The tradeoff is clear: you give up a bit of readability in exchange for massive gains in operability.</p>
+
+        <h3>What to Log: The Essential Fields</h3>
+        <p>Every structured log entry from your agent should include these fields:</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs">
+            <button class="code-tab active" onclick="switchTab(this, 'log-fields-json')" aria-label="JSON Schema code">JSON Schema</button>
+          </div>
+          <div class="code-panel active" id="log-fields-json">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code class="language-javascript">{
+  // Correlation fields — link this log to its trace
+  "trace_id": "tr_a1b2c3d4e5f6",
+  "span_id": "sp_7g8h9i0j",
+  "timestamp": "2025-03-15T14:32:01.847Z",
+
+  // Classification fields — filter and aggregate
+  "level": "info",           // debug, info, warn, error
+  "agent_id": "order-agent-v2",
+  "step_number": 3,          // which step in the agent loop
+
+  // Execution fields — understand what happened
+  "model": "claude-sonnet-4-20250514",
+  "token_count": { "input": 1840, "output": 312 },
+  "tool_name": "search_orders",
+  "latency_ms": 847,
+
+  // Context fields — understand the situation
+  "message": "Tool call completed successfully",
+  "user_id": "usr_hashed_abc",  // hashed, never raw
+  "session_id": "sess_xyz789"
+}</code></pre>
+          </div>
+        </div>
+
+        <h3>What NOT to Log: The Danger Zone</h3>
+
+        <div class="callout-security">
+          <span class="box-label">Security: Never Log These</span>
+          <ul>
+            <li><strong>PII (Personally Identifiable Information):</strong> Names, emails, phone numbers, addresses, SSNs. Hash or redact before logging.</li>
+            <li><strong>API keys and secrets:</strong> Never log <code>Authorization</code> headers, API keys, or database credentials. Even in debug mode.</li>
+            <li><strong>Full prompt contents:</strong> Prompts may contain user data. Log a hash or summary instead of the full text.</li>
+            <li><strong>Full model responses:</strong> Responses may contain generated PII or sensitive reasoning. Log a truncated summary.</li>
+            <li><strong>Medical/financial data:</strong> PHI (HIPAA), payment card numbers (PCI-DSS), and financial account details have strict regulatory requirements.</li>
+          </ul>
+        </div>
+
+        <!-- What to Log vs Not Log Two-Column Diagram (inline SVG) -->
+        <div class="animation-container" aria-label="Two-column diagram comparing what to log versus what not to log in agent systems">
+          <div class="animation-title">What to Log vs What NOT to Log</div>
+          <svg viewBox="0 0 580 310" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Left column shows safe items to log: timestamps, trace IDs, tool names, token counts, latency, log level, model version. Right column shows items to never log: PII, API keys, full prompts, full responses, medical and financial data." style="width:100%;max-width:580px;margin:0 auto;display:block;">
+            <style>
+              .ll-text { font-family: 'Inter', system-ui, sans-serif; fill: #e0e0e0; }
+              .ll-item { font-size: 12px; font-family: 'Inter', system-ui, sans-serif; }
+              .ll-check { fill: #4ade80; }
+              .ll-cross { fill: #f87171; }
+              @media (prefers-reduced-motion: reduce) { .ll-pulse { animation: none !important; } }
+            </style>
+            <!-- Column headers -->
+            <rect x="15" y="10" width="260" height="36" rx="8" ry="8" fill="#1a3a2a" stroke="#4ade80" stroke-width="1.5"/>
+            <text x="145" y="34" text-anchor="middle" class="ll-text" font-size="14" font-weight="700" fill="#4ade80">&#10003; DO Log</text>
+            <rect x="305" y="10" width="260" height="36" rx="8" ry="8" fill="#3a1a1a" stroke="#f87171" stroke-width="1.5"/>
+            <text x="435" y="34" text-anchor="middle" class="ll-text" font-size="14" font-weight="700" fill="#f87171">&#10007; NEVER Log</text>
+            <!-- DO Log items -->
+            <text x="30" y="74" class="ll-item ll-check" font-weight="600">&#10003;</text><text x="50" y="74" class="ll-item" fill="#e0e0e0">Timestamps (ISO 8601)</text>
+            <text x="30" y="100" class="ll-item ll-check" font-weight="600">&#10003;</text><text x="50" y="100" class="ll-item" fill="#e0e0e0">Trace &amp; span IDs</text>
+            <text x="30" y="126" class="ll-item ll-check" font-weight="600">&#10003;</text><text x="50" y="126" class="ll-item" fill="#e0e0e0">Tool names &amp; parameters</text>
+            <text x="30" y="152" class="ll-item ll-check" font-weight="600">&#10003;</text><text x="50" y="152" class="ll-item" fill="#e0e0e0">Token counts (input/output)</text>
+            <text x="30" y="178" class="ll-item ll-check" font-weight="600">&#10003;</text><text x="50" y="178" class="ll-item" fill="#e0e0e0">Latency (ms per span)</text>
+            <text x="30" y="204" class="ll-item ll-check" font-weight="600">&#10003;</text><text x="50" y="204" class="ll-item" fill="#e0e0e0">Log level &amp; error codes</text>
+            <text x="30" y="230" class="ll-item ll-check" font-weight="600">&#10003;</text><text x="50" y="230" class="ll-item" fill="#e0e0e0">Model version &amp; agent ID</text>
+            <text x="30" y="256" class="ll-item ll-check" font-weight="600">&#10003;</text><text x="50" y="256" class="ll-item" fill="#e0e0e0">Hashed user/session IDs</text>
+            <!-- NEVER Log items -->
+            <text x="320" y="74" class="ll-item ll-cross" font-weight="600">&#10007;</text><text x="340" y="74" class="ll-item" fill="#fca5a5">PII (names, emails, SSNs)</text>
+            <text x="320" y="100" class="ll-item ll-cross" font-weight="600">&#10007;</text><text x="340" y="100" class="ll-item" fill="#fca5a5">API keys &amp; secrets</text>
+            <text x="320" y="126" class="ll-item ll-cross" font-weight="600">&#10007;</text><text x="340" y="126" class="ll-item" fill="#fca5a5">Full prompt contents</text>
+            <text x="320" y="152" class="ll-item ll-cross" font-weight="600">&#10007;</text><text x="340" y="152" class="ll-item" fill="#fca5a5">Full model responses</text>
+            <text x="320" y="178" class="ll-item ll-cross" font-weight="600">&#10007;</text><text x="340" y="178" class="ll-item" fill="#fca5a5">Medical data (PHI/HIPAA)</text>
+            <text x="320" y="204" class="ll-item ll-cross" font-weight="600">&#10007;</text><text x="340" y="204" class="ll-item" fill="#fca5a5">Payment card numbers</text>
+            <text x="320" y="230" class="ll-item ll-cross" font-weight="600">&#10007;</text><text x="340" y="230" class="ll-item" fill="#fca5a5">Authorization headers</text>
+            <text x="320" y="256" class="ll-item ll-cross" font-weight="600">&#10007;</text><text x="340" y="256" class="ll-item" fill="#fca5a5">Raw user data / addresses</text>
+            <!-- Divider -->
+            <line x1="290" y1="55" x2="290" y2="268" stroke="#444" stroke-width="1.5"/>
+            <!-- Bottom rule -->
+            <rect x="15" y="275" width="550" height="28" rx="6" ry="6" fill="#1e1e3a" stroke="#666" stroke-width="1"/>
+            <text x="290" y="294" text-anchor="middle" class="ll-text" font-size="11" fill="#aaa">Rule: log what helps you debug &mdash; redact what could harm your users</text>
+          </svg>
+        </div>
+
+        <!-- Animation 3: Structured Logging Pipeline -->
+        <div class="animation-container" id="anim-logging" aria-label="Animation showing structured logging pipeline with PII redaction">
+          <div class="animation-title">Structured Logging Pipeline with PII Redaction</div>
+          <div class="sl-wrap" id="sl-container">
+            <!-- Row 1: Raw log entry -->
+            <div class="sl-stage">
+              <div class="sl-box raw" id="sl-raw">
+                <div style="font-weight:700;margin-bottom:0.2rem;color:var(--text-primary);">Raw Log Event</div>
+                <span class="sl-field">trace_id: tr_abc</span>
+                <span class="sl-field">tool: search</span>
+                <span class="sl-field pii">user_email: john@test.com</span>
+                <span class="sl-field">latency: 847ms</span>
+                <span class="sl-field pii">patient_name: John Smith</span>
+                <span class="sl-field">tokens: 1840</span>
+              </div>
+              <div class="sl-arrow" id="sl-arr1">&rarr;</div>
+              <div class="sl-gate" id="sl-gate1">
+                <div class="sl-icon">&#128683;</div>
+                <div>PII</div>
+                <div>FILTER</div>
+              </div>
+              <div class="sl-arrow" id="sl-arr2">&rarr;</div>
+              <div class="sl-box redacted" id="sl-clean">
+                <div style="font-weight:700;margin-bottom:0.2rem;">Clean Log Entry</div>
+                <span class="sl-field safe">trace_id: tr_abc</span>
+                <span class="sl-field safe">tool: search</span>
+                <span class="sl-field safe">user_id: usr_h4sh3d</span>
+                <span class="sl-field safe">latency: 847ms</span>
+                <span class="sl-field safe">patient_id: pt_r3d4ct</span>
+                <span class="sl-field safe">tokens: 1840</span>
+              </div>
+            </div>
+            <!-- Row 2: Destinations -->
+            <div class="sl-stage" style="justify-content:center;gap:1rem;margin-top:0.75rem;">
+              <div class="sl-arrow" id="sl-arr3" style="transform:rotate(90deg);">&darr;</div>
+            </div>
+            <div class="sl-stage" style="justify-content:center;gap:1rem;">
+              <div class="sl-box structured" id="sl-dest1" style="text-align:center;">
+                <div style="font-weight:700;">Log Aggregator</div>
+                <div>Queryable JSON store</div>
+              </div>
+              <div class="sl-box structured" id="sl-dest2" style="text-align:center;">
+                <div style="font-weight:700;">Alerting System</div>
+                <div>latency_ms > 5000</div>
+              </div>
+              <div class="sl-box structured" id="sl-dest3" style="text-align:center;">
+                <div style="font-weight:700;">Dashboard</div>
+                <div>Real-time metrics</div>
+              </div>
+            </div>
+          </div>
+          <div class="anim-static-fallback">A pipeline showing: (1) Raw log with PII fields highlighted in red, (2) PII filter gate that strips/hashes sensitive data, (3) Clean log entry with safe fields, (4) Clean logs flowing to a log aggregator, alerting system, and dashboard.</div>
+          <div class="animation-controls">
+            <button class="anim-btn" onclick="animLogging.play()" aria-label="Play animation">&#9654;</button>
+            <button class="anim-btn" onclick="animLogging.pause()" aria-label="Pause animation">&#10074;&#10074;</button>
+            <button class="anim-btn" onclick="animLogging.restart()" aria-label="Restart animation">&#8635;</button>
+          </div>
+        </div>
+
+        <div class="checkpoint">
+          <div class="checkpoint-label">What Just Happened?</div>
+          The animation showed a raw log entry flowing through a PII filter that strips emails and names, replacing them with hashed identifiers. The clean entry then fans out to three destinations: a log aggregator for querying, an alerting system for threshold violations, and a dashboard for real-time visibility. This pipeline is the backbone of production observability.
+        </div>
+
+        <div class="callout-warning">
+          <span class="box-label">&#9888;&#65039; Common Misconceptions</span>
+          <p><strong>"Structured logging means I have to give up human-readable output."</strong> &mdash; Not true. Tools like <code>jq</code> (command line) and log viewers (Kibana, Grafana Loki) render structured JSON beautifully. During local development, you can configure structlog or pino to output pretty-printed, colorized text. You get human-readable locally AND machine-parseable in production.</p>
+          <p><strong>"I should log the full prompt and full response for debugging."</strong> &mdash; This is a compliance and cost trap. Full prompts often contain user PII. Full responses can be thousands of tokens. Instead, log a hash of the prompt (for deduplication), token counts (for cost tracking), and the first 200 characters of the response (for quick inspection). Store full prompt/response pairs only in a secure, access-controlled trace backend like Langfuse &mdash; never in general application logs.</p>
+          <p><strong>"Log levels (DEBUG, INFO, WARN, ERROR) are enough for filtering."</strong> &mdash; Log levels are one dimension. With structured logging, you can filter on any field: <code>tool_name="search_orders" AND latency_ms > 2000</code> finds slow search calls regardless of log level. Think of log levels as a coarse filter and structured fields as fine-grained filters.</p>
+        </div>
+
+        <div class="bridge">With structured logs and traces in place, you need tools to collect, store, and visualize this data. Let's survey the observability landscape for AI agents.</div>
+      </section>
+
+      <!-- Observability Tools -->
+      <section class="section" id="tools-landscape">
+        <h2 id="tools-landscape-heading">Observability Tools: The Landscape</h2>
+
+        <p>The AI agent observability ecosystem has matured rapidly. Here are the four major tools you should know, each with different strengths:</p>
+
+        <h3>Langfuse (Open Source)</h3>
+        <p><strong>Best for:</strong> Teams that want full control over their data and prefer self-hosting. Langfuse is purpose-built for LLM observability &mdash; it understands what an LLM call is, what tokens cost, and how traces flow through agent loops. Unlike general-purpose observability tools, you do not need to teach it what "input_tokens" means or how to calculate cost per model.</p>
+        <p>Langfuse integrates directly with the Anthropic SDK via a simple decorator or client wrapper. It provides a web UI where you can click on any trace, see the full span waterfall, inspect the prompt and response for each LLM call, and see exactly how much that request cost.</p>
+        <ul>
+          <li>Self-hosted (Docker Compose) or cloud option &mdash; your data stays on your infrastructure if needed</li>
+          <li>Native Python and JS/TS SDKs with minimal code changes to add tracing</li>
+          <li>Built-in cost calculation that knows current pricing for Claude, GPT-4, and other models</li>
+          <li>Prompt management and versioning &mdash; track which prompt version produced which results</li>
+        </ul>
+
+        <h3>OpenTelemetry (CNCF Standard)</h3>
+        <p><strong>Best for:</strong> Teams already using OpenTelemetry for microservice observability who want to extend it to LLM calls. If your company already has Jaeger or Grafana Tempo collecting traces from your backend services, OpenTelemetry lets you add LLM spans into that same pipeline. Your agent's trace shows up alongside your API server's trace, giving you end-to-end visibility from the HTTP request all the way through the LLM call and back.</p>
+        <p>The tradeoff: OpenTelemetry is a general-purpose standard, not LLM-specific. It does not know what "tokens" or "model cost" are out of the box. You need to add those as custom span attributes. The GenAI semantic conventions (standard attribute names for LLM operations) are still being finalized by the CNCF community.</p>
+        <ul>
+          <li>Vendor-neutral, CNCF-backed standard &mdash; no lock-in to any specific backend</li>
+          <li>Works with your existing infrastructure (Jaeger, Datadog, Honeycomb, Grafana Tempo)</li>
+          <li>Requires more setup for LLM-specific features like cost tracking and prompt inspection</li>
+          <li>Semantic conventions for GenAI are still evolving &mdash; expect attribute names to stabilize over the next year</li>
+        </ul>
+
+        <h3>LangSmith (LangChain Ecosystem)</h3>
+        <p><strong>Best for:</strong> Teams already using LangChain/LangGraph who want tight integration. LangSmith provides tracing, evaluation, and dataset management in one platform.</p>
+        <ul>
+          <li>Deep LangChain integration (auto-instrumentation)</li>
+          <li>Built-in evaluation and testing features</li>
+          <li>Cloud-hosted (no self-host option)</li>
+          <li>May create vendor lock-in if you move away from LangChain</li>
+        </ul>
+
+        <h3>Arize Phoenix (Open Source)</h3>
+        <p><strong>Best for:</strong> Teams focused on model performance analysis, embedding drift detection, and retrieval quality. Strong visualization for understanding how your RAG pipeline performs over time.</p>
+        <ul>
+          <li>Embedding visualization and drift detection</li>
+          <li>RAG-specific evaluation metrics</li>
+          <li>Open-source with a cloud option</li>
+          <li>Strong evaluation integration</li>
+        </ul>
+
+        <!-- Animation 4: Tool Comparison -->
+        <div class="animation-container" id="anim-tools" aria-label="Animation comparing observability tools" style="min-height:220px;">
+          <div class="animation-title">Observability Tool Comparison</div>
+          <div class="tc-wrap" id="tc-container">
+            <div class="tc-card" id="tc-langfuse">
+              <div class="tc-card-name">Langfuse</div>
+              <div class="tc-card-type">Open Source / Cloud</div>
+              <div class="tc-feature"><span class="tc-check">&#10003;</span> LLM-native traces</div>
+              <div class="tc-feature"><span class="tc-check">&#10003;</span> Cost tracking</div>
+              <div class="tc-feature"><span class="tc-check">&#10003;</span> Self-hostable</div>
+              <div class="tc-feature"><span class="tc-check">&#10003;</span> Prompt mgmt</div>
+              <div class="tc-feature"><span class="tc-partial">~</span> GenAI evals</div>
+            </div>
+            <div class="tc-card" id="tc-otel">
+              <div class="tc-card-name">OpenTelemetry</div>
+              <div class="tc-card-type">CNCF Standard</div>
+              <div class="tc-feature"><span class="tc-check">&#10003;</span> Vendor neutral</div>
+              <div class="tc-feature"><span class="tc-check">&#10003;</span> Existing infra</div>
+              <div class="tc-feature"><span class="tc-check">&#10003;</span> Multi-language</div>
+              <div class="tc-feature"><span class="tc-partial">~</span> LLM support</div>
+              <div class="tc-feature"><span class="tc-miss">&mdash;</span> Cost tracking</div>
+            </div>
+            <div class="tc-card" id="tc-langsmith">
+              <div class="tc-card-name">LangSmith</div>
+              <div class="tc-card-type">Cloud Platform</div>
+              <div class="tc-feature"><span class="tc-check">&#10003;</span> LangChain native</div>
+              <div class="tc-feature"><span class="tc-check">&#10003;</span> Eval + datasets</div>
+              <div class="tc-feature"><span class="tc-check">&#10003;</span> Auto-instrument</div>
+              <div class="tc-feature"><span class="tc-miss">&mdash;</span> Self-hostable</div>
+              <div class="tc-feature"><span class="tc-partial">~</span> Non-LC agents</div>
+            </div>
+            <div class="tc-card" id="tc-arize">
+              <div class="tc-card-name">Arize Phoenix</div>
+              <div class="tc-card-type">Open Source / Cloud</div>
+              <div class="tc-feature"><span class="tc-check">&#10003;</span> Embedding viz</div>
+              <div class="tc-feature"><span class="tc-check">&#10003;</span> Drift detection</div>
+              <div class="tc-feature"><span class="tc-check">&#10003;</span> RAG evals</div>
+              <div class="tc-feature"><span class="tc-check">&#10003;</span> Self-hostable</div>
+              <div class="tc-feature"><span class="tc-partial">~</span> Cost tracking</div>
+            </div>
+          </div>
+          <div class="anim-static-fallback">Four cards comparing Langfuse, OpenTelemetry, LangSmith, and Arize Phoenix across features like tracing, cost tracking, self-hosting, and evaluation support.</div>
+          <div class="animation-controls">
+            <button class="anim-btn" onclick="animTools.play()" aria-label="Play animation">&#9654;</button>
+            <button class="anim-btn" onclick="animTools.pause()" aria-label="Pause animation">&#10074;&#10074;</button>
+            <button class="anim-btn" onclick="animTools.restart()" aria-label="Restart animation">&#8635;</button>
+          </div>
+        </div>
+
+        <div class="callout-why">
+          <span class="box-label">Why It Matters</span>
+          Choosing the wrong observability tool can lock you into a vendor or leave critical blind spots. If you are building with Claude directly (not LangChain), Langfuse or OpenTelemetry are the strongest choices. Langfuse gives you LLM-specific features out of the box; OpenTelemetry gives you vendor neutrality and integration with your existing infrastructure. Most production teams end up using both: OpenTelemetry for infrastructure spans and Langfuse (or similar) for LLM-specific trace analysis.
+        </div>
+
+        <div class="bridge">Now let's put it all together. In the code walkthrough, you will build an instrumented agent that creates traces, nests spans, logs structured data with PII redaction, and handles observability failures gracefully.</div>
+      </section>
+
+      <!-- Code Walkthrough -->
+      <section class="section" id="code-walkthrough">
+        <h2 id="code-walkthrough-heading">Code Walkthrough: Instrumented Agent with Langfuse</h2>
+
+        <p>We will build an order-tracking agent instrumented with Langfuse for tracing and structlog/pino for structured logging. The agent creates traces, nests spans, redacts PII, and &mdash; critically &mdash; never lets observability failures break the agent itself.</p>
+
+        <h3>Step 1: Setup and Configuration</h3>
+        <p>Let's start by initializing the two pillars of our observability stack: a Langfuse client for tracing and a structured logger for machine-readable log entries. Langfuse will capture the "what happened" story &mdash; traces and spans showing every decision the agent made. Structlog (Python) or pino (Node.js) will capture the "what should we alert on" signals &mdash; JSON log entries with fields like latency, token counts, and error status.</p>
+        <p>There is one critical design decision here: the Langfuse client is wrapped in a try/catch block. Why? Because if Langfuse's servers are down or your API keys are misconfigured, your agent must still serve users. Observability is important, but never more important than the agent's primary job. Also, never hardcode API keys &mdash; always pull them from environment variables so they do not end up in version control.</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs">
+            <button class="code-tab active" onclick="switchTab(this, 'setup-py')" aria-label="Python code">Python</button>
+            <button class="code-tab" onclick="switchTab(this, 'setup-ts')" aria-label="Node.js / TypeScript code">Node.js / TypeScript</button>
+          </div>
+          <div class="code-panel active" id="setup-py">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code class="language-python">import os
+import re
+import time
+import hashlib
+import anthropic
+import structlog
+from langfuse import Langfuse
+
+# --- Langfuse client (tracing) ---
+# Falls back gracefully if credentials are missing
+try:
+    langfuse = Langfuse(
+        public_key=os.environ.get("LANGFUSE_PUBLIC_KEY", ""),
+        secret_key=os.environ.get("LANGFUSE_SECRET_KEY", ""),
+        host=os.environ.get("LANGFUSE_HOST", "https://cloud.langfuse.com"),
+    )
+    TRACING_ENABLED = True
+except Exception:
+    langfuse = None
+    TRACING_ENABLED = False
+
+# --- Structured logger (structlog) ---
+structlog.configure(
+    processors=[
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.processors.add_log_level,
+        structlog.processors.JSONRenderer(),
+    ]
+)
+logger = structlog.get_logger()
+
+# --- Anthropic client ---
+client = anthropic.Anthropic()
+
+# --- PII redaction utility ---
+def redact_pii(text: str) -> str:
+    """Remove emails, phone numbers, and SSNs from text."""
+    text = re.sub(
+        r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}',
+        '[EMAIL_REDACTED]', text
+    )
+    text = re.sub(
+        r'\b\d{3}[-.]?\d{3}[-.]?\d{4}\b',
+        '[PHONE_REDACTED]', text
+    )
+    text = re.sub(
+        r'\b\d{3}-\d{2}-\d{4}\b',
+        '[SSN_REDACTED]', text
+    )
+    return text
+
+def hash_user_id(user_id: str) -> str:
+    """One-way hash for user identifiers in logs."""
+    return "usr_" + hashlib.sha256(
+        user_id.encode()
+    ).hexdigest()[:12]</code></pre>
+          </div>
+          <div class="code-panel" id="setup-ts">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code class="language-javascript">import Anthropic from "@anthropic-ai/sdk";
+import { Langfuse } from "langfuse";
+import pino from "pino";
+import crypto from "crypto";
+
+// --- Langfuse client (tracing) ---
+let langfuse: Langfuse | null = null;
+let TRACING_ENABLED = false;
+
+try {
+  langfuse = new Langfuse({
+    publicKey: process.env.LANGFUSE_PUBLIC_KEY ?? "",
+    secretKey: process.env.LANGFUSE_SECRET_KEY ?? "",
+    baseUrl: process.env.LANGFUSE_HOST ?? "https://cloud.langfuse.com",
+  });
+  TRACING_ENABLED = true;
+} catch {
+  langfuse = null;
+}
+
+// --- Structured logger (pino) ---
+const logger = pino({
+  level: "info",
+  timestamp: pino.stdTimeFunctions.isoTime,
+  formatters: { level: (label) => ({ level: label }) },
+});
+
+// --- Anthropic client ---
+const client = new Anthropic();
+
+// --- PII redaction utility ---
+function redactPii(text: string): string {
+  return text
+    .replace(
+      /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g,
+      "[EMAIL_REDACTED]"
+    )
+    .replace(/\b\d{3}[-.]?\d{3}[-.]?\d{4}\b/g, "[PHONE_REDACTED]")
+    .replace(/\b\d{3}-\d{2}-\d{4}\b/g, "[SSN_REDACTED]");
+}
+
+function hashUserId(userId: string): string {
+  return (
+    "usr_" +
+    crypto.createHash("sha256").update(userId).digest("hex").slice(0, 12)
+  );
+}</code></pre>
+          </div>
+        </div>
+
+        <div class="checkpoint">
+          <div class="checkpoint-label">What Just Happened?</div>
+          We set up three things: (1) A Langfuse client wrapped in a try/catch so the agent works even if tracing is down, (2) A structured logger that outputs JSON with ISO timestamps, and (3) A PII redaction function that strips emails, phone numbers, and SSNs before they reach any log or trace. The <code>hash_user_id</code> function creates a one-way hash so you can correlate logs by user without storing their actual ID.
+        </div>
+
+        <h3>Step 2: The Instrumented Agent Loop</h3>
+        <p>Now for the heart of the module: the agent loop itself, fully instrumented. Here is the mental model for what this code does. Every time a user sends a message, three things happen in parallel with the agent's work: a trace is created (the "flight recorder" starts), spans are opened and closed for each operation (LLM calls, tool calls), and structured log entries are emitted at every step. Think of it as the agent doing its job while a diligent assistant takes notes on every decision, timing each one with a stopwatch.</p>
+        <p>There is one design pattern you will see repeated throughout this code, and it is the most important lesson of this entire module: <strong>every single observability call is wrapped in try/except</strong>. This is not paranoia &mdash; it is a production requirement. Here is the reasoning: if Langfuse's servers go down at 3 AM, what should happen? Option A: your agent crashes and 1,000 users get error pages. Option B: your agent keeps serving users, and you lose 30 minutes of trace data that you can reconstruct from structured logs later. The answer is always Option B. Observability is a supporting actor, never the lead.</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs">
+            <button class="code-tab active" onclick="switchTab(this, 'agent-py')" aria-label="Python code">Python</button>
+            <button class="code-tab" onclick="switchTab(this, 'agent-ts')" aria-label="Node.js / TypeScript code">Node.js / TypeScript</button>
+          </div>
+          <div class="code-panel active" id="agent-py">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code class="language-python">TOOLS = [
+    {
+        "name": "search_orders",
+        "description": "Search for orders by order ID or customer ID.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Order ID or customer ID"}
+            },
+            "required": ["query"],
+        },
+    }
+]
+
+def search_orders(query: str) -> dict:
+    """Simulated order lookup."""
+    return {
+        "order_id": "ORD-12345",
+        "status": "shipped",
+        "carrier": "FedEx",
+        "tracking": "FX9876543210",
+        "estimated_delivery": "2025-03-18",
+    }
+
+def run_agent(user_message: str, user_id: str = "anonymous"):
+    """Run the agent with full tracing and structured logging."""
+    hashed_uid = hash_user_id(user_id)
+    trace = None
+    trace_id = None
+
+    # --- Create trace ---
+    if TRACING_ENABLED:
+        try:
+            trace = langfuse.trace(
+                name="order-agent",
+                user_id=hashed_uid,
+                metadata={"agent_version": "v2.1"},
+                input=redact_pii(user_message),
+            )
+            trace_id = trace.id
+        except Exception as e:
+            logger.warning("tracing_init_failed", error=str(e))
+
+    logger.info(
+        "agent_start",
+        trace_id=trace_id,
+        user_id=hashed_uid,
+        input_length=len(user_message),
+    )
+
+    messages = [{"role": "user", "content": user_message}]
+    step = 0
+    max_steps = 10
+
+    while step < max_steps:
+        step += 1
+        start_time = time.time()
+
+        # --- LLM span ---
+        llm_span = None
+        if trace:
+            try:
+                llm_span = trace.span(
+                    name="llm.chat",
+                    metadata={"model": "claude-sonnet-4-20250514", "step": step},
+                )
+            except Exception:
+                pass
+
+        try:
+            response = client.messages.create(
+                model="claude-sonnet-4-20250514",
+                max_tokens=1024,
+                tools=TOOLS,
+                messages=messages,
+            )
+            latency_ms = int((time.time() - start_time) * 1000)
+
+            # Log the LLM call
+            logger.info(
+                "llm_call",
+                trace_id=trace_id,
+                step=step,
+                model="claude-sonnet-4-20250514",
+                input_tokens=response.usage.input_tokens,
+                output_tokens=response.usage.output_tokens,
+                latency_ms=latency_ms,
+                stop_reason=response.stop_reason,
+            )
+
+            # Update LLM span
+            if llm_span:
+                try:
+                    llm_span.end(
+                        metadata={
+                            "input_tokens": response.usage.input_tokens,
+                            "output_tokens": response.usage.output_tokens,
+                            "latency_ms": latency_ms,
+                            "stop_reason": response.stop_reason,
+                        }
+                    )
+                except Exception:
+                    pass
+
+        except Exception as e:
+            logger.error(
+                "llm_call_failed",
+                trace_id=trace_id,
+                step=step,
+                error=str(e),
+            )
+            if llm_span:
+                try:
+                    llm_span.end(metadata={"error": str(e)})
+                except Exception:
+                    pass
+            break
+
+        # --- Handle tool use ---
+        if response.stop_reason == "tool_use":
+            for block in response.content:
+                if block.type == "tool_use":
+                    tool_start = time.time()
+                    tool_span = None
+
+                    if trace:
+                        try:
+                            tool_span = trace.span(
+                                name=f"tool.{block.name}",
+                                input=str(block.input),
+                            )
+                        except Exception:
+                            pass
+
+                    try:
+                        result = search_orders(block.input.get("query", ""))
+                        tool_latency = int((time.time() - tool_start) * 1000)
+
+                        logger.info(
+                            "tool_call",
+                            trace_id=trace_id,
+                            step=step,
+                            tool_name=block.name,
+                            latency_ms=tool_latency,
+                            success=True,
+                        )
+
+                        if tool_span:
+                            try:
+                                tool_span.end(
+                                    output=str(result),
+                                    metadata={
+                                        "latency_ms": tool_latency,
+                                        "success": True,
+                                    },
+                                )
+                            except Exception:
+                                pass
+
+                        messages.append({"role": "assistant", "content": response.content})
+                        messages.append({
+                            "role": "user",
+                            "content": [{
+                                "type": "tool_result",
+                                "tool_use_id": block.id,
+                                "content": str(result),
+                            }],
+                        })
+
+                    except Exception as e:
+                        logger.error(
+                            "tool_call_failed",
+                            trace_id=trace_id,
+                            step=step,
+                            tool_name=block.name,
+                            error=str(e),
+                        )
+                        if tool_span:
+                            try:
+                                tool_span.end(metadata={"error": str(e)})
+                            except Exception:
+                                pass
+                        break
+        else:
+            # End turn — extract final text
+            final_text = ""
+            for block in response.content:
+                if hasattr(block, "text"):
+                    final_text += block.text
+
+            logger.info(
+                "agent_complete",
+                trace_id=trace_id,
+                total_steps=step,
+                output_length=len(final_text),
+            )
+
+            if trace:
+                try:
+                    trace.update(output=redact_pii(final_text[:200]))
+                except Exception:
+                    pass
+
+            return final_text
+
+    logger.warning("agent_max_steps", trace_id=trace_id, steps=max_steps)
+    return "I was unable to complete your request. Please try again."
+
+
+# --- Run it ---
+if __name__ == "__main__":
+    result = run_agent(
+        "Where is my order ORD-12345?",
+        user_id="john@example.com"
+    )
+    print(result)
+    if TRACING_ENABLED and langfuse:
+        langfuse.flush()</code></pre>
+          </div>
+          <div class="code-panel" id="agent-ts">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code class="language-javascript">const TOOLS = [
+  {
+    name: "search_orders",
+    description: "Search for orders by order ID or customer ID.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        query: { type: "string", description: "Order ID or customer ID" },
+      },
+      required: ["query"],
+    },
+  },
+];
+
+function searchOrders(query: string) {
+  return {
+    order_id: "ORD-12345",
+    status: "shipped",
+    carrier: "FedEx",
+    tracking: "FX9876543210",
+    estimated_delivery: "2025-03-18",
+  };
+}
+
+async function runAgent(userMessage: string, userId = "anonymous") {
+  const hashedUid = hashUserId(userId);
+  let trace: any = null;
+  let traceId: string | null = null;
+
+  // --- Create trace ---
+  if (TRACING_ENABLED && langfuse) {
+    try {
+      trace = langfuse.trace({
+        name: "order-agent",
+        userId: hashedUid,
+        metadata: { agent_version: "v2.1" },
+        input: redactPii(userMessage),
+      });
+      traceId = trace.id;
+    } catch (e) {
+      logger.warn({ error: String(e) }, "tracing_init_failed");
+    }
+  }
+
+  logger.info(
+    { traceId, userId: hashedUid, inputLength: userMessage.length },
+    "agent_start"
+  );
+
+  const messages: any[] = [{ role: "user", content: userMessage }];
+  let step = 0;
+  const maxSteps = 10;
+
+  while (step < maxSteps) {
+    step++;
+    const startTime = Date.now();
+
+    // --- LLM span ---
+    let llmSpan: any = null;
+    if (trace) {
+      try {
+        llmSpan = trace.span({
+          name: "llm.chat",
+          metadata: { model: "claude-sonnet-4-20250514", step },
+        });
+      } catch {}
+    }
+
+    try {
+      const response = await client.messages.create({
+        model: "claude-sonnet-4-20250514",
+        max_tokens: 1024,
+        tools: TOOLS,
+        messages,
+      });
+      const latencyMs = Date.now() - startTime;
+
+      logger.info(
+        {
+          traceId,
+          step,
+          model: "claude-sonnet-4-20250514",
+          inputTokens: response.usage.input_tokens,
+          outputTokens: response.usage.output_tokens,
+          latencyMs,
+          stopReason: response.stop_reason,
+        },
+        "llm_call"
+      );
+
+      if (llmSpan) {
+        try {
+          llmSpan.end({
+            metadata: {
+              input_tokens: response.usage.input_tokens,
+              output_tokens: response.usage.output_tokens,
+              latency_ms: latencyMs,
+              stop_reason: response.stop_reason,
+            },
+          });
+        } catch {}
+      }
+
+      // --- Handle tool use ---
+      if (response.stop_reason === "tool_use") {
+        for (const block of response.content) {
+          if (block.type === "tool_use") {
+            const toolStart = Date.now();
+            let toolSpan: any = null;
+
+            if (trace) {
+              try {
+                toolSpan = trace.span({
+                  name: `tool.${block.name}`,
+                  input: JSON.stringify(block.input),
+                });
+              } catch {}
+            }
+
+            try {
+              const result = searchOrders(
+                (block.input as any).query ?? ""
+              );
+              const toolLatency = Date.now() - toolStart;
+
+              logger.info(
+                {
+                  traceId,
+                  step,
+                  toolName: block.name,
+                  latencyMs: toolLatency,
+                  success: true,
+                },
+                "tool_call"
+              );
+
+              if (toolSpan) {
+                try {
+                  toolSpan.end({
+                    output: JSON.stringify(result),
+                    metadata: { latency_ms: toolLatency, success: true },
+                  });
+                } catch {}
+              }
+
+              messages.push({ role: "assistant", content: response.content });
+              messages.push({
+                role: "user",
+                content: [
+                  {
+                    type: "tool_result",
+                    tool_use_id: block.id,
+                    content: JSON.stringify(result),
+                  },
+                ],
+              });
+            } catch (e) {
+              logger.error(
+                { traceId, step, toolName: block.name, error: String(e) },
+                "tool_call_failed"
+              );
+              if (toolSpan) {
+                try { toolSpan.end({ metadata: { error: String(e) } }); } catch {}
+              }
+              break;
+            }
+          }
+        }
+      } else {
+        // End turn
+        let finalText = "";
+        for (const block of response.content) {
+          if (block.type === "text") finalText += block.text;
+        }
+
+        logger.info(
+          { traceId, totalSteps: step, outputLength: finalText.length },
+          "agent_complete"
+        );
+
+        if (trace) {
+          try {
+            trace.update({ output: redactPii(finalText.slice(0, 200)) });
+          } catch {}
+        }
+
+        return finalText;
+      }
+    } catch (e) {
+      logger.error({ traceId, step, error: String(e) }, "llm_call_failed");
+      if (llmSpan) {
+        try { llmSpan.end({ metadata: { error: String(e) } }); } catch {}
+      }
+      break;
+    }
+  }
+
+  logger.warn({ traceId, steps: maxSteps }, "agent_max_steps");
+  return "I was unable to complete your request. Please try again.";
+}
+
+// --- Run it ---
+(async () => {
+  const result = await runAgent(
+    "Where is my order ORD-12345?",
+    "john@example.com"
+  );
+  console.log(result);
+  if (TRACING_ENABLED && langfuse) {
+    await langfuse.flushAsync();
+  }
+})();</code></pre>
+          </div>
+        </div>
+
+        <div class="output-label">Example Structured Log Output (JSON)</div>
+        <div class="output-block">{"timestamp":"2025-03-15T14:32:01.847Z","level":"info","event":"agent_start","trace_id":"tr_a1b2c3d4","user_id":"usr_8f14e45fce","input_length":29}
+{"timestamp":"2025-03-15T14:32:02.694Z","level":"info","event":"llm_call","trace_id":"tr_a1b2c3d4","step":1,"model":"claude-sonnet-4-20250514","input_tokens":1840,"output_tokens":89,"latency_ms":847,"stop_reason":"tool_use"}
+{"timestamp":"2025-03-15T14:32:02.741Z","level":"info","event":"tool_call","trace_id":"tr_a1b2c3d4","step":1,"tool_name":"search_orders","latency_ms":47,"success":true}
+{"timestamp":"2025-03-15T14:32:03.453Z","level":"info","event":"llm_call","trace_id":"tr_a1b2c3d4","step":2,"model":"claude-sonnet-4-20250514","input_tokens":2102,"output_tokens":156,"latency_ms":712,"stop_reason":"end_turn"}
+{"timestamp":"2025-03-15T14:32:03.454Z","level":"info","event":"agent_complete","trace_id":"tr_a1b2c3d4","total_steps":2,"output_length":198}</div>
+
+        <div class="checkpoint">
+          <div class="checkpoint-label">What Just Happened?</div>
+          We built a complete instrumented agent. Key patterns: (1) Every observability call is wrapped in try/except &mdash; if Langfuse is down, the agent still serves users. (2) PII is redacted before it reaches any trace or log. (3) Every LLM call and tool call gets its own span with timing metadata. (4) Structured logs include <code>trace_id</code> so you can correlate logs with traces. (5) The agent logs <code>input_tokens</code>, <code>output_tokens</code>, and <code>latency_ms</code> for every call &mdash; essential for cost and performance monitoring.
+        </div>
+      </section>
+
+      <!-- Compliance & Audit Logging (GAP 9) -->
+      <section class="section" id="compliance-logging">
+        <h2 id="compliance-logging-heading">Compliance &amp; Audit Logging</h2>
+
+        <p>Production agents in regulated industries must meet strict logging requirements. The traces and structured logs you built earlier in this module are your foundation &mdash; but compliance adds rules about <em>what</em> you log, <em>how</em> you protect it, and <em>how long</em> you keep it.</p>
+
+        <h3>What to Log for Each Framework</h3>
+        <ul>
+          <li><strong><span class="tooltip" data-tooltip="Health Insurance Portability and Accountability Act &mdash; U.S. law governing protected health information (PHI)">HIPAA</span>:</strong> Log every access to protected health information (PHI) &mdash; who requested it, which agent tool accessed it, what record was returned, and when. You must capture the minimum necessary data for the operation. Never log full patient records in traces; log only record IDs and access metadata.</li>
+          <li><strong><span class="tooltip" data-tooltip="Service Organization Control Type 2 &mdash; audit standard for security, availability, and confidentiality controls">SOC 2</span>:</strong> Log all authentication events, authorization decisions, configuration changes, and data access patterns. SOC 2 auditors want to see that every agent action is attributable to a specific user and that access controls are enforced consistently.</li>
+          <li><strong><span class="tooltip" data-tooltip="General Data Protection Regulation &mdash; EU law governing personal data processing and privacy rights">GDPR</span>:</strong> Log the legal basis for processing personal data, consent status, and any cross-border data transfers. Critically, GDPR&rsquo;s right-to-erasure means you must be able to locate and delete all traces containing a specific user&rsquo;s data &mdash; design your trace storage with a <code>user_id</code> index from day one.</li>
+        </ul>
+
+        <h3>PII Redaction in Logs</h3>
+        <p>Apply <span class="tooltip" data-tooltip="Personally Identifiable Information &mdash; any data that could identify a specific individual, such as names, emails, SSNs, or phone numbers">PII</span> redaction <em>before</em> data reaches your logging pipeline, not after. Use pattern matching to detect and mask emails, phone numbers, SSNs, and credit card numbers in both agent inputs and outputs. The redaction function you saw in the code walkthrough&rsquo;s <code>redact_pii()</code> helper is the right pattern &mdash; wrap every trace span&rsquo;s input and output through it.</p>
+
+        <h3>Audit Trail &amp; Data Retention</h3>
+        <p>Audit logs must be <strong>immutable</strong> and <strong>tamper-proof</strong>. Write them to append-only storage (such as S3 with Object Lock or a dedicated audit log service) separate from your application database. Timestamp every entry with a synchronized clock. For retention: HIPAA requires six years, SOC 2 typically one year, and GDPR requires you to delete data when the processing purpose expires &mdash; but keep anonymized audit records to prove compliance. Build retention automation early; retrofitting deletion across years of unindexed traces is painful.</p>
+
+        <div class="checkpoint">
+          <div class="checkpoint-label">What Just Happened?</div>
+          You learned the three compliance dimensions of agent logging: <em>what</em> to capture (access events, authorization decisions, legal basis), <em>what to exclude</em> (PII/PHI redacted before storage), and <em>how to store it</em> (immutable, indexed by user ID, with framework-specific retention periods).
+        </div>
+      </section>
+
+      <!-- Prompt Management & Versioning (GAP 8) -->
+      <section class="section" id="prompt-management">
+        <h2 id="prompt-management-heading">Prompt Management &amp; Versioning</h2>
+
+        <p>Your agent&rsquo;s system prompt is as critical as any function in your codebase &mdash; a single word change can shift behavior across thousands of requests. Yet many teams treat prompts as hardcoded strings buried inside application code, with no review process, no version history, and no way to roll back. Treat prompts as code.</p>
+
+        <h3>Prompts as Code in Version Control</h3>
+        <p>Store every system prompt, few-shot example set, and tool description in version-controlled files (e.g., <code>prompts/order_agent_v12.txt</code>) rather than inline strings. This gives you Git history showing exactly when a prompt changed, who changed it, and why. Use a prompt registry &mdash; a simple config file or a service like <span class="tooltip" data-tooltip="An open-source LLM engineering platform that provides tracing, prompt management, and evaluation tools">Langfuse</span>&rsquo;s prompt management &mdash; to map prompt names to versions at runtime. Your agent loads <code>get_prompt("order_agent", version="latest")</code> instead of reading a hardcoded string, making it trivial to switch versions without redeploying code.</p>
+
+        <h3>A/B Testing Prompts</h3>
+        <p>When you write a new prompt version, don&rsquo;t replace the old one immediately. Instead, route a small percentage of traffic (5&ndash;10%) to the new version and compare metrics: task success rate, average tokens used, user satisfaction scores, and hallucination rate. Log the prompt version in every trace (add a <code>prompt_version</code> field to your structured logs) so you can slice dashboards by version. Only promote the new prompt to 100% once metrics confirm it performs at least as well as the previous version.</p>
+
+        <h3>Prompt Regression Testing</h3>
+        <p>Maintain an <span class="tooltip" data-tooltip="A fixed set of input/output pairs used to verify that a system still produces correct results after changes">evaluation suite</span> of 20&ndash;50 representative inputs with expected outputs. Run this suite automatically (in CI or as a pre-merge check) whenever a prompt file changes. Compare results against baseline scores &mdash; if accuracy drops below your threshold, the change is blocked. This catches regressions that manual review misses: a prompt tweak that improves one edge case but degrades ten common cases. Combine this with the evaluation framework from M18 for a complete quality gate.</p>
+
+        <div class="checkpoint">
+          <div class="checkpoint-label">What Just Happened?</div>
+          You learned the three pillars of prompt management: <em>version control</em> (prompts in Git with a registry for runtime lookup), <em>A/B testing</em> (gradual rollout with metric comparison), and <em>regression testing</em> (automated eval suites that block bad changes before they reach production).
+        </div>
+      </section>
+
+      <!-- Hands-On Exercise -->
+      <section class="section" id="hands-on">
+        <h2 id="hands-on-heading">Hands-On Exercise</h2>
+
+        <h3>What You'll Build</h3>
+        <p>A fully instrumented order-tracking agent with a PII guardrail span, per-call cost tracking, and a log analysis function that computes summary metrics from structured logs &mdash; extending the code walkthrough from earlier in this module.</p>
+        <p><strong>Time Estimate:</strong> 30&ndash;40 minutes</p>
+        <p><strong>Prerequisites:</strong> Python 3.9+ installed, an Anthropic API key (<code>ANTHROPIC_API_KEY</code> environment variable set), and pip available. Langfuse account is optional &mdash; the agent works without it by using local trace IDs.</p>
+        <p><strong>Files You'll Create:</strong></p>
+        <ul>
+          <li><code>traced_agent.py</code> &mdash; The instrumented agent with guardrail span and cost tracking</li>
+          <li><code>log_analyzer.py</code> &mdash; A log query function to analyze agent run data</li>
+        </ul>
+
+        <h3>Environment Setup</h3>
+        <div class="code-block-wrapper">
+          <div class="code-tabs">
+            <button class="code-tab active" onclick="switchTab(this, 'lab-setup-py')" aria-label="Python code">Python</button>
+          </div>
+          <div class="code-panel active" id="lab-setup-py">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code class="language-python">mkdir tracing-lab && cd tracing-lab
+python -m venv venv
+# macOS/Linux:
+source venv/bin/activate
+# Windows:
+# venv\Scripts\activate
+pip install anthropic structlog
+export ANTHROPIC_API_KEY=your-key-here
+# Optional — only if you have a Langfuse account:
+# pip install langfuse
+# export LANGFUSE_PUBLIC_KEY=your-public-key
+# export LANGFUSE_SECRET_KEY=your-secret-key</code></pre>
+          </div>
+        </div>
+
+        <h3>Step 1: Create the Base Agent with Guardrail Span</h3>
+        <p>We will start from the code walkthrough's agent and add two new features: a guardrail span that checks the final response for PII, and per-call cost tracking. Why the guardrail? Even if your tool data is clean, the LLM might echo back PII from the user's message. For example, if the user says "my email is john@test.com, where's my order?", Claude might include that email in its response. The guardrail catches and redacts it before the response reaches the user.</p>
+        <p>The cost tracking is straightforward multiplication &mdash; input tokens times the per-million price, plus output tokens times their price &mdash; but having it in every log entry means you can spot cost anomalies in real time.</p>
+        <p>Create a new file called <code>traced_agent.py</code> with the following complete code:</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs">
+            <button class="code-tab active" onclick="switchTab(this, 'lab-step1-py')" aria-label="Python code">Python</button>
+          </div>
+          <div class="code-panel active" id="lab-step1-py">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code class="language-python">import os
+import re
+import time
+import json
+import hashlib
+import anthropic
+import structlog
+
+# --- Structured logger ---
+structlog.configure(
+    processors=[
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.processors.add_log_level,
+        structlog.processors.JSONRenderer(),
+    ]
+)
+logger = structlog.get_logger()
+
+# --- Anthropic client ---
+client = anthropic.Anthropic()
+
+# --- PII redaction ---
+PII_PATTERNS = [
+    (r'[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}', '[EMAIL_REDACTED]'),
+    (r'\b\d{3}[-.]?\d{3}[-.]?\d{4}\b', '[PHONE_REDACTED]'),
+    (r'\b\d{3}-\d{2}-\d{4}\b', '[SSN_REDACTED]'),
+]
+
+def redact_pii(text: str) -> str:
+    """Remove emails, phone numbers, and SSNs from text."""
+    for pattern, replacement in PII_PATTERNS:
+        text = re.sub(pattern, replacement, text)
+    return text
+
+def contains_pii(text: str) -> bool:
+    """Check if text contains any PII patterns."""
+    for pattern, _ in PII_PATTERNS:
+        if re.search(pattern, text):
+            return True
+    return False
+
+def hash_user_id(user_id: str) -> str:
+    return "usr_" + hashlib.sha256(user_id.encode()).hexdigest()[:12]
+
+# --- Cost calculation ---
+# Prices per million tokens (Claude Sonnet)
+COST_PER_M_INPUT = 3.00
+COST_PER_M_OUTPUT = 15.00
+
+def calculate_cost(input_tokens: int, output_tokens: int) -> float:
+    """Calculate cost in USD for a single LLM call."""
+    input_cost = (input_tokens / 1_000_000) * COST_PER_M_INPUT
+    output_cost = (output_tokens / 1_000_000) * COST_PER_M_OUTPUT
+    return round(input_cost + output_cost, 6)
+
+# --- Tool definition ---
+TOOLS = [
+    {
+        "name": "search_orders",
+        "description": "Search for orders by order ID or customer ID.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "query": {"type": "string", "description": "Order ID or customer ID"}
+            },
+            "required": ["query"],
+        },
+    }
+]
+
+def search_orders(query: str) -> dict:
+    """Simulated order lookup."""
+    return {
+        "order_id": "ORD-12345",
+        "status": "shipped",
+        "carrier": "FedEx",
+        "tracking": "FX9876543210",
+        "estimated_delivery": "2025-03-18",
+    }
+
+# --- Agent with guardrail span and cost tracking ---
+def run_agent(user_message: str, user_id: str = "anonymous"):
+    hashed_uid = hash_user_id(user_id)
+    trace_id = f"tr_{hashlib.md5(f'{time.time()}'.encode()).hexdigest()[:10]}"
+    total_cost = 0.0
+
+    logger.info(
+        "agent_start",
+        trace_id=trace_id,
+        user_id=hashed_uid,
+        input_length=len(user_message),
+    )
+
+    messages = [{"role": "user", "content": user_message}]
+    step = 0
+    max_steps = 10
+
+    while step < max_steps:
+        step += 1
+        start_time = time.time()
+
+        try:
+            response = client.messages.create(
+                model="claude-sonnet-4-20250514",
+                max_tokens=1024,
+                tools=TOOLS,
+                messages=messages,
+            )
+            latency_ms = int((time.time() - start_time) * 1000)
+            call_cost = calculate_cost(
+                response.usage.input_tokens,
+                response.usage.output_tokens,
+            )
+            total_cost += call_cost
+
+            logger.info(
+                "llm_call",
+                trace_id=trace_id,
+                step=step,
+                model="claude-sonnet-4-20250514",
+                input_tokens=response.usage.input_tokens,
+                output_tokens=response.usage.output_tokens,
+                latency_ms=latency_ms,
+                cost_usd=call_cost,
+                stop_reason=response.stop_reason,
+            )
+
+        except Exception as e:
+            logger.error(
+                "llm_call_failed",
+                trace_id=trace_id,
+                step=step,
+                error=str(e),
+            )
+            break
+
+        # Handle tool use
+        if response.stop_reason == "tool_use":
+            for block in response.content:
+                if block.type == "tool_use":
+                    tool_start = time.time()
+                    try:
+                        result = search_orders(block.input.get("query", ""))
+                        tool_latency = int((time.time() - tool_start) * 1000)
+
+                        logger.info(
+                            "tool_call",
+                            trace_id=trace_id,
+                            step=step,
+                            tool_name=block.name,
+                            latency_ms=tool_latency,
+                            success=True,
+                        )
+
+                        messages.append({"role": "assistant", "content": response.content})
+                        messages.append({
+                            "role": "user",
+                            "content": [{
+                                "type": "tool_result",
+                                "tool_use_id": block.id,
+                                "content": str(result),
+                            }],
+                        })
+                    except Exception as e:
+                        logger.error(
+                            "tool_call_failed",
+                            trace_id=trace_id,
+                            step=step,
+                            tool_name=block.name,
+                            error=str(e),
+                        )
+                        break
+        else:
+            # Extract final text
+            final_text = ""
+            for block in response.content:
+                if hasattr(block, "text"):
+                    final_text += block.text
+
+            # --- GUARDRAIL SPAN: Check for PII in output ---
+            guard_start = time.time()
+            pii_found = contains_pii(final_text)
+            guard_latency = int((time.time() - guard_start) * 1000)
+
+            if pii_found:
+                final_text = redact_pii(final_text)
+                guard_status = "fail_redacted"
+            else:
+                guard_status = "pass"
+
+            logger.info(
+                "guardrail_check",
+                trace_id=trace_id,
+                span_name="guardrail.output_check",
+                pii_detected=pii_found,
+                status=guard_status,
+                latency_ms=guard_latency,
+            )
+
+            logger.info(
+                "agent_complete",
+                trace_id=trace_id,
+                total_steps=step,
+                total_cost_usd=total_cost,
+                output_length=len(final_text),
+            )
+
+            return final_text
+
+    logger.warning("agent_max_steps", trace_id=trace_id, steps=max_steps)
+    return "I was unable to complete your request. Please try again."
+
+
+if __name__ == "__main__":
+    result = run_agent(
+        "Where is my order ORD-12345?",
+        user_id="john@example.com"
+    )
+    print(f"\nAgent response:\n{result}")</code></pre>
+          </div>
+        </div>
+
+        <p><strong>Run command:</strong></p>
+        <div class="output-block">python traced_agent.py</div>
+
+        <p><strong>Expected output</strong> (structured log lines followed by the agent response):</p>
+        <div class="output-block">{"timestamp":"...","level":"info","event":"agent_start","trace_id":"tr_...","user_id":"usr_8f14e45fce","input_length":29}
+{"timestamp":"...","level":"info","event":"llm_call","trace_id":"tr_...","step":1,"model":"claude-sonnet-4-20250514","input_tokens":...,"output_tokens":...,"latency_ms":...,"cost_usd":0.00xxxx,"stop_reason":"tool_use"}
+{"timestamp":"...","level":"info","event":"tool_call","trace_id":"tr_...","step":1,"tool_name":"search_orders","latency_ms":0,"success":true}
+{"timestamp":"...","level":"info","event":"llm_call","trace_id":"tr_...","step":2,...,"cost_usd":0.00xxxx,"stop_reason":"end_turn"}
+{"timestamp":"...","level":"info","event":"guardrail_check","trace_id":"tr_...","span_name":"guardrail.output_check","pii_detected":false,"status":"pass","latency_ms":0}
+{"timestamp":"...","level":"info","event":"agent_complete","trace_id":"tr_...","total_steps":2,"total_cost_usd":0.00xxxx,"output_length":...}
+
+Agent response:
+Your order ORD-12345 has been shipped via FedEx...</div>
+
+        <div class="checkpoint">
+          <div class="checkpoint-label">&#9989; Checkpoint</div>
+          You should see structured JSON log lines with <code>cost_usd</code> fields on each <code>llm_call</code> event, a <code>guardrail_check</code> event with <code>"pii_detected": false</code> and <code>"status": "pass"</code>, and an <code>agent_complete</code> event with <code>total_cost_usd</code>. If you see these, Step 1 is working correctly.
+        </div>
+
+        <p><strong>Troubleshooting:</strong></p>
+        <ul>
+          <li>If you see <code>ModuleNotFoundError: No module named 'structlog'</code> &rarr; run <code>pip install structlog</code></li>
+          <li>If you see <code>AuthenticationError</code> &rarr; check that your <code>ANTHROPIC_API_KEY</code> environment variable is set</li>
+          <li>If you see <code>RateLimitError</code> &rarr; wait 30 seconds and try again</li>
+        </ul>
+
+        <h3>Step 2: Create the Log Analyzer</h3>
+        <p>Now that the agent produces structured JSON logs, let's write a function that reads those logs and answers operational questions: "What was the total cost and average latency for all agent runs?" This is the kind of query that structured logging makes trivial but free-form logging makes nearly impossible.</p>
+        <p><strong>Step dependency:</strong> This step uses the log output from Step 1. Make sure <code>traced_agent.py</code> from Step 1 is working before proceeding.</p>
+        <p>Create a new file called <code>log_analyzer.py</code>:</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs">
+            <button class="code-tab active" onclick="switchTab(this, 'lab-step2-py')" aria-label="Python code">Python</button>
+          </div>
+          <div class="code-panel active" id="lab-step2-py">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code class="language-python">import json
+import sys
+from collections import defaultdict
+
+
+def analyze_logs(log_lines: list[str]) -> dict:
+    """Analyze structured JSON log lines from the traced agent.
+
+    Returns a summary with total cost, average latency,
+    tool call counts, and guardrail results.
+    """
+    llm_calls = []
+    tool_calls = []
+    guardrail_results = []
+    agent_runs = []
+
+    for line in log_lines:
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            entry = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+
+        event = entry.get("event", "")
+
+        if event == "llm_call":
+            llm_calls.append({
+                "trace_id": entry.get("trace_id"),
+                "latency_ms": entry.get("latency_ms", 0),
+                "cost_usd": entry.get("cost_usd", 0),
+                "input_tokens": entry.get("input_tokens", 0),
+                "output_tokens": entry.get("output_tokens", 0),
+            })
+        elif event == "tool_call":
+            tool_calls.append({
+                "trace_id": entry.get("trace_id"),
+                "tool_name": entry.get("tool_name"),
+                "latency_ms": entry.get("latency_ms", 0),
+                "success": entry.get("success", False),
+            })
+        elif event == "guardrail_check":
+            guardrail_results.append({
+                "trace_id": entry.get("trace_id"),
+                "pii_detected": entry.get("pii_detected", False),
+                "status": entry.get("status"),
+            })
+        elif event == "agent_complete":
+            agent_runs.append({
+                "trace_id": entry.get("trace_id"),
+                "total_steps": entry.get("total_steps", 0),
+                "total_cost_usd": entry.get("total_cost_usd", 0),
+            })
+
+    # Compute summary
+    total_cost = sum(c["cost_usd"] for c in llm_calls)
+    avg_latency = (
+        sum(c["latency_ms"] for c in llm_calls) / len(llm_calls)
+        if llm_calls else 0
+    )
+    total_tokens = sum(
+        c["input_tokens"] + c["output_tokens"] for c in llm_calls
+    )
+    pii_detections = sum(1 for g in guardrail_results if g["pii_detected"])
+
+    summary = {
+        "total_llm_calls": len(llm_calls),
+        "total_tool_calls": len(tool_calls),
+        "total_agent_runs": len(agent_runs),
+        "total_cost_usd": round(total_cost, 6),
+        "avg_llm_latency_ms": round(avg_latency, 1),
+        "total_tokens": total_tokens,
+        "guardrail_pii_detections": pii_detections,
+        "tool_success_rate": (
+            f"{sum(1 for t in tool_calls if t['success'])}/{len(tool_calls)}"
+            if tool_calls else "N/A"
+        ),
+    }
+
+    return summary
+
+
+if __name__ == "__main__":
+    # Read log lines from stdin or a file
+    if len(sys.argv) > 1:
+        with open(sys.argv[1], "r") as f:
+            lines = f.readlines()
+    else:
+        print("Usage: python log_analyzer.py <logfile>")
+        print("  Or pipe logs: python traced_agent.py 2>&1 | python log_analyzer.py /dev/stdin")
+        sys.exit(1)
+
+    summary = analyze_logs(lines)
+    print(json.dumps(summary, indent=2))</code></pre>
+          </div>
+        </div>
+
+        <p><strong>Run command</strong> (pipe agent logs to the analyzer):</p>
+        <div class="output-block">python traced_agent.py 2>agent_logs.jsonl && python log_analyzer.py agent_logs.jsonl</div>
+
+        <p><strong>Expected output:</strong></p>
+        <div class="output-block">{
+  "total_llm_calls": 2,
+  "total_tool_calls": 1,
+  "total_agent_runs": 1,
+  "total_cost_usd": 0.008xxx,
+  "avg_llm_latency_ms": 780.0,
+  "total_tokens": 4087,
+  "guardrail_pii_detections": 0,
+  "tool_success_rate": "1/1"
+}</div>
+
+        <div class="checkpoint">
+          <div class="checkpoint-label">&#9989; Checkpoint</div>
+          You should see a JSON summary with all fields populated. The <code>total_cost_usd</code> should be a small number (under $0.05 for a single run). The <code>guardrail_pii_detections</code> should be 0 since the simulated order data does not contain PII. If you see this output, Step 2 is working correctly.
+        </div>
+
+        <p><strong>Troubleshooting:</strong></p>
+        <ul>
+          <li>If the log file is empty &rarr; make sure you used <code>2></code> (stderr redirect) because structlog outputs to stderr by default</li>
+          <li>If you see <code>json.JSONDecodeError</code> &rarr; some non-JSON output mixed in. The analyzer skips bad lines, but check that your traced_agent.py is printing the agent response to stdout (not stderr)</li>
+        </ul>
+
+        <h3>Verify Everything Works</h3>
+        <p>Run both steps together as a single end-to-end pipeline:</p>
+        <div class="output-block">python traced_agent.py 2>agent_logs.jsonl && echo "--- Agent logs ---" && cat agent_logs.jsonl && echo "" && echo "--- Analysis ---" && python log_analyzer.py agent_logs.jsonl</div>
+        <p>You should see: (1) the agent response printed to the terminal, (2) all structured JSON log lines, and (3) the analysis summary. If all three appear with sensible values, you have a working instrumented agent with guardrail spans, cost tracking, and log analysis.</p>
+
+        <div class="checkpoint">
+          <div class="checkpoint-label">&#127881; Congratulations</div>
+          You have built a production-style observability pipeline from scratch. Your agent creates structured logs with trace IDs, tracks per-call costs, runs a PII guardrail on output, and you can analyze the logs programmatically. These are the same patterns used by teams running agents at scale.
+        </div>
+      </section>
+
+      <!-- Quiz -->
+      <section class="section" id="quiz">
+        <h2 id="quiz-heading">Knowledge Check</h2>
+
+        <div class="quiz-question">
+          <h4>1. What is the relationship between a trace and a span?</h4>
+          <div class="quiz-option" role="button" tabindex="0" aria-label="Option A" onclick="checkAnswer(this, false)"><span class="quiz-marker">A</span><span>A trace is a type of span with additional metadata</span></div>
+          <div class="quiz-option" role="button" tabindex="0" aria-label="Option B" onclick="checkAnswer(this, true)"><span class="quiz-marker">B</span><span>A trace is the top-level container; spans are the individual units of work nested inside it</span></div>
+          <div class="quiz-option" role="button" tabindex="0" aria-label="Option C" onclick="checkAnswer(this, false)"><span class="quiz-marker">C</span><span>Traces and spans are independent data structures linked by timestamps</span></div>
+          <div class="quiz-option" role="button" tabindex="0" aria-label="Option D" onclick="checkAnswer(this, false)"><span class="quiz-marker">D</span><span>A span contains multiple traces, one per tool call</span></div>
+          <div class="quiz-feedback correct-fb">Correct! A trace is the top-level container representing the entire request lifecycle. Spans are nested inside the trace and represent individual operations (LLM calls, tool invocations, guardrail checks). Each span has a parent_span_id that creates the tree structure.</div>
+          <div class="quiz-feedback incorrect-fb">Not quite. A trace is the top-level container for an entire request lifecycle. Spans are nested inside it, each representing a single unit of work (LLM call, tool invocation, etc.). Spans link to each other via parent_span_id to form a tree.</div>
+        </div>
+
+        <div class="quiz-question">
+          <h4>2. Which of the following should NEVER appear in production agent logs?</h4>
+          <div class="quiz-option" role="button" tabindex="0" aria-label="Option A" onclick="checkAnswer(this, false)"><span class="quiz-marker">A</span><span>Token counts and model names</span></div>
+          <div class="quiz-option" role="button" tabindex="0" aria-label="Option B" onclick="checkAnswer(this, false)"><span class="quiz-marker">B</span><span>Latency measurements and trace IDs</span></div>
+          <div class="quiz-option" role="button" tabindex="0" aria-label="Option C" onclick="checkAnswer(this, true)"><span class="quiz-marker">C</span><span>User email addresses and full prompt contents</span></div>
+          <div class="quiz-option" role="button" tabindex="0" aria-label="Option D" onclick="checkAnswer(this, false)"><span class="quiz-marker">D</span><span>Tool names and error messages</span></div>
+          <div class="quiz-feedback correct-fb">Correct! PII like email addresses and full prompt contents must never appear in production logs. Emails are PII that violate privacy regulations; prompts may contain user-provided sensitive data. Always hash user identifiers and log prompt summaries or hashes instead of full text.</div>
+          <div class="quiz-feedback incorrect-fb">The answer is user email addresses and full prompt contents. Emails are PII, and prompts often contain user-provided sensitive data. Token counts, latency, trace IDs, tool names, and error messages are all safe and useful to log.</div>
+        </div>
+
+        <div class="quiz-question">
+          <h4>3. An agent trace shows: LLM call (200ms) &rarr; tool.search_db (3200ms) &rarr; LLM call (250ms). Total latency is 3650ms. What is the bottleneck?</h4>
+          <div class="quiz-option" role="button" tabindex="0" aria-label="Option A" onclick="checkAnswer(this, false)"><span class="quiz-marker">A</span><span>The LLM calls are too slow and need a faster model</span></div>
+          <div class="quiz-option" role="button" tabindex="0" aria-label="Option B" onclick="checkAnswer(this, true)"><span class="quiz-marker">B</span><span>The database tool call at 3200ms is the bottleneck &mdash; consider caching or query optimization</span></div>
+          <div class="quiz-option" role="button" tabindex="0" aria-label="Option C" onclick="checkAnswer(this, false)"><span class="quiz-marker">C</span><span>The agent is making too many steps and needs fewer tool calls</span></div>
+          <div class="quiz-option" role="button" tabindex="0" aria-label="Option D" onclick="checkAnswer(this, false)"><span class="quiz-marker">D</span><span>The total latency is normal for an AI agent and needs no optimization</span></div>
+          <div class="quiz-feedback correct-fb">Correct! The database tool call accounts for 3200ms out of 3650ms total (87.7% of execution time). The LLM calls are fast (200ms and 250ms). Optimizing the database query, adding caching, or using connection pooling would have the highest impact on latency.</div>
+          <div class="quiz-feedback incorrect-fb">Look at the timing breakdown: the database tool call is 3200ms out of 3650ms total (87.7%). The LLM calls are actually quite fast at 200ms and 250ms. The database call is the clear bottleneck &mdash; caching or query optimization would have the biggest impact.</div>
+        </div>
+
+        <div class="quiz-question">
+          <h4>4. What is the primary advantage of OpenTelemetry over LLM-specific tools like Langfuse?</h4>
+          <div class="quiz-option" role="button" tabindex="0" aria-label="Option A" onclick="checkAnswer(this, false)"><span class="quiz-marker">A</span><span>Better cost tracking for LLM calls</span></div>
+          <div class="quiz-option" role="button" tabindex="0" aria-label="Option B" onclick="checkAnswer(this, false)"><span class="quiz-marker">B</span><span>Built-in prompt management and versioning</span></div>
+          <div class="quiz-option" role="button" tabindex="0" aria-label="Option C" onclick="checkAnswer(this, true)"><span class="quiz-marker">C</span><span>Vendor neutrality &mdash; instrument once, send to any compatible backend</span></div>
+          <div class="quiz-option" role="button" tabindex="0" aria-label="Option D" onclick="checkAnswer(this, false)"><span class="quiz-marker">D</span><span>Automatic PII redaction in traces</span></div>
+          <div class="quiz-feedback correct-fb">Correct! OpenTelemetry's primary advantage is vendor neutrality. It is a CNCF standard supported by dozens of backends (Jaeger, Grafana, Datadog, Honeycomb, etc.). You instrument your code once using the OTel SDK, and you can switch backends without changing your application code. LLM-specific tools like Langfuse offer better AI-native features but may create vendor dependency.</div>
+          <div class="quiz-feedback incorrect-fb">The key advantage of OpenTelemetry is vendor neutrality. You write instrumentation once and send it to any compatible backend (Jaeger, Datadog, Honeycomb, etc.). Cost tracking and prompt management are actually strengths of LLM-specific tools like Langfuse, not OpenTelemetry.</div>
+        </div>
+
+        <div class="quiz-question">
+          <h4>5. A user reports: "The agent gave me the wrong order status." What should you check FIRST?</h4>
+          <div class="quiz-option" role="button" tabindex="0" aria-label="Option A" onclick="checkAnswer(this, false)"><span class="quiz-marker">A</span><span>The model version and temperature settings</span></div>
+          <div class="quiz-option" role="button" tabindex="0" aria-label="Option B" onclick="checkAnswer(this, false)"><span class="quiz-marker">B</span><span>The user's account permissions</span></div>
+          <div class="quiz-option" role="button" tabindex="0" aria-label="Option C" onclick="checkAnswer(this, true)"><span class="quiz-marker">C</span><span>The trace for that request &mdash; specifically the tool call output and LLM reasoning</span></div>
+          <div class="quiz-option" role="button" tabindex="0" aria-label="Option D" onclick="checkAnswer(this, false)"><span class="quiz-marker">D</span><span>The system prompt for recent changes</span></div>
+          <div class="quiz-feedback correct-fb">Correct! The trace for that specific request is your first stop. Pull up the trace_id (from request logs) and examine: (1) Did the tool return the correct data? (2) Did the LLM interpret the tool output correctly? (3) Was the right tool called? This immediately narrows the root cause to either a data issue (tool returned stale data) or a model issue (LLM misinterpreted the result).</div>
+          <div class="quiz-feedback incorrect-fb">Start with the trace. Pull up the trace_id for that specific request and look at the tool call output (did the tool return correct data?) and the LLM reasoning (did the model interpret the data correctly?). This immediately narrows the root cause. Model versions and system prompts are secondary investigations.</div>
+        </div>
+
+        <div class="quiz-question">
+          <h4>6. In a span hierarchy, which statement about parent-child relationships is correct?</h4>
+          <div class="quiz-option" role="button" tabindex="0" aria-label="Option A" onclick="checkAnswer(this, false)"><span class="quiz-marker">A</span><span>Child spans always start after the parent span ends</span></div>
+          <div class="quiz-option" role="button" tabindex="0" aria-label="Option B" onclick="checkAnswer(this, false)"><span class="quiz-marker">B</span><span>A parent span's duration is always exactly the sum of its children's durations</span></div>
+          <div class="quiz-option" role="button" tabindex="0" aria-label="Option C" onclick="checkAnswer(this, true)"><span class="quiz-marker">C</span><span>Child spans execute within the parent span's time window, and the parent's duration includes overhead beyond its children</span></div>
+          <div class="quiz-option" role="button" tabindex="0" aria-label="Option D" onclick="checkAnswer(this, false)"><span class="quiz-marker">D</span><span>Spans cannot have more than one level of nesting</span></div>
+          <div class="quiz-feedback correct-fb">Correct! Child spans execute within the time window of their parent span. The parent span's duration is typically longer than the sum of its children because of processing overhead between child operations (parsing, decision logic, data transformation). This overhead is visible in the waterfall as gaps between child spans.</div>
+          <div class="quiz-feedback incorrect-fb">Child spans run within the parent's time window, not after it. The parent's duration includes both the children's execution time and any overhead (parsing, logic) between them. Spans can be nested many levels deep &mdash; e.g., trace > agent_loop > llm_call > token_streaming.</div>
+        </div>
+
+        <div id="quiz-score" class="quiz-score">
+          <p style="color:var(--text-secondary);margin-bottom:0.5rem;">Your Score</p>
+          <div class="score-num" id="score-display">0/0</div>
+          <p id="score-message" style="color:var(--text-secondary);margin-top:0.5rem;"></p>
+        </div>
+      </section>
+
+      <!-- Summary -->
+      <section class="section" id="summary">
+        <h2 id="summary-heading">Summary</h2>
+        <p>You have completed the first module of Track 6: Observability. Here is what you learned:</p>
+        <ul>
+          <li><strong>Observability vs. Monitoring:</strong> Monitoring tells you <em>that</em> something broke; observability tells you <em>why</em>. For non-deterministic AI agents, observability is essential.</li>
+          <li><strong>Traces:</strong> The top-level container capturing the complete lifecycle of a single agent request. Every trace has a unique ID and contains a tree of spans.</li>
+          <li><strong>Spans:</strong> Individual units of work (LLM calls, tool invocations, guardrail checks) nested in parent-child hierarchies with timing data.</li>
+          <li><strong>Structured Logging:</strong> JSON-formatted logs with consistent keys (trace_id, span_id, latency_ms, tokens) that enable filtering, aggregation, and alerting. Always redact PII before logging.</li>
+          <li><strong>Tools:</strong> Langfuse (LLM-native, self-hostable), OpenTelemetry (vendor-neutral standard), LangSmith (LangChain ecosystem), Arize Phoenix (embedding/RAG focus).</li>
+          <li><strong>Golden Rule:</strong> Never let observability failures break your agent. Wrap all tracing/logging calls in try/except.</li>
+        </ul>
+        <p><strong>Next up:</strong> <a href="M20-monitoring-continuous-improvement.html">M20: Monitoring &amp; Continuous Improvement</a> builds on this foundation &mdash; you will learn to set up dashboards, alerts, and feedback loops that keep your agent improving over time.</p>
+      </section>
+
+      <div class="module-nav">
+        <a href="M18-evaluation-testing.html">&larr; M18: Evaluation &amp; Testing</a>
+          <a href="index.html" aria-label="Course Home" title="Course Home" style="font-size:1.2rem;">&#x1F3E0; Home</a>
+        <a href="M20-monitoring-continuous-improvement.html">M20: Monitoring &amp; CI &rarr;</a>
+      </div>
+    </main>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+  <script>
+    function switchTab(btn, panelId) {
+      const wrapper = btn.closest('.code-block-wrapper');
+      wrapper.querySelectorAll('.code-tab').forEach(t => t.classList.remove('active'));
+      wrapper.querySelectorAll('.code-panel').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById(panelId).classList.add('active');
+    }
+    function copyCode(btn) {
+      const code = btn.closest('.code-panel').querySelector('code').textContent;
+      navigator.clipboard.writeText(code).then(() => { btn.textContent = 'Copied!'; setTimeout(() => btn.textContent = 'Copy', 2000); });
+    }
+
+    // Quiz
+    let quizAnswered = 0, quizCorrect = 0;
+    function checkAnswer(option, isCorrect) {
+      const question = option.closest('.quiz-question');
+      if (question.classList.contains('answered')) return;
+      question.classList.add('answered');
+      quizAnswered++;
+      const options = question.querySelectorAll('.quiz-option');
+      options.forEach(o => { o.classList.add('disabled'); if (o === option) { o.classList.add(isCorrect ? 'correct' : 'incorrect'); o.querySelector('.quiz-marker').textContent = isCorrect ? '\u2713' : '\u2717'; } });
+      if (!isCorrect) { options.forEach(o => { if (o.getAttribute('onclick')?.includes('true')) { o.classList.add('correct'); o.querySelector('.quiz-marker').textContent = '\u2713'; } }); }
+      if (isCorrect) quizCorrect++;
+      const fb = question.querySelectorAll('.quiz-feedback');
+      fb.forEach(f => f.classList.remove('show'));
+      (isCorrect ? question.querySelector('.correct-fb') : question.querySelector('.incorrect-fb'))?.classList.add('show');
+      const totalQuestions = document.querySelectorAll('.quiz-question').length;
+      if (quizAnswered === totalQuestions) {
+        document.getElementById('quiz-score').style.display = 'block';
+        document.getElementById('score-display').textContent = `${quizCorrect}/${totalQuestions}`;
+        const msg = document.getElementById('score-message');
+        if (quizCorrect === totalQuestions) msg.textContent = 'Perfect! You have full observability mastery.';
+        else if (quizCorrect >= totalQuestions * 0.7) msg.textContent = 'Good work! Review the missed questions to sharpen your tracing skills.';
+        else msg.textContent = 'Review the tracing and logging concepts above and try again.';
+      }
+    }
+
+    // Sidebar
+    const sections = document.querySelectorAll('.section');
+    const navLinks = document.querySelectorAll('.sidebar-nav a');
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => { if (entry.isIntersecting) { navLinks.forEach(l => l.classList.remove('active')); const link = document.querySelector(`.sidebar-nav a[href="#${entry.target.id}"]`); if (link) link.classList.add('active'); } });
+    }, { rootMargin: '-20% 0px -70% 0px' });
+    sections.forEach(s => observer.observe(s));
+
+    // Animation 1: Agent Without vs With Observability
+    const animObs = (() => {
+      const withoutSteps = [
+        { icon: 'info', cls: 'info', text: 'User: "Where is order ORD-12345?"' },
+        { icon: '?', cls: 'warn', text: 'Agent processing... (no visibility)' },
+        { icon: '?', cls: 'warn', text: '... something is happening ...' },
+        { icon: '?', cls: 'warn', text: '... maybe a tool call? ...' },
+        { icon: '!', cls: 'bad', text: 'Response: "Your order is delayed"' },
+      ];
+      const withSteps = [
+        { icon: 'i', cls: 'info', text: 'trace_id: tr_abc | User input received' },
+        { icon: '\u2713', cls: 'ok', text: 'span: llm.chat | 847ms | 1840 tokens' },
+        { icon: '\u2713', cls: 'ok', text: 'span: tool.search_orders | 47ms | found' },
+        { icon: '!', cls: 'warn', text: 'tool returned STALE data (cached 2hrs ago)' },
+        { icon: '\u2713', cls: 'ok', text: 'span: llm.chat | 712ms | generated response' },
+      ];
+      let step = 0, timer = null, paused = false;
+      const wEl = document.getElementById('obs-without');
+      const oEl = document.getElementById('obs-with');
+      const wRes = document.getElementById('obs-without-result');
+      const oRes = document.getElementById('obs-with-result');
+
+      function reset() { step = 0; wEl.innerHTML = ''; oEl.innerHTML = ''; wRes.classList.remove('visible','good','poor'); wRes.textContent = ''; oRes.classList.remove('visible','good','poor'); oRes.textContent = ''; }
+
+      function addLine(container, data) {
+        const el = document.createElement('div');
+        el.className = 'obs-line';
+        el.innerHTML = `<div class="obs-icon ${data.cls}">${data.icon}</div><span class="obs-text">${data.text}</span>`;
+        container.appendChild(el);
+        setTimeout(() => el.classList.add('visible'), 50);
+      }
+
+      function animate() {
+        if (paused) { timer = setTimeout(animate, 100); return; }
+        if (step < withoutSteps.length) {
+          addLine(wEl, withoutSteps[step]);
+        }
+        if (step < withSteps.length) {
+          addLine(oEl, withSteps[step]);
+        }
+        if (step === withoutSteps.length) {
+          wRes.textContent = 'Debug: "Why did it say delayed?" \u2014 No data. Guess and redeploy.';
+          wRes.classList.add('visible', 'poor');
+        }
+        if (step === withSteps.length) {
+          oRes.textContent = 'Debug: Tool returned cached data from 2hrs ago. Root cause found in 30 seconds.';
+          oRes.classList.add('visible', 'good');
+        }
+        step++;
+        if (step <= Math.max(withoutSteps.length, withSteps.length)) timer = setTimeout(animate, 700);
+      }
+
+      return {
+        play() { paused = false; animate(); },
+        pause() { paused = true; },
+        restart() { if (timer) clearTimeout(timer); reset(); paused = false; animate(); },
+      };
+    })();
+
+    // Animation 2: Trace Waterfall
+    const animWaterfall = (() => {
+      const totalWidth = 100; // percentage
+      const spans = [
+        { label: 'trace (root)', left: 0, width: 96, cls: 'trace', detail: 'trace_id: tr_a1b2c3d4 | total: 2400ms' },
+        { label: 'llm.chat #1', left: 2, width: 33, cls: 'llm', detail: 'model: claude-sonnet-4 | tokens: 1840/89 | 800ms' },
+        { label: 'tool.search', left: 36, width: 18, cls: 'tool', detail: 'search_orders({query:"ORD-12345"}) | 450ms' },
+        { label: 'llm.chat #2', left: 55, width: 24, cls: 'llm', detail: 'model: claude-sonnet-4 | tokens: 2102/156 | 600ms' },
+        { label: 'guardrail', left: 80, width: 5, cls: 'guard', detail: 'output_pii_check | PASS | 120ms' },
+        { label: 'response', left: 86, width: 8, cls: 'parse', detail: 'format + deliver response | 200ms' },
+      ];
+      let step = 0, timer = null, paused = false;
+      const container = document.getElementById('tw-container');
+      const detailEl = document.getElementById('tw-detail');
+
+      function reset() { step = 0; container.innerHTML = ''; detailEl.classList.remove('visible'); detailEl.textContent = ''; }
+
+      function animate() {
+        if (paused) { timer = setTimeout(animate, 100); return; }
+        if (step < spans.length) {
+          const s = spans[step];
+          const row = document.createElement('div');
+          row.className = 'tw-row';
+          row.innerHTML = `<span class="tw-row-label">${s.label}</span><div class="tw-bar ${s.cls}" style="left:${s.left}%;width:0%;"></div>`;
+          container.appendChild(row);
+          setTimeout(() => {
+            row.classList.add('visible');
+            row.querySelector('.tw-bar').style.width = s.width + '%';
+          }, 50);
+          row.addEventListener('click', () => {
+            detailEl.textContent = s.detail;
+            detailEl.classList.add('visible');
+          });
+          step++;
+          timer = setTimeout(animate, 400);
+        }
+      }
+
+      return {
+        play() { paused = false; animate(); },
+        pause() { paused = true; },
+        restart() { if (timer) clearTimeout(timer); reset(); paused = false; animate(); },
+      };
+    })();
+
+    // Animation 3: Structured Logging Pipeline
+    const animLogging = (() => {
+      const els = ['sl-raw','sl-arr1','sl-gate1','sl-arr2','sl-clean','sl-arr3','sl-dest1','sl-dest2','sl-dest3'];
+      let step = 0, timer = null, paused = false;
+
+      function reset() {
+        step = 0;
+        els.forEach(id => {
+          const el = document.getElementById(id);
+          if (el) { el.classList.remove('visible','active'); }
+        });
+      }
+
+      function animate() {
+        if (paused) { timer = setTimeout(animate, 100); return; }
+        if (step < els.length) {
+          const el = document.getElementById(els[step]);
+          if (el) {
+            el.classList.add('visible');
+            if (el.id === 'sl-gate1') el.classList.add('active');
+          }
+          step++;
+          timer = setTimeout(animate, 500);
+        }
+      }
+
+      return {
+        play() { paused = false; animate(); },
+        pause() { paused = true; },
+        restart() { if (timer) clearTimeout(timer); reset(); paused = false; animate(); },
+      };
+    })();
+
+    // Animation 4: Tool Comparison
+    const animTools = (() => {
+      const cards = ['tc-langfuse','tc-otel','tc-langsmith','tc-arize'];
+      let step = 0, timer = null, paused = false;
+
+      function reset() { step = 0; cards.forEach(id => document.getElementById(id).classList.remove('visible')); }
+
+      function animate() {
+        if (paused) { timer = setTimeout(animate, 100); return; }
+        if (step < cards.length) {
+          document.getElementById(cards[step]).classList.add('visible');
+          step++;
+          timer = setTimeout(animate, 400);
+        }
+      }
+
+      return {
+        play() { paused = false; animate(); },
+        pause() { paused = true; },
+        restart() { if (timer) clearTimeout(timer); reset(); paused = false; animate(); },
+      };
+    })();
+
+    // Auto-play on scroll
+    const animObserver = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const id = entry.target.id;
+          if (id === 'anim-observability') animObs.play();
+          else if (id === 'anim-waterfall') animWaterfall.play();
+          else if (id === 'anim-logging') animLogging.play();
+          else if (id === 'anim-tools') animTools.play();
+          animObserver.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.3 });
+    document.querySelectorAll('[id^="anim-"]').forEach(el => animObserver.observe(el));
+  </script>
+</body>
+</html>

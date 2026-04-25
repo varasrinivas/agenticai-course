@@ -1,0 +1,175 @@
+================================================================================
+M06 Lab -- Expected Output (approximate)
+================================================================================
+Claude's exact wording will vary between runs. What matters is the STRUCTURE:
+the tool calls, tool results, and final answers should match these patterns.
+
+================================================================================
+STEP 1: parallel_tools.py / parallel_tools.js
+================================================================================
+
+>>> Test 1: Parallel weather lookups (3 cities)
+============================================================
+[QUERY] What's the weather in Tokyo, New York, and London?
+============================================================
+
+============================================================
+[THINKING] Turn 1 -- sending 1 message(s) to Claude...
+============================================================
+
+────────────────────────────────────────────────────────────
+[USING TOOL] get_weather
+[INPUT]      {"city": "Tokyo"}
+────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────
+[USING TOOL] get_weather
+[INPUT]      {"city": "New York"}
+────────────────────────────────────────────────────────────
+
+────────────────────────────────────────────────────────────
+[USING TOOL] get_weather
+[INPUT]      {"city": "London"}
+────────────────────────────────────────────────────────────
+
+[PARALLEL] Processed 3 tool calls in this turn
+
+────────────────────────────────────────────────────────────
+[TOOL RESULT] get_weather -> {"city": "Tokyo", "temp_f": 85, "condition": "Sunny", "humidity": 45}
+────────────────────────────────────────────────────────────
+[TOOL RESULT] get_weather -> {"city": "New York", "temp_f": 72, "condition": "Partly Cloudy", "humidity": 65}
+────────────────────────────────────────────────────────────
+[TOOL RESULT] get_weather -> {"city": "London", "temp_f": 58, "condition": "Rainy", "humidity": 80}
+────────────────────────────────────────────────────────────
+
+============================================================
+[RESPONSE] Here's the weather for all three cities:
+
+- **Tokyo**: 85F, Sunny, 45% humidity
+- **New York**: 72F, Partly Cloudy, 65% humidity
+- **London**: 58F, Rainy, 80% humidity
+============================================================
+
+
+>>> Test 2: Parallel across different tools
+[USING TOOL] get_weather   -> Paris: 68F, Overcast
+[USING TOOL] get_time      -> EST: 2024-03-15 14:30:00 EST
+[PARALLEL] Processed 2 tool calls in this turn
+FINAL ANSWER: The weather in Paris is 68F and overcast. The current time in
+EST is 2:30 PM on March 15, 2024.
+
+
+>>> Test 3: Parallel calculate calls
+[USING TOOL] calculate -> 25 * 4 = 100
+[USING TOOL] calculate -> 100 / 3 = 33.333333
+[PARALLEL] Processed 2 tool calls in this turn
+FINAL ANSWER: 25 times 4 is 100, and 100 divided by 3 is approximately 33.33.
+
+
+================================================================================
+STEP 2: tool_chain.py / tool_chain.js
+================================================================================
+
+>>> Test 1: Full 3-step chain
+============================================================
+[QUERY] Find filings for Greenfield Logistics and summarize the collateral
+============================================================
+
+--- Turn 1: Claude calls search_filings ---
+[USING TOOL] search_filings
+[INPUT]      {"debtor_name": "Greenfield Logistics"}
+[TOOL RESULT] [{"filing_number": "UCC-2024-001", "debtor": "Greenfield Logistics LLC", ...}]
+
+--- Turn 2: Claude calls get_filing_details ---
+[USING TOOL] get_filing_details
+[INPUT]      {"filing_number": "UCC-2024-001"}
+[TOOL RESULT] {"filing_number": "UCC-2024-001", "collateral": "All accounts receivable..."}
+
+--- Turn 3: Claude calls summarize_text ---
+[USING TOOL] summarize_text
+[INPUT]      {"text": "All accounts receivable, inventory, equipment..."}
+[TOOL RESULT] {"summary": "This filing covers all of the company's receivables..."}
+
+============================================================
+[RESPONSE] I found a UCC filing for Greenfield Logistics LLC (UCC-2024-001).
+
+In plain English, the collateral covers: all of the company's receivables,
+physical inventory, equipment, and intangible assets -- both current and
+future. This is a broad "blanket lien" covering essentially all business assets.
+============================================================
+
+[CHAIN] Total tool calls: 3 across 3 turns (search -> details -> summarize)
+
+
+>>> Test 2: 2-step chain
+[USING TOOL] get_filing_details -> UCC-2024-001 details
+[USING TOOL] summarize_text    -> plain English summary
+[CHAIN] Total tool calls: 2 across 2 turns
+
+
+>>> Test 3: Single tool, no chain
+[USING TOOL] search_filings -> results for New York
+[CHAIN] Total tool calls: 1 across 1 turn
+FINAL ANSWER: I found X filings in New York: ...
+
+
+================================================================================
+STEP 3: research_assistant.py / research_assistant.js
+================================================================================
+
+>>> Test 1: Search + summarize
+[USING TOOL] search_filings    -> found filings in New York
+[USING TOOL] summarize_text    -> plain English collateral summaries
+FINAL ANSWER: I found 2 active filings in New York. Here are the collateral
+summaries: (1) Greenfield Logistics LLC -- blanket lien covering all
+receivables, inventory, equipment... (2) Harbor Shipping -- TERMINATED filing...
+
+>>> Test 2: Search + risk score
+[USING TOOL] search_filings       -> Greenfield Logistics results
+[USING TOOL] calculate_risk_score -> risk score based on filing count + collateral
+FINAL ANSWER: Greenfield Logistics LLC has a risk score of 65/100 (Moderate).
+They have 2 active filings with broad collateral descriptions...
+
+>>> Test 3: Search + details + report
+[USING TOOL] search_filings      -> Texas filings
+[USING TOOL] get_filing_details  -> full details for each filing
+[USING TOOL] generate_report     -> formatted report
+FINAL ANSWER: Here is the report on UCC filings in Texas:
+
+=== UCC FILING REPORT ===
+State: Texas | Total Filings: 1
+---
+Filing: UCC-2023-TX-0187634
+Debtor: Lone Star Energy Solutions LP
+Secured Party: Wells Fargo Equipment Finance
+Status: Active
+Collateral: Specific equipment (3 excavators, 1 crane)
+...
+
+
+================================================================================
+KEY PATTERNS TO VERIFY
+================================================================================
+
+1. PARALLEL DISPATCH (Step 1):
+   Claude sends MULTIPLE tool_use blocks in one response.
+   Your code processes ALL of them and sends ALL results back together.
+   Look for: "Processed N tool calls in this turn" in the output.
+
+2. SEQUENTIAL CHAINING (Step 2):
+   Claude calls tool 1, gets results, then calls tool 2, gets results, etc.
+   Each turn has exactly ONE tool call. The chain spans MULTIPLE turns.
+   Look for: "Total tool calls: N across N turns" in the output.
+
+3. TOOL SELECTION (Step 3):
+   With 5 tools available, Claude picks the right ones for each query.
+   Some queries need 2 tools, some need 3-4. Claude decides the order.
+   Look for: varied tool combinations depending on the query.
+
+4. TOOL DISPATCHER:
+   All 5 tools route through a single dispatcher (dict/object mapping).
+   Unknown tool names are caught and reported as errors.
+
+5. AGENT LOOP:
+   Same core pattern as M05: while loop, check stop_reason, act accordingly.
+   The loop naturally supports both parallel and sequential patterns.

@@ -1,0 +1,28 @@
+# M22B: UCC Agent — Production Dockerfile (Node.js variant)
+# ===========================================================
+# Build:  docker build -f Dockerfile.node -t ucc-agent-node .
+# Run:    docker run -p 8000:8000 --env-file .env ucc-agent-node
+# Test:   curl http://localhost:8000/health
+
+FROM node:20-slim AS base
+
+WORKDIR /app
+
+# Install dependencies (cached layer)
+COPY package.json package-lock.json* ./
+RUN npm ci --production
+
+# Copy application code
+COPY server.js .
+
+# Security: non-root user
+RUN groupadd -r appgroup && useradd -r -g appgroup appuser
+USER appuser
+
+# Expose port and health check
+EXPOSE 8000
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
+    CMD curl -f http://localhost:8000/health || exit 1
+
+# Start command
+CMD ["node", "server.js"]

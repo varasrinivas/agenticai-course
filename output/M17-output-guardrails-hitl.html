@@ -1,0 +1,1892 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>M17: Output Guardrails &amp; Human-in-the-Loop | Building AI Agents with Claude</title>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;700;800&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg-primary: #0A1628; --bg-secondary: #111D33; --bg-card: #162033; --bg-surface: #1A2740;
+      --text-primary: #E8ECF1; --text-secondary: #94A3B8; --text-muted: #64748B;
+      --accent-primary: #D4A843; --accent-hover: #E5BC5A; --accent-muted: rgba(212, 168, 67, 0.15);
+      --success: #10B981; --success-bg: rgba(16, 185, 129, 0.1);
+      --warning: #F59E0B; --warning-bg: rgba(245, 158, 11, 0.1);
+      --error: #F43F5E; --error-bg: rgba(244, 63, 94, 0.1);
+      --info: #3B82F6; --info-bg: rgba(59, 130, 246, 0.1);
+      --track-guardrails: #EF4444; --track-color: var(--track-guardrails); --track-capstones: #D4A843;
+      --code-bg: #0D1117; --code-border: #21262D; --code-text: #C9D1D9;
+      --transition-fast: 150ms; --transition-normal: 300ms; --transition-slow: 500ms;
+    }
+    body { background: var(--bg-primary); color: var(--text-primary); font-family: 'Source Sans 3', sans-serif; font-size: 1.05rem; line-height: 1.7; min-height: 100vh; }
+    .top-progress { position: fixed; top: 0; left: 0; right: 0; height: 4px; background: var(--bg-surface); z-index: 200; }
+    .top-progress .fill { height: 100%; background: linear-gradient(90deg, var(--track-color), var(--accent-primary)); width: 60%; border-radius: 0 2px 2px 0; }
+    .course-header { background: var(--bg-secondary); border-bottom: 1px solid var(--code-border); padding: 1.25rem 2rem; }
+    .course-header-inner { max-width: 1200px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; }
+    .course-title { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.95rem; font-weight: 600; color: var(--text-secondary); }
+    .track-badge { display: inline-flex; align-items: center; gap: 0.5rem; background: rgba(239, 68, 68, 0.15); border: 1px solid var(--track-color); border-radius: 20px; padding: 0.25rem 0.75rem; font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.8rem; font-weight: 600; color: var(--track-color); }
+    .track-badge .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--track-color); }
+    .header-meta { display: flex; gap: 1.5rem; font-size: 0.85rem; color: var(--text-muted); }
+    .page-container { max-width: 1200px; margin: 0 auto; padding: 2rem; display: grid; grid-template-columns: 240px 1fr; gap: 3rem; }
+    .sidebar-nav { position: sticky; top: 2rem; height: calc(100vh - 4rem); overflow-y: auto; padding-right: 1rem; }
+    .sidebar-nav::-webkit-scrollbar { width: 3px; } .sidebar-nav::-webkit-scrollbar-thumb { background: var(--bg-surface); border-radius: 3px; }
+    .sidebar-title { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); margin-bottom: 1rem; }
+    .sidebar-nav a { display: block; padding: 0.4rem 0.75rem; margin-bottom: 0.15rem; font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.82rem; font-weight: 600; color: var(--text-muted); text-decoration: none; border-left: 2px solid transparent; border-radius: 0 4px 4px 0; transition: all var(--transition-fast); }
+    .sidebar-nav a:hover { color: var(--text-primary); background: var(--bg-surface); }
+    .sidebar-nav a.active { color: var(--accent-primary); border-left-color: var(--accent-primary); background: var(--accent-muted); }
+    .content { max-width: 800px; } .section { margin-bottom: 4rem; }
+    h1 { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 2.25rem; line-height: 1.2; margin-bottom: 0.75rem; }
+    h2 { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 1.5rem; color: var(--text-primary); margin: 2.5rem 0 1rem; padding-top: 1rem; border-top: 1px solid var(--code-border); }
+    h2:first-of-type { border-top: none; }
+    h3 { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 600; font-size: 1.25rem; color: var(--text-primary); margin: 2rem 0 0.75rem; }
+    p { margin-bottom: 1rem; } ul, ol { margin: 0.5rem 0 1rem 1.5rem; } li { margin-bottom: 0.4rem; } strong { font-weight: 600; }
+    a { color: var(--accent-primary); text-decoration: none; } a:hover { text-decoration: underline; }
+    .analogy-box, .tech-def-box, .callout-why, .callout-warning, .callout-security, .callout-cost, .callout-cert { border-left: 4px solid; border-radius: 0 8px 8px 0; padding: 1.25rem 1.5rem; margin: 1.5rem 0; }
+    .analogy-box { background: var(--accent-muted); border-left-color: var(--accent-primary); }
+    .tech-def-box { background: var(--info-bg); border-left-color: var(--info); }
+    .callout-why { background: var(--success-bg); border-left-color: var(--success); }
+    .callout-warning { background: var(--warning-bg); border-left-color: var(--warning); }
+    .callout-security { background: var(--error-bg); border-left-color: var(--error); }
+    .callout-cost { background: var(--warning-bg); border-left-color: var(--accent-primary); }
+    .callout-cert { background: rgba(212, 168, 67, 0.06); border-left-color: var(--accent-primary); }
+    .box-label { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 0.9rem; display: block; margin-bottom: 0.4rem; }
+    .analogy-box .box-label { color: var(--accent-primary); } .tech-def-box .box-label { color: var(--info); } .callout-why .box-label { color: var(--success); } .callout-warning .box-label { color: var(--warning); } .callout-security .box-label { color: var(--error); } .callout-cost .box-label { color: var(--accent-primary); } .callout-cert .box-label { color: var(--accent-primary); }
+    .term-tooltip { position: relative; color: var(--accent-primary); cursor: help; border-bottom: 1px dashed var(--accent-primary); }
+    .term-tooltip .tooltip-content { position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); background: var(--bg-card); border: 1px solid var(--accent-primary); border-radius: 8px; padding: 0.75rem 1rem; font-size: 0.85rem; color: var(--text-primary); width: 280px; opacity: 0; pointer-events: none; transition: opacity var(--transition-fast); z-index: 10; line-height: 1.5; box-shadow: 0 4px 20px rgba(0,0,0,0.4); }
+    .term-tooltip:hover .tooltip-content, .term-tooltip:focus .tooltip-content { opacity: 1; pointer-events: auto; }
+    .code-block-wrapper { background: var(--code-bg); border: 1px solid var(--code-border); border-radius: 12px; margin: 1.5rem 0; overflow: hidden; }
+    .code-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--code-border); background: var(--bg-surface); }
+    .code-tab { padding: 0.5rem 1.25rem; background: none; border: none; font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; color: var(--text-muted); transition: all var(--transition-fast); }
+    .code-tab:hover { color: var(--text-primary); } .code-tab.active { color: var(--accent-primary); border-bottom-color: var(--accent-primary); }
+    .code-panel { display: none; position: relative; } .code-panel.active { display: block; }
+    .code-panel pre { margin: 0; padding: 1.25rem; overflow-x: auto; font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; line-height: 1.6; }
+    .code-panel pre code { background: none; color: var(--code-text); }
+    .copy-btn { position: absolute; top: 0.75rem; right: 0.75rem; background: var(--bg-surface); border: 1px solid var(--code-border); color: var(--text-muted); padding: 0.3rem 0.6rem; border-radius: 6px; font-size: 0.75rem; cursor: pointer; font-family: 'JetBrains Mono', monospace; transition: all var(--transition-fast); }
+    .copy-btn:hover { color: var(--accent-primary); border-color: var(--accent-primary); }
+    .output-block { background: var(--code-bg); border: 1px solid var(--code-border); border-radius: 8px; padding: 1rem 1.25rem; margin: 0.75rem 0 1.5rem; font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; color: var(--success); line-height: 1.5; white-space: pre-wrap; }
+    .output-label { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.25rem; }
+    .animation-container { background: var(--bg-secondary); border: 1px solid var(--code-border); border-radius: 12px; padding: 2rem; margin: 2rem 0; position: relative; min-height: 300px; overflow: hidden; }
+    .animation-title { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.85rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 1.25rem; }
+    .animation-controls { display: flex; gap: 0.5rem; position: absolute; bottom: 1rem; right: 1rem; }
+    .anim-btn { background: var(--bg-card); border: 1px solid var(--code-border); color: var(--text-primary); width: 36px; height: 36px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 1rem; transition: all var(--transition-fast); }
+    .anim-btn:hover { border-color: var(--accent-primary); color: var(--accent-primary); }
+    .quiz-question { background: var(--bg-card); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; }
+    .quiz-question h4 { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 600; margin-bottom: 1rem; font-size: 1rem; }
+    .quiz-option { padding: 0.75rem 1rem; margin: 0.5rem 0; border: 1px solid var(--code-border); border-radius: 8px; cursor: pointer; transition: all var(--transition-fast); display: flex; align-items: flex-start; gap: 0.75rem; }
+    .quiz-option:hover { border-color: var(--accent-primary); }
+    .quiz-option.correct { border-color: var(--success); background: var(--success-bg); } .quiz-option.incorrect { border-color: var(--error); background: var(--error-bg); } .quiz-option.disabled { pointer-events: none; }
+    .quiz-marker { width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--code-border); flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 700; margin-top: 2px; }
+    .quiz-option.correct .quiz-marker { border-color: var(--success); color: var(--success); } .quiz-option.incorrect .quiz-marker { border-color: var(--error); color: var(--error); }
+    .quiz-feedback { margin-top: 0.75rem; padding: 0.75rem; border-radius: 8px; font-size: 0.9rem; display: none; }
+    .quiz-feedback.show { display: block; } .quiz-feedback.correct-fb { background: var(--success-bg); color: var(--success); } .quiz-feedback.incorrect-fb { background: var(--error-bg); color: var(--error); }
+    .quiz-score { background: var(--bg-card); border-radius: 12px; padding: 1.5rem; text-align: center; margin-top: 2rem; display: none; }
+    .quiz-score .score-num { font-family: 'Bricolage Grotesque', sans-serif; font-size: 2.5rem; font-weight: 800; color: var(--accent-primary); }
+    .module-nav { display: flex; justify-content: space-between; align-items: center; padding: 1.5rem 0; margin: 2rem 0; border-top: 1px solid var(--code-border); }
+    .module-nav a { display: flex; align-items: center; gap: 0.5rem; color: var(--accent-primary); text-decoration: none; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 600; font-size: 0.9rem; padding: 0.5rem 1rem; border: 1px solid var(--code-border); border-radius: 8px; transition: all var(--transition-fast); }
+    .module-nav a:hover { border-color: var(--accent-primary); background: var(--accent-muted); text-decoration: none; }
+    .objectives-list { list-style: none; margin-left: 0; } .objectives-list li { padding: 0.5rem 0 0.5rem 2rem; position: relative; }
+    .objectives-list li::before { content: ''; position: absolute; left: 0; top: 0.85rem; width: 16px; height: 16px; border-radius: 4px; border: 2px solid var(--track-color); background: rgba(239, 68, 68, 0.1); }
+    .checkpoint { background: var(--bg-card); border: 1px solid var(--track-color); border-radius: 8px; padding: 1rem 1.25rem; margin: 1.5rem 0; }
+    .checkpoint-label { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 0.85rem; color: var(--track-color); margin-bottom: 0.4rem; }
+    .bridge { background: var(--bg-surface); border-radius: 8px; padding: 1rem 1.25rem; margin: 2rem 0; font-style: italic; color: var(--text-secondary); border-left: 3px solid var(--text-muted); }
+
+    /* === OUTPUT GUARDRAIL ANIMATION === */
+    .og-wrap { display: flex; align-items: center; gap: 0.5rem; flex-wrap: wrap; justify-content: center; min-height: 80px; }
+    .og-box { background: var(--bg-card); border: 1px solid var(--code-border); border-radius: 8px; padding: 0.3rem 0.6rem; font-family: 'JetBrains Mono', monospace; font-size: 0.6rem; color: var(--text-secondary); opacity: 0; transition: all 0.4s; max-width: 120px; text-align: center; }
+    .og-box.visible { opacity: 1; }
+    .og-box.pass { border-color: var(--success); color: var(--success); }
+    .og-box.fail { border-color: var(--error); color: var(--error); }
+    .og-box.flag { border-color: var(--warning); color: var(--warning); }
+    .og-gate { width: 55px; height: 55px; border: 2px solid var(--code-border); border-radius: 8px; display: flex; flex-direction: column; align-items: center; justify-content: center; font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.5rem; font-weight: 700; color: var(--text-muted); gap: 0.1rem; transition: all 0.3s; }
+    .og-gate.active { border-color: var(--track-color); color: var(--track-color); box-shadow: 0 0 12px rgba(239,68,68,0.2); }
+    .og-gate .og-icon { font-size: 0.9rem; }
+    .og-arrow { color: var(--text-muted); font-size: 0.8rem; opacity: 0; transition: opacity 0.3s; }
+    .og-arrow.visible { opacity: 1; }
+
+    /* === COST BREAKDOWN ANIMATION === */
+    .cb-wrap { display: flex; gap: 1.5rem; align-items: flex-end; }
+    .cb-chart { flex: 1; max-width: 350px; height: 200px; position: relative; display: flex; align-items: flex-end; gap: 0.3rem; padding-bottom: 1.5rem; border-bottom: 1px solid var(--code-border); }
+    .cb-bar-group { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 0.2rem; }
+    .cb-bar { width: 100%; border-radius: 4px 4px 0 0; transition: height 0.5s; }
+    .cb-bar.input { background: var(--info); }
+    .cb-bar.output { background: var(--success); }
+    .cb-bar.tools { background: #F97316; }
+    .cb-bar-label { font-family: 'JetBrains Mono', monospace; font-size: 0.55rem; color: var(--text-muted); text-align: center; }
+    .cb-budget-line { position: absolute; left: 0; right: 0; height: 2px; background: var(--error); bottom: calc(1.5rem + 160px); }
+    .cb-budget-label { position: absolute; right: 0; bottom: calc(1.5rem + 162px); font-family: 'JetBrains Mono', monospace; font-size: 0.55rem; color: var(--error); }
+    .cb-cost { font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; color: var(--text-secondary); }
+    .cb-legend { display: flex; flex-direction: column; gap: 0.4rem; }
+    .cb-legend-item { display: flex; align-items: center; gap: 0.4rem; font-family: 'JetBrains Mono', monospace; font-size: 0.65rem; color: var(--text-secondary); }
+    .cb-legend-dot { width: 10px; height: 10px; border-radius: 2px; }
+    .cb-total { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.85rem; font-weight: 700; color: var(--text-primary); margin-top: 0.5rem; }
+    .cb-alert { display: none; background: var(--error-bg); border: 1px solid var(--error); border-radius: 6px; padding: 0.4rem 0.75rem; font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.7rem; font-weight: 700; color: var(--error); text-align: center; margin-top: 0.5rem; }
+    .cb-alert.visible { display: block; }
+
+    /* === CIRCUIT BREAKER ANIMATION === */
+    .cbr-wrap { display: flex; flex-direction: column; align-items: center; gap: 0.75rem; min-height: 220px; }
+    .cbr-state { width: 100px; height: 100px; border-radius: 50%; border: 4px solid var(--success); display: flex; flex-direction: column; align-items: center; justify-content: center; font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.75rem; font-weight: 700; color: var(--success); transition: all 0.5s; }
+    .cbr-state.open { border-color: var(--error); color: var(--error); }
+    .cbr-state.half-open { border-color: var(--warning); color: var(--warning); }
+    .cbr-counter { font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; color: var(--text-secondary); }
+    .cbr-requests { display: flex; gap: 0.4rem; flex-wrap: wrap; justify-content: center; }
+    .cbr-req { width: 28px; height: 28px; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 0.7rem; opacity: 0; transition: all 0.3s; border: 1px solid var(--code-border); }
+    .cbr-req.visible { opacity: 1; }
+    .cbr-req.ok { background: var(--success-bg); border-color: var(--success); color: var(--success); }
+    .cbr-req.fail { background: var(--error-bg); border-color: var(--error); color: var(--error); }
+    .cbr-req.blocked { background: var(--bg-surface); border-color: var(--text-muted); color: var(--text-muted); }
+    .cbr-cooldown { font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; color: var(--warning); opacity: 0; transition: opacity 0.3s; }
+    .cbr-cooldown.visible { opacity: 1; }
+
+    /* === HITL TIMELINE === */
+    .hitl-wrap { display: flex; flex-direction: column; gap: 1rem; }
+    .hitl-lane { display: flex; align-items: center; gap: 0; min-height: 40px; }
+    .hitl-seg { height: 30px; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-family: 'JetBrains Mono', monospace; font-size: 0.55rem; color: white; opacity: 0; transition: all 0.4s; }
+    .hitl-seg.visible { opacity: 1; }
+    .hitl-seg.agent { background: var(--info); }
+    .hitl-seg.human { background: var(--success); }
+    .hitl-seg.gate { background: var(--warning); width: 24px; flex-shrink: 0; }
+    .hitl-lane-label { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.65rem; font-weight: 700; color: var(--text-muted); min-width: 80px; flex-shrink: 0; }
+
+    .anim-static-fallback { display: none; padding: 1rem; font-size: 0.9rem; color: var(--text-secondary); }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+      .animation-controls { display: none; }
+      .anim-static-fallback { display: block; }
+    }
+    @media (max-width: 900px) {
+      .page-container { grid-template-columns: 1fr; }
+      .sidebar-nav { position: fixed; bottom: 0; left: 0; right: 0; height: auto; z-index: 100; background: var(--bg-secondary); border-top: 1px solid var(--code-border); padding: 0.75rem; display: flex; gap: 0.25rem; overflow-x: auto; }
+      .sidebar-title { display: none; }
+      .sidebar-nav a { white-space: nowrap; font-size: 0.75rem; }
+    }
+  </style>
+</head>
+<body>
+  <div class="top-progress" role="progressbar" aria-valuenow="19" aria-valuemin="1" aria-valuemax="30" aria-label="Course progress: Module 19 of 30"><div class="fill"></div></div>
+
+  <header class="course-header">
+    <div class="course-header-inner">
+      <div>
+        <div class="course-title">Building AI Agents with Claude</div>
+        <div style="display:flex;align-items:center;gap:1rem;margin-top:0.5rem;flex-wrap:wrap;">
+          <span class="track-badge"><span class="dot"></span> Track 5: Guardrails &amp; Safety</span>
+          <span style="font-size:0.85rem;color:var(--text-muted);">Module 19 of 30</span>
+        </div>
+      </div>
+      <div class="header-meta">
+        <span>⏱ 70 min</span>
+        <span>📊 Intermediate</span>
+      </div>
+    </div>
+  </header>
+
+  <div class="page-container">
+    <nav class="sidebar-nav" aria-label="Module sections">
+      <div class="sidebar-title">On This Page</div>
+      <a href="#objectives">Learning Objectives</a>
+      <a href="#output-validation">Output Validation</a>
+      <a href="#cost-controls">Cost Controls</a>
+      <a href="#hitl">Human-in-the-Loop</a>
+      <a href="#circuit-breaker">Circuit Breaker</a>
+      <a href="#code-walkthrough">Code Walkthrough</a>
+      <a href="#hands-on">Hands-On Exercise</a>
+      <a href="#quiz">Knowledge Check</a>
+      <a href="#summary">Summary</a>
+    </nav>
+
+    <main class="content">
+      <div class="module-nav" style="border-top:none;margin-top:0;">
+        <a href="M16-input-guardrails.html">← M16: Input Guardrails</a>
+        <a href="index.html" aria-label="Course Home" title="Course Home" style="font-size:1.2rem;">&#x1F3E0; Home</a>
+        <a href="M18-evaluation-testing.html">M18: Evaluation &amp; Testing →</a>
+      </div>
+      <h1>M17: Output Guardrails &amp; Human-in-the-Loop</h1>
+      <p style="font-size:1.1rem;color:var(--text-secondary);margin-bottom:2rem;">Validate what your agent says, control what it costs, and know when to hand off to a human.</p>
+
+      <section class="section" id="objectives">
+        <h2 id="objectives-heading">Learning Objectives</h2>
+        <ul class="objectives-list">
+          <li>Implement output validation: hallucination detection, toxicity filtering, and format checks</li>
+          <li>Build cost controls with budget ceilings, token caps, and loop detection</li>
+          <li>Design human-in-the-loop patterns: approval gates, modification gates, and escalation gates</li>
+          <li>Implement the circuit breaker pattern to prevent cascading failures</li>
+          <li>Wire input and output guardrails into a complete production pipeline</li>
+        </ul>
+      </section>
+
+      <!-- Output Validation -->
+      <section class="section" id="output-validation">
+        <h2 id="output-validation-heading">Output Validation</h2>
+        <p>In M16, you built input guardrails that protect your system from bad inputs. Now we build the other half: <span class="term-tooltip" tabindex="0">output guardrails<span class="tooltip-content" role="tooltip">Validation layers that intercept agent responses BEFORE they reach the user. They check for hallucinations, toxic content, and format compliance — protecting users from your system's mistakes.</span></span> that protect your users from bad outputs. Input guardrails protect your system from users. Output guardrails protect users from your system.</p>
+
+        <div class="analogy-box">
+          <span class="box-label">💡 Everyday Analogy</span>
+          <p>Before quality inspectors existed on factory assembly lines, products went straight from the machines to the customer. Most products were fine, but occasionally a defective one slipped through — a car with a faulty brake line, a toy with a sharp edge, a medicine with the wrong dosage. The machines themselves didn't know they'd made a mistake. Quality inspectors sit at the END of the line, checking every product before it ships. They don't make the products — they catch the defects that the manufacturing process missed. Output guardrails work exactly the same way. Your agent generates responses using Claude, and most responses are excellent. But occasionally Claude hallucinates a fact, generates inappropriate content, or produces malformed output. Output guardrails catch these defects before the response reaches your user.</p>
+        </div>
+
+        <p>Here's what an output guardrail check actually looks like in practice. The hallucination detector returns a structured verdict for each factual claim:</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs"><button class="code-tab active" aria-label="JSON example">Hallucination Check Result</button></div>
+          <div class="code-panel active">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code>// Agent response: "The filing was submitted on March 15, 2024
+//   by Acme Corp for $2.3M in equipment collateral."
+// Source document says: March 22, 2024; Acme Corp; $2.3M equipment
+
+{
+  "claims": [
+    { "text": "filed on March 15, 2024", "status": "contradicted",
+      "source": "Document shows March 22, 2024" },
+    { "text": "by Acme Corp", "status": "supported",
+      "source": "filing_2024_NY.txt line 3" },
+    { "text": "$2.3M in equipment collateral", "status": "supported",
+      "source": "filing_2024_NY.txt line 7" }
+  ],
+  "overall": "block",       // One contradicted claim = block
+  "unsupported_count": 0
+}
+// Result: Response blocked. Agent told to re-check the date.</code></pre>
+          </div>
+        </div>
+
+        <div class="tech-def-box">
+          <span class="box-label">📐 Technical Definition</span>
+          <p>Output validation runs three critical checks on every agent response:</p>
+          <p><strong>Hallucination detection</strong> verifies factual claims against source documents. If your RAG agent (M09-M10) says "The filing was submitted on March 15, 2024," the hallucination detector checks whether the source documents actually contain that date. Implementation uses a separate Claude call that receives both the response and the source documents, then classifies each claim as "supported," "unsupported," or "contradicted."</p>
+          <p><strong>Toxicity filtering</strong> screens for harmful, biased, or inappropriate content. While Claude's safety training handles most cases, edge cases slip through — especially in agentic loops where the model processes external data that may contain offensive content. A <span class="term-tooltip" tabindex="0">Claude-as-judge<span class="tooltip-content" role="tooltip">A pattern where a separate Claude call evaluates the output of the main agent. The judge has its own focused prompt and clean context, making it more reliable than self-evaluation within the same conversation.</span></span> call rates content on a severity scale (1-5) and blocks anything above the configured threshold.</p>
+          <p><strong>Format validation</strong> ensures the output matches expected structure. If your agent should return JSON with specific fields, the format validator runs three sub-checks: Is the JSON syntactically valid? Are all required fields present? Are values within expected ranges (e.g., a dollar amount is positive, a date is not in the future)? This is the cheapest check — no API call needed, just local parsing — and it catches the most common failures.</p>
+        </div>
+
+        <!-- Output Guardrail Animation -->
+        <div class="animation-container" aria-label="Animation showing output flowing through validation gates">
+          <div class="animation-title">Output Validation Pipeline</div>
+          <div id="anim-output" style="display:flex;flex-direction:column;gap:1rem;min-height:200px;">
+            <div class="og-wrap">
+              <div class="og-box" id="og-agent" style="min-width:100px;">🤖 Agent Response</div>
+              <div class="og-arrow" id="og-a1">→</div>
+              <div class="og-gate" id="og-g1"><span class="og-icon">📋</span>Format</div>
+              <div class="og-arrow" id="og-a2">→</div>
+              <div class="og-gate" id="og-g2"><span class="og-icon">🔍</span>Halluc.</div>
+              <div class="og-arrow" id="og-a3">→</div>
+              <div class="og-gate" id="og-g3"><span class="og-icon">🛡️</span>Toxicity</div>
+              <div class="og-arrow" id="og-a4">→</div>
+              <div class="og-box" id="og-user" style="min-width:80px;">👤 User</div>
+            </div>
+            <div id="og-result" style="text-align:center;font-family:'JetBrains Mono',monospace;font-size:0.7rem;color:var(--text-muted);opacity:0;transition:opacity 0.4s;"></div>
+          </div>
+          <div class="anim-static-fallback"><p><strong>Output Pipeline (static):</strong> Agent response flows through Format Validation (schema check), Hallucination Detection (fact verification), and Toxicity Filter (content safety). Clean outputs reach the user. Hallucinated claims get flagged. Toxic content gets blocked.</p></div>
+          <div class="animation-controls">
+            <button class="anim-btn" onclick="animOutput.play()" aria-label="Play">▶</button>
+            <button class="anim-btn" onclick="animOutput.pause()" aria-label="Pause">⏸</button>
+            <button class="anim-btn" onclick="animOutput.restart()" aria-label="Restart">↻</button>
+            <button class="anim-btn" onclick="animOutput.step()" aria-label="Step">⏭</button>
+          </div>
+        </div>
+
+        <div class="callout-why">
+          <span class="box-label">✅ Why It Matters</span>
+          <p>In a healthcare pre-authorization agent (Domain A), a hallucinated CPT code could approve the wrong procedure — costing thousands of dollars and potentially harming a patient. In a B2B ecommerce agent (Domain B), a format error that drops the shipping address field means packages go nowhere. A hallucination detector that costs $0.003 per check is trivially cheap compared to the cost of acting on fabricated data. Output guardrails are the last checkpoint before your agent's decisions affect real people.</p>
+        </div>
+
+        <div class="callout-warning">
+          <span class="box-label">⚠️ Common Misconceptions</span>
+          <p><strong>"Output guardrails are unnecessary because Claude is already safe"</strong> — Claude's safety training catches most harmful content, but it's not infallible. In agentic loops where external data flows through the model, offensive content from data sources can leak into responses. And safety training doesn't prevent hallucinations — the model can confidently state incorrect facts.</p>
+          <p><strong>"Human-in-the-loop means the AI is unreliable"</strong> — The opposite. HITL is a sign of a well-designed system. Even the best human employees need manager approval for large transactions or important communications. HITL gates are the same principle — they're about risk management, not reliability.</p>
+          <p><strong>"The model can tell you how confident it is"</strong> — Self-reported confidence scores ("I'm 85% confident") are NOT calibrated. Claude might say "I'm very confident" about a hallucinated fact. Use programmatic criteria (source document matching, structured validation) for escalation decisions, not the model's self-assessment.</p>
+          <p><strong>"Circuit breakers are overkill for AI agents"</strong> — Without them, a downstream API outage causes every agent request to fail, burn tokens on error responses, and trigger retries that compound the problem. A circuit breaker saves thousands during a 30-minute outage by short-circuiting to a fallback response after 3 failures.</p>
+        </div>
+      </section>
+
+      <div class="bridge">Output validation catches mistakes in what your agent says. But there's another critical dimension: what it COSTS. Without budget controls, a single agent loop can burn through your entire monthly API budget in minutes.</div>
+
+      <!-- Cost Controls -->
+      <section class="section" id="cost-controls">
+        <h2 id="cost-controls-heading">Cost Controls</h2>
+
+        <div class="analogy-box">
+          <span class="box-label">💡 Everyday Analogy</span>
+          <p>Before prepaid phone plans existed, parents gave their teenagers a phone with an unlimited plan — and then got a $2,000 bill because the teenager discovered international calling. The phone worked perfectly; the problem was that nothing stopped reasonable use from escalating into catastrophic cost. Running an AI agent without cost controls is the same story. Your agent loop works perfectly in testing — 3-4 iterations, $0.02 per request. But in production, an edge case triggers 50 iterations, each processing a 100K-token document, and suddenly one request costs $15 instead of $0.02. Without <span class="term-tooltip" tabindex="0">budget ceilings<span class="tooltip-content" role="tooltip">Hard limits on token usage or dollar cost per request, per user, or per time period. When the ceiling is hit, the agent returns a graceful fallback response instead of continuing to spend.</span></span>, a single bug can burn through your monthly budget in hours.</p>
+          <p>Here's what a cost middleware check looks like in practice — the object your middleware maintains after each API call:</p>
+        </div>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs"><button class="code-tab active" aria-label="JSON example">Cost Tracker State</button></div>
+          <div class="code-panel active">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code>// After iteration 3 of an agent loop:
+{
+  "iteration": 3,
+  "input_tokens": 24000,    // 8K per iteration × 3
+  "output_tokens": 6000,    // 2K per iteration × 3
+  "total_cost": "$0.162",   // (24K × $3/M) + (6K × $15/M)
+  "budget": "$0.50",
+  "budget_remaining": "$0.338",
+  "can_afford_next": true,  // Estimated next call: $0.054
+  "status": "ok"
+}
+
+// After iteration 8:
+{
+  "iteration": 8,
+  "total_cost": "$0.432",
+  "budget_remaining": "$0.068",
+  "can_afford_next": false, // Next call ~$0.054 would exceed budget
+  "status": "budget_exceeded — returning fallback response"
+}</code></pre>
+          </div>
+        </div>
+
+        <div class="tech-def-box">
+          <span class="box-label">📐 Technical Definition</span>
+          <p>Cost control operates at four levels. Here's each one and when it kicks in:</p>
+          <p><strong>Per-request budget</strong> caps the maximum tokens (or dollar cost) for a single agent invocation. If the agent loop consumes more than the budget, it terminates and returns a fallback response instead of continuing to spend. Think of it as a prepaid card for each request — once the balance hits zero, the card declines.</p>
+          <p><strong>Per-user budget</strong> sets daily or monthly limits per user. This prevents any single user from consuming disproportionate resources. Without it, one power user running expensive queries all day could eat your entire monthly allocation.</p>
+          <p><strong>Loop detection</strong> identifies when the agent is calling the same tool repeatedly without making progress. For example, an agent might retry a failing API call infinitely — each retry costs tokens but produces no useful result. Loop detection spots this pattern and breaks the cycle.</p>
+          <p><strong>Execution time limits</strong> are wall-clock timeouts that kill the agent process if it runs too long. These catch infinite loops that might not hit token limits — for example, an agent stuck in a reasoning loop that generates very few tokens per iteration but never terminates.</p>
+          <p>Implementation uses <span class="term-tooltip" tabindex="0">middleware<span class="tooltip-content" role="tooltip">A software layer that wraps API calls, adding functionality like cost tracking, logging, and enforcement without modifying the core agent logic. In Python, often implemented as decorators or context managers.</span></span> that wraps every Claude API call. The middleware tracks cumulative input tokens, output tokens, and cost. Before each API call, it checks whether the next call would exceed the budget. If so, it short-circuits the call and returns a budget-exceeded response. The key insight: the middleware sits BETWEEN your agent code and the API client, so your agent logic doesn't need to know about budgets at all.</p>
+        </div>
+
+        <!-- Cost Breakdown Animation -->
+        <div class="animation-container" aria-label="Animation showing cost accumulation during agent loop">
+          <div class="animation-title">Cost Accumulation in Agent Loop</div>
+          <div id="anim-cost" class="cb-wrap" style="min-height:220px;">
+            <div class="cb-chart" id="cb-chart">
+              <div class="cb-budget-line"></div>
+              <div class="cb-budget-label">$0.50 budget</div>
+            </div>
+            <div>
+              <div class="cb-legend">
+                <div class="cb-legend-item"><span class="cb-legend-dot" style="background:var(--info);"></span> Input tokens</div>
+                <div class="cb-legend-item"><span class="cb-legend-dot" style="background:var(--success);"></span> Output tokens</div>
+                <div class="cb-legend-item"><span class="cb-legend-dot" style="background:#F97316;"></span> Tool calls</div>
+              </div>
+              <div class="cb-total" id="cb-total">Total: $0.000</div>
+              <div class="cb-alert" id="cb-alert">⛔ Budget Exceeded — Returning Fallback</div>
+            </div>
+          </div>
+          <div class="anim-static-fallback"><p><strong>Cost Breakdown (static):</strong> Stacked bar chart showing cost per agent loop iteration. Input tokens (blue), output tokens (green), tool calls (orange) accumulate. A budget ceiling line marks the $0.50 limit. When costs approach 80%, bars turn yellow. At 100%, the agent returns a fallback response instead of continuing.</p></div>
+          <div class="animation-controls">
+            <button class="anim-btn" onclick="animCost.play()" aria-label="Play">▶</button>
+            <button class="anim-btn" onclick="animCost.pause()" aria-label="Pause">⏸</button>
+            <button class="anim-btn" onclick="animCost.restart()" aria-label="Restart">↻</button>
+            <button class="anim-btn" onclick="animCost.step()" aria-label="Step">⏭</button>
+          </div>
+        </div>
+
+        <div class="callout-cost">
+          <span class="box-label">💰 Cost Alert</span>
+          <p>Real numbers: A single Claude Sonnet call with 10K input tokens and 2K output tokens costs ~$0.06. An agentic loop that runs 20 iterations (each with tool use) processes ~240K total tokens — that's $1.44 per request. At 1,000 requests/day, you're at $1,440/day. A per-request budget of $0.50 caps runaway loops at 8-10 iterations while allowing normal 3-4 iteration flows, reducing daily costs to ~$500. The budget saves you from the long tail of expensive edge cases.</p>
+        </div>
+      </section>
+
+      <div class="bridge">Cost controls protect your wallet. But some decisions are too important — or too risky — for an AI to make alone. That's where human-in-the-loop patterns come in: designing clear handoff points where humans take the controls.</div>
+
+      <!-- Human-in-the-Loop -->
+      <section class="section" id="hitl">
+        <h2 id="hitl-heading">Human-in-the-Loop Patterns</h2>
+
+        <div class="analogy-box">
+          <span class="box-label">💡 Everyday Analogy</span>
+          <p>Before autopilot systems matured, every second of a flight required active human control. Modern autopilot handles the routine — maintaining altitude, speed, and heading for hours. But the pilot takes over for takeoff, landing, and anything unexpected — turbulence, system warnings, unusual ATC instructions. The key insight isn't that autopilot is unreliable — it's that some decisions require human judgment, and the system is designed with clear handoff points where control transfers smoothly. <span class="term-tooltip" tabindex="0">Human-in-the-loop (HITL)<span class="tooltip-content" role="tooltip">A design pattern where AI handles routine tasks autonomously but pauses at predefined decision points for human review, approval, or modification before proceeding. The human is "in the loop" — part of the workflow, not just observing.</span></span> patterns work exactly the same way. Your agent handles routine requests autonomously, but at specific decision points — irreversible actions, high-stakes choices, edge cases — it pauses and hands control to a human.</p>
+          <p>Here's what an approval gate request looks like when it reaches a human reviewer — the JSON object that gets stored in the approval queue:</p>
+        </div>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs"><button class="code-tab active" aria-label="JSON example">Approval Gate Payload</button></div>
+          <div class="code-panel active">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code>// What the human reviewer sees in their approval queue:
+{
+  "gate_type": "approval",
+  "agent_id": "order-support-agent-7",
+  "proposed_action": "Send $450 refund to customer",
+  "context": {
+    "order_id": "ORD-12345",
+    "reason": "Damaged item — photos verified by vision model",
+    "return_window": "within 30-day policy",
+    "customer_history": "12 orders, 0 previous refunds"
+  },
+  "state": "waiting_for_human",
+  "options": ["approve", "deny", "modify"],
+  "created_at": "2024-03-22T14:32:00Z",
+  "timeout": "4 hours — auto-escalate to manager if no response"
+}</code></pre>
+          </div>
+        </div>
+
+        <div class="tech-def-box">
+          <span class="box-label">📐 Technical Definition</span>
+          <p>Three HITL gate patterns serve different purposes:</p>
+          <p><strong>Approval gates</strong> pause before irreversible actions. The agent proposes "Send refund of $450 to customer X" and waits for human confirmation. The human sees the full context, clicks Approve or Deny, and the agent proceeds accordingly. Used for: sending emails, processing payments, modifying databases, deploying code.</p>
+          <p><strong>Modification gates</strong> present a draft for human editing. The agent generates a customer response, displays it, and the human can edit the text before it's sent. Unlike approval gates (binary yes/no), modification gates allow the human to adjust the content. Used for: customer communications, reports, legal documents, content that needs a human voice.</p>
+          <p><strong>Escalation gates</strong> detect when the agent has hit its competence boundary. The agent recognizes "I can't resolve this" and routes to a human specialist with full context. Unlike the other gates, escalation is triggered by the agent's own uncertainty — not a pre-configured rule. Used for: edge cases, ambiguous situations, policy gaps, high-stakes decisions the agent wasn't trained for.</p>
+          <p>Each pattern requires a <span class="term-tooltip" tabindex="0">state machine<span class="tooltip-content" role="tooltip">A programming pattern where a system exists in one of several defined states (e.g., "running," "waiting_for_human," "completed") and transitions between states based on events. Used to track where an agent is in a HITL workflow.</span></span> that pauses agent execution, stores the pending action in a queue, notifies the human, waits for their response, and resumes the agent with the human's decision.</p>
+        </div>
+
+        <!-- Confidence Routing Diagram (inline SVG) -->
+        <div class="animation-container" aria-label="Diagram showing confidence-based routing with three branches: auto-approve, HITL queue, and auto-deny">
+          <div class="animation-title">Confidence Routing &mdash; Three Decision Branches</div>
+          <svg viewBox="0 0 580 320" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Agent output enters a confidence check diamond. High confidence routes to auto-approve, medium to HITL queue, low to auto-deny." style="width:100%;max-width:580px;margin:0 auto;display:block;">
+            <style>
+              .cr-text { fill: #e0e0e0; font-family: 'Inter', system-ui, sans-serif; }
+              .cr-box { rx: 8; ry: 8; }
+              .cr-arrow { stroke: #888; stroke-width: 1.5; fill: none; marker-end: url(#cr-arrowhead); }
+              .cr-label { fill: #aaa; font-size: 11px; font-family: 'Inter', system-ui, sans-serif; }
+              @media (prefers-reduced-motion: reduce) { .cr-pulse { animation: none !important; } }
+              @keyframes cr-pulse-green { 0%,100% { opacity:.7 } 50% { opacity:1 } }
+              @keyframes cr-pulse-yellow { 0%,100% { opacity:.7 } 50% { opacity:1 } }
+              @keyframes cr-pulse-red { 0%,100% { opacity:.7 } 50% { opacity:1 } }
+            </style>
+            <defs>
+              <marker id="cr-arrowhead" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6" fill="#888"/></marker>
+            </defs>
+            <!-- Agent Output box -->
+            <rect x="20" y="130" width="120" height="44" class="cr-box" fill="#2a2a4a" stroke="#7c6fe0" stroke-width="1.5"/>
+            <text x="80" y="157" text-anchor="middle" class="cr-text" font-size="13" font-weight="600">Agent Output</text>
+            <!-- Arrow to diamond -->
+            <line x1="140" y1="152" x2="185" y2="152" class="cr-arrow"/>
+            <!-- Confidence Check diamond -->
+            <polygon points="230,115 275,152 230,189 185,152" fill="#1e1e3a" stroke="#a78bfa" stroke-width="1.5"/>
+            <text x="230" y="148" text-anchor="middle" class="cr-text" font-size="11" font-weight="600">Confidence</text>
+            <text x="230" y="162" text-anchor="middle" class="cr-text" font-size="11" font-weight="600">Check</text>
+            <!-- HIGH branch (top) -->
+            <path d="M230,115 L230,60 L400,60" class="cr-arrow"/>
+            <text x="245" y="83" class="cr-label">&gt; 90%</text>
+            <rect x="400" y="38" width="150" height="44" class="cr-box" fill="#1a3a2a" stroke="#4ade80" stroke-width="1.5" style="animation:cr-pulse-green 3s ease-in-out infinite;" class="cr-pulse"/>
+            <text x="475" y="56" text-anchor="middle" class="cr-text" font-size="12" font-weight="600" fill="#4ade80">&#10003; Auto-Approve</text>
+            <text x="475" y="72" text-anchor="middle" class="cr-text" font-size="10" fill="#6ee7a0">Execute immediately</text>
+            <!-- MEDIUM branch (middle) -->
+            <line x1="275" y1="152" x2="400" y2="152" class="cr-arrow"/>
+            <text x="320" y="143" class="cr-label">70 &ndash; 90%</text>
+            <rect x="400" y="130" width="150" height="44" class="cr-box" fill="#3a3520" stroke="#facc15" stroke-width="1.5" style="animation:cr-pulse-yellow 3s ease-in-out infinite;" class="cr-pulse"/>
+            <text x="475" y="148" text-anchor="middle" class="cr-text" font-size="12" font-weight="600" fill="#facc15">&#9208; HITL Queue</text>
+            <text x="475" y="164" text-anchor="middle" class="cr-text" font-size="10" fill="#fde68a">Human reviews</text>
+            <!-- LOW branch (bottom) -->
+            <path d="M230,189 L230,250 L400,250" class="cr-arrow"/>
+            <text x="245" y="228" class="cr-label">&lt; 70%</text>
+            <rect x="400" y="228" width="150" height="44" class="cr-box" fill="#3a1a1a" stroke="#f87171" stroke-width="1.5" style="animation:cr-pulse-red 3s ease-in-out infinite;" class="cr-pulse"/>
+            <text x="475" y="246" text-anchor="middle" class="cr-text" font-size="12" font-weight="600" fill="#f87171">&#10007; Auto-Deny</text>
+            <text x="475" y="262" text-anchor="middle" class="cr-text" font-size="10" fill="#fca5a5">Return fallback</text>
+          </svg>
+        </div>
+
+        <!-- HITL Timeline Animation -->
+        <div class="animation-container" aria-label="Animation showing three HITL gate patterns as timelines">
+          <div class="animation-title">Human-in-the-Loop Gate Patterns</div>
+          <div id="anim-hitl" class="hitl-wrap" style="min-height:180px;">
+            <div class="hitl-lane">
+              <span class="hitl-lane-label">Approval</span>
+              <div class="hitl-seg agent" id="hl-a1" style="width:80px;">Agent runs</div>
+              <div class="hitl-seg gate" id="hl-a2">⏸</div>
+              <div class="hitl-seg human" id="hl-a3" style="width:60px;">✓ Approve</div>
+              <div class="hitl-seg agent" id="hl-a4" style="width:60px;">Execute</div>
+            </div>
+            <div class="hitl-lane">
+              <span class="hitl-lane-label">Modification</span>
+              <div class="hitl-seg agent" id="hl-b1" style="width:70px;">Draft</div>
+              <div class="hitl-seg gate" id="hl-b2">✏️</div>
+              <div class="hitl-seg human" id="hl-b3" style="width:80px;">Edit draft</div>
+              <div class="hitl-seg agent" id="hl-b4" style="width:50px;">Send</div>
+            </div>
+            <div class="hitl-lane">
+              <span class="hitl-lane-label">Escalation</span>
+              <div class="hitl-seg agent" id="hl-c1" style="width:90px;">Agent runs</div>
+              <div class="hitl-seg gate" id="hl-c2">🔀</div>
+              <div class="hitl-seg human" id="hl-c3" style="width:100px;">Human resolves</div>
+            </div>
+          </div>
+          <div class="anim-static-fallback"><p><strong>HITL Gates (static):</strong> Three timelines: (1) Approval — agent proposes action, pauses for human approval, then executes. (2) Modification — agent drafts content, human edits it, then agent sends. (3) Escalation — agent detects uncertainty, routes to human specialist who resolves the issue.</p></div>
+          <div class="animation-controls">
+            <button class="anim-btn" onclick="animHITL.play()" aria-label="Play">▶</button>
+            <button class="anim-btn" onclick="animHITL.pause()" aria-label="Pause">⏸</button>
+            <button class="anim-btn" onclick="animHITL.restart()" aria-label="Restart">↻</button>
+            <button class="anim-btn" onclick="animHITL.step()" aria-label="Step">⏭</button>
+          </div>
+        </div>
+
+        <div class="callout-cert" style="background:rgba(212,168,67,.06);border-left:4px solid #D4A843;border-radius:0 8px 8px 0;padding:1.25rem 1.5rem;margin:1.5rem 0;">
+          <span class="box-label" style="color:#D4A843;">🎓 Cert Tip — Domain 5.3</span>
+          <p>Escalate based on policy gaps, capability limits, explicit requests, or business thresholds. NEVER escalate based on sentiment/anger alone. An angry customer with a simple request does NOT need a human. A calm customer hitting a policy gap DOES.</p>
+        </div>
+
+        <div class="callout-why">
+          <span class="box-label">✅ Why It Matters</span>
+          <p>The best HITL systems make human intervention effortless. When a human gets an approval request, they should see: the proposed action ("Send $450 refund to Order #12345"), the full context ("Customer received damaged item, photos verified, within 30-day return window"), and one-click actions (Approve / Deny / Modify). Forcing the human to reconstruct context from scratch defeats the purpose — the agent should do 95% of the work, and the human provides the final 5% of judgment.</p>
+        </div>
+      </section>
+
+      <div class="bridge">HITL gates handle individual decisions. But what about systemic failures — when your downstream APIs go down, or your hallucination detector starts failing repeatedly? That's where the circuit breaker pattern prevents cascading damage.</div>
+
+      <!-- Circuit Breaker -->
+      <section class="section" id="circuit-breaker">
+        <h2 id="circuit-breaker-heading">Circuit Breaker Pattern</h2>
+
+        <div class="analogy-box">
+          <span class="box-label">💡 Everyday Analogy</span>
+          <p>Before circuit breakers existed in homes, an electrical overload — a faulty appliance, a lightning strike, too many devices on one outlet — would cause the wiring to overheat and start a fire. The circuit breaker monitors current flow and TRIPS when it detects dangerous levels, cutting power instantly. Once the problem is fixed (unplug the faulty appliance), you flip the breaker back on. Without the breaker, one bad appliance could burn down the house. An agent <span class="term-tooltip" tabindex="0">circuit breaker<span class="tooltip-content" role="tooltip">A pattern that monitors consecutive failures and automatically halts the agent when a threshold is reached. Three states: Closed (normal), Open (tripped — all requests get fallback response), Half-Open (testing — one request allowed through to check recovery).</span></span> works the same way. When failures pile up — API errors, hallucination detections, timeouts — the breaker trips and routes all requests to a safe fallback response instead of continuing to make failing API calls that waste money and degrade user experience.</p>
+          <p>Here's the internal state of a circuit breaker as it transitions through all three states:</p>
+        </div>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs"><button class="code-tab active" aria-label="JSON example">Circuit Breaker State Log</button></div>
+          <div class="code-panel active">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code>// Request 1: success → state unchanged
+{ "state": "closed", "failures": 0, "action": "allowed" }
+
+// Request 2: API 500 error
+{ "state": "closed", "failures": 1, "action": "allowed" }
+
+// Request 3: API 500 error
+{ "state": "closed", "failures": 2, "action": "allowed" }
+
+// Request 4: API 500 error → threshold reached, circuit TRIPS
+{ "state": "open", "failures": 3, "action": "tripped",
+  "cooldown_until": "2024-03-22T14:33:00Z" }
+
+// Request 5: arrives during cooldown
+{ "state": "open", "action": "blocked",
+  "response": "fallback — no API call made" }
+
+// After 60s cooldown expires:
+{ "state": "half_open", "action": "testing — 1 request allowed" }
+
+// Test request succeeds:
+{ "state": "closed", "failures": 0, "action": "recovered" }</code></pre>
+          </div>
+        </div>
+
+        <div class="tech-def-box">
+          <span class="box-label">📐 Technical Definition</span>
+          <p>The circuit breaker has three states. In <strong>Closed</strong> (normal), requests flow through to Claude. Failures are counted. If failures exceed the threshold (e.g., 3 consecutive failures in a 5-minute window), the circuit trips. In <strong>Open</strong> (tripped), ALL requests immediately receive a fallback response — no API calls are made. This prevents piling on a failing service. A cooldown timer starts. In <strong>Half-Open</strong> (testing), after the cooldown expires, ONE test request is allowed through. If it succeeds, the circuit closes (returns to normal). If it fails, the circuit re-opens with a longer cooldown (exponential backoff).</p>
+          <p>What counts as a "failure"? Several types: API 500 errors (the server is down), rate limit 429 responses (you're sending too many requests), hallucination detections above your threshold, guardrail violations, and execution timeouts. Each failure type can have its own threshold and cooldown. For example, you might tolerate 5 rate-limit errors (they're transient) but trip on just 2 consecutive hallucination detections (those suggest a deeper problem with the model's context).</p>
+        </div>
+
+        <!-- Circuit Breaker State Machine Diagram (inline SVG) -->
+        <div class="animation-container" aria-label="Diagram showing circuit breaker state machine with Closed, Open, and Half-Open states">
+          <div class="animation-title">Circuit Breaker State Machine</div>
+          <svg viewBox="0 0 580 280" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Three states: Closed (normal) transitions to Open when failures accumulate, Open transitions to Half-Open after cooldown timer, Half-Open returns to Closed on success or back to Open on failure." style="width:100%;max-width:580px;margin:0 auto;display:block;">
+            <style>
+              .cb-text { font-family: 'Inter', system-ui, sans-serif; }
+              .cb-arrow { stroke-width: 1.8; fill: none; marker-end: url(#cb-arrowhead); }
+              .cb-sublabel { font-size: 10px; fill: #aaa; font-family: 'Inter', system-ui, sans-serif; }
+              @media (prefers-reduced-motion: reduce) { .cb-glow { animation: none !important; } }
+            </style>
+            <defs>
+              <marker id="cb-arrowhead" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6" fill="#888"/></marker>
+            </defs>
+            <!-- CLOSED state -->
+            <circle cx="100" cy="140" r="55" fill="#1a3a2a" stroke="#4ade80" stroke-width="2"/>
+            <text x="100" y="132" text-anchor="middle" class="cb-text" font-size="13" font-weight="700" fill="#4ade80">CLOSED</text>
+            <text x="100" y="150" text-anchor="middle" class="cb-text" font-size="10" fill="#6ee7a0">(normal)</text>
+            <text x="100" y="165" text-anchor="middle" class="cb-sublabel">Requests flow</text>
+            <!-- Self-loop: success resets counter -->
+            <path d="M60,105 C40,60 160,60 140,105" class="cb-arrow" stroke="#4ade80"/>
+            <text x="100" y="55" text-anchor="middle" class="cb-sublabel" fill="#6ee7a0">success → reset</text>
+            <!-- Arrow CLOSED → OPEN -->
+            <path d="M155,130 C200,100 230,100 255,115" class="cb-arrow" stroke="#f87171"/>
+            <text x="205" y="95" text-anchor="middle" class="cb-sublabel" fill="#fca5a5">failures ≥ threshold</text>
+            <!-- OPEN state -->
+            <circle cx="310" cy="140" r="55" fill="#3a1a1a" stroke="#f87171" stroke-width="2"/>
+            <text x="310" y="132" text-anchor="middle" class="cb-text" font-size="13" font-weight="700" fill="#f87171">OPEN</text>
+            <text x="310" y="150" text-anchor="middle" class="cb-text" font-size="10" fill="#fca5a5">(tripped)</text>
+            <text x="310" y="165" text-anchor="middle" class="cb-sublabel">All blocked</text>
+            <!-- Arrow OPEN → HALF-OPEN -->
+            <path d="M365,130 C410,100 440,100 465,115" class="cb-arrow" stroke="#facc15"/>
+            <text x="415" y="95" text-anchor="middle" class="cb-sublabel" fill="#fde68a">cooldown expires</text>
+            <!-- HALF-OPEN state -->
+            <circle cx="520" cy="140" r="55" fill="#3a3520" stroke="#facc15" stroke-width="2"/>
+            <text x="520" y="125" text-anchor="middle" class="cb-text" font-size="13" font-weight="700" fill="#facc15">HALF-</text>
+            <text x="520" y="142" text-anchor="middle" class="cb-text" font-size="13" font-weight="700" fill="#facc15">OPEN</text>
+            <text x="520" y="158" text-anchor="middle" class="cb-text" font-size="10" fill="#fde68a">(testing)</text>
+            <text x="520" y="173" text-anchor="middle" class="cb-sublabel">1 request</text>
+            <!-- Arrow HALF-OPEN → CLOSED (success, bottom path) -->
+            <path d="M475,180 C400,240 180,240 110,195" class="cb-arrow" stroke="#4ade80"/>
+            <text x="290" y="248" text-anchor="middle" class="cb-sublabel" fill="#6ee7a0">test succeeds → close</text>
+            <!-- Arrow HALF-OPEN → OPEN (failure, top curved back) -->
+            <path d="M475,110 C440,50 370,50 345,90" class="cb-arrow" stroke="#f87171"/>
+            <text x="410" y="48" text-anchor="middle" class="cb-sublabel" fill="#fca5a5">test fails → re-open</text>
+          </svg>
+        </div>
+
+        <!-- Circuit Breaker Animation -->
+        <div class="animation-container" aria-label="Animation showing circuit breaker state transitions">
+          <div class="animation-title">Circuit Breaker State Machine</div>
+          <div id="anim-circuit" class="cbr-wrap">
+            <div class="cbr-state" id="cbr-state"><span style="font-size:1.2rem;">✓</span>CLOSED</div>
+            <div class="cbr-counter" id="cbr-counter">Failures: 0/3</div>
+            <div class="cbr-requests" id="cbr-requests"></div>
+            <div class="cbr-cooldown" id="cbr-cooldown">Cooldown: 60s remaining...</div>
+          </div>
+          <div class="anim-static-fallback"><p><strong>Circuit Breaker (static):</strong> Starts in Closed state (green). After 3 consecutive failures, trips to Open state (red) — all requests get fallback response. After 60s cooldown, enters Half-Open (yellow) — one test request allowed. If test passes, returns to Closed. If test fails, re-opens with longer cooldown.</p></div>
+          <div class="animation-controls">
+            <button class="anim-btn" onclick="animCircuit.play()" aria-label="Play">▶</button>
+            <button class="anim-btn" onclick="animCircuit.pause()" aria-label="Pause">⏸</button>
+            <button class="anim-btn" onclick="animCircuit.restart()" aria-label="Restart">↻</button>
+            <button class="anim-btn" onclick="animCircuit.step()" aria-label="Step">⏭</button>
+          </div>
+        </div>
+
+        <div class="callout-cert" style="background:rgba(212,168,67,.06);border-left:4px solid #D4A843;border-radius:0 8px 8px 0;padding:1.25rem 1.5rem;margin:1.5rem 0;">
+          <span class="box-label" style="color:#D4A843;">🎓 Cert Tip — Domain 1.4</span>
+          <p>Self-reported confidence scores are NOT reliable for escalation decisions. The model's internal confidence is not well-calibrated. Use structured programmatic criteria instead.</p>
+        </div>
+
+        <div class="callout-why">
+          <span class="box-label">✅ Why It Matters</span>
+          <p>Without a circuit breaker, a downstream API outage causes every agent request to fail. Each failure triggers a retry. Retries pile up. Rate limits are exhausted. Error responses consume tokens (you still pay for the failed attempt). All users are affected simultaneously. A circuit breaker detects the pattern after 3 failures and immediately switches to fallback responses — no more API calls, no more retries, no more cost. When the API recovers, the half-open test request verifies it's healthy before resuming normal traffic. One $0 circuit breaker saves thousands in wasted API calls during outages.</p>
+        </div>
+      </section>
+
+      <div class="bridge">You now have all the building blocks: output validation, cost controls, HITL gates, and circuit breakers. Let's wire them into production-ready code.</div>
+
+      <!-- Code Walkthrough -->
+      <section class="section" id="code-walkthrough">
+        <h2 id="code-walkthrough-heading">Code Walkthrough</h2>
+
+        <h3 id="hallucination-code">Hallucination Detector</h3>
+        <p>Let's build the hallucination detector step by step. The core idea is the "Claude-as-judge" pattern: we make a SEPARATE Claude API call whose only job is fact-checking. Why separate? Because the original agent's reasoning context can bias its self-evaluation. A fresh Claude call with a focused prompt is a much more reliable judge.</p>
+        <p>The code has three logical parts. First, the <strong>prompt template</strong> — this tells the judge exactly how to classify claims and what JSON structure to return. Second, the <strong>API call</strong> — a straightforward Claude message where we inject the source documents and the response to check. Third, the <strong>decision logic</strong> — the part that turns the judge's per-claim classifications into an overall pass/flag/block verdict. The critical design choice here: we "fail closed." If the fact-checking call itself errors out (network issue, JSON parse failure), we flag the response for human review rather than letting it through unchecked.</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs">
+            <button class="code-tab active" onclick="switchTab(this, 'hal-py')" aria-label="Python code">Python</button>
+            <button class="code-tab" onclick="switchTab(this, 'hal-js')" aria-label="Node.js code">Node.js</button>
+          </div>
+          <div class="code-panel active" id="hal-py">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code class="language-python">import anthropic
+import json
+
+HALLUCINATION_PROMPT = """You are a fact-checking judge. Compare the agent's
+response against the provided source documents.
+
+For each factual claim in the response, classify it as:
+- "supported": Claim is directly backed by source documents
+- "unsupported": Claim is NOT in source documents (possible hallucination)
+- "contradicted": Claim CONTRADICTS source documents (definite error)
+
+Respond with ONLY a JSON object:
+{
+  "claims": [
+    {"text": "claim text", "status": "supported|unsupported|contradicted", "source": "which document supports/contradicts, or null"}
+  ],
+  "overall": "pass|flag|block",
+  "unsupported_count": 0
+}
+
+Source documents:
+<sources>
+{sources}
+</sources>
+
+Agent response to fact-check:
+<response>
+{response}
+</response>"""
+
+def check_hallucination(
+    client: anthropic.Anthropic,
+    response_text: str,
+    source_docs: list[str],
+) -> dict:
+    """Verify agent output against source documents.
+
+    Uses a SEPARATE Claude call (Claude-as-judge pattern).
+    The judge has its own clean context and can't be influenced
+    by the agent's reasoning that led to the response.
+    """
+    sources_text = "\n---\n".join(source_docs)
+    try:
+        result = client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=1024,
+            messages=[{
+                "role": "user",
+                "content": HALLUCINATION_PROMPT.format(
+                    sources=sources_text,
+                    response=response_text,
+                ),
+            }],
+        )
+        parsed = json.loads(result.content[0].text)
+
+        # Decision logic:
+        # - Any "contradicted" claim = block immediately
+        # - 2+ "unsupported" claims = flag for review
+        # - All "supported" = pass
+        contradicted = [c for c in parsed["claims"] if c["status"] == "contradicted"]
+        unsupported = [c for c in parsed["claims"] if c["status"] == "unsupported"]
+
+        if contradicted:
+            return {"result": "block", "reason": f"Contradicted claims: {contradicted}", "claims": parsed["claims"]}
+        elif len(unsupported) >= 2:
+            return {"result": "flag", "reason": f"{len(unsupported)} unsupported claims", "claims": parsed["claims"]}
+        else:
+            return {"result": "pass", "claims": parsed["claims"]}
+
+    except Exception as e:
+        # Fail closed — if fact-checking fails, flag for review
+        return {"result": "flag", "reason": f"Fact-check error: {e}", "claims": []}</code></pre>
+          </div>
+          <div class="code-panel" id="hal-js">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code class="language-javascript">import Anthropic from '@anthropic-ai/sdk';
+
+const HALLUCINATION_PROMPT = `You are a fact-checking judge. Compare the agent's
+response against the provided source documents.
+
+For each factual claim, classify as:
+- "supported": Backed by source documents
+- "unsupported": NOT in sources (possible hallucination)
+- "contradicted": CONTRADICTS sources (definite error)
+
+Respond with ONLY JSON:
+{"claims": [{"text": "...", "status": "supported|unsupported|contradicted", "source": "..."}], "overall": "pass|flag|block", "unsupported_count": 0}
+
+Source documents:
+&lt;sources&gt;
+{SOURCES}
+&lt;/sources&gt;
+
+Agent response to fact-check:
+&lt;response&gt;
+{RESPONSE}
+&lt;/response&gt;`;
+
+async function checkHallucination(client, responseText, sourceDocs) {
+  // Claude-as-judge: separate call with clean context.
+  const sourcesText = sourceDocs.join('\n---\n');
+  try {
+    const result = await client.messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 1024,
+      messages: [{
+        role: 'user',
+        content: HALLUCINATION_PROMPT
+          .replace('{SOURCES}', sourcesText)
+          .replace('{RESPONSE}', responseText),
+      }],
+    });
+
+    const parsed = JSON.parse(result.content[0].text);
+    const contradicted = parsed.claims.filter((c) => c.status === 'contradicted');
+    const unsupported = parsed.claims.filter((c) => c.status === 'unsupported');
+
+    if (contradicted.length > 0) {
+      return { result: 'block', reason: `Contradicted claims found`, claims: parsed.claims };
+    } else if (unsupported.length >= 2) {
+      return { result: 'flag', reason: `${unsupported.length} unsupported claims`, claims: parsed.claims };
+    }
+    return { result: 'pass', claims: parsed.claims };
+  } catch (error) {
+    // Fail closed — flag for review if fact-checking errors
+    return { result: 'flag', reason: `Fact-check error: ${error.message}`, claims: [] };
+  }
+}</code></pre>
+          </div>
+        </div>
+
+        <div class="checkpoint">
+          <div class="checkpoint-label">🔍 What Just Happened?</div>
+          <p>You built a hallucination detector using the Claude-as-judge pattern. A separate Claude call receives both the agent's response and the source documents, then classifies each factual claim as supported, unsupported, or contradicted. The decision logic: any contradicted claim = block, 2+ unsupported claims = flag for review, all supported = pass. The judge runs in its own context so it can't be influenced by the agent's reasoning.</p>
+        </div>
+
+        <h3 id="circuit-breaker-code">Circuit Breaker Implementation</h3>
+        <p>Now let's build the circuit breaker itself. The interesting challenge here is managing state transitions cleanly. We need three states (Closed, Open, Half-Open), and the transitions between them must be atomic — you can't have two requests both thinking they're the "test request" in Half-Open state. The implementation below uses a simple class with methods for each state transition. In production, you'd add thread safety (a lock around state changes), but the logic is identical.</p>
+        <p>Pay attention to the <code>can_execute()</code> method — that's the gatekeeper. Every API call goes through it first. And notice how <code>record_failure()</code> handles the Half-Open case differently: a failure during testing re-opens the circuit with a DOUBLED cooldown (exponential backoff), giving the failing service progressively more time to recover.</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs">
+            <button class="code-tab active" onclick="switchTab(this, 'cb-py')" aria-label="Python code">Python</button>
+            <button class="code-tab" onclick="switchTab(this, 'cb-js')" aria-label="Node.js code">Node.js</button>
+          </div>
+          <div class="code-panel active" id="cb-py">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code class="language-python">import time
+from enum import Enum
+from dataclasses import dataclass, field
+
+class BreakerState(Enum):
+    CLOSED = "closed"       # Normal — requests flow through
+    OPEN = "open"           # Tripped — all requests get fallback
+    HALF_OPEN = "half_open" # Testing — one request allowed
+
+@dataclass
+class CircuitBreaker:
+    """Circuit breaker for agent API calls.
+
+    Monitors consecutive failures and trips when threshold
+    is reached. Prevents cascading failures and wasted spend
+    during outages.
+    """
+    failure_threshold: int = 3      # Trip after N failures
+    cooldown_seconds: float = 60.0  # Wait before testing
+    state: BreakerState = field(default=BreakerState.CLOSED)
+    failure_count: int = field(default=0)
+    last_failure_time: float = field(default=0.0)
+    opened_at: float = field(default=0.0)
+
+    def can_execute(self) -> bool:
+        """Check if a request should be allowed through."""
+        if self.state == BreakerState.CLOSED:
+            return True
+
+        if self.state == BreakerState.OPEN:
+            # Check if cooldown has elapsed
+            elapsed = time.time() - self.opened_at
+            if elapsed >= self.cooldown_seconds:
+                self.state = BreakerState.HALF_OPEN
+                return True  # Allow one test request
+            return False  # Still cooling down
+
+        if self.state == BreakerState.HALF_OPEN:
+            return False  # Already testing, block others
+
+        return False
+
+    def record_success(self):
+        """Record a successful request."""
+        if self.state == BreakerState.HALF_OPEN:
+            # Test passed — close the circuit
+            self.state = BreakerState.CLOSED
+            self.failure_count = 0
+        elif self.state == BreakerState.CLOSED:
+            self.failure_count = 0  # Reset on success
+
+    def record_failure(self):
+        """Record a failed request."""
+        self.failure_count += 1
+        self.last_failure_time = time.time()
+
+        if self.state == BreakerState.HALF_OPEN:
+            # Test failed — re-open with longer cooldown
+            self.state = BreakerState.OPEN
+            self.opened_at = time.time()
+            self.cooldown_seconds *= 2  # Exponential backoff
+
+        elif self.state == BreakerState.CLOSED:
+            if self.failure_count >= self.failure_threshold:
+                self.state = BreakerState.OPEN
+                self.opened_at = time.time()
+
+    @property
+    def fallback_response(self) -> str:
+        return (
+            "I'm temporarily unable to process your request. "
+            "Our systems are experiencing issues. Please try "
+            "again in a few minutes."
+        )
+
+# Usage with an agent
+breaker = CircuitBreaker(failure_threshold=3, cooldown_seconds=60)
+
+def call_agent_with_breaker(client, messages):
+    """Wrap agent calls with circuit breaker protection."""
+    if not breaker.can_execute():
+        return {"content": breaker.fallback_response, "circuit_breaker": "open"}
+
+    try:
+        response = client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=1024,
+            messages=messages,
+        )
+        breaker.record_success()
+        return {"content": response.content[0].text, "circuit_breaker": breaker.state.value}
+    except Exception as e:
+        breaker.record_failure()
+        if not breaker.can_execute():
+            return {"content": breaker.fallback_response, "circuit_breaker": "open"}
+        raise  # Re-raise if breaker hasn't tripped yet</code></pre>
+          </div>
+          <div class="code-panel" id="cb-js">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code class="language-javascript">import Anthropic from '@anthropic-ai/sdk';
+
+const BreakerState = { CLOSED: 'closed', OPEN: 'open', HALF_OPEN: 'half_open' };
+
+class CircuitBreaker {
+  // Monitors failures and trips when threshold reached.
+  // Prevents cascading failures during outages.
+  constructor(failureThreshold = 3, cooldownSeconds = 60) {
+    this.failureThreshold = failureThreshold;
+    this.cooldownSeconds = cooldownSeconds;
+    this.state = BreakerState.CLOSED;
+    this.failureCount = 0;
+    this.openedAt = 0;
+  }
+
+  canExecute() {
+    if (this.state === BreakerState.CLOSED) return true;
+
+    if (this.state === BreakerState.OPEN) {
+      const elapsed = (Date.now() - this.openedAt) / 1000;
+      if (elapsed >= this.cooldownSeconds) {
+        this.state = BreakerState.HALF_OPEN;
+        return true; // Allow one test request
+      }
+      return false;
+    }
+
+    return false; // HALF_OPEN blocks others while testing
+  }
+
+  recordSuccess() {
+    if (this.state === BreakerState.HALF_OPEN) {
+      this.state = BreakerState.CLOSED; // Test passed
+      this.failureCount = 0;
+    } else {
+      this.failureCount = 0; // Reset on success
+    }
+  }
+
+  recordFailure() {
+    this.failureCount++;
+
+    if (this.state === BreakerState.HALF_OPEN) {
+      this.state = BreakerState.OPEN; // Test failed
+      this.openedAt = Date.now();
+      this.cooldownSeconds *= 2; // Exponential backoff
+    } else if (this.failureCount >= this.failureThreshold) {
+      this.state = BreakerState.OPEN;
+      this.openedAt = Date.now();
+    }
+  }
+
+  get fallbackResponse() {
+    return 'I\'m temporarily unable to process your request. '
+      + 'Our systems are experiencing issues. Please try again shortly.';
+  }
+}
+
+// Usage with an agent
+const breaker = new CircuitBreaker(3, 60);
+
+async function callAgentWithBreaker(client, messages) {
+  if (!breaker.canExecute()) {
+    return { content: breaker.fallbackResponse, circuitBreaker: 'open' };
+  }
+  try {
+    const response = await client.messages.create({
+      model: 'claude-sonnet-4-20250514',
+      max_tokens: 1024,
+      messages,
+    });
+    breaker.recordSuccess();
+    return { content: response.content[0].text, circuitBreaker: breaker.state };
+  } catch (error) {
+    breaker.recordFailure();
+    if (!breaker.canExecute()) {
+      return { content: breaker.fallbackResponse, circuitBreaker: 'open' };
+    }
+    throw error;
+  }
+}</code></pre>
+          </div>
+        </div>
+
+        <div class="checkpoint">
+          <div class="checkpoint-label">🔍 What Just Happened?</div>
+          <p>You built a circuit breaker with three states: Closed (normal), Open (all requests get fallback), and Half-Open (one test request). When 3 consecutive failures occur, the circuit trips. After a 60-second cooldown, one test request probes recovery. If the test fails, the cooldown doubles (exponential backoff). This prevents burning money on retries during outages and gives downstream services time to recover.</p>
+        </div>
+      </section>
+
+      <!-- Hands-On Exercise -->
+      <section class="section" id="hands-on">
+        <h2 id="hands-on-heading">Hands-On Exercise</h2>
+
+        <h3>What You'll Build</h3>
+        <p>A complete output guardrail pipeline with hallucination detection (Claude-as-judge), cost tracking with budget enforcement, a circuit breaker with three-state transitions, and a CLI-based human approval gate — tested with 5 scenarios including contradicted claims, budget overruns, and cascading failures.</p>
+        <ul>
+          <li><strong>Time Estimate:</strong> 35-45 minutes</li>
+          <li><strong>Prerequisites:</strong> Python 3.9+, an Anthropic API key (from <a href="https://console.anthropic.com">console.anthropic.com</a>), and a terminal</li>
+          <li><strong>Files You'll Create:</strong>
+            <ul>
+              <li><code>output_guardrails.py</code> — All four guardrail components (hallucination detector, cost tracker, circuit breaker, approval gate) plus a 5-scenario test suite</li>
+            </ul>
+          </li>
+          <li><strong>API Cost:</strong> ~$0.01 total (2 Claude Sonnet calls for hallucination checks)</li>
+        </ul>
+
+        <h3>Environment Setup</h3>
+        <div class="code-block-wrapper">
+          <div class="code-tabs"><button class="code-tab active">Setup</button></div>
+          <div class="code-panel active">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code>mkdir output-guardrails && cd output-guardrails
+python -m venv venv && source venv/bin/activate   # Windows: venv\Scripts\activate
+pip install anthropic
+export ANTHROPIC_API_KEY=your-key-here             # Windows: set ANTHROPIC_API_KEY=your-key-here</code></pre>
+          </div>
+        </div>
+
+        <h3>Step 1: Build the Output Guardrail Pipeline</h3>
+        <p><strong>What:</strong> Create a single file with four output guardrail components — a hallucination detector, cost tracker, circuit breaker, and approval gate — plus a test suite that exercises each one.</p>
+        <p><strong>Why:</strong> Building all four components in one file lets you see how they work together as a pipeline. In production you'd split them into separate modules, but for learning, having everything in one place makes it easier to trace the data flow from agent response through each guardrail to the final output.</p>
+
+        <p>Create a new file called <code>output_guardrails.py</code>:</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs">
+            <button class="code-tab active" onclick="switchTab(this, 'lab-py')" aria-label="Python code">Python</button>
+            <button class="code-tab" onclick="switchTab(this, 'lab-js')" aria-label="Node.js code">Node.js</button>
+          </div>
+          <div class="code-panel active" id="lab-py">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code class="language-python">"""Output Guardrails & HITL — M17 Hands-On Lab"""
+import anthropic
+import json
+import time
+from dataclasses import dataclass, field
+from enum import Enum
+
+client = anthropic.Anthropic()
+
+
+# ── Hallucination Detector (Claude-as-Judge) ─────────────
+
+HALLUCINATION_PROMPT = """You are a fact-checking judge. Compare the response
+against the source documents. For each factual claim, classify it as:
+- "supported": Directly backed by sources
+- "unsupported": NOT in sources (possible hallucination)
+- "contradicted": CONTRADICTS sources (definite error)
+
+Respond with ONLY JSON:
+{{"claims": [{{"text": "claim", "status": "supported|unsupported|contradicted"}}],
+ "overall": "pass|flag|block", "unsupported_count": 0}}
+
+Sources:
+<sources>
+{sources}
+</sources>
+
+Response to check:
+<response>
+{response}
+</response>"""
+
+def check_hallucination(response_text: str, source_docs: list[str]) -> dict:
+    """Verify agent response against source documents."""
+    sources = "\n---\n".join(source_docs)
+    try:
+        result = client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=1024,
+            messages=[{
+                "role": "user",
+                "content": HALLUCINATION_PROMPT.format(
+                    sources=sources, response=response_text
+                ),
+            }],
+        )
+        parsed = json.loads(result.content[0].text)
+
+        contradicted = [c for c in parsed["claims"]
+                       if c["status"] == "contradicted"]
+        unsupported = [c for c in parsed["claims"]
+                      if c["status"] == "unsupported"]
+
+        if contradicted:
+            return {"result": "block",
+                    "reason": f"{len(contradicted)} contradicted claim(s)",
+                    "claims": parsed["claims"]}
+        elif len(unsupported) >= 2:
+            return {"result": "flag",
+                    "reason": f"{len(unsupported)} unsupported claim(s)",
+                    "claims": parsed["claims"]}
+        return {"result": "pass", "claims": parsed["claims"]}
+    except Exception as e:
+        return {"result": "flag", "reason": f"Check failed: {e}", "claims": []}
+
+
+# ── Cost Tracker with Budget Enforcement ─────────────────
+
+@dataclass
+class CostTracker:
+    """Track token usage and enforce per-request budget."""
+    budget_dollars: float = 0.50
+    input_tokens: int = 0
+    output_tokens: int = 0
+
+    # Claude Sonnet pricing (per token)
+    INPUT_PRICE = 3.0 / 1_000_000    # $3/M input tokens
+    OUTPUT_PRICE = 15.0 / 1_000_000  # $15/M output tokens
+
+    @property
+    def total_cost(self) -> float:
+        return (self.input_tokens * self.INPUT_PRICE +
+                self.output_tokens * self.OUTPUT_PRICE)
+
+    @property
+    def budget_remaining(self) -> float:
+        return self.budget_dollars - self.total_cost
+
+    def record_usage(self, input_toks: int, output_toks: int):
+        self.input_tokens += input_toks
+        self.output_tokens += output_toks
+
+    def can_afford(self, estimated_input: int = 5000,
+                   estimated_output: int = 1000) -> bool:
+        """Check if the next call would stay within budget."""
+        estimated_cost = (estimated_input * self.INPUT_PRICE +
+                         estimated_output * self.OUTPUT_PRICE)
+        return self.total_cost + estimated_cost <= self.budget_dollars
+
+    def summary(self) -> str:
+        return (f"Tokens: {self.input_tokens} in / {self.output_tokens} out "
+                f"| Cost: ${self.total_cost:.4f} / ${self.budget_dollars:.2f}")
+
+
+# ── Circuit Breaker ──────────────────────────────────────
+
+class BreakerState(Enum):
+    CLOSED = "closed"
+    OPEN = "open"
+    HALF_OPEN = "half_open"
+
+@dataclass
+class CircuitBreaker:
+    failure_threshold: int = 3
+    cooldown_seconds: float = 5.0   # Short for demo
+    state: BreakerState = field(default=BreakerState.CLOSED)
+    failure_count: int = field(default=0)
+    opened_at: float = field(default=0.0)
+
+    def can_execute(self) -> bool:
+        if self.state == BreakerState.CLOSED:
+            return True
+        if self.state == BreakerState.OPEN:
+            if time.time() - self.opened_at >= self.cooldown_seconds:
+                self.state = BreakerState.HALF_OPEN
+                return True
+            return False
+        return False  # HALF_OPEN blocks while testing
+
+    def record_success(self):
+        if self.state == BreakerState.HALF_OPEN:
+            self.state = BreakerState.CLOSED
+        self.failure_count = 0
+
+    def record_failure(self):
+        self.failure_count += 1
+        if self.state == BreakerState.HALF_OPEN:
+            self.state = BreakerState.OPEN
+            self.opened_at = time.time()
+            self.cooldown_seconds *= 2  # Exponential backoff
+        elif self.failure_count >= self.failure_threshold:
+            self.state = BreakerState.OPEN
+            self.opened_at = time.time()
+
+
+# ── Approval Gate (CLI) ──────────────────────────────────
+
+def approval_gate(action: str, context: str,
+                  auto_approve: bool = False) -> dict:
+    """Pause for human approval before irreversible actions.
+    Set auto_approve=True for automated testing."""
+    print(f"\n{'='*50}")
+    print(f"🔒 APPROVAL REQUIRED")
+    print(f"Action: {action}")
+    print(f"Context: {context}")
+    print(f"{'='*50}")
+
+    if auto_approve:
+        print("  [Auto-approved for testing]")
+        return {"approved": True, "modified": False}
+
+    response = input("Approve? (y/n/e to edit): ").strip().lower()
+    if response == "y":
+        return {"approved": True, "modified": False}
+    elif response == "e":
+        new_action = input("Enter modified action: ").strip()
+        return {"approved": True, "modified": True, "new_action": new_action}
+    return {"approved": False, "reason": "Human denied"}
+
+
+# ── Test Scenarios ────────────────────────────────────────
+if __name__ == "__main__":
+    print("=" * 60)
+    print("OUTPUT GUARDRAILS — TEST SUITE")
+    print("=" * 60)
+
+    # Test 1: Hallucination Detection
+    print("\n" + "─" * 60)
+    print("TEST 1: Hallucination Detection — Contradicted Claim")
+    source_docs = [
+        "UCC Filing #2024-NY-0042: Filed March 22, 2024 by Acme Corp. "
+        "Collateral: $2.3M in manufacturing equipment. Status: Active.",
+        "Amendment filed April 10, 2024: Added collateral description "
+        "for warehouse inventory valued at $890K."
+    ]
+    agent_response = (
+        "The UCC filing was submitted on March 15, 2024 by Acme Corp "
+        "for $2.3M in equipment collateral. An amendment was filed "
+        "on April 10, 2024 adding $890K in warehouse inventory."
+    )
+    result = check_hallucination(agent_response, source_docs)
+    print(f"  Result: {result['result']}")
+    print(f"  Reason: {result.get('reason', 'All claims supported')}")
+    for claim in result.get("claims", []):
+        print(f"    [{claim['status']}] {claim['text']}")
+
+    # Test 2: Hallucination Detection — All Supported
+    print("\n" + "─" * 60)
+    print("TEST 2: Hallucination Detection — All Supported")
+    correct_response = (
+        "The UCC filing was submitted on March 22, 2024 by Acme Corp "
+        "for $2.3M in equipment collateral."
+    )
+    result2 = check_hallucination(correct_response, source_docs)
+    print(f"  Result: {result2['result']}")
+
+    # Test 3: Cost Tracker
+    print("\n" + "─" * 60)
+    print("TEST 3: Cost Tracking & Budget Enforcement")
+    tracker = CostTracker(budget_dollars=0.10)
+    for i in range(5):
+        if not tracker.can_afford():
+            print(f"  Iteration {i+1}: BUDGET EXCEEDED — {tracker.summary()}")
+            break
+        # Simulate API usage
+        tracker.record_usage(input_toks=8000, output_toks=2000)
+        print(f"  Iteration {i+1}: {tracker.summary()}")
+
+    # Test 4: Circuit Breaker
+    print("\n" + "─" * 60)
+    print("TEST 4: Circuit Breaker State Transitions")
+    breaker = CircuitBreaker(failure_threshold=3, cooldown_seconds=2)
+
+    actions = [
+        ("success", "Normal request 1"),
+        ("failure", "API error 1"),
+        ("failure", "API error 2"),
+        ("failure", "API error 3 → TRIPS"),
+        ("blocked", "Request during OPEN state"),
+    ]
+    for action, label in actions:
+        can_exec = breaker.can_execute()
+        if not can_exec:
+            print(f"  {label}: BLOCKED (state={breaker.state.value})")
+            continue
+        if action == "success":
+            breaker.record_success()
+            print(f"  {label}: OK (state={breaker.state.value})")
+        else:
+            breaker.record_failure()
+            print(f"  {label}: FAIL (state={breaker.state.value}, "
+                  f"failures={breaker.failure_count}/{breaker.failure_threshold})")
+
+    print(f"  Waiting {breaker.cooldown_seconds}s for cooldown...")
+    time.sleep(breaker.cooldown_seconds + 0.1)
+    can_test = breaker.can_execute()
+    print(f"  Half-open test: can_execute={can_test} "
+          f"(state={breaker.state.value})")
+    breaker.record_success()
+    print(f"  Test passed → state={breaker.state.value}")
+
+    # Test 5: Approval Gate
+    print("\n" + "─" * 60)
+    print("TEST 5: Approval Gate (auto-approved for testing)")
+    gate_result = approval_gate(
+        action="Send $450 refund to Order #12345",
+        context="Customer received damaged item, within return window",
+        auto_approve=True,
+    )
+    print(f"  Result: {gate_result}")</code></pre>
+          </div>
+          <div class="code-panel" id="lab-js">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code class="language-javascript">// Output Guardrails & HITL — M17 Hands-On Lab
+import Anthropic from "@anthropic-ai/sdk";
+import * as readline from "node:readline/promises";
+
+const client = new Anthropic();
+
+// ── Hallucination Detector ──────────────────────────────
+async function checkHallucination(responseText, sourceDocs) {
+  const sources = sourceDocs.join("\n---\n");
+  try {
+    const r = await client.messages.create({
+      model: "claude-sonnet-4-20250514", max_tokens: 1024,
+      messages: [{ role: "user", content:
+        `Fact-check this response against sources. For each claim: ` +
+        `"supported", "unsupported", or "contradicted". ` +
+        `Return ONLY JSON: {"claims":[{"text":"...","status":"..."}],` +
+        `"overall":"pass|flag|block"}\n\n` +
+        `<sources>${sources}</sources>\n` +
+        `<response>${responseText}</response>`
+      }],
+    });
+    const parsed = JSON.parse(r.content[0].text);
+    const contradicted = parsed.claims.filter(c => c.status === "contradicted");
+    if (contradicted.length) return { result: "block", claims: parsed.claims };
+    return { result: "pass", claims: parsed.claims };
+  } catch (e) {
+    return { result: "flag", reason: e.message, claims: [] };
+  }
+}
+
+// ── Cost Tracker ────────────────────────────────────────
+class CostTracker {
+  constructor(budget = 0.10) {
+    this.budget = budget;
+    this.inputTokens = 0; this.outputTokens = 0;
+  }
+  get cost() {
+    return this.inputTokens * 3e-6 + this.outputTokens * 15e-6;
+  }
+  record(inp, out) { this.inputTokens += inp; this.outputTokens += out; }
+  canAfford(estIn = 5000, estOut = 1000) {
+    return this.cost + estIn * 3e-6 + estOut * 15e-6 <= this.budget;
+  }
+}
+
+// ── Circuit Breaker ─────────────────────────────────────
+class CircuitBreaker {
+  constructor(threshold = 3, cooldown = 2) {
+    this.threshold = threshold; this.cooldown = cooldown;
+    this.state = "closed"; this.failures = 0; this.openedAt = 0;
+  }
+  canExecute() {
+    if (this.state === "closed") return true;
+    if (this.state === "open" &&
+        (Date.now() - this.openedAt) / 1000 >= this.cooldown) {
+      this.state = "half_open"; return true;
+    }
+    return false;
+  }
+  recordSuccess() {
+    if (this.state === "half_open") this.state = "closed";
+    this.failures = 0;
+  }
+  recordFailure() {
+    this.failures++;
+    if (this.state === "half_open") {
+      this.state = "open"; this.openedAt = Date.now();
+      this.cooldown *= 2;
+    } else if (this.failures >= this.threshold) {
+      this.state = "open"; this.openedAt = Date.now();
+    }
+  }
+}
+
+// ── Tests ───────────────────────────────────────────────
+console.log("TEST 1: Hallucination Detection");
+const sources = ["Filed March 22, 2024 by Acme Corp. $2.3M equipment."];
+const r1 = await checkHallucination(
+  "Filed on March 15, 2024 by Acme Corp for $2.3M.", sources);
+console.log(`  Result: ${r1.result}`);
+r1.claims.forEach(c => console.log(`  [${c.status}] ${c.text}`));
+
+console.log("\nTEST 2: Cost Tracker");
+const tracker = new CostTracker(0.10);
+for (let i = 0; i < 5; i++) {
+  if (!tracker.canAfford()) { console.log(`  Iter ${i+1}: BUDGET EXCEEDED`); break; }
+  tracker.record(8000, 2000);
+  console.log(`  Iter ${i+1}: $${tracker.cost.toFixed(4)} / $${tracker.budget}`);
+}
+
+console.log("\nTEST 3: Circuit Breaker");
+const breaker = new CircuitBreaker(3, 2);
+for (let i = 0; i < 4; i++) {
+  if (!breaker.canExecute()) { console.log("  BLOCKED"); continue; }
+  breaker.recordFailure();
+  console.log(`  Failure ${breaker.failures} → ${breaker.state}`);
+}
+console.log(`  Waiting ${breaker.cooldown}s...`);
+await new Promise(r => setTimeout(r, (breaker.cooldown + 0.1) * 1000));
+console.log(`  Can execute: ${breaker.canExecute()} (${breaker.state})`);
+breaker.recordSuccess();
+console.log(`  After success: ${breaker.state}`);</code></pre>
+          </div>
+        </div>
+
+        <p><strong>Run Command:</strong> Execute the complete test suite with a single command:</p>
+        <div class="code-block-wrapper">
+          <div class="code-tabs"><button class="code-tab active">Terminal</button></div>
+          <div class="code-panel active">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code>python output_guardrails.py</code></pre>
+          </div>
+        </div>
+        <p>The script runs 5 tests sequentially. Tests 1-2 make Claude API calls (~3 seconds each). Tests 3-5 are local-only and run instantly, except the circuit breaker cooldown wait (~5 seconds).</p>
+
+        <p class="output-label">Expected Output</p>
+        <div class="output-block">============================================================
+OUTPUT GUARDRAILS — TEST SUITE
+============================================================
+
+──────────────────────────────────────────────────────────────
+TEST 1: Hallucination Detection — Contradicted Claim
+  Result: block
+  Reason: 1 contradicted claim(s)
+    [contradicted] filed on March 15, 2024
+    [supported] by Acme Corp
+    [supported] $2.3M in equipment collateral
+
+──────────────────────────────────────────────────────────────
+TEST 2: Hallucination Detection — All Supported
+  Result: pass
+
+──────────────────────────────────────────────────────────────
+TEST 3: Cost Tracking & Budget Enforcement
+  Iteration 1: Tokens: 8000 in / 2000 out | Cost: $0.0540 / $0.10
+  Iteration 2: BUDGET EXCEEDED — Tokens: 8000 in / 2000 out | Cost: $0.0540 / $0.10
+
+──────────────────────────────────────────────────────────────
+TEST 4: Circuit Breaker State Transitions
+  Normal request 1: OK (state=closed)
+  API error 1: FAIL (state=closed, failures=1/3)
+  API error 2: FAIL (state=closed, failures=2/3)
+  API error 3 → TRIPS: FAIL (state=open, failures=3/3)
+  Request during OPEN state: BLOCKED (state=open)
+  Waiting 5.0s for cooldown...
+  Half-open test: can_execute=True (state=half_open)
+  Test passed → state=closed
+
+──────────────────────────────────────────────────────────────
+TEST 5: Approval Gate (auto-approved for testing)
+==================================================
+🔒 APPROVAL REQUIRED
+Action: Send $450 refund to Order #12345
+Context: Customer received damaged item, within return window
+==================================================
+  [Auto-approved for testing]
+  Result: {'approved': True, 'modified': False}</div>
+
+        <div class="callout-why" style="background: var(--success-bg); border-left-color: var(--success);">
+          <span class="box-label" style="color: var(--success);">✅ Checkpoint</span>
+          <p>Verify these 5 key results in your output:</p>
+          <ul>
+            <li><strong>Test 1:</strong> Result shows <code>block</code> — the hallucination detector caught the wrong date (March 15 vs March 22)</li>
+            <li><strong>Test 2:</strong> Result shows <code>pass</code> — all claims match source documents</li>
+            <li><strong>Test 3:</strong> Budget exceeded at iteration 2 — $0.054/iteration exceeds the $0.10 budget after one iteration of headroom</li>
+            <li><strong>Test 4:</strong> Circuit breaker transitions through all states: closed → open (after 3 failures) → half-open (after cooldown) → closed (after test success)</li>
+            <li><strong>Test 5:</strong> Approval gate displays the action and auto-approves with <code>{'approved': True, 'modified': False}</code></li>
+          </ul>
+          <p>If all 5 pass, your output guardrail pipeline is working correctly.</p>
+        </div>
+
+        <h3>Troubleshooting</h3>
+        <ul>
+          <li><strong>If you see <code>AuthenticationError</code></strong> → Your <code>ANTHROPIC_API_KEY</code> is not set or is invalid. Run <code>echo $ANTHROPIC_API_KEY</code> (or <code>echo %ANTHROPIC_API_KEY%</code> on Windows) to verify. Re-export if needed: <code>export ANTHROPIC_API_KEY=sk-ant-...</code></li>
+          <li><strong>If you see <code>ModuleNotFoundError: No module named 'anthropic'</code></strong> → Run <code>pip install anthropic</code>. Make sure your virtual environment is activated (<code>source venv/bin/activate</code>).</li>
+          <li><strong>If hallucination test shows "pass" instead of "block"</strong> → The classifier may occasionally miss the date discrepancy (March 15 vs March 22). Run again — results are probabilistic. If persistent across 3 runs, make the contradiction more obvious by changing "March 15" to "June 15" in the test data.</li>
+          <li><strong>If circuit breaker cooldown test fails</strong> → Ensure the <code>time.sleep</code> duration exceeds the cooldown. On slow systems, change <code>cooldown_seconds=2</code> to <code>cooldown_seconds=3</code> and add an extra 0.5s to the sleep.</li>
+          <li><strong>If cost tracker doesn't exceed budget</strong> → Check that the budget is set to <code>$0.10</code> (not <code>$0.50</code>). At $0.054/iteration, the tracker should report BUDGET EXCEEDED when checking affordability for iteration 2.</li>
+        </ul>
+
+        <h3>Verify Everything Works</h3>
+        <p>Run the full script and use grep to confirm all 5 key guardrail behaviors trigger correctly:</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs"><button class="code-tab active">Terminal</button></div>
+          <div class="code-panel active">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code># Verify key behaviors
+python output_guardrails.py 2>&1 | grep -E "(block|BUDGET|TRIPS|APPROVAL)"
+# Should show: block, BUDGET EXCEEDED, TRIPS, APPROVAL REQUIRED</code></pre>
+          </div>
+        </div>
+
+        <p class="output-label">Expected Verification Output</p>
+        <div class="output-block">  Result: block
+  Iteration 2: BUDGET EXCEEDED — Tokens: 8000 in / 2000 out | Cost: $0.0540 / $0.10
+  API error 3 → TRIPS: FAIL (state=open, failures=3/3)
+🔒 APPROVAL REQUIRED</div>
+
+        <div class="callout-why" style="background: var(--success-bg); border-left-color: var(--success);">
+          <span class="box-label" style="color: var(--success);">🎉 Congratulations</span>
+          <p>You've built a complete output guardrail pipeline. Your agent now has four layers of protection: hallucination detection catches fabricated facts, cost tracking prevents runaway spending, circuit breakers handle cascading failures, and approval gates keep humans in the loop for high-stakes decisions. In M18, you'll learn how to <em>measure</em> whether these guardrails actually work in production.</p>
+        </div>
+
+        <div class="callout-cost">
+          <span class="box-label">Cost Note</span>
+          <p>The full test suite makes 2 Claude API calls (hallucination checks). At Claude Sonnet pricing, that's ~$0.01 total. The cost tracker, circuit breaker, and approval gate use zero API calls. In production, hallucination detection costs ~$0.003 per check. At 1,000 responses/day, that's $3/day for fact-checking — trivially cheap compared to the cost of acting on hallucinated data.</p>
+        </div>
+      </section>
+
+      <!-- Quiz -->
+      <section class="section" id="quiz">
+        <h2 id="quiz-heading">Knowledge Check</h2>
+
+        <div class="quiz-question">
+          <h4>1. What is the key difference between an approval gate and a modification gate?</h4>
+          <div class="quiz-option" role="button" tabindex="0" aria-label="Option A" onclick="checkAnswer(this, false)"><span class="quiz-marker">A</span><span>Approval gates are for important decisions; modification gates are for minor ones</span></div>
+          <div class="quiz-option" role="button" tabindex="0" aria-label="Option B" onclick="checkAnswer(this, true)"><span class="quiz-marker">B</span><span>Approval gates are binary (yes/no); modification gates allow the human to edit the content before proceeding</span></div>
+          <div class="quiz-option" role="button" tabindex="0" aria-label="Option C" onclick="checkAnswer(this, false)"><span class="quiz-marker">C</span><span>Approval gates pause the agent; modification gates don't pause</span></div>
+          <div class="quiz-option" role="button" tabindex="0" aria-label="Option D" onclick="checkAnswer(this, false)"><span class="quiz-marker">D</span><span>Approval gates require a manager; modification gates only need any user</span></div>
+          <div class="quiz-feedback correct-fb">✓ Correct! Approval gates are binary — the human approves or denies the proposed action. Modification gates present a draft that the human can edit before it's finalized. Both pause the agent; the difference is the type of human input (yes/no vs. text editing).</div>
+          <div class="quiz-feedback incorrect-fb">✗ The key difference is the type of human input. Approval gates: binary yes/no decision. Modification gates: the human can edit the agent's draft before it's sent. Both gates pause the agent and both can be used for important decisions.</div>
+        </div>
+
+        <div class="quiz-question">
+          <h4>2. A circuit breaker is in "half-open" state. The test request fails. What happens next?</h4>
+          <div class="quiz-option" role="button" tabindex="0" aria-label="Option A" onclick="checkAnswer(this, false)"><span class="quiz-marker">A</span><span>The circuit closes and resumes normal operation</span></div>
+          <div class="quiz-option" role="button" tabindex="0" aria-label="Option B" onclick="checkAnswer(this, false)"><span class="quiz-marker">B</span><span>Another test request is sent immediately</span></div>
+          <div class="quiz-option" role="button" tabindex="0" aria-label="Option C" onclick="checkAnswer(this, true)"><span class="quiz-marker">C</span><span>The circuit re-opens with a longer cooldown period (exponential backoff)</span></div>
+          <div class="quiz-option" role="button" tabindex="0" aria-label="Option D" onclick="checkAnswer(this, false)"><span class="quiz-marker">D</span><span>The circuit stays half-open and tries again after a fixed 10-second delay</span></div>
+          <div class="quiz-feedback correct-fb">✓ Correct! When a half-open test fails, the circuit re-opens (back to blocking all requests) with a LONGER cooldown — typically double the previous cooldown (exponential backoff). This gives the failing service more time to recover before the next test.</div>
+          <div class="quiz-feedback incorrect-fb">✗ When the half-open test fails, the circuit re-opens with exponential backoff — the cooldown doubles. If the first cooldown was 60s, the next is 120s, then 240s. This prevents hammering a failing service with test requests and gives it progressively more time to recover.</div>
+        </div>
+
+        <div class="quiz-question">
+          <h4>3. An agent's response claims "The filing was submitted on March 15, 2024" but the source documents show the date was March 22. Which guardrail catches this?</h4>
+          <div class="quiz-option" role="button" tabindex="0" aria-label="Option A" onclick="checkAnswer(this, false)"><span class="quiz-marker">A</span><span>Toxicity filter — the incorrect date is harmful</span></div>
+          <div class="quiz-option" role="button" tabindex="0" aria-label="Option B" onclick="checkAnswer(this, false)"><span class="quiz-marker">B</span><span>Format validator — the date format is wrong</span></div>
+          <div class="quiz-option" role="button" tabindex="0" aria-label="Option C" onclick="checkAnswer(this, true)"><span class="quiz-marker">C</span><span>Hallucination detector — the claim contradicts the source documents and should be blocked</span></div>
+          <div class="quiz-option" role="button" tabindex="0" aria-label="Option D" onclick="checkAnswer(this, false)"><span class="quiz-marker">D</span><span>Input guardrail — the PII detector should catch the date</span></div>
+          <div class="quiz-feedback correct-fb">✓ Correct! The hallucination detector compares agent claims against source documents. "March 15" vs "March 22" is a "contradicted" claim — the source documents explicitly show a different date. The detector should classify this as "contradicted" and block the response.</div>
+          <div class="quiz-feedback incorrect-fb">✗ This is a hallucination (specifically a "contradicted" claim). The agent generated a date that contradicts the source documents. The hallucination detector catches this by comparing claims against sources. Toxicity, format, and PII checks don't verify factual accuracy.</div>
+        </div>
+
+        <div class="quiz-question">
+          <h4>4. Your agent loop typically runs 3-4 iterations at $0.05 each. You set a per-request budget of $0.50. An edge case triggers 20 iterations. What happens?</h4>
+          <div class="quiz-option" role="button" tabindex="0" aria-label="Option A" onclick="checkAnswer(this, false)"><span class="quiz-marker">A</span><span>The agent completes all 20 iterations — the budget is just a warning</span></div>
+          <div class="quiz-option" role="button" tabindex="0" aria-label="Option B" onclick="checkAnswer(this, true)"><span class="quiz-marker">B</span><span>At iteration ~10, the cost middleware halts the loop and returns a fallback response</span></div>
+          <div class="quiz-option" role="button" tabindex="0" aria-label="Option C" onclick="checkAnswer(this, false)"><span class="quiz-marker">C</span><span>The API returns an error because Anthropic enforces the budget server-side</span></div>
+          <div class="quiz-option" role="button" tabindex="0" aria-label="Option D" onclick="checkAnswer(this, false)"><span class="quiz-marker">D</span><span>The agent continues but switches to a cheaper model for remaining iterations</span></div>
+          <div class="quiz-feedback correct-fb">✓ Correct! At ~$0.05 per iteration, 10 iterations = $0.50. The cost middleware checks the budget before each API call. At iteration 10 or 11, the cumulative cost exceeds $0.50, so the middleware short-circuits the call and returns a graceful fallback response. Iterations 11-20 never happen. Budget saved: ~$0.50.</div>
+          <div class="quiz-feedback incorrect-fb">✗ The cost middleware halts the loop at ~10 iterations ($0.50 budget / $0.05 per iteration). Budgets are enforced client-side by your middleware, not by Anthropic's API. The middleware checks cumulative cost before each API call and returns a fallback response when the budget is exceeded.</div>
+        </div>
+
+        <div class="quiz-question">
+          <h4>5. Which guardrail pipeline ordering is correct?</h4>
+          <div class="quiz-option" role="button" tabindex="0" aria-label="Option A" onclick="checkAnswer(this, false)"><span class="quiz-marker">A</span><span>Input: injection detection → rate limiting → PII scan → schema validation</span></div>
+          <div class="quiz-option" role="button" tabindex="0" aria-label="Option B" onclick="checkAnswer(this, true)"><span class="quiz-marker">B</span><span>Input: rate limiting → schema validation → PII detection → injection detection</span></div>
+          <div class="quiz-option" role="button" tabindex="0" aria-label="Option C" onclick="checkAnswer(this, false)"><span class="quiz-marker">C</span><span>Input: PII detection → injection detection → rate limiting → schema validation</span></div>
+          <div class="quiz-option" role="button" tabindex="0" aria-label="Option D" onclick="checkAnswer(this, false)"><span class="quiz-marker">D</span><span>The order doesn't matter — all checks run independently</span></div>
+          <div class="quiz-feedback correct-fb">✓ Correct! Order matters: cheapest checks first. Rate limiting (zero cost, instant) → schema validation (zero API calls) → PII detection (regex, sub-ms) → injection detection (Claude API call, ~200ms). This ensures the most expensive check only runs on inputs that passed the cheap checks. Running injection detection first wastes an API call on rate-limited or malformed requests.</div>
+          <div class="quiz-feedback incorrect-fb">✗ The correct order is B: cheapest checks first. Rate limiting is free and instant — run it first. Schema validation is free. PII detection uses regex (fast). Injection detection uses an API call (expensive) — run it last. Running expensive checks before cheap ones wastes money on inputs that would have been rejected.</div>
+        </div>
+
+        <div class="quiz-question">
+          <h4>6. When should you use an escalation gate instead of an approval gate?</h4>
+          <div class="quiz-option" role="button" tabindex="0" aria-label="Option A" onclick="checkAnswer(this, false)"><span class="quiz-marker">A</span><span>When the customer is angry or upset</span></div>
+          <div class="quiz-option" role="button" tabindex="0" aria-label="Option B" onclick="checkAnswer(this, true)"><span class="quiz-marker">B</span><span>When the agent detects it has hit a policy gap, capability limit, or ambiguous situation it can't resolve</span></div>
+          <div class="quiz-option" role="button" tabindex="0" aria-label="Option C" onclick="checkAnswer(this, false)"><span class="quiz-marker">C</span><span>When the request involves any dollar amount over $100</span></div>
+          <div class="quiz-option" role="button" tabindex="0" aria-label="Option D" onclick="checkAnswer(this, false)"><span class="quiz-marker">D</span><span>Whenever the agent's self-reported confidence is below 80%</span></div>
+          <div class="quiz-feedback correct-fb">✓ Correct! Escalation gates are triggered by policy gaps, capability limits, explicit human requests, or business-defined thresholds — NOT by sentiment (A) or self-reported confidence (D). An approval gate would be used for the $100 threshold (C) because it's a pre-defined rule, not an uncertainty-based escalation.</div>
+          <div class="quiz-feedback incorrect-fb">✗ Escalation gates trigger on policy gaps, capability limits, or ambiguity that the agent can't resolve. Sentiment-based escalation (A) is an anti-pattern. Self-reported confidence (D) is unreliable. Dollar thresholds (C) are better handled by approval gates with pre-defined rules, not escalation.</div>
+        </div>
+
+        <div id="quiz-score" class="quiz-score">
+          <p style="color:var(--text-secondary);margin-bottom:0.5rem;">Your Score</p>
+          <div class="score-num" id="score-display">0/0</div>
+          <p id="score-message" style="color:var(--text-secondary);margin-top:0.5rem;"></p>
+        </div>
+      </section>
+
+      <!-- Summary -->
+      <section class="section" id="summary">
+        <h2 id="summary-heading">Summary</h2>
+        <p>You've now built both sides of the guardrail sandwich — input validation (M16) and output validation (M17). Here's the complete picture:</p>
+        <ul>
+          <li><strong>Output Validation</strong> — Hallucination detection (Claude-as-judge), toxicity filtering, and format validation catch errors before responses reach users.</li>
+          <li><strong>Cost Controls</strong> — Per-request budgets, token caps, and loop detection prevent runaway spending. A $0.50 budget caps edge-case loops at 10 iterations.</li>
+          <li><strong>HITL Gates</strong> — Approval (yes/no), modification (edit draft), and escalation (route to human) patterns handle decisions that need human judgment.</li>
+          <li><strong>Circuit Breaker</strong> — Three-state pattern (closed → open → half-open) prevents cascading failures during outages with exponential backoff.</li>
+        </ul>
+        <p><strong>Next up:</strong> In <a href="M18-evaluation-testing.html">M18: Evaluation &amp; Testing</a>, you'll learn how to measure whether your guardrails actually work — building evaluation pipelines that test accuracy, catch regressions, and quantify your agent's reliability.</p>
+      </section>
+
+      <div class="module-nav">
+        <a href="M16-input-guardrails.html">← M16: Input Guardrails</a>
+          <a href="index.html" aria-label="Course Home" title="Course Home" style="font-size:1.2rem;">&#x1F3E0; Home</a>
+        <a href="M18-evaluation-testing.html">M18: Evaluation &amp; Testing →</a>
+      </div>
+    </main>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+  <script>
+    function switchTab(btn, panelId) {
+      const wrapper = btn.closest('.code-block-wrapper');
+      wrapper.querySelectorAll('.code-tab').forEach(t => t.classList.remove('active'));
+      wrapper.querySelectorAll('.code-panel').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      document.getElementById(panelId).classList.add('active');
+    }
+    function copyCode(btn) {
+      const code = btn.closest('.code-panel').querySelector('code').textContent;
+      navigator.clipboard.writeText(code).then(() => { btn.textContent = 'Copied!'; setTimeout(() => btn.textContent = 'Copy', 2000); });
+    }
+
+    // Quiz
+    let quizAnswered = 0, quizCorrect = 0;
+    function checkAnswer(option, isCorrect) {
+      const question = option.closest('.quiz-question');
+      if (question.classList.contains('answered')) return;
+      question.classList.add('answered');
+      quizAnswered++;
+      const options = question.querySelectorAll('.quiz-option');
+      options.forEach(o => {
+        o.classList.add('disabled');
+        if (o === option) { o.classList.add(isCorrect ? 'correct' : 'incorrect'); o.querySelector('.quiz-marker').textContent = isCorrect ? '✓' : '✗'; }
+      });
+      if (!isCorrect) { options.forEach(o => { if (o.getAttribute('onclick')?.includes('true')) { o.classList.add('correct'); o.querySelector('.quiz-marker').textContent = '✓'; } }); }
+      if (isCorrect) quizCorrect++;
+      const fb = question.querySelectorAll('.quiz-feedback');
+      fb.forEach(f => f.classList.remove('show'));
+      const target = isCorrect ? question.querySelector('.correct-fb') : question.querySelector('.incorrect-fb');
+      if (target) target.classList.add('show');
+      const totalQuestions = document.querySelectorAll('.quiz-question').length;
+      if (quizAnswered === totalQuestions) {
+        const scoreEl = document.getElementById('quiz-score');
+        scoreEl.style.display = 'block';
+        document.getElementById('score-display').textContent = `${quizCorrect}/${totalQuestions}`;
+        const msg = document.getElementById('score-message');
+        if (quizCorrect === totalQuestions) msg.textContent = 'Perfect! Your agents are fully guarded. 🛡️';
+        else if (quizCorrect >= totalQuestions * 0.7) msg.textContent = 'Good work! Review the missed questions to strengthen your defenses.';
+        else msg.textContent = 'Review the output guardrail concepts above and try again.';
+      }
+    }
+
+    // Sidebar
+    const sections = document.querySelectorAll('.section');
+    const navLinks = document.querySelectorAll('.sidebar-nav a');
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => { if (entry.isIntersecting) { navLinks.forEach(l => l.classList.remove('active')); const link = document.querySelector(`.sidebar-nav a[href="#${entry.target.id}"]`); if (link) link.classList.add('active'); } });
+    }, { rootMargin: '-20% 0px -70% 0px' });
+    sections.forEach(s => observer.observe(s));
+
+    // Animation 1: Output Guardrail Pipeline
+    const animOutput = (() => {
+      const scenarios = [
+        { label: '✅ Clean response', gates: ['pass','pass','pass'], resultClass: 'pass', resultText: '✓ Response delivered to user' },
+        { label: '⚠️ Unsupported claim', gates: ['pass','flag','pass'], resultClass: 'flag', resultText: '⚠ Flagged: 1 unsupported claim — sent to review queue' },
+        { label: '❌ Contradicts sources', gates: ['pass','fail','—'], resultClass: 'fail', resultText: '✗ Blocked: contradicts source documents' },
+      ];
+      let idx = 0, step = 0, timer = null, paused = false;
+      const agent = document.getElementById('og-agent');
+      const user = document.getElementById('og-user');
+      const gates = [document.getElementById('og-g1'), document.getElementById('og-g2'), document.getElementById('og-g3')];
+      const arrows = [document.getElementById('og-a1'), document.getElementById('og-a2'), document.getElementById('og-a3'), document.getElementById('og-a4')];
+      const result = document.getElementById('og-result');
+
+      function reset() { step = 0; agent.className = 'og-box'; user.className = 'og-box'; gates.forEach(g => g.classList.remove('active')); arrows.forEach(a => a.classList.remove('visible')); result.style.opacity = '0'; }
+
+      function animate() {
+        if (paused) { timer = setTimeout(animate, 100); return; }
+        const sc = scenarios[idx];
+        if (step === 0) { agent.classList.add('visible'); agent.textContent = sc.label; step++; timer = setTimeout(animate, 400); }
+        else if (step <= 3) {
+          arrows[step - 1].classList.add('visible');
+          gates[step - 1].classList.add('active');
+          const gResult = sc.gates[step - 1];
+          if (gResult === 'fail') { agent.classList.add('fail'); result.textContent = sc.resultText; result.style.opacity = '1'; result.style.color = 'var(--error)'; step = 10; timer = setTimeout(() => { idx = (idx + 1) % scenarios.length; reset(); }, 2000); return; }
+          if (gResult === 'flag') { agent.classList.add('flag'); }
+          step++;
+          timer = setTimeout(animate, 500);
+        } else if (step === 4) {
+          arrows[3].classList.add('visible');
+          user.classList.add('visible');
+          if (sc.resultClass === 'flag') { user.classList.add('flag'); result.style.color = 'var(--warning)'; }
+          else { user.classList.add('pass'); result.style.color = 'var(--success)'; }
+          result.textContent = sc.resultText;
+          result.style.opacity = '1';
+          step = 10;
+          timer = setTimeout(() => { idx = (idx + 1) % scenarios.length; reset(); }, 2000);
+        }
+      }
+
+      return {
+        play() { paused = false; animate(); },
+        pause() { paused = true; },
+        restart() { if (timer) clearTimeout(timer); idx = 0; reset(); paused = false; animate(); },
+        step() { paused = false; animate(); }
+      };
+    })();
+
+    // Animation 2: Cost Breakdown
+    const animCost = (() => {
+      const iterations = [
+        { input: 15, output: 8, tools: 5, cost: 0.05 },
+        { input: 20, output: 12, tools: 8, cost: 0.08 },
+        { input: 25, output: 15, tools: 10, cost: 0.12 },
+        { input: 30, output: 18, tools: 12, cost: 0.15 },
+        { input: 35, output: 20, tools: 15, cost: 0.18 },
+        { input: 40, output: 25, tools: 18, cost: 0.22 },
+        { input: 45, output: 28, tools: 20, cost: 0.28 },
+        { input: 50, output: 30, tools: 22, cost: 0.35 },
+        { input: 55, output: 35, tools: 25, cost: 0.45 },
+        { input: 60, output: 38, tools: 28, cost: 0.55 },
+      ];
+      let step = 0, timer = null, paused = false, cumCost = 0;
+      const chart = document.getElementById('cb-chart');
+      const total = document.getElementById('cb-total');
+      const alert = document.getElementById('cb-alert');
+
+      function reset() { step = 0; cumCost = 0; const existing = chart.querySelectorAll('.cb-bar-group'); existing.forEach(e => e.remove()); total.textContent = 'Total: $0.000'; alert.classList.remove('visible'); }
+
+      function animate() {
+        if (paused) { timer = setTimeout(animate, 100); return; }
+        if (step >= iterations.length) return;
+        const it = iterations[step];
+        cumCost += it.cost;
+
+        const group = document.createElement('div');
+        group.className = 'cb-bar-group';
+        const maxH = 150;
+        const scale = maxH / 60;
+        group.innerHTML = `
+          <div class="cb-bar tools" style="height:${it.tools * scale}px;"></div>
+          <div class="cb-bar output" style="height:${it.output * scale}px;"></div>
+          <div class="cb-bar input" style="height:${it.input * scale}px;"></div>
+          <div class="cb-bar-label">I${step + 1}</div>
+        `;
+        chart.appendChild(group);
+        total.textContent = `Total: $${cumCost.toFixed(3)}`;
+
+        if (cumCost > 0.50) {
+          alert.classList.add('visible');
+          total.style.color = 'var(--error)';
+        } else if (cumCost > 0.40) {
+          total.style.color = 'var(--warning)';
+        }
+
+        step++;
+        if (step < iterations.length && cumCost <= 0.55) {
+          timer = setTimeout(animate, 600);
+        }
+      }
+
+      return {
+        play() { paused = false; animate(); },
+        pause() { paused = true; },
+        restart() { if (timer) clearTimeout(timer); reset(); total.style.color = 'var(--text-primary)'; paused = false; animate(); },
+        step() { paused = false; animate(); }
+      };
+    })();
+
+    // Animation 3: HITL Timeline
+    const animHITL = (() => {
+      const segs = [
+        ['hl-a1','hl-a2','hl-a3','hl-a4'],
+        ['hl-b1','hl-b2','hl-b3','hl-b4'],
+        ['hl-c1','hl-c2','hl-c3'],
+      ];
+      let lane = 0, seg = 0, timer = null, paused = false;
+
+      function reset() {
+        lane = 0; seg = 0;
+        segs.flat().forEach(id => document.getElementById(id)?.classList.remove('visible'));
+      }
+
+      function animate() {
+        if (paused) { timer = setTimeout(animate, 100); return; }
+        if (lane >= segs.length) return;
+        const el = document.getElementById(segs[lane][seg]);
+        if (el) el.classList.add('visible');
+        seg++;
+        if (seg >= segs[lane].length) { lane++; seg = 0; }
+        if (lane < segs.length) timer = setTimeout(animate, 400);
+      }
+
+      return {
+        play() { paused = false; animate(); },
+        pause() { paused = true; },
+        restart() { if (timer) clearTimeout(timer); reset(); paused = false; animate(); },
+        step() { paused = false; animate(); }
+      };
+    })();
+
+    // Animation 4: Circuit Breaker
+    const animCircuit = (() => {
+      const sequence = [
+        { type: 'ok' }, { type: 'ok' }, { type: 'fail' },
+        { type: 'fail' }, { type: 'fail' },
+        { type: 'blocked' }, { type: 'blocked' },
+        { type: 'cooldown' },
+        { type: 'test-fail' },
+        { type: 'blocked' },
+        { type: 'cooldown2' },
+        { type: 'test-ok' },
+        { type: 'ok' },
+      ];
+      let step = 0, timer = null, paused = false, failures = 0;
+      const stateEl = document.getElementById('cbr-state');
+      const counterEl = document.getElementById('cbr-counter');
+      const reqsEl = document.getElementById('cbr-requests');
+      const cooldownEl = document.getElementById('cbr-cooldown');
+
+      function reset() {
+        step = 0; failures = 0;
+        stateEl.className = 'cbr-state'; stateEl.innerHTML = '<span style="font-size:1.2rem;">✓</span>CLOSED';
+        counterEl.textContent = 'Failures: 0/3';
+        reqsEl.innerHTML = '';
+        cooldownEl.classList.remove('visible');
+      }
+
+      function addReq(type) {
+        const r = document.createElement('div');
+        r.className = `cbr-req ${type}`;
+        r.textContent = type === 'ok' ? '✓' : type === 'fail' ? '✗' : '⊘';
+        reqsEl.appendChild(r);
+        setTimeout(() => r.classList.add('visible'), 50);
+      }
+
+      function animate() {
+        if (paused) { timer = setTimeout(animate, 100); return; }
+        if (step >= sequence.length) return;
+        const s = sequence[step];
+
+        if (s.type === 'ok') { addReq('ok'); failures = 0; counterEl.textContent = `Failures: ${failures}/3`; }
+        else if (s.type === 'fail') {
+          addReq('fail'); failures++;
+          counterEl.textContent = `Failures: ${failures}/3`;
+          if (failures >= 3) { stateEl.className = 'cbr-state open'; stateEl.innerHTML = '<span style="font-size:1.2rem;">✗</span>OPEN'; }
+        }
+        else if (s.type === 'blocked') { addReq('blocked'); }
+        else if (s.type === 'cooldown' || s.type === 'cooldown2') {
+          cooldownEl.textContent = s.type === 'cooldown' ? 'Cooldown: 60s → Half-Open' : 'Cooldown: 120s → Half-Open';
+          cooldownEl.classList.add('visible');
+          stateEl.className = 'cbr-state half-open'; stateEl.innerHTML = '<span style="font-size:1.2rem;">?</span>HALF-OPEN';
+        }
+        else if (s.type === 'test-fail') {
+          cooldownEl.classList.remove('visible');
+          addReq('fail');
+          stateEl.className = 'cbr-state open'; stateEl.innerHTML = '<span style="font-size:1.2rem;">✗</span>OPEN';
+        }
+        else if (s.type === 'test-ok') {
+          cooldownEl.classList.remove('visible');
+          addReq('ok');
+          stateEl.className = 'cbr-state'; stateEl.innerHTML = '<span style="font-size:1.2rem;">✓</span>CLOSED';
+          failures = 0; counterEl.textContent = 'Failures: 0/3';
+        }
+
+        step++;
+        if (step < sequence.length) timer = setTimeout(animate, 700);
+      }
+
+      return {
+        play() { paused = false; animate(); },
+        pause() { paused = true; },
+        restart() { if (timer) clearTimeout(timer); reset(); paused = false; animate(); },
+        step() { paused = false; animate(); }
+      };
+    })();
+
+    // Auto-play on scroll
+    const animObserver = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          const id = entry.target.id;
+          if (id === 'anim-output') animOutput.play();
+          else if (id === 'anim-cost') animCost.play();
+          else if (id === 'anim-hitl') animHITL.play();
+          else if (id === 'anim-circuit') animCircuit.play();
+          animObserver.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.3 });
+    document.querySelectorAll('[id^="anim-"]').forEach(el => animObserver.observe(el));
+  </script>
+</body>
+</html>

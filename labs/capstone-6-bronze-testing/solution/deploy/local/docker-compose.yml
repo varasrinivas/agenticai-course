@@ -1,0 +1,54 @@
+##############################################################################
+# Tier 1: Local Docker Deployment
+#
+# Runs the Bronze Table Validation Agent locally with DuckDB persistence.
+#
+# Usage:
+#   cd deploy/local
+#   docker compose up --build
+#
+# Output:
+#   - Console dashboard printed to stdout
+#   - HTML report at ./output/validation_report.html
+#   - JSON report at ./output/validation_report.json
+#   - DuckDB state stored in ./data/validation.duckdb
+##############################################################################
+
+version: "3.8"
+
+services:
+  bronze-validator:
+    build:
+      context: ../../
+      dockerfile: Dockerfile
+    container_name: bronze-validator-local
+    volumes:
+      # Mount mock_data from the starter directory (shared test data)
+      - ../../mock_data:/data/mock_data:ro
+      # Persist output reports
+      - ./output:/app/output
+      # Persist DuckDB state between runs
+      - ./data:/app/data
+    environment:
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - DUCKDB_PATH=/app/data/validation.duckdb
+    command: >
+      python coordinator.py
+        --data-dir /data/mock_data
+        --workers 5
+        --html-output /app/output/validation_report.html
+        --json-output /app/output/validation_report.json
+
+  # Optional: simple web server to view the HTML report
+  report-viewer:
+    image: python:3.12-slim
+    container_name: bronze-report-viewer
+    depends_on:
+      bronze-validator:
+        condition: service_completed_successfully
+    volumes:
+      - ./output:/serve:ro
+    ports:
+      - "8080:8080"
+    working_dir: /serve
+    command: python -m http.server 8080
