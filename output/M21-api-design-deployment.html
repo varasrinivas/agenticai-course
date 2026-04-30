@@ -636,6 +636,234 @@ Service URL: https://agent-api-xxxx-uc.a.run.app</div>
           <div class="checkpoint-label">What Just Happened?</div>
           You compared three cloud deployment models. Lambda is cheap but limited for agents. VMs give full control but waste money when idle. Cloud Run is the sweet spot: streaming support, long timeouts, scale-to-zero, and pay-per-use pricing. For most agent APIs, start with Cloud Run (or Azure Container Apps, or Railway).
         </div>
+
+        <h3 id="model-host-choice">Model Host Choice: Direct API vs Bedrock vs Vertex AI</h3>
+        <p>Picking <em>where your code runs</em> (Cloud Run, Lambda, VM) is one decision. Picking <em>where Claude itself runs</em> is a second, independent one. The same agent code can call Claude through three different model hosts, and the choice usually depends on which cloud already holds your data, your IAM policies, and your billing relationship.</p>
+
+        <table style="width:100%;border-collapse:collapse;font-size:0.9rem;margin:1rem 0;">
+          <thead>
+            <tr style="border-bottom:2px solid var(--code-border);">
+              <th style="text-align:left;padding:0.5rem;color:var(--text-muted);font-family:'Bricolage Grotesque',sans-serif;font-size:0.8rem;">Dimension</th>
+              <th style="text-align:center;padding:0.5rem;color:var(--accent-primary);font-family:'Bricolage Grotesque',sans-serif;font-size:0.8rem;">Direct Anthropic API</th>
+              <th style="text-align:center;padding:0.5rem;color:var(--warning);font-family:'Bricolage Grotesque',sans-serif;font-size:0.8rem;">AWS Bedrock</th>
+              <th style="text-align:center;padding:0.5rem;color:var(--info);font-family:'Bricolage Grotesque',sans-serif;font-size:0.8rem;">Google Vertex AI</th>
+            </tr>
+          </thead>
+          <tbody style="color:var(--text-secondary);">
+            <tr style="border-bottom:1px solid var(--code-border);">
+              <td style="padding:0.5rem;">Auth</td>
+              <td style="text-align:center;padding:0.5rem;">API key</td>
+              <td style="text-align:center;padding:0.5rem;">AWS IAM / SigV4</td>
+              <td style="text-align:center;padding:0.5rem;">Google IAM / ADC</td>
+            </tr>
+            <tr style="border-bottom:1px solid var(--code-border);">
+              <td style="padding:0.5rem;">Billing</td>
+              <td style="text-align:center;padding:0.5rem;">Anthropic invoice</td>
+              <td style="text-align:center;padding:0.5rem;">Rolls into AWS bill</td>
+              <td style="text-align:center;padding:0.5rem;">Rolls into GCP bill</td>
+            </tr>
+            <tr style="border-bottom:1px solid var(--code-border);">
+              <td style="padding:0.5rem;">Data residency</td>
+              <td style="text-align:center;padding:0.5rem;">US / EU regions</td>
+              <td style="text-align:center;padding:0.5rem;">Any AWS region with Claude</td>
+              <td style="text-align:center;padding:0.5rem;">Any GCP region with Claude</td>
+            </tr>
+            <tr style="border-bottom:1px solid var(--code-border);">
+              <td style="padding:0.5rem;">Newest model lag</td>
+              <td style="text-align:center;padding:0.5rem;color:var(--success);">Day 0</td>
+              <td style="text-align:center;padding:0.5rem;color:var(--warning);">Days to weeks</td>
+              <td style="text-align:center;padding:0.5rem;color:var(--warning);">Days to weeks</td>
+            </tr>
+            <tr style="border-bottom:1px solid var(--code-border);">
+              <td style="padding:0.5rem;">Procurement</td>
+              <td style="text-align:center;padding:0.5rem;">New vendor</td>
+              <td style="text-align:center;padding:0.5rem;color:var(--success);">Existing AWS contract</td>
+              <td style="text-align:center;padding:0.5rem;color:var(--success);">Existing GCP contract</td>
+            </tr>
+            <tr>
+              <td style="padding:0.5rem;">Best for</td>
+              <td style="text-align:center;padding:0.5rem;font-size:0.8rem;">Fastest model access, simplest auth</td>
+              <td style="text-align:center;padding:0.5rem;font-size:0.8rem;">AWS-native shops, VPC-only data</td>
+              <td style="text-align:center;padding:0.5rem;font-size:0.8rem;">GCP-native shops, Vertex pipelines</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <p>Code-wise, switching hosts is usually a constructor change &mdash; the message-shape and tool-use protocol are identical across all three:</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs">
+            <button class="code-tab active" onclick="switchTab(this, 'host-py')" aria-label="Python tab">Python</button>
+            <button class="code-tab" onclick="switchTab(this, 'host-ts')" aria-label="TypeScript tab">TypeScript</button>
+          </div>
+          <div class="code-panel active" id="host-py">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code class="language-python"># Direct Anthropic API &mdash; uses ANTHROPIC_API_KEY from env
+from anthropic import Anthropic
+client = Anthropic()
+msg = client.messages.create(
+    model="claude-opus-4-7",
+    max_tokens=1024,
+    messages=[{"role": "user", "content": "Hello"}],
+)
+
+# AWS Bedrock &mdash; uses your AWS IAM credentials, no API key
+from anthropic import AnthropicBedrock
+bedrock = AnthropicBedrock(aws_region="us-west-2")
+msg = bedrock.messages.create(
+    model="anthropic.claude-opus-4-7-v1:0",  # Bedrock model ID
+    max_tokens=1024,
+    messages=[{"role": "user", "content": "Hello"}],
+)
+
+# Google Vertex AI &mdash; uses Application Default Credentials
+from anthropic import AnthropicVertex
+vertex = AnthropicVertex(project_id="my-gcp-project", region="us-east5")
+msg = vertex.messages.create(
+    model="claude-opus-4-7@20260101",  # Vertex publisher model ID
+    max_tokens=1024,
+    messages=[{"role": "user", "content": "Hello"}],
+)</code></pre>
+          </div>
+          <div class="code-panel" id="host-ts">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code class="language-typescript">// Direct Anthropic API
+import Anthropic from "@anthropic-ai/sdk";
+const client = new Anthropic();
+const msg = await client.messages.create({
+  model: "claude-opus-4-7",
+  max_tokens: 1024,
+  messages: [{ role: "user", content: "Hello" }],
+});
+
+// AWS Bedrock
+import { AnthropicBedrock } from "@anthropic-ai/bedrock-sdk";
+const bedrock = new AnthropicBedrock({ awsRegion: "us-west-2" });
+const msg2 = await bedrock.messages.create({
+  model: "anthropic.claude-opus-4-7-v1:0",
+  max_tokens: 1024,
+  messages: [{ role: "user", content: "Hello" }],
+});
+
+// Google Vertex AI
+import { AnthropicVertex } from "@anthropic-ai/vertex-sdk";
+const vertex = new AnthropicVertex({ projectId: "my-gcp-project", region: "us-east5" });
+const msg3 = await vertex.messages.create({
+  model: "claude-opus-4-7@20260101",
+  max_tokens: 1024,
+  messages: [{ role: "user", content: "Hello" }],
+});</code></pre>
+          </div>
+        </div>
+
+        <div class="callout-why">
+          <span class="box-label">Why This Matters in the Real World</span>
+          <p><strong>Healthcare and finance teams</strong> often cannot use the direct Anthropic API at all &mdash; their compliance teams have already approved AWS or GCP under a BAA / DPA, and adding a fourth-party data processor restarts that review. Bedrock and Vertex AI are the same Claude model, but invoked through an already-approved cloud account. The data never leaves your AWS or GCP perimeter.</p>
+          <p><strong>Startups</strong> usually go direct &mdash; new models land on the Anthropic API days to weeks before they appear on Bedrock or Vertex, and shipping on the latest model is often a competitive edge.</p>
+        </div>
+
+        <h3 id="managed-platforms">Managed Agent Platforms (Skip the Container Entirely)</h3>
+        <p>Cloud Run and Lambda host <em>your</em> agent code. Managed agent platforms host a preconfigured <em>agent runtime</em> &mdash; you upload a system prompt, a list of tools (called &ldquo;action groups&rdquo; on Bedrock or &ldquo;tools&rdquo; on Vertex Agent Engine), and the platform runs the tool-use loop, persists session state, and exposes a single <code>InvokeAgent</code> endpoint. You never write a FastAPI server.</p>
+
+        <table style="width:100%;border-collapse:collapse;font-size:0.9rem;margin:1rem 0;">
+          <thead>
+            <tr style="border-bottom:2px solid var(--code-border);">
+              <th style="text-align:left;padding:0.5rem;color:var(--text-muted);font-family:'Bricolage Grotesque',sans-serif;font-size:0.8rem;">Platform</th>
+              <th style="text-align:left;padding:0.5rem;color:var(--text-muted);font-family:'Bricolage Grotesque',sans-serif;font-size:0.8rem;">What it gives you</th>
+              <th style="text-align:left;padding:0.5rem;color:var(--text-muted);font-family:'Bricolage Grotesque',sans-serif;font-size:0.8rem;">Use when</th>
+            </tr>
+          </thead>
+          <tbody style="color:var(--text-secondary);">
+            <tr style="border-bottom:1px solid var(--code-border);">
+              <td style="padding:0.5rem;vertical-align:top;"><strong style="color:var(--warning);">AWS Bedrock AgentCore</strong></td>
+              <td style="padding:0.5rem;vertical-align:top;">Hosted agent runtime, session memory, action groups (tools defined as Lambda functions or OpenAPI specs), Bedrock Knowledge Bases for built-in RAG, Bedrock Guardrails for safety filters.</td>
+              <td style="padding:0.5rem;vertical-align:top;">You are AWS-native and want session state, tool execution, and RAG without writing or operating any of it.</td>
+            </tr>
+            <tr style="border-bottom:1px solid var(--code-border);">
+              <td style="padding:0.5rem;vertical-align:top;"><strong style="color:var(--info);">Vertex AI Agent Engine</strong></td>
+              <td style="padding:0.5rem;vertical-align:top;">Managed runtime for LangChain / LangGraph / CrewAI / Agent Development Kit agents. Handles deployment, autoscaling, sessions, and Cloud Trace integration.</td>
+              <td style="padding:0.5rem;vertical-align:top;">You wrote your agent in a Python framework and want to deploy without containerizing or running infrastructure.</td>
+            </tr>
+            <tr>
+              <td style="padding:0.5rem;vertical-align:top;"><strong style="color:var(--accent-primary);">Anthropic Agent SDK</strong></td>
+              <td style="padding:0.5rem;vertical-align:top;">A code SDK (not a hosted runtime) that bundles the agent loop, sub-agents, file system tools, and bash/code execution. Run it inside <em>your</em> Cloud Run / Lambda / VM.</td>
+              <td style="padding:0.5rem;vertical-align:top;">You want Anthropic&rsquo;s reference agent loop but keep full control over hosting and data flow.</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <p><strong>Working example:</strong> here is what calling a deployed Bedrock agent looks like from your application code. The agent itself was configured through the Bedrock console or Terraform &mdash; system prompt, foundation model (Claude), action groups, and an optional knowledge base ID. Your code just invokes it:</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs">
+            <button class="code-tab active" onclick="switchTab(this, 'bedrock-py')" aria-label="Python tab">Python</button>
+            <button class="code-tab" onclick="switchTab(this, 'bedrock-ts')" aria-label="TypeScript tab">TypeScript</button>
+          </div>
+          <div class="code-panel active" id="bedrock-py">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code class="language-python">import boto3, uuid
+
+# bedrock-agent-runtime is the data-plane client (invoke a deployed agent).
+# bedrock-agent (without -runtime) is the control-plane client (create/update agents).
+client = boto3.client("bedrock-agent-runtime", region_name="us-west-2")
+
+def ask_agent(question: str, session_id: str) -> str:
+    response = client.invoke_agent(
+        agentId="ABCDE12345",          # set when you created the agent
+        agentAliasId="TSTALIASID",     # "TSTALIASID" = the auto-created test alias
+        sessionId=session_id,          # reuse to keep conversation state on Bedrock's side
+        inputText=question,
+    )
+    # invoke_agent returns a streaming event iterator, not a JSON blob
+    chunks = []
+    for event in response["completion"]:
+        if "chunk" in event:
+            chunks.append(event["chunk"]["bytes"].decode("utf-8"))
+    return "".join(chunks)
+
+# Same session_id across calls = Bedrock remembers the conversation
+session = str(uuid.uuid4())
+print(ask_agent("What were Q4 sales for Acme Corp?", session))
+print(ask_agent("And how does that compare to Q3?", session))  # context is preserved</code></pre>
+          </div>
+          <div class="code-panel" id="bedrock-ts">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code class="language-typescript">import {
+  BedrockAgentRuntimeClient,
+  InvokeAgentCommand,
+} from "@aws-sdk/client-bedrock-agent-runtime";
+import { randomUUID } from "node:crypto";
+
+const client = new BedrockAgentRuntimeClient({ region: "us-west-2" });
+
+async function askAgent(question: string, sessionId: string): Promise&lt;string&gt; {
+  const cmd = new InvokeAgentCommand({
+    agentId: "ABCDE12345",
+    agentAliasId: "TSTALIASID",
+    sessionId,
+    inputText: question,
+  });
+  const response = await client.send(cmd);
+  let out = "";
+  // response.completion is an async iterable of events
+  for await (const event of response.completion ?? []) {
+    if (event.chunk?.bytes) {
+      out += new TextDecoder().decode(event.chunk.bytes);
+    }
+  }
+  return out;
+}
+
+const session = randomUUID();
+console.log(await askAgent("What were Q4 sales for Acme Corp?", session));
+console.log(await askAgent("And how does that compare to Q3?", session));</code></pre>
+          </div>
+        </div>
+
+        <div class="callout-cost">
+          <span class="box-label">The Real Tradeoff</span>
+          Managed platforms remove ops work but lock you into the platform&rsquo;s agent loop. You can&rsquo;t intercept tool calls for custom guardrails, you can&rsquo;t inject middleware between reasoning steps, and you debug through CloudWatch instead of your own traces. For 80% of agent products this is a great trade. For the other 20% &mdash; agents that need bespoke planning logic, custom memory, or strict cost controls per-step &mdash; you still want to host your own loop on Cloud Run or Lambda.
+        </div>
       </section>
 
       <div class="bridge">You have picked your cloud platform. But what happens when 1,000 users hit your API at the same time? And what if the Anthropic API starts returning 429 (rate limit) errors? You need a scaling strategy that handles both user demand and upstream rate limits.</div>
@@ -810,7 +1038,7 @@ async def stream_agent_response(
     """Stream agent response as SSE events."""
     try:
         async with client.messages.stream(
-            model="claude-sonnet-4-20250514",
+            model="claude-sonnet-4-6",
             max_tokens=4096,
             messages=[{"role": "user", "content": message}],
         ) as stream:
@@ -925,7 +1153,7 @@ app.post("/chat", async (req, res) => {
 
   try {
     const stream = client.messages.stream({
-      model: "claude-sonnet-4-20250514",
+      model: "claude-sonnet-4-6",
       max_tokens: 4096,
       messages: [{ role: "user", content: message }],
     });
@@ -1322,6 +1550,52 @@ FUNCTION stream_agent_response(user_message):
 
         <div class="analogy">
           <strong>Before auth:</strong> Imagine a hospital where every door is unlocked and anyone can walk into the pharmacy. <strong>The pain:</strong> An unauthenticated agent API is an open door to your LLM budget &mdash; one leaked URL and a bot can run up thousands of dollars in API calls, or worse, access sensitive tool actions. <strong>The mapping:</strong> Authentication is the badge that proves who you are; authorization is the access list that decides which rooms (tools) your badge opens.
+        </div>
+
+        <!-- AUTH FLOW SVG -->
+        <div class="animation-container" aria-label="Three-layer auth and authorization flow for agent API">
+          <div class="animation-title">3-Layer Defense &mdash; Authenticate, Authorize, Throttle</div>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 290" style="width:100%;max-width:600px;display:block;margin:0 auto;" role="img" aria-label="Request flows through three sequential gates: authenticate (verifies JWT or API key), authorize (RBAC checks role-to-tool mapping), and throttle (per-user rate limit). Each gate can return 401, 403, or 429 respectively. Only after all three pass does the agent execute the tool.">
+            <defs><marker id="au-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#94A3B8"/></marker><marker id="au-fail" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#F43F5E"/></marker><marker id="au-pass" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#10B981"/></marker></defs>
+            <!-- Client -->
+            <rect x="20" y="125" width="100" height="40" rx="8" fill="rgba(212,168,67,0.15)" stroke="#D4A843"/>
+            <text x="70" y="143" text-anchor="middle" fill="#D4A843" font-family="Bricolage Grotesque" font-weight="700" font-size="11">Client</text>
+            <text x="70" y="158" text-anchor="middle" fill="#94A3B8" font-family="Source Sans 3" font-size="9">Authorization: Bearer</text>
+            <line x1="123" y1="145" x2="148" y2="145" stroke="#94A3B8" stroke-width="1.5" marker-end="url(#au-arrow)"/>
+            <!-- Layer 1: Authenticate -->
+            <rect x="150" y="115" width="110" height="60" rx="8" fill="rgba(99,102,241,0.15)" stroke="#6366F1" stroke-width="1.5"/>
+            <text x="205" y="135" text-anchor="middle" fill="#6366F1" font-family="Bricolage Grotesque" font-weight="700" font-size="11">1. Authenticate</text>
+            <text x="205" y="150" text-anchor="middle" fill="#94A3B8" font-family="Source Sans 3" font-size="9">verify JWT signature</text>
+            <text x="205" y="163" text-anchor="middle" fill="#94A3B8" font-family="Source Sans 3" font-size="9">extract user + roles</text>
+            <line x1="205" y1="175" x2="205" y2="200" stroke="#F43F5E" stroke-width="1.5" stroke-dasharray="3,2" marker-end="url(#au-fail)"/>
+            <text x="240" y="200" fill="#F43F5E" font-family="JetBrains Mono" font-size="10">401 Unauthorized</text>
+            <line x1="263" y1="145" x2="288" y2="145" stroke="#10B981" stroke-width="1.5" marker-end="url(#au-pass)"/>
+            <!-- Layer 2: Authorize -->
+            <rect x="290" y="115" width="110" height="60" rx="8" fill="rgba(139,92,246,0.15)" stroke="#8B5CF6" stroke-width="1.5"/>
+            <text x="345" y="135" text-anchor="middle" fill="#8B5CF6" font-family="Bricolage Grotesque" font-weight="700" font-size="11">2. Authorize</text>
+            <text x="345" y="150" text-anchor="middle" fill="#94A3B8" font-family="Source Sans 3" font-size="9">RBAC tool allowlist</text>
+            <text x="345" y="163" text-anchor="middle" fill="#94A3B8" font-family="Source Sans 3" font-size="9">role &rarr; tools[]</text>
+            <line x1="345" y1="175" x2="345" y2="200" stroke="#F43F5E" stroke-width="1.5" stroke-dasharray="3,2" marker-end="url(#au-fail)"/>
+            <text x="380" y="200" fill="#F43F5E" font-family="JetBrains Mono" font-size="10">403 Forbidden</text>
+            <line x1="403" y1="145" x2="428" y2="145" stroke="#10B981" stroke-width="1.5" marker-end="url(#au-pass)"/>
+            <!-- Layer 3: Throttle -->
+            <rect x="430" y="115" width="110" height="60" rx="8" fill="rgba(245,158,11,0.15)" stroke="#F59E0B" stroke-width="1.5"/>
+            <text x="485" y="135" text-anchor="middle" fill="#F59E0B" font-family="Bricolage Grotesque" font-weight="700" font-size="11">3. Throttle</text>
+            <text x="485" y="150" text-anchor="middle" fill="#94A3B8" font-family="Source Sans 3" font-size="9">per-user budget</text>
+            <text x="485" y="163" text-anchor="middle" fill="#94A3B8" font-family="Source Sans 3" font-size="9">sliding window</text>
+            <line x1="485" y1="175" x2="485" y2="200" stroke="#F43F5E" stroke-width="1.5" stroke-dasharray="3,2" marker-end="url(#au-fail)"/>
+            <text x="525" y="200" fill="#F43F5E" font-family="JetBrains Mono" font-size="10">429 Too Many</text>
+            <!-- Pass-through to agent -->
+            <line x1="485" y1="115" x2="485" y2="50" stroke="#10B981" stroke-width="1.5" marker-end="url(#au-pass)"/>
+            <rect x="380" y="20" width="210" height="36" rx="8" fill="rgba(16,185,129,0.18)" stroke="#10B981" stroke-width="1.5"/>
+            <text x="485" y="38" text-anchor="middle" fill="#10B981" font-family="Bricolage Grotesque" font-weight="700" font-size="11">Agent executes tool</text>
+            <text x="485" y="50" text-anchor="middle" fill="#94A3B8" font-family="Source Sans 3" font-size="9">tool call passes all 3 gates</text>
+
+            <!-- Caption -->
+            <text x="300" y="240" text-anchor="middle" fill="#64748B" font-family="Source Sans 3" font-size="10" font-style="italic">Each gate is independently enforced in middleware. Bypass at any layer = production incident.</text>
+            <text x="300" y="258" text-anchor="middle" fill="#F43F5E" font-family="Source Sans 3" font-size="10" font-weight="700">Critical: never enforce tool permissions inside the agent prompt &mdash; prompt injection bypasses prompt rules</text>
+            <text x="300" y="276" text-anchor="middle" fill="#10B981" font-family="Source Sans 3" font-size="10">Tool permissions belong in middleware, where the model cannot influence them.</text>
+          </svg>
         </div>
 
         <h3 id="api-key-auth">API Key Authentication</h3>

@@ -375,14 +375,14 @@
             <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
             <pre><code># Before: standard response
 response = client.messages.create(
-    model="claude-sonnet-4-20250514",
+    model="claude-sonnet-4-6",
     max_tokens=1024,
     messages=[{"role": "user", "content": "Design a microservices architecture for..."}]
 )
 
 # After: extended thinking enabled
 response = client.messages.create(
-    model="claude-sonnet-4-20250514",
+    model="claude-sonnet-4-6",
     max_tokens=16000,
     thinking={
         "type": "enabled",
@@ -396,14 +396,14 @@ response = client.messages.create(
             <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
             <pre><code>// Before: standard response
 const response = await client.messages.create({
-  model: "claude-sonnet-4-20250514",
+  model: "claude-sonnet-4-6",
   max_tokens: 1024,
   messages: [{ role: "user", content: "Design a microservices architecture for..." }]
 });
 
 // After: extended thinking enabled
 const response = await client.messages.create({
-  model: "claude-sonnet-4-20250514",
+  model: "claude-sonnet-4-6",
   max_tokens: 16000,
   thinking: {
     type: "enabled",
@@ -477,6 +477,178 @@ const response = await client.messages.create({
             <button class="anim-btn" onclick="timelineAnim.toggle()" aria-label="Play/Pause animation" id="timeline-play">&#9654;</button>
             <button class="anim-btn" onclick="timelineAnim.restart()" aria-label="Restart animation">&#8635;</button>
           </div>
+        </div>
+
+        <h3 id="computer-use-in-practice">Computer Use in Practice: A Working Example</h3>
+        <p>Computer Use is a <em>pre-built</em> tool that ships with the Claude API &mdash; you don&rsquo;t define a JSON schema for it, you just enable it and provide an execution sandbox. Claude receives a screenshot, decides on an action (click, type, scroll, key), and your code executes that action and returns the next screenshot. The loop continues until Claude reports it&rsquo;s done.</p>
+
+        <p>Three pre-built tools usually go together for an autonomous Computer Use agent:</p>
+        <ul>
+          <li><strong><code>computer_20250124</code></strong> &mdash; the screenshot/click/type/scroll tool itself.</li>
+          <li><strong><code>bash_20250124</code></strong> &mdash; lets Claude open URLs, launch apps, restart services.</li>
+          <li><strong><code>text_editor_20250429</code></strong> &mdash; lets Claude read/write files (e.g., scratch notes for multi-step tasks).</li>
+        </ul>
+
+        <p>Here is what a Computer Use call looks like end-to-end. The key differences from regular tool use (M05): you set a <code>betas=["computer-use-2025-01-24"]</code> header, you pass <code>display_width_px</code> / <code>display_height_px</code> so Claude knows the screen geometry, and your loop must execute the action and return a fresh screenshot as the <code>tool_result</code>:</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs">
+            <button class="code-tab active" onclick="switchTab(this, 'cu-py')" aria-label="Python tab">Python</button>
+            <button class="code-tab" onclick="switchTab(this, 'cu-ts')" aria-label="TypeScript tab">TypeScript</button>
+          </div>
+          <div class="code-panel active" id="cu-py">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code class="language-python">from anthropic import Anthropic
+import base64, subprocess
+
+client = Anthropic()
+
+# Your sandbox primitives. In production these run inside a Docker container
+# with a virtual display (Xvfb) so the agent can&rsquo;t touch your real desktop.
+def take_screenshot() -&gt; bytes:
+    subprocess.run(["scrot", "/tmp/screen.png"], check=True)
+    return open("/tmp/screen.png", "rb").read()
+
+def execute_action(action: dict) -&gt; bytes:
+    if action["action"] == "screenshot":
+        pass
+    elif action["action"] == "left_click":
+        x, y = action["coordinate"]
+        subprocess.run(["xdotool", "mousemove", str(x), str(y), "click", "1"])
+    elif action["action"] == "type":
+        subprocess.run(["xdotool", "type", "--", action["text"]])
+    elif action["action"] == "key":
+        subprocess.run(["xdotool", "key", action["text"]])
+    # ... scroll, double_click, mouse_move, cursor_position, etc.
+    return take_screenshot()
+
+# Initial request: enable the three pre-built tools and give a goal
+messages = [{"role": "user", "content": "Open firefox, search 'anthropic pricing', screenshot the result"}]
+initial = take_screenshot()
+
+while True:
+    response = client.beta.messages.create(
+        model="claude-opus-4-7",
+        max_tokens=4096,
+        tools=[
+            {"type": "computer_20250124", "name": "computer",
+             "display_width_px": 1280, "display_height_px": 800},
+            {"type": "bash_20250124", "name": "bash"},
+            {"type": "text_editor_20250429", "name": "str_replace_based_edit_tool"},
+        ],
+        betas=["computer-use-2025-01-24"],
+        messages=messages,
+    )
+
+    if response.stop_reason == "end_turn":
+        break  # Claude decided it&rsquo;s done
+
+    # Append Claude&rsquo;s reply to the conversation
+    messages.append({"role": "assistant", "content": response.content})
+
+    # Execute every tool_use block and collect tool_results
+    results = []
+    for block in response.content:
+        if block.type == "tool_use" and block.name == "computer":
+            screenshot = execute_action(block.input)
+            results.append({
+                "type": "tool_result",
+                "tool_use_id": block.id,
+                "content": [{
+                    "type": "image",
+                    "source": {"type": "base64", "media_type": "image/png",
+                               "data": base64.b64encode(screenshot).decode()}
+                }],
+            })
+        # ... handle bash and text_editor tool_use blocks similarly
+    messages.append({"role": "user", "content": results})</code></pre>
+          </div>
+          <div class="code-panel" id="cu-ts">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code class="language-typescript">import Anthropic from "@anthropic-ai/sdk";
+import { execSync } from "node:child_process";
+import { readFileSync } from "node:fs";
+
+const client = new Anthropic();
+
+function takeScreenshot(): Buffer {
+  execSync("scrot /tmp/screen.png");
+  return readFileSync("/tmp/screen.png");
+}
+
+function executeAction(action: any): Buffer {
+  if (action.action === "left_click") {
+    const [x, y] = action.coordinate;
+    execSync(`xdotool mousemove ${x} ${y} click 1`);
+  } else if (action.action === "type") {
+    execSync(`xdotool type -- ${JSON.stringify(action.text)}`);
+  } else if (action.action === "key") {
+    execSync(`xdotool key ${action.text}`);
+  }
+  // ... screenshot, scroll, double_click, mouse_move, cursor_position
+  return takeScreenshot();
+}
+
+const messages: any[] = [{
+  role: "user",
+  content: "Open firefox, search 'anthropic pricing', screenshot the result",
+}];
+
+while (true) {
+  const response = await client.beta.messages.create({
+    model: "claude-opus-4-7",
+    max_tokens: 4096,
+    tools: [
+      { type: "computer_20250124", name: "computer",
+        display_width_px: 1280, display_height_px: 800 },
+      { type: "bash_20250124", name: "bash" },
+      { type: "text_editor_20250429", name: "str_replace_based_edit_tool" },
+    ],
+    betas: ["computer-use-2025-01-24"],
+    messages,
+  });
+
+  if (response.stop_reason === "end_turn") break;
+  messages.push({ role: "assistant", content: response.content });
+
+  const results: any[] = [];
+  for (const block of response.content as any[]) {
+    if (block.type === "tool_use" && block.name === "computer") {
+      const screenshot = executeAction(block.input);
+      results.push({
+        type: "tool_result",
+        tool_use_id: block.id,
+        content: [{
+          type: "image",
+          source: { type: "base64", media_type: "image/png",
+                    data: screenshot.toString("base64") },
+        }],
+      });
+    }
+  }
+  messages.push({ role: "user", content: results });
+}</code></pre>
+          </div>
+        </div>
+
+        <div class="callout-security" style="background:rgba(244,63,94,0.08);border-left:4px solid #F43F5E;border-radius:0 8px 8px 0;padding:1.25rem 1.5rem;margin:1.5rem 0;">
+          <span class="box-label" style="color:#F43F5E;">&#128737;&#65039; Sandboxing Is Not Optional</span>
+          <p>The agent above can click and type anywhere on the display. <strong>Never run this against your real desktop.</strong> Production deployments run the loop inside a disposable Docker container with:</p>
+          <ul>
+            <li>A virtual display (<code>Xvfb</code>) &mdash; no host GUI is touched.</li>
+            <li>A locked-down browser/app set &mdash; only what the task needs.</li>
+            <li>Network egress allow-lists &mdash; no exfiltration to arbitrary hosts.</li>
+            <li>No host-filesystem mounts &mdash; the container is throwaway.</li>
+            <li>A wall-clock budget and step cap &mdash; prevent runaway loops.</li>
+          </ul>
+          <p style="margin-bottom:0;">Anthropic publishes a reference Docker image that bundles Xvfb, Firefox, an X11 desktop, and the loop wrapper. Use it as a starting point rather than rolling your own. <strong>Prompt injection from the page being browsed is the #1 risk:</strong> a hostile webpage can include text instructing Claude to leak credentials or click destructive buttons. Pair Computer Use with the input-guardrails patterns from M16 (allow-list of intents, suspicious-action detection, human-in-the-loop confirmation for irreversible actions).</p>
+        </div>
+
+        <div class="callout-cost">
+          <span class="box-label">When (and When Not) to Reach for Computer Use</span>
+          <p><strong>Use it when:</strong> the target system has no API, no MCP server, and no scriptable interface (legacy enterprise apps, vendor portals, GUI-only desktop software). Or when you need the same agent to handle apps you can&rsquo;t enumerate ahead of time (general &ldquo;use this website for me&rdquo; flows).</p>
+          <p><strong>Skip it when:</strong> a regular API or MCP server exists. Computer Use is slower (each step round-trips a screenshot through vision), more expensive (every screenshot is a full image input), and less reliable (UIs change, rendering differs, modal dialogs surprise the agent). Per-step cost on Opus 4.7: a 1280&times;800 PNG decodes to roughly 1,500-2,500 vision tokens &mdash; a 20-step task can run $0.20-$0.50 just on screenshot input. A REST call would cost cents.</p>
+          <p style="margin-bottom:0;"><strong>The realistic shape of a Computer Use agent in production:</strong> a narrow, well-scoped task (&ldquo;file this expense in Concur,&rdquo; &ldquo;refresh this tableau dashboard&rdquo;), inside a locked-down sandbox, with a human-approval step before any irreversible action, and a hard step/time budget. Open-ended &ldquo;just browse the web for me&rdquo; agents make impressive demos but are still unreliable enough that most teams keep them out of customer-facing flows.</p>
         </div>
 
         <div class="callout-why">
@@ -760,7 +932,7 @@ logger = logging.getLogger(__name__)
 
 
 # --- Configuration ---
-MODEL = "claude-sonnet-4-20250514"
+MODEL = "claude-sonnet-4-6"
 MAX_TOKENS = 1024
 MAX_ITERATIONS = 10  # Safety net (M12: stop_reason is primary)
 
@@ -909,7 +1081,7 @@ if __name__ == "__main__":
 import Anthropic from "@anthropic-ai/sdk";
 
 // --- Configuration ---
-const MODEL = "claude-sonnet-4-20250514";
+const MODEL = "claude-sonnet-4-6";
 const MAX_TOKENS = 1024;
 const MAX_ITERATIONS = 10; // Safety net (M12: stop_reason is primary)
 

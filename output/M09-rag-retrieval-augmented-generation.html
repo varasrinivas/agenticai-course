@@ -217,6 +217,8 @@
       <a href="#embeddings">Embeddings Explained</a>
       <a href="#chunking">Chunking Strategies</a>
       <a href="#vector-dbs">Vector Databases</a>
+      <a href="#citations">Citations</a>
+      <a href="#multimodal">Multimodal Inputs</a>
       <a href="#code-walkthrough">Code Walkthrough</a>
       <a href="#hands-on">Hands-On Exercise</a>
       <a href="#quiz">Knowledge Check</a>
@@ -732,6 +734,227 @@ Chunk 1: "assigns a unique file number. Continuation statements must be filed wi
         </div>
       </section>
 
+      <!-- ==================== CITATIONS ==================== -->
+      <section class="section" id="citations">
+        <h2 id="citations-heading">Citations &mdash; Native Provenance From Claude</h2>
+
+        <p>The RAG pipeline you just built returns retrieved chunks <em>and</em> Claude's answer, but stitching those two together &mdash; "which sentence in the answer came from which chunk?" &mdash; is your responsibility. For audit-grade applications (legal, medical, regulated finance), that stitching is fragile: Claude can reword, summarize, or merge sources, and matching back to the original passages is error-prone.</p>
+
+        <p>Anthropic ships a built-in <strong>Citations</strong> feature that solves this at the API level. You pass your source documents into the request as <code>document</code> content blocks; Claude returns its answer with explicit <code>citations</code> arrays attached to each sentence, telling you exactly which document and which character span supports each claim. No regex, no fuzzy matching, no hallucinated quotes.</p>
+
+        <div class="tech-def-box">
+          <span class="box-label">Technical Definition</span>
+          <p>The Citations feature accepts up to ~20 documents per request, each with a unique <code>title</code>. Claude's response includes <code>citations[]</code> on each text block, where each citation references a <code>document_index</code>, <code>document_title</code>, and the exact <code>cited_text</code> span used. You enable it per request by passing documents as content blocks with <code>"type": "document"</code> and <code>"citations": {"enabled": true}</code>.</p>
+          <pre style="background:var(--code-bg);border:1px solid var(--code-border);border-radius:8px;padding:0.85rem;font-family:'JetBrains Mono',monospace;font-size:0.78rem;color:var(--code-text);overflow-x:auto;margin:0.75rem 0 0.25rem;"><code>response = client.messages.create(
+    model="claude-sonnet-4-6",
+    max_tokens=1024,
+    messages=[{
+        "role": "user",
+        "content": [
+            {
+                "type": "document",
+                "source": {"type": "text", "media_type": "text/plain", "data": chunk_1},
+                "title": "Filing UCC-2024-001",
+                "citations": {"enabled": True}
+            },
+            # ...more documents...
+            {"type": "text", "text": "Summarize the secured party's collateral interest."}
+        ]
+    }]
+)
+# response.content[0].citations -&gt; [{document_index: 0, document_title: "...", cited_text: "..."}]</code></pre>
+        </div>
+
+        <h3>RAG vs Citations &mdash; Pick Per Job</h3>
+        <div class="animation-container" aria-label="RAG versus Citations decision matrix" style="padding:1.25rem;">
+          <div class="animation-title">When to Reach for Each</div>
+          <table style="width:100%;border-collapse:collapse;font-size:0.88rem;">
+            <thead>
+              <tr style="background:var(--bg-surface);">
+                <th style="padding:0.6rem 0.75rem;text-align:left;font-family:'Bricolage Grotesque',sans-serif;font-size:0.8rem;color:var(--text-secondary);border-bottom:1px solid var(--code-border);">Concern</th>
+                <th style="padding:0.6rem 0.75rem;text-align:left;font-family:'Bricolage Grotesque',sans-serif;font-size:0.8rem;color:#06B6D4;border-bottom:1px solid var(--code-border);">Build RAG</th>
+                <th style="padding:0.6rem 0.75rem;text-align:left;font-family:'Bricolage Grotesque',sans-serif;font-size:0.8rem;color:#10B981;border-bottom:1px solid var(--code-border);">Use Citations</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);">Corpus size</td><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Millions of docs &mdash; need vector search to narrow down</td><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">A small candidate set (&lt;20 docs) per request</td></tr>
+              <tr><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);">Provenance requirement</td><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">"Roughly attributable" via chunk metadata</td><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);"><strong>Sentence-level character spans</strong> &mdash; audit-grade</td></tr>
+              <tr><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);">Hallucination risk</td><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Claude may paraphrase outside the sources</td><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Each cited claim is grounded in a specific span</td></tr>
+              <tr><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);">Token cost</td><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Pay only for top-K retrieved chunks</td><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Pay for all candidate documents (cap ~20)</td></tr>
+              <tr><td style="padding:0.55rem 0.75rem;">Best stack</td><td style="padding:0.55rem 0.75rem;color:var(--text-secondary);">Vector DB + Claude (this module's pipeline)</td><td style="padding:0.55rem 0.75rem;color:var(--text-secondary);"><strong>Vector DB shortlist &rarr; pass top-K to Citations</strong></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>The strongest production pattern combines them: use your RAG pipeline to find the top ~10 candidate chunks, then pass those chunks <em>as citation-enabled documents</em> in the request. You get the scale of vector search and the audit-grade provenance of Citations in the same call.</p>
+
+        <div class="callout-cert">
+          <span class="box-label" style="color:#D4A843;">&#127891; Cert Tip &mdash; Domain 5.6 (Provenance)</span>
+          <p>The exam tests recognition that <em>provenance</em> is a first-class API feature, not something you bolt on after the fact. Anti-pattern: asking Claude in the prompt to "include citations like [1] [2]" and parsing them out &mdash; the model can fabricate citation numbers. Correct pattern: pass documents as citation-enabled content blocks and read structured <code>citations[]</code> from the response.</p>
+        </div>
+      </section>
+
+      <!-- ==================== MULTIMODAL INPUTS ==================== -->
+      <section class="section" id="multimodal">
+        <h2 id="multimodal-heading">Multimodal Inputs &mdash; PDFs, Images, &amp; the Files API</h2>
+
+        <p>The retrieval pipeline you built so far assumes your documents arrive as plain text. In production they don't. They arrive as PDFs with embedded tables and figures, scanned images, charts, and screenshots. Claude has three native primitives for handling these without a separate OCR step or vision model: <strong>PDF support</strong>, <strong>vision</strong>, and the <strong>Files API</strong>. Knowing which to reach for &mdash; and when to combine them with your RAG pipeline &mdash; closes the last gap between a toy chatbot and a production document agent.</p>
+
+        <!-- MULTIMODAL CONTENT BLOCK SVG -->
+        <div class="animation-container" aria-label="Three multimodal input types: text content blocks, PDF document blocks, and image blocks, all flowing into the Claude API in a single request">
+          <div class="animation-title">Three Input Modalities, One API Surface</div>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 260" style="width:100%;max-width:600px;display:block;margin:0 auto;" role="img" aria-label="Four content block types stack into a single Messages API request: text content, PDF document content (up to 100 pages, native parsing of text and tables), image content (PNG/JPEG/GIF/WebP, base64 or URL), and Files API references (upload once, reference by file_id in many requests). All four feed into Claude which produces unified output.">
+            <defs><marker id="mm-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#94A3B8"/></marker></defs>
+            <!-- Inputs column -->
+            <text x="100" y="22" text-anchor="middle" fill="#94A3B8" font-family="Bricolage Grotesque" font-weight="700" font-size="11">Content Blocks</text>
+
+            <rect x="20" y="35" width="160" height="42" rx="6" fill="rgba(212,168,67,0.12)" stroke="#D4A843"/>
+            <text x="100" y="52" text-anchor="middle" fill="#D4A843" font-family="JetBrains Mono" font-weight="700" font-size="11">type: "text"</text>
+            <text x="100" y="68" text-anchor="middle" fill="#94A3B8" font-family="Source Sans 3" font-size="9">user message, prompt</text>
+
+            <rect x="20" y="85" width="160" height="55" rx="6" fill="rgba(99,102,241,0.15)" stroke="#6366F1"/>
+            <text x="100" y="102" text-anchor="middle" fill="#6366F1" font-family="JetBrains Mono" font-weight="700" font-size="11">type: "document"</text>
+            <text x="100" y="117" text-anchor="middle" fill="#94A3B8" font-family="Source Sans 3" font-size="9">PDF, up to 100 pages</text>
+            <text x="100" y="130" text-anchor="middle" fill="#94A3B8" font-family="Source Sans 3" font-size="9">native text + table parsing</text>
+
+            <rect x="20" y="148" width="160" height="55" rx="6" fill="rgba(139,92,246,0.15)" stroke="#8B5CF6"/>
+            <text x="100" y="165" text-anchor="middle" fill="#8B5CF6" font-family="JetBrains Mono" font-weight="700" font-size="11">type: "image"</text>
+            <text x="100" y="180" text-anchor="middle" fill="#94A3B8" font-family="Source Sans 3" font-size="9">PNG, JPEG, GIF, WebP</text>
+            <text x="100" y="193" text-anchor="middle" fill="#94A3B8" font-family="Source Sans 3" font-size="9">base64 or URL</text>
+
+            <rect x="20" y="211" width="160" height="42" rx="6" fill="rgba(6,182,212,0.15)" stroke="#06B6D4"/>
+            <text x="100" y="228" text-anchor="middle" fill="#06B6D4" font-family="JetBrains Mono" font-weight="700" font-size="11">file_id: "file_abc"</text>
+            <text x="100" y="244" text-anchor="middle" fill="#94A3B8" font-family="Source Sans 3" font-size="9">Files API reference</text>
+
+            <!-- Arrows -->
+            <line x1="183" y1="56" x2="270" y2="115" stroke="#94A3B8" stroke-width="1.5" marker-end="url(#mm-arrow)"/>
+            <line x1="183" y1="112" x2="270" y2="125" stroke="#94A3B8" stroke-width="1.5" marker-end="url(#mm-arrow)"/>
+            <line x1="183" y1="175" x2="270" y2="135" stroke="#94A3B8" stroke-width="1.5" marker-end="url(#mm-arrow)"/>
+            <line x1="183" y1="232" x2="270" y2="145" stroke="#94A3B8" stroke-width="1.5" marker-end="url(#mm-arrow)"/>
+
+            <!-- Claude -->
+            <rect x="275" y="100" width="140" height="60" rx="10" fill="rgba(236,72,153,0.18)" stroke="#EC4899" stroke-width="2"/>
+            <text x="345" y="123" text-anchor="middle" fill="#EC4899" font-family="Bricolage Grotesque" font-weight="700" font-size="13">Claude</text>
+            <text x="345" y="139" text-anchor="middle" fill="#94A3B8" font-family="Source Sans 3" font-size="10">unified multimodal</text>
+            <text x="345" y="152" text-anchor="middle" fill="#94A3B8" font-family="Source Sans 3" font-size="10">reasoning</text>
+
+            <!-- Output -->
+            <line x1="418" y1="130" x2="448" y2="130" stroke="#94A3B8" stroke-width="1.5" marker-end="url(#mm-arrow)"/>
+            <rect x="450" y="100" width="135" height="60" rx="10" fill="rgba(16,185,129,0.15)" stroke="#10B981"/>
+            <text x="517" y="123" text-anchor="middle" fill="#10B981" font-family="Bricolage Grotesque" font-weight="700" font-size="12">Structured</text>
+            <text x="517" y="138" text-anchor="middle" fill="#10B981" font-family="Bricolage Grotesque" font-weight="700" font-size="12">extraction</text>
+            <text x="517" y="153" text-anchor="middle" fill="#94A3B8" font-family="Source Sans 3" font-size="9">+ citations</text>
+          </svg>
+        </div>
+
+        <h3>PDF Support &mdash; Skip the OCR Pipeline</h3>
+        <p>Pass a PDF directly as a <code>document</code> content block (base64-encoded or via Files API reference) and Claude reads it natively &mdash; including tables, headings, and the layout structure that OCR'd text would lose. Limits to know: up to ~100 pages per document, ~32MB per file. For longer documents, split into chunks and use your RAG pipeline to shortlist before passing the most relevant pages.</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-panel active" style="display:block;">
+            <pre><code class="language-python">import anthropic, base64
+
+with open("ucc_filing.pdf", "rb") as f:
+    pdf_data = base64.standard_b64encode(f.read()).decode("utf-8")
+
+response = client.messages.create(
+    model="claude-sonnet-4-6",
+    max_tokens=2048,
+    messages=[{
+        "role": "user",
+        "content": [
+            {
+                "type": "document",
+                "source": {"type": "base64", "media_type": "application/pdf", "data": pdf_data},
+                "title": "UCC-1 Filing 2024-001",
+                "citations": {"enabled": True}  # &larr; pairs with Citations
+            },
+            {"type": "text", "text": "Extract debtor, secured party, and collateral. Cite each field."}
+        ]
+    }]
+)</code></pre>
+          </div>
+        </div>
+
+        <h3 style="margin-top:1.5rem;">Vision &mdash; Images as First-Class Inputs</h3>
+        <p>Same content-block paradigm with <code>type: "image"</code>. Useful for: extracting data from charts/graphs, reading screenshots from agents that monitor dashboards, classifying scanned forms when you don't have native PDFs, and processing diagram-heavy documents (architecture diagrams, flowcharts). Cost: image tokens are calculated by image dimensions &mdash; ~1.15 tokens per pixel after resizing. A 1280x800 screenshot is roughly 1500 tokens.</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-panel active" style="display:block;">
+            <pre><code class="language-python">with open("dashboard_screenshot.png", "rb") as f:
+    image_data = base64.standard_b64encode(f.read()).decode("utf-8")
+
+response = client.messages.create(
+    model="claude-sonnet-4-6",
+    max_tokens=1024,
+    messages=[{
+        "role": "user",
+        "content": [
+            {"type": "image",
+             "source": {"type": "base64", "media_type": "image/png", "data": image_data}},
+            {"type": "text", "text": "Read the latency chart and report the p95 value for the last 24h."}
+        ]
+    }]
+)</code></pre>
+          </div>
+        </div>
+
+        <h3 style="margin-top:1.5rem;">Files API &mdash; Upload Once, Reference Many Times</h3>
+        <p>If you reference the same document across many requests &mdash; an agent that answers questions about a 50-page contract over a multi-turn session, or a batch job that runs 1000 questions against the same PDF &mdash; uploading via the <strong>Files API</strong> beats re-encoding the file in every request. You upload once, get a <code>file_id</code>, and reference it by ID in subsequent messages.</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-panel active" style="display:block;">
+            <pre><code class="language-python"># Step 1: upload (do this once)
+file = client.files.create(file=open("contract.pdf", "rb"), purpose="user_data")
+file_id = file.id  # e.g., "file_abc123"
+
+# Step 2: reference by ID in any request
+response = client.messages.create(
+    model="claude-sonnet-4-6",
+    max_tokens=1024,
+    messages=[{
+        "role": "user",
+        "content": [
+            {"type": "document", "source": {"type": "file", "file_id": file_id}},
+            {"type": "text", "text": "What is the termination clause?"}
+        ]
+    }]
+)</code></pre>
+          </div>
+        </div>
+
+        <h3 style="margin-top:1.5rem;">When to Use Each &mdash; Decision Matrix</h3>
+        <div class="animation-container" aria-label="Multimodal input decision matrix" style="padding:1.25rem;">
+          <div class="animation-title">Pick the Right Input Modality</div>
+          <table style="width:100%;border-collapse:collapse;font-size:0.88rem;">
+            <thead>
+              <tr style="background:var(--bg-surface);">
+                <th style="padding:0.6rem 0.75rem;text-align:left;font-family:'Bricolage Grotesque',sans-serif;font-size:0.8rem;color:var(--text-secondary);border-bottom:1px solid var(--code-border);">Scenario</th>
+                <th style="padding:0.6rem 0.75rem;text-align:left;font-family:'Bricolage Grotesque',sans-serif;font-size:0.8rem;color:var(--text-secondary);border-bottom:1px solid var(--code-border);">Use</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);">One-off PDF question, &lt;100 pages</td><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);"><strong style="color:#6366F1;">document content block (base64)</strong> + Citations</td></tr>
+              <tr><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);">Same PDF referenced in 50+ requests</td><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);"><strong style="color:#06B6D4;">Files API</strong> + reference by <code>file_id</code></td></tr>
+              <tr><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);">PDF &gt;100 pages or &gt;32MB</td><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);"><strong style="color:#10B981;">RAG to shortlist + document blocks for top-K</strong></td></tr>
+              <tr><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);">Screenshot, chart, or scanned form</td><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);"><strong style="color:#8B5CF6;">image content block</strong></td></tr>
+              <tr><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);">Diagram/architecture interpretation</td><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);"><strong style="color:#8B5CF6;">image content block</strong> with explicit task prompt</td></tr>
+              <tr><td style="padding:0.55rem 0.75rem;">Mixed content (PDF + screenshots + text)</td><td style="padding:0.55rem 0.75rem;"><strong>All three</strong> in one <code>content</code> array &mdash; Claude reasons across them jointly</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout-warning">
+          <span class="box-label">Cost &amp; Limits</span>
+          <p><strong>PDFs:</strong> ~1500&ndash;3000 tokens per page depending on text density. <strong>Images:</strong> tokens scale with image dimensions; resize before sending if you don't need full resolution. <strong>Files API:</strong> file references count toward your context window the same as inline content &mdash; the upload is for re-use efficiency, not free context. <strong>Caching:</strong> document and image content blocks ARE cacheable via <code>cache_control</code> &mdash; combine with prompt caching for high-frequency document Q&amp;A and you'll see 90% savings on the second-and-onward request.</p>
+        </div>
+
+        <div class="callout-why">
+          <span class="box-label">Why It Matters</span>
+          <p>The single biggest production gap for document agents isn't retrieval quality &mdash; it's <em>format handling</em>. Teams build elegant RAG pipelines, then hit a wall when 60% of their documents are scanned PDFs with tables. Native multimodal support collapses what used to be a 3-stage pipeline (OCR &rarr; layout parsing &rarr; LLM) into a single API call. Combined with Citations and prompt caching, you get a complete document-agent stack with audit-grade provenance for under 100 lines of code.</p>
+        </div>
+      </section>
+
       <!-- ==================== CODE WALKTHROUGH ==================== -->
       <section class="section" id="code-walkthrough">
         <h2 id="code-walkthrough-heading">Code Walkthrough: Chat with Your Docs</h2>
@@ -979,7 +1202,7 @@ def query_rag(question: str, top_k: int = 3) -> str:
     # Step 2: Generate with Claude
     try:
         response = claude.messages.create(
-            model="claude-sonnet-4-20250514",
+            model="claude-sonnet-4-6",
             max_tokens=1024,
             system=(
                 "You are a helpful assistant that answers questions "
@@ -1036,7 +1259,7 @@ async function queryRag(question, topK = 3) {
   // Step 2: Generate with Claude
   try {
     const response = await claude.messages.create({
-      model: "claude-sonnet-4-20250514",
+      model: "claude-sonnet-4-6",
       max_tokens: 1024,
       system:
         "You are a helpful assistant that answers questions " +
@@ -1067,13 +1290,18 @@ console.log(answer);</code></pre>
         </div>
 
         <div class="callout-cert">
-          <span class="box-label" style="color:var(--accent-primary);">&#127891; Cert Tip &mdash; Domain 5.2</span>
+          <span class="box-label" style="color:var(--accent-primary);">&#127891; Cert Tip &mdash; Domain 5.1</span>
           <span style="color:var(--text-secondary);font-size:0.92rem;">The "lost in the middle" effect means information placed in the middle of a long context gets lower recall than information at the start or end. In RAG systems, this means the ORDER of your retrieved chunks matters: place the highest-relevance chunk first. If you retrieve 5 chunks, chunk #3 in the middle gets the least attention. The exam tests awareness of this positional bias and expects you to mitigate it by ranking chunks by relevance score.</span>
         </div>
 
         <div class="callout-cert">
           <span class="box-label" style="color:var(--accent-primary);">&#127891; Cert Tip &mdash; Domain 4.3</span>
           <span style="color:var(--text-secondary);font-size:0.92rem;">RAG provides CONTEXT but not CORRECTNESS guarantees. Even with perfect retrieval, Claude may still misinterpret or combine facts incorrectly. The exam-recommended pattern is to add a validation step after generation: check that cited source numbers actually exist, and that key claims in the answer appear verbatim in the retrieved chunks. Anti-pattern: trusting RAG output without any post-generation validation.</span>
+        </div>
+
+        <div class="callout-cert">
+          <span class="box-label" style="color:var(--accent-primary);">&#127891; Cert Tip &mdash; Domain 5.6 (Provenance)</span>
+          <span style="color:var(--text-secondary);font-size:0.92rem;">Every claim a RAG agent emits must be tagged to its source chunk: <code>{claim, source_id, confidence}</code>. Synthesizing answers without source attribution is an exam anti-pattern &mdash; even when the answer is correct, you can't audit it later. When multiple sources agree, mark the claim as <em>well-established</em>; when sources conflict, surface it as a <em>contested claim</em> with both source pointers rather than silently picking one. The exam tests whether your output schema enforces source mappings, not whether the answer happens to be right.</span>
         </div>
       </section>
 
@@ -1296,7 +1524,7 @@ def query_rag(collection, question: str, top_k: int = 3, verbose: bool = True) -
 
     # Generate
     response = client.messages.create(
-        model="claude-sonnet-4-20250514",
+        model="claude-sonnet-4-6",
         max_tokens=1024,
         system=(
             "You are a helpful assistant that answers questions "

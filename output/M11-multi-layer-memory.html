@@ -199,6 +199,9 @@
       <a href="#tier3-procedural">Tier 3: Procedural Memory</a>
       <a href="#summarization">Summarization Pipeline</a>
       <a href="#persistence">Persistence Layer</a>
+      <a href="#memory-tool">Memory Tool (Managed)</a>
+      <a href="#auto-memory">Auto Memory (Claude Code)</a>
+      <a href="#cert-patterns">Cert-Critical Patterns</a>
       <a href="#code-walkthrough">Code Walkthrough</a>
       <a href="#integration">Integration Demo</a>
       <a href="#exercise">Hands-On Exercise</a>
@@ -577,6 +580,10 @@
         </div>
 
         <div class="bridge">You now understand all three memory tiers. The next question is: how do conversations become memories? That&rsquo;s the summarization pipeline &mdash; the bridge between short-term conversation and long-term storage.</div>
+        <div class="callout-cert" style="background:rgba(212,168,67,.06);border-left:4px solid #D4A843;border-radius:0 8px 8px 0;padding:1.25rem 1.5rem;margin:1.5rem 0;">
+          <span class="box-label" style="color:#D4A843;">&#x1F393; Cert Tip &mdash; Domain 5.6 (Temporal Data)</span>
+          <p>Facts have an "as-of" timestamp. Memory layers must distinguish <em>current</em> facts ("CEO is Alice") from <em>historical</em> facts ("CEO was Bob through 2024-Q3"). Without temporal metadata, your agent will confidently report stale facts as current &mdash; the canonical exam scenario. Store every fact with <code>{value, valid_from, valid_to, source}</code>; on retrieval, prefer the row where <code>valid_to IS NULL</code> for "current" queries and filter by date for "as-of" queries. Episodic memory naturally has timestamps, but semantic and procedural memory often don't &mdash; this is where temporal bugs hide.</p>
+        </div>
       </section>
 
       <!-- ========== SUMMARIZATION PIPELINE ========== -->
@@ -761,7 +768,431 @@
           <p>Long sessions accumulate stale context &mdash; Claude may reference code that&rsquo;s been changed. Mitigations: <code>/compact</code> (lossy), scratchpad files (lossless), subagent delegation (fresh context), or crash recovery manifests for interrupted sessions. The exam tests your knowledge of these tradeoffs.</p>
         </div>
 
-        <div class="bridge">Now that you understand the architecture conceptually, let&rsquo;s build it. The code walkthrough implements all three tiers, the summarization pipeline, and a Memory Manager that orchestrates everything.</div>
+        <div class="bridge">You've built memory yourself across three tiers. But Anthropic also ships a <strong>managed memory tool</strong> that abstracts most of this for you &mdash; handing you a ready-made persistence layer at the cost of less control. Knowing when to reach for it (and when to keep your DIY stack) is the next skill.</div>
+      </section>
+
+      <!-- ========== MEMORY TOOL (MANAGED) ========== -->
+      <section class="section" id="memory-tool">
+        <h2 id="memory-tool-heading">The Managed Memory Tool</h2>
+
+        <p>Claude exposes a built-in <strong>memory tool</strong> in the API: a managed key/value-and-namespace store that persists across requests for a given user, project, or org. Instead of standing up Postgres, building a summarization pipeline, and writing your own retrieval prompts, you call <code>memory.write</code> and <code>memory.read</code> tools and Anthropic handles storage, retrieval, and quota management.</p>
+
+        <div class="tech-def-box">
+          <span class="box-label">Technical Definition</span>
+          <p>The memory tool is enabled like any other built-in tool in your <code>tools</code> array. Claude can call <code>memory.write</code> to store a fact under a namespaced key (e.g. <code>user_prefs/timezone</code>), <code>memory.read</code> to retrieve, and <code>memory.list</code> to enumerate. Memory is scoped: you can isolate per-user, per-session, or per-tenant by passing scoping headers. Storage and retrieval cost is metered separately from input/output tokens.</p>
+        </div>
+
+        <h3>Memory Tool vs Building It Yourself</h3>
+        <div class="animation-container" aria-label="Memory tool versus DIY 3-tier memory comparison" style="padding:1.25rem;">
+          <div class="animation-title">When to Use the Managed Memory Tool</div>
+          <table style="width:100%;border-collapse:collapse;font-size:0.88rem;">
+            <thead>
+              <tr style="background:var(--bg-surface);">
+                <th style="padding:0.6rem 0.75rem;text-align:left;font-family:'Bricolage Grotesque',sans-serif;font-size:0.8rem;color:var(--text-secondary);border-bottom:1px solid var(--code-border);">Concern</th>
+                <th style="padding:0.6rem 0.75rem;text-align:left;font-family:'Bricolage Grotesque',sans-serif;font-size:0.8rem;color:#10B981;border-bottom:1px solid var(--code-border);">Memory tool</th>
+                <th style="padding:0.6rem 0.75rem;text-align:left;font-family:'Bricolage Grotesque',sans-serif;font-size:0.8rem;color:#06B6D4;border-bottom:1px solid var(--code-border);">DIY 3-tier (this module)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);">Setup time</td><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Minutes &mdash; enable the tool, done</td><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Days &mdash; DB schema, summarizer, retrieval logic</td></tr>
+              <tr><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);">Where data lives</td><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Anthropic-managed storage</td><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Your DB, your VPC, your control plane</td></tr>
+              <tr><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);">Retrieval policy</td><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Claude decides when to read</td><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">You decide &mdash; eager, lazy, hybrid</td></tr>
+              <tr><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);">Compliance / data residency</td><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Bound by Anthropic's region/ZDR options</td><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Whatever your infra allows (HIPAA, GDPR, etc.)</td></tr>
+              <tr><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);">Cost model</td><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Per-read/write metering</td><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Your storage + compute</td></tr>
+              <tr><td style="padding:0.55rem 0.75rem;">Best for</td><td style="padding:0.55rem 0.75rem;color:var(--text-secondary);"><strong>Prototypes, B2C agents, simple personalization</strong></td><td style="padding:0.55rem 0.75rem;color:var(--text-secondary);"><strong>Regulated data, complex retrieval, multi-tenant SaaS</strong></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>A common production pattern: use the memory tool for short-lived per-user preferences (timezone, locale, "remember I want JSON output") and keep your DIY tiered system for case-grade context (medical history, account state, audit-relevant decisions). They aren't competitive &mdash; they target different problem shapes.</p>
+
+        <div class="callout-warning">
+          <span class="box-label">When NOT to Use the Memory Tool</span>
+          <p>Three cases where the DIY 3-tier system you just built is the right answer: <strong>(1)</strong> any data subject to data-residency regulation that requires you to store inside your own VPC. <strong>(2)</strong> retrieval policies more nuanced than "Claude reads when it thinks it should" &mdash; e.g., always-load-on-session-start case facts. <strong>(3)</strong> high-volume personalization with thousands of facts per user, where DB indexes give you better economics than per-read metering.</p>
+        </div>
+
+        <div class="bridge">The managed memory tool is API-level &mdash; useful in any Claude application. Claude Code adds a <em>second</em> managed memory system on top of it: <strong>Auto Memory</strong>. Where the memory tool stores facts you tell Claude to remember, Auto Memory is something Claude does on its own, accumulating notes about your project as it works. It's a critical primitive that didn't exist before Claude Code v2.1.59.</div>
+      </section>
+
+      <!-- ========== AUTO MEMORY (CLAUDE CODE) ========== -->
+      <section class="section" id="auto-memory">
+        <h2 id="auto-memory-heading">Auto Memory &mdash; Claude Writes Its Own Notes</h2>
+
+        <p>Imagine pairing with a colleague who silently keeps a running notebook of everything they've learned about your codebase &mdash; build commands they figured out, debugging quirks, your preferences &mdash; and reads that notebook before every session. That's <strong>Auto Memory</strong>: a Claude Code feature where Claude itself decides what's worth remembering across sessions and writes it to disk, without you typing a single line of CLAUDE.md.</p>
+
+        <p>Auto Memory is on by default in Claude Code v2.1.59 and later. Most learners discover it the first time they see <em>"Writing memory&hellip;"</em> in the terminal and wonder what just happened &mdash; that's Claude updating its notes. The course wouldn't be complete without showing you exactly how it works, where it stores data, and how it interacts with the CLAUDE.md memory you write yourself.</p>
+
+        <div class="tech-def-box">
+          <span class="box-label">Technical Definition</span>
+          <p><strong>Auto Memory</strong> is an automatic note-taking system built into Claude Code. Claude decides at runtime whether something is worth remembering &mdash; build commands, debugging insights, architectural decisions, preferences it has discovered &mdash; and writes those notes to a per-project memory directory. The directory is loaded at the start of every future session. Auto Memory is <em>complementary</em> to CLAUDE.md, not a replacement: CLAUDE.md is what <strong>you</strong> tell Claude; Auto Memory is what <strong>Claude tells itself</strong>.</p>
+        </div>
+
+        <h3>CLAUDE.md vs Auto Memory &mdash; Two Complementary Systems</h3>
+        <div class="animation-container" aria-label="CLAUDE.md vs Auto Memory comparison" style="padding:1.25rem;">
+          <div class="animation-title">Two Memory Systems, Different Authors</div>
+          <table style="width:100%;border-collapse:collapse;font-size:0.88rem;">
+            <thead>
+              <tr style="background:var(--bg-surface);">
+                <th style="padding:0.6rem 0.75rem;text-align:left;font-family:'Bricolage Grotesque',sans-serif;font-size:0.8rem;color:var(--text-secondary);border-bottom:1px solid var(--code-border);"></th>
+                <th style="padding:0.6rem 0.75rem;text-align:left;font-family:'Bricolage Grotesque',sans-serif;font-size:0.8rem;color:#EC4899;border-bottom:1px solid var(--code-border);">CLAUDE.md files</th>
+                <th style="padding:0.6rem 0.75rem;text-align:left;font-family:'Bricolage Grotesque',sans-serif;font-size:0.8rem;color:#10B981;border-bottom:1px solid var(--code-border);">Auto Memory</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);font-weight:600;">Who writes it</td><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">You</td><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Claude</td></tr>
+              <tr><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);font-weight:600;">What it contains</td><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Instructions, rules, conventions</td><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Learnings, patterns, discovered preferences</td></tr>
+              <tr><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);font-weight:600;">Scope</td><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Project &middot; user &middot; org</td><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Per working tree (git repo)</td></tr>
+              <tr><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);font-weight:600;">Loaded into</td><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Every session, in full</td><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Every session: first 200 lines or 25KB of <code>MEMORY.md</code></td></tr>
+              <tr><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);font-weight:600;">Best for</td><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Coding standards, architecture, "always do X"</td><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Build quirks, debug insights, preferences Claude discovers</td></tr>
+              <tr><td style="padding:0.55rem 0.75rem;font-weight:600;">Storage</td><td style="padding:0.55rem 0.75rem;color:var(--text-secondary);"><code>./CLAUDE.md</code>, <code>./.claude/CLAUDE.md</code>, <code>~/.claude/CLAUDE.md</code></td><td style="padding:0.55rem 0.75rem;color:var(--text-secondary);"><code>~/.claude/projects/&lt;project&gt;/memory/</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>Both systems load at the start of every conversation. CLAUDE.md captures what you'd otherwise re-explain every session; Auto Memory captures what Claude would otherwise re-discover every session. Together they're a Pareto-optimal split &mdash; you write the unchangeable rules, Claude takes notes on the rest.</p>
+
+        <h3>How It Works &mdash; The Memory Directory</h3>
+        <p>Each git repository gets its own auto memory directory at <code>~/.claude/projects/&lt;project&gt;/memory/</code>. The directory contains an entrypoint plus optional topic files:</p>
+
+        <div class="animation-container" aria-label="Auto memory directory structure showing MEMORY.md as the always-loaded index and topic files loaded on demand" style="padding:1.25rem;">
+          <div class="animation-title">Auto Memory Directory Layout</div>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 280" style="width:100%;max-width:600px;display:block;margin:0 auto;" role="img" aria-label="Diagram showing auto memory directory at ~/.claude/projects/<project>/memory/. Contains MEMORY.md (the index, loaded into every session, capped at 200 lines or 25KB) and topic files like debugging.md, api-conventions.md, build-quirks.md (read on demand by Claude when relevant). MEMORY.md acts as a router pointing to topic files. Files are plain markdown editable via /memory command.">
+            <defs><marker id="am-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#94A3B8"/></marker></defs>
+            <!-- Path -->
+            <text x="300" y="22" text-anchor="middle" fill="#94A3B8" font-family="JetBrains Mono" font-size="11" font-weight="700">~/.claude/projects/&lt;project&gt;/memory/</text>
+            <!-- MEMORY.md (highlighted) -->
+            <rect x="180" y="40" width="240" height="64" rx="10" fill="rgba(212,168,67,0.18)" stroke="#D4A843" stroke-width="2"/>
+            <text x="300" y="62" text-anchor="middle" fill="#D4A843" font-family="Bricolage Grotesque" font-weight="700" font-size="13">MEMORY.md</text>
+            <text x="300" y="78" text-anchor="middle" fill="#94A3B8" font-family="Source Sans 3" font-size="10">always loaded at session start</text>
+            <text x="300" y="94" text-anchor="middle" fill="#94A3B8" font-family="Source Sans 3" font-size="10">capped: first 200 lines or 25KB</text>
+
+            <!-- Lines from MEMORY.md to topic files -->
+            <line x1="220" y1="106" x2="80" y2="158" stroke="#94A3B8" stroke-width="1" stroke-dasharray="3,2" marker-end="url(#am-arrow)"/>
+            <line x1="280" y1="106" x2="220" y2="158" stroke="#94A3B8" stroke-width="1" stroke-dasharray="3,2" marker-end="url(#am-arrow)"/>
+            <line x1="320" y1="106" x2="380" y2="158" stroke="#94A3B8" stroke-width="1" stroke-dasharray="3,2" marker-end="url(#am-arrow)"/>
+            <line x1="380" y1="106" x2="520" y2="158" stroke="#94A3B8" stroke-width="1" stroke-dasharray="3,2" marker-end="url(#am-arrow)"/>
+
+            <!-- Topic files (loaded on demand) -->
+            <rect x="20" y="160" width="120" height="60" rx="6" fill="rgba(99,102,241,0.12)" stroke="#6366F1"/>
+            <text x="80" y="178" text-anchor="middle" fill="#6366F1" font-family="JetBrains Mono" font-weight="700" font-size="10">debugging.md</text>
+            <text x="80" y="194" text-anchor="middle" fill="#94A3B8" font-family="Source Sans 3" font-size="9">on-demand</text>
+            <text x="80" y="208" text-anchor="middle" fill="#94A3B8" font-family="Source Sans 3" font-size="9">debug patterns</text>
+
+            <rect x="160" y="160" width="120" height="60" rx="6" fill="rgba(99,102,241,0.12)" stroke="#6366F1"/>
+            <text x="220" y="178" text-anchor="middle" fill="#6366F1" font-family="JetBrains Mono" font-weight="700" font-size="10">api-conventions.md</text>
+            <text x="220" y="194" text-anchor="middle" fill="#94A3B8" font-family="Source Sans 3" font-size="9">on-demand</text>
+            <text x="220" y="208" text-anchor="middle" fill="#94A3B8" font-family="Source Sans 3" font-size="9">API decisions</text>
+
+            <rect x="320" y="160" width="120" height="60" rx="6" fill="rgba(99,102,241,0.12)" stroke="#6366F1"/>
+            <text x="380" y="178" text-anchor="middle" fill="#6366F1" font-family="JetBrains Mono" font-weight="700" font-size="10">build-quirks.md</text>
+            <text x="380" y="194" text-anchor="middle" fill="#94A3B8" font-family="Source Sans 3" font-size="9">on-demand</text>
+            <text x="380" y="208" text-anchor="middle" fill="#94A3B8" font-family="Source Sans 3" font-size="9">env gotchas</text>
+
+            <rect x="460" y="160" width="120" height="60" rx="6" fill="rgba(99,102,241,0.12)" stroke="#6366F1"/>
+            <text x="520" y="178" text-anchor="middle" fill="#6366F1" font-family="JetBrains Mono" font-weight="700" font-size="10">preferences.md</text>
+            <text x="520" y="194" text-anchor="middle" fill="#94A3B8" font-family="Source Sans 3" font-size="9">on-demand</text>
+            <text x="520" y="208" text-anchor="middle" fill="#94A3B8" font-family="Source Sans 3" font-size="9">user prefs</text>
+
+            <!-- Caption -->
+            <text x="300" y="248" text-anchor="middle" fill="#10B981" font-family="Source Sans 3" font-size="11">MEMORY.md is the index &mdash; topic files are read by Claude on demand using its file tools.</text>
+            <text x="300" y="266" text-anchor="middle" fill="#64748B" font-family="Source Sans 3" font-size="10" font-style="italic">All files are plain markdown &mdash; you can read, edit, or delete them anytime via <code>/memory</code>.</text>
+          </svg>
+        </div>
+
+        <h3>The <code>/memory</code> Command</h3>
+        <p>The <code>/memory</code> slash command is your control plane for both CLAUDE.md and Auto Memory. From inside a session, it lists every file currently loaded (CLAUDE.md, CLAUDE.local.md, rules files, MEMORY.md), lets you toggle Auto Memory on or off, and provides a link to open the auto memory folder. Selecting any file opens it in your editor.</p>
+
+        <p>Two natural prompts trigger Auto Memory writes:</p>
+        <ul>
+          <li><strong>"Remember that X"</strong> &mdash; <em>"Remember that the API tests need a local Redis on port 6380."</em> Claude writes this to Auto Memory.</li>
+          <li><strong>"Add to CLAUDE.md"</strong> &mdash; <em>"Add this to CLAUDE.md."</em> Claude appends the rule to your project CLAUDE.md instead.</li>
+        </ul>
+        <p>Choose deliberately: rules everyone on the team needs go in CLAUDE.md (committed); per-machine quirks Claude discovered go in Auto Memory (machine-local).</p>
+
+        <h3>Configuration &amp; Toggles</h3>
+        <div class="code-block-wrapper">
+          <div class="code-tabs">
+            <button class="code-tab active" onclick="switchTab(this,'am-cfg')" aria-label="Auto memory settings">.claude/settings.json</button>
+          </div>
+          <div class="code-panel active" id="am-cfg">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code>{
+  "autoMemoryEnabled": true,
+  "autoMemoryDirectory": "~/my-custom-memory-dir"
+}</code></pre>
+          </div>
+        </div>
+        <ul style="margin-top:0.75rem;">
+          <li><strong><code>autoMemoryEnabled</code></strong> &mdash; on by default. Toggle from <code>/memory</code> in-session, or set in user/local settings (not project settings, to prevent shared projects from disabling it for your machine).</li>
+          <li><strong><code>autoMemoryDirectory</code></strong> &mdash; redirects the storage location. Accepted from policy, local, and user settings only &mdash; <em>not</em> project settings, so a shared repo cannot redirect your auto memory writes to a sensitive location.</li>
+          <li><strong><code>CLAUDE_CODE_DISABLE_AUTO_MEMORY=1</code></strong> &mdash; environment-variable kill switch for sandboxed runs (CI, ephemeral containers).</li>
+        </ul>
+
+        <div class="callout-warning">
+          <span class="box-label">Auto Memory Is Machine-Local</span>
+          <p>All worktrees and subdirectories of the same git repo share <em>one</em> auto memory directory on your machine. But that directory is <strong>not synced</strong> across machines, cloud environments, or teammates. If you switch laptops, you start with empty Auto Memory. This is by design &mdash; Auto Memory captures machine-specific quirks (your local Redis port, your sandbox URL) that wouldn't be useful or safe to share.</p>
+          <p>For team-shared learnings, use CLAUDE.md (committed to git). For machine-local Claude-discovered notes, use Auto Memory.</p>
+        </div>
+
+        <div class="callout-cert">
+          <span class="box-label" style="color:#D4A843;">&#127891; Cert Tip &mdash; Domain 3 (Memory)</span>
+          <p>The exam may test recognition of when Auto Memory applies vs CLAUDE.md. Pattern: a developer says <em>"every session I have to remind Claude that the local DB is on port 5433."</em> Wrong answer: add to CLAUDE.md. Correct answer: that's exactly what Auto Memory exists for &mdash; it's machine-local, Claude-written, and survives across sessions. Use CLAUDE.md only when the rule should be shared with the team via git.</p>
+        </div>
+
+        <div class="bridge">Now you've seen all five scopes of Claude memory: in-call (M01), cross-call server-assisted (M22, M11, M09), within-session (M26), persistent across sessions both human-authored (CLAUDE.md in M25) and Claude-authored (Auto Memory, this section), and external (this module). Two cert-critical patterns &mdash; crash recovery manifests and tool-output trimming &mdash; close out the memory toolkit before we drop into code.</div>
+      </section>
+
+      <!-- ========== CERT-CRITICAL PATTERNS ========== -->
+      <section class="section" id="cert-patterns">
+        <h2 id="cert-patterns-heading">Claude's Native Memory Landscape &amp; Cert-Critical Patterns</h2>
+
+        <p>You've learned the academic 3-tier architecture (working / episodic / procedural) and the managed memory tool. Before we build it in code, take one step back and look at the <strong>full set of Claude-native memory mechanisms</strong>. Claude provides at least <em>twelve</em> distinct memory primitives across five scopes &mdash; from the conversation-level message array to file-based persistent memory in Claude Code. Knowing all twelve, and which scope each one operates at, is what separates "I learned the API" from "I can architect a Claude system."</p>
+
+        <!-- CLAUDE MEMORY LANDSCAPE SVG -->
+        <div class="animation-container" aria-label="Claude memory mechanisms landscape: five scopes from in-call to external persistence, showing all twelve native Claude memory primitives">
+          <div class="animation-title">Claude Memory Mechanisms &mdash; The Full Landscape</div>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 480" style="width:100%;max-width:600px;display:block;margin:0 auto;" role="img" aria-label="Five horizontal scopes showing all native Claude memory primitives. Scope 1: Within a single API call - system prompt, messages array, tool use cycle. Scope 2: Across API calls (developer-managed) - prompt caching, memory tool, Files API, Citations. Scope 3: Within a session (Claude Code or Agent SDK) - session state with --resume, fork_session, /compact, PreCompact hook, subagent isolation. Scope 4: Persistent across sessions (Claude Code) - CLAUDE.md hierarchy, Skills, Slash commands, Hooks. Scope 5: External persistence (you build) - RAG plus vector DB, 3-tier memory architecture, crash recovery manifests. Each mechanism is annotated with the module that teaches it.">
+            <defs><linearGradient id="memGrad" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#D4A843" stop-opacity="0.05"/><stop offset="100%" stop-color="#EC4899" stop-opacity="0.05"/></linearGradient></defs>
+            <rect x="0" y="0" width="600" height="480" fill="url(#memGrad)"/>
+
+            <!-- Scope 1 -->
+            <rect x="10" y="10" width="580" height="68" rx="8" fill="rgba(212,168,67,0.12)" stroke="#D4A843" stroke-width="1.5"/>
+            <text x="20" y="32" fill="#D4A843" font-family="Bricolage Grotesque" font-weight="700" font-size="12">1. Within a single API call</text>
+            <text x="20" y="46" fill="#94A3B8" font-family="Source Sans 3" font-size="10" font-style="italic">Stateless. Memory = whatever you send in this request.</text>
+            <rect x="20" y="52" width="125" height="20" rx="4" fill="rgba(212,168,67,0.20)" stroke="#D4A843"/><text x="82" y="66" text-anchor="middle" fill="#D4A843" font-family="JetBrains Mono" font-size="9" font-weight="700">system prompt</text>
+            <rect x="155" y="52" width="135" height="20" rx="4" fill="rgba(212,168,67,0.20)" stroke="#D4A843"/><text x="222" y="66" text-anchor="middle" fill="#D4A843" font-family="JetBrains Mono" font-size="9" font-weight="700">messages array</text>
+            <rect x="300" y="52" width="135" height="20" rx="4" fill="rgba(212,168,67,0.20)" stroke="#D4A843"/><text x="367" y="66" text-anchor="middle" fill="#D4A843" font-family="JetBrains Mono" font-size="9" font-weight="700">tool_use cycle</text>
+            <text x="555" y="66" text-anchor="end" fill="#64748B" font-family="JetBrains Mono" font-size="9">M01 &middot; M03 &middot; M05</text>
+
+            <!-- Scope 2 -->
+            <rect x="10" y="86" width="580" height="80" rx="8" fill="rgba(59,130,246,0.10)" stroke="#3B82F6" stroke-width="1.5"/>
+            <text x="20" y="108" fill="#3B82F6" font-family="Bricolage Grotesque" font-weight="700" font-size="12">2. Across API calls &mdash; developer-managed, server-assisted</text>
+            <text x="20" y="122" fill="#94A3B8" font-family="Source Sans 3" font-size="10" font-style="italic">You re-send context every time, but Claude offers caching and managed stores to make it cheap.</text>
+            <rect x="20" y="128" width="120" height="22" rx="4" fill="rgba(59,130,246,0.25)" stroke="#3B82F6"/><text x="80" y="143" text-anchor="middle" fill="#3B82F6" font-family="JetBrains Mono" font-size="9" font-weight="700">prompt caching</text>
+            <rect x="150" y="128" width="115" height="22" rx="4" fill="rgba(59,130,246,0.25)" stroke="#3B82F6"/><text x="207" y="143" text-anchor="middle" fill="#3B82F6" font-family="JetBrains Mono" font-size="9" font-weight="700">memory tool</text>
+            <rect x="275" y="128" width="100" height="22" rx="4" fill="rgba(59,130,246,0.25)" stroke="#3B82F6"/><text x="325" y="143" text-anchor="middle" fill="#3B82F6" font-family="JetBrains Mono" font-size="9" font-weight="700">Files API</text>
+            <rect x="385" y="128" width="100" height="22" rx="4" fill="rgba(59,130,246,0.25)" stroke="#3B82F6"/><text x="435" y="143" text-anchor="middle" fill="#3B82F6" font-family="JetBrains Mono" font-size="9" font-weight="700">Citations</text>
+            <text x="20" y="160" fill="#64748B" font-family="JetBrains Mono" font-size="9">M22 &middot; M11 &middot; M09 &middot; M09</text>
+
+            <!-- Scope 3 -->
+            <rect x="10" y="174" width="580" height="92" rx="8" fill="rgba(139,92,246,0.10)" stroke="#8B5CF6" stroke-width="1.5"/>
+            <text x="20" y="196" fill="#8B5CF6" font-family="Bricolage Grotesque" font-weight="700" font-size="12">3. Within a session &mdash; Claude Code &amp; Agent SDK</text>
+            <text x="20" y="210" fill="#94A3B8" font-family="Source Sans 3" font-size="10" font-style="italic">The runtime keeps conversation state for you; you control compaction and forking.</text>
+            <rect x="20" y="216" width="115" height="22" rx="4" fill="rgba(139,92,246,0.25)" stroke="#8B5CF6"/><text x="78" y="231" text-anchor="middle" fill="#8B5CF6" font-family="JetBrains Mono" font-size="9" font-weight="700">--resume session</text>
+            <rect x="145" y="216" width="100" height="22" rx="4" fill="rgba(139,92,246,0.25)" stroke="#8B5CF6"/><text x="195" y="231" text-anchor="middle" fill="#8B5CF6" font-family="JetBrains Mono" font-size="9" font-weight="700">fork_session</text>
+            <rect x="255" y="216" width="80" height="22" rx="4" fill="rgba(139,92,246,0.25)" stroke="#8B5CF6"/><text x="295" y="231" text-anchor="middle" fill="#8B5CF6" font-family="JetBrains Mono" font-size="9" font-weight="700">/compact</text>
+            <rect x="345" y="216" width="115" height="22" rx="4" fill="rgba(139,92,246,0.25)" stroke="#8B5CF6"/><text x="402" y="231" text-anchor="middle" fill="#8B5CF6" font-family="JetBrains Mono" font-size="9" font-weight="700">PreCompact hook</text>
+            <rect x="470" y="216" width="115" height="22" rx="4" fill="rgba(139,92,246,0.25)" stroke="#8B5CF6"/><text x="527" y="231" text-anchor="middle" fill="#8B5CF6" font-family="JetBrains Mono" font-size="9" font-weight="700">subagent isolation</text>
+            <text x="20" y="258" fill="#64748B" font-family="JetBrains Mono" font-size="9">M26 sessions &middot; M26 fork &middot; M26 compaction &middot; M26 hooks &middot; M14 + M26</text>
+
+            <!-- Scope 4 -->
+            <rect x="10" y="274" width="580" height="92" rx="8" fill="rgba(236,72,153,0.08)" stroke="#EC4899" stroke-width="1.5"/>
+            <text x="20" y="296" fill="#EC4899" font-family="Bricolage Grotesque" font-weight="700" font-size="12">4. Persistent across sessions &mdash; Claude Code file-based memory</text>
+            <text x="20" y="310" fill="#94A3B8" font-family="Source Sans 3" font-size="10" font-style="italic">Files on disk that auto-load every session. CLAUDE.md = you write it. Auto Memory = Claude writes it.</text>
+            <rect x="20" y="316" width="125" height="22" rx="4" fill="rgba(236,72,153,0.25)" stroke="#EC4899"/><text x="82" y="331" text-anchor="middle" fill="#EC4899" font-family="JetBrains Mono" font-size="9" font-weight="700">CLAUDE.md hierarchy</text>
+            <rect x="155" y="316" width="120" height="22" rx="4" fill="rgba(16,185,129,0.30)" stroke="#10B981" stroke-width="2"/><text x="215" y="331" text-anchor="middle" fill="#10B981" font-family="JetBrains Mono" font-size="9" font-weight="700">Auto Memory (NEW)</text>
+            <rect x="285" y="316" width="60" height="22" rx="4" fill="rgba(236,72,153,0.25)" stroke="#EC4899"/><text x="315" y="331" text-anchor="middle" fill="#EC4899" font-family="JetBrains Mono" font-size="9" font-weight="700">Skills</text>
+            <rect x="355" y="316" width="105" height="22" rx="4" fill="rgba(236,72,153,0.25)" stroke="#EC4899"/><text x="407" y="331" text-anchor="middle" fill="#EC4899" font-family="JetBrains Mono" font-size="9" font-weight="700">Slash commands</text>
+            <rect x="470" y="316" width="55" height="22" rx="4" fill="rgba(236,72,153,0.25)" stroke="#EC4899"/><text x="497" y="331" text-anchor="middle" fill="#EC4899" font-family="JetBrains Mono" font-size="9" font-weight="700">Hooks</text>
+            <rect x="535" y="316" width="55" height="22" rx="4" fill="rgba(236,72,153,0.25)" stroke="#EC4899"/><text x="562" y="331" text-anchor="middle" fill="#EC4899" font-family="JetBrains Mono" font-size="9" font-weight="700">Plugins</text>
+            <text x="20" y="358" fill="#64748B" font-family="JetBrains Mono" font-size="9">M25 &middot; M11 (Auto Memory) &middot; M25 skills &middot; M25 commands &middot; M25 + M26 hooks &middot; M25 plugins</text>
+
+            <!-- Scope 5 -->
+            <rect x="10" y="374" width="580" height="92" rx="8" fill="rgba(16,185,129,0.10)" stroke="#10B981" stroke-width="1.5"/>
+            <text x="20" y="396" fill="#10B981" font-family="Bricolage Grotesque" font-weight="700" font-size="12">5. External persistence &mdash; you build it</text>
+            <text x="20" y="410" fill="#94A3B8" font-family="Source Sans 3" font-size="10" font-style="italic">When the managed primitives aren't enough: scale, compliance, custom retrieval policies.</text>
+            <rect x="20" y="416" width="115" height="22" rx="4" fill="rgba(16,185,129,0.25)" stroke="#10B981"/><text x="78" y="431" text-anchor="middle" fill="#10B981" font-family="JetBrains Mono" font-size="9" font-weight="700">RAG + vector DB</text>
+            <rect x="145" y="416" width="155" height="22" rx="4" fill="rgba(16,185,129,0.25)" stroke="#10B981"/><text x="222" y="431" text-anchor="middle" fill="#10B981" font-family="JetBrains Mono" font-size="9" font-weight="700">3-tier memory architecture</text>
+            <rect x="310" y="416" width="155" height="22" rx="4" fill="rgba(16,185,129,0.25)" stroke="#10B981"/><text x="387" y="431" text-anchor="middle" fill="#10B981" font-family="JetBrains Mono" font-size="9" font-weight="700">crash recovery manifests</text>
+            <rect x="475" y="416" width="105" height="22" rx="4" fill="rgba(16,185,129,0.25)" stroke="#10B981"/><text x="527" y="431" text-anchor="middle" fill="#10B981" font-family="JetBrains Mono" font-size="9" font-weight="700">tool trim wrapper</text>
+            <text x="20" y="458" fill="#64748B" font-family="JetBrains Mono" font-size="9">M09 RAG &middot; M11 (this module) &middot; M11 (this section) &middot; M11 (this section)</text>
+          </svg>
+        </div>
+
+        <div class="callout-why">
+          <span class="box-label">Reading the Landscape</span>
+          <p>Three signals tell you which scope to reach for. <strong>Volatility:</strong> if the data lives only for this turn, scope 1 is enough &mdash; just put it in the prompt. <strong>Reuse rate:</strong> if you'll re-send the same context across many calls, scope 2 (prompt caching, Files API) collapses cost by 90%. <strong>Persistence:</strong> if the data must outlive the session, scope 4 (CLAUDE.md, skills) auto-loads forever; scope 5 (your DB) handles scale and compliance. Most production agents use 3&ndash;4 of the five scopes simultaneously &mdash; not because more is better, but because each scope solves a different memory problem.</p>
+        </div>
+
+        <h3 style="margin-top:1.75rem;">Cert-Critical Patterns: Crash Recovery &amp; Tool-Output Trimming</h3>
+
+        <p>Two memory patterns from scope 5 don't fit cleanly into the working/episodic/procedural taxonomy but show up repeatedly as Domain 5 cert questions. Both solve real production failures &mdash; an interrupted long-running session, and a context window flooded with verbose tool output.</p>
+
+        <h3>Pattern 1: Crash Recovery Manifests</h3>
+        <p>You're 40 minutes into a long-running migration. The agent has touched 18 files, run 6 test passes, and has 3 outstanding TODOs in flight. Your laptop reboots for an OS update. <em>Without a manifest</em>, the next session starts cold &mdash; you re-prompt from scratch and Claude rediscovers everything. <em>With a manifest</em>, the next session reads a small structured file and picks up exactly where it left off.</p>
+
+        <div class="tech-def-box">
+          <span class="box-label">Technical Definition</span>
+          <p>A <strong>crash recovery manifest</strong> is a small structured file (typically <code>.claude/state/manifest.json</code> or a markdown scratchpad) that the agent writes after every meaningful step. It captures the minimum information needed to resume work: modified files with one-line summaries, current test status, the agreed-upon plan, and any unresolved TODOs. The manifest lives <em>outside</em> the context window, so it survives session crashes, compaction, and machine restarts.</p>
+        </div>
+
+        <div class="animation-container" aria-label="Crash recovery manifest pattern: the agent writes state to an external manifest file after each step; on restart, the agent reads the manifest and resumes exactly where it left off">
+          <div class="animation-title">Crash Recovery &mdash; Manifest as External State</div>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 320" style="width:100%;max-width:600px;display:block;margin:0 auto;" role="img" aria-label="Two timelines compared. Top: without manifest. Session crashes at step 4 of 7. New session starts from step 1 with no memory. Bottom: with manifest. Each step writes to manifest.json. Session crashes at step 4. New session reads manifest, resumes at step 5. Right side shows the manifest schema: modified_files array, test_status, plan, open_todos.">
+            <defs><marker id="cr-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#94A3B8"/></marker><marker id="cr-fail" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#F43F5E"/></marker><marker id="cr-pass" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#10B981"/></marker></defs>
+            <!-- Top: WITHOUT manifest -->
+            <text x="20" y="30" fill="#F43F5E" font-family="Bricolage Grotesque" font-weight="700" font-size="12">Without manifest</text>
+            <!-- Steps -->
+            <circle cx="50" cy="60" r="12" fill="rgba(16,185,129,0.18)" stroke="#10B981"/><text x="50" y="64" text-anchor="middle" fill="#10B981" font-family="JetBrains Mono" font-size="9" font-weight="700">1</text>
+            <circle cx="90" cy="60" r="12" fill="rgba(16,185,129,0.18)" stroke="#10B981"/><text x="90" y="64" text-anchor="middle" fill="#10B981" font-family="JetBrains Mono" font-size="9" font-weight="700">2</text>
+            <circle cx="130" cy="60" r="12" fill="rgba(16,185,129,0.18)" stroke="#10B981"/><text x="130" y="64" text-anchor="middle" fill="#10B981" font-family="JetBrains Mono" font-size="9" font-weight="700">3</text>
+            <circle cx="170" cy="60" r="12" fill="rgba(244,63,94,0.20)" stroke="#F43F5E" stroke-width="2"/><text x="170" y="64" text-anchor="middle" fill="#F43F5E" font-family="JetBrains Mono" font-size="9" font-weight="700">&#9889;</text>
+            <text x="200" y="64" fill="#F43F5E" font-family="Source Sans 3" font-size="10">crash at step 4</text>
+            <line x1="60" y1="60" x2="80" y2="60" stroke="#94A3B8" stroke-width="1"/>
+            <line x1="100" y1="60" x2="120" y2="60" stroke="#94A3B8" stroke-width="1"/>
+            <line x1="140" y1="60" x2="160" y2="60" stroke="#94A3B8" stroke-width="1"/>
+            <!-- Restart -->
+            <line x1="170" y1="78" x2="50" y2="100" stroke="#F43F5E" stroke-width="1.5" stroke-dasharray="3,2" marker-end="url(#cr-fail)"/>
+            <text x="100" y="102" text-anchor="middle" fill="#F43F5E" font-family="Source Sans 3" font-size="10">restart from scratch</text>
+            <circle cx="50" cy="118" r="12" fill="rgba(244,63,94,0.10)" stroke="#F43F5E"/><text x="50" y="122" text-anchor="middle" fill="#F43F5E" font-family="JetBrains Mono" font-size="9" font-weight="700">1</text>
+            <text x="80" y="122" fill="#F43F5E" font-family="Source Sans 3" font-size="10">re-prompt, rediscover everything &mdash; lost 40 min</text>
+
+            <!-- Divider -->
+            <line x1="20" y1="148" x2="580" y2="148" stroke="#21262D" stroke-width="1" stroke-dasharray="3,3"/>
+
+            <!-- Bottom: WITH manifest -->
+            <text x="20" y="172" fill="#10B981" font-family="Bricolage Grotesque" font-weight="700" font-size="12">With manifest (cert-recommended)</text>
+            <circle cx="50" cy="205" r="12" fill="rgba(16,185,129,0.18)" stroke="#10B981"/><text x="50" y="209" text-anchor="middle" fill="#10B981" font-family="JetBrains Mono" font-size="9" font-weight="700">1</text>
+            <circle cx="90" cy="205" r="12" fill="rgba(16,185,129,0.18)" stroke="#10B981"/><text x="90" y="209" text-anchor="middle" fill="#10B981" font-family="JetBrains Mono" font-size="9" font-weight="700">2</text>
+            <circle cx="130" cy="205" r="12" fill="rgba(16,185,129,0.18)" stroke="#10B981"/><text x="130" y="209" text-anchor="middle" fill="#10B981" font-family="JetBrains Mono" font-size="9" font-weight="700">3</text>
+            <circle cx="170" cy="205" r="12" fill="rgba(244,63,94,0.20)" stroke="#F43F5E" stroke-width="2"/><text x="170" y="209" text-anchor="middle" fill="#F43F5E" font-family="JetBrains Mono" font-size="9" font-weight="700">&#9889;</text>
+            <line x1="60" y1="205" x2="80" y2="205" stroke="#94A3B8" stroke-width="1"/>
+            <line x1="100" y1="205" x2="120" y2="205" stroke="#94A3B8" stroke-width="1"/>
+            <line x1="140" y1="205" x2="160" y2="205" stroke="#94A3B8" stroke-width="1"/>
+            <!-- write to manifest after each step -->
+            <line x1="50" y1="217" x2="50" y2="240" stroke="#06B6D4" stroke-width="1" stroke-dasharray="2,2"/>
+            <line x1="90" y1="217" x2="90" y2="240" stroke="#06B6D4" stroke-width="1" stroke-dasharray="2,2"/>
+            <line x1="130" y1="217" x2="130" y2="240" stroke="#06B6D4" stroke-width="1" stroke-dasharray="2,2"/>
+            <rect x="20" y="240" width="170" height="36" rx="6" fill="rgba(6,182,212,0.10)" stroke="#06B6D4"/>
+            <text x="105" y="256" text-anchor="middle" fill="#06B6D4" font-family="JetBrains Mono" font-size="10" font-weight="700">.claude/state/manifest.json</text>
+            <text x="105" y="269" text-anchor="middle" fill="#94A3B8" font-family="Source Sans 3" font-size="9">written after every step</text>
+            <!-- restart reads manifest -->
+            <line x1="170" y1="220" x2="200" y2="258" stroke="#10B981" stroke-width="1.5" marker-end="url(#cr-pass)"/>
+            <line x1="190" y1="258" x2="215" y2="220" stroke="#10B981" stroke-width="1.5" marker-end="url(#cr-pass)"/>
+            <circle cx="240" cy="205" r="12" fill="rgba(16,185,129,0.30)" stroke="#10B981" stroke-width="2"/><text x="240" y="209" text-anchor="middle" fill="#10B981" font-family="JetBrains Mono" font-size="9" font-weight="700">5</text>
+            <text x="265" y="209" fill="#10B981" font-family="Source Sans 3" font-size="10">resumes at step 5 with full state</text>
+
+            <!-- Manifest schema (right side) -->
+            <rect x="400" y="170" width="180" height="120" rx="8" fill="#0D1117" stroke="#21262D"/>
+            <text x="490" y="188" text-anchor="middle" fill="#94A3B8" font-family="Bricolage Grotesque" font-weight="700" font-size="10">manifest.json schema</text>
+            <text x="410" y="208" fill="#A5D6FF" font-family="JetBrains Mono" font-size="9">{</text>
+            <text x="420" y="220" fill="#A5D6FF" font-family="JetBrains Mono" font-size="9">"modified_files": [...]</text>
+            <text x="420" y="232" fill="#A5D6FF" font-family="JetBrains Mono" font-size="9">"test_status": "3/47 fail"</text>
+            <text x="420" y="244" fill="#A5D6FF" font-family="JetBrains Mono" font-size="9">"plan": [step1, step2,...]</text>
+            <text x="420" y="256" fill="#A5D6FF" font-family="JetBrains Mono" font-size="9">"current_step": 4</text>
+            <text x="420" y="268" fill="#A5D6FF" font-family="JetBrains Mono" font-size="9">"open_todos": [...]</text>
+            <text x="420" y="280" fill="#A5D6FF" font-family="JetBrains Mono" font-size="9">}</text>
+
+            <text x="300" y="312" text-anchor="middle" fill="#64748B" font-family="Source Sans 3" font-size="10" font-style="italic">Pair with the PreCompact hook to also survive auto-compaction (M26).</text>
+          </svg>
+        </div>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs">
+            <button class="code-tab active" onclick="switchTab(this,'mfst-py')" aria-label="Manifest pattern Python">manifest.py</button>
+          </div>
+          <div class="code-panel active" id="mfst-py">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code>from pathlib import Path
+import json
+from datetime import datetime
+
+MANIFEST = Path(".claude/state/manifest.json")
+
+def write_manifest(modified_files, test_status, plan, current_step, open_todos):
+    """Call after EVERY meaningful step in a long-running session."""
+    MANIFEST.parent.mkdir(parents=True, exist_ok=True)
+    MANIFEST.write_text(json.dumps({
+        "updated_at": datetime.utcnow().isoformat(),
+        "modified_files": modified_files,   # [{"path": "src/api.ts", "summary": "added /v2/search"}]
+        "test_status": test_status,         # "47/50 passing; auth_test.ts:42 failing"
+        "plan": plan,                       # ["step1: schema", "step2: route", ...]
+        "current_step": current_step,
+        "open_todos": open_todos,           # ["fix locale fallback", "add rate-limit test"]
+    }, indent=2))
+
+def read_manifest():
+    """First action of any resumed session."""
+    if not MANIFEST.exists():
+        return None
+    return json.loads(MANIFEST.read_text())</code></pre>
+          </div>
+        </div>
+
+        <h3 style="margin-top:1.75rem;">Pattern 2: Trimming Verbose Tool Outputs</h3>
+        <p>The single fastest way to fill a context window is by piping in raw tool output. A <code>Bash(grep -r foo .)</code> call can return 8,000 lines of matches; a <code>Read</code> on a 4,000-line file dumps the entire file into context. Most of those tokens are noise &mdash; the agent only needs the first 50 matches or the relevant function. Trimming tool output <em>before</em> it enters context is a Domain 5 cert pattern that's easy to miss because it lives in the boundary between the tool and the agent.</p>
+
+        <div class="tech-def-box">
+          <span class="box-label">Technical Definition</span>
+          <p><strong>Tool-output trimming</strong> is a pre-context filter applied to tool results before they're appended to the message history. The pattern is: the tool runs, returns its full result; a wrapper trims the result to the relevant slice (top-N matches, head/tail of a file, summary of a long stdout); only the trimmed slice is sent back to the model. The full result is preserved in a side log for debugging; the model only sees the trimmed version.</p>
+        </div>
+
+        <div class="animation-container" aria-label="Tool-output trimming pattern: full tool result is trimmed to relevant slice before entering context" style="padding:1.25rem;">
+          <div class="animation-title">Trim Strategies &mdash; Pick Per Tool</div>
+          <table style="width:100%;border-collapse:collapse;font-size:0.88rem;">
+            <thead>
+              <tr style="background:var(--bg-surface);">
+                <th style="padding:0.6rem 0.75rem;text-align:left;font-family:'Bricolage Grotesque',sans-serif;font-size:0.8rem;color:var(--text-secondary);border-bottom:1px solid var(--code-border);">Tool output type</th>
+                <th style="padding:0.6rem 0.75rem;text-align:left;font-family:'Bricolage Grotesque',sans-serif;font-size:0.8rem;color:var(--text-secondary);border-bottom:1px solid var(--code-border);">Trim strategy</th>
+                <th style="padding:0.6rem 0.75rem;text-align:left;font-family:'Bricolage Grotesque',sans-serif;font-size:0.8rem;color:var(--text-secondary);border-bottom:1px solid var(--code-border);">Limit</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);">grep / search results</td><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Top-N by relevance + total count footer</td><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);color:var(--text-muted);">50 lines + "(... 247 more matches)"</td></tr>
+              <tr><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);">file Read on large files</td><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Offset + limit; agent re-reads on demand</td><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);color:var(--text-muted);">2000 lines per call</td></tr>
+              <tr><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);">Bash stdout / log streams</td><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Head + tail; drop middle</td><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);color:var(--text-muted);">first 30 + last 30 lines</td></tr>
+              <tr><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);">DB query results</td><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">LIMIT clause + row count</td><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);color:var(--text-muted);">100 rows max per call</td></tr>
+              <tr><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);">HTTP responses</td><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Strip headers, body limit</td><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);color:var(--text-muted);">10KB body slice</td></tr>
+              <tr><td style="padding:0.55rem 0.75rem;">test runner output</td><td style="padding:0.55rem 0.75rem;color:var(--text-secondary);">Failures only; pass-count summary</td><td style="padding:0.55rem 0.75rem;color:var(--text-muted);">"47/50 passing" + 3 failure traces</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout-warning">
+          <span class="box-label">The Two-Tier Logging Rule</span>
+          <p><strong>Never throw away the full result &mdash; just don't show it to the model.</strong> The trim pattern is: (1) the tool wrapper writes the <em>full</em> result to a side log on disk (<code>.claude/state/tool_log.jsonl</code>) for debugging and audit. (2) The wrapper returns a <em>trimmed</em> slice to the model. (3) If the agent needs more, it can call the tool again with a different query (more specific grep, different file offset). This way the model sees clean signal but you keep full forensic data.</p>
+        </div>
+
+        <div class="callout-cert">
+          <span class="box-label" style="color:#D4A843;">&#127891; Cert Tip &mdash; Domain 5 (Context Optimization)</span>
+          <p>The exam tests recognition that "context degraded" isn't always solved by a bigger model or longer window &mdash; sometimes it's solved by <em>less input</em>. Trick scenario: an agent's quality drops after a Bash search returns 8000 lines. Wrong answers: switch to Opus, increase max_tokens, add more case facts. Correct answer: trim the tool output to the relevant slice <em>before</em> it enters the model's context. Pair with the manifest pattern above for crash recovery, and you've got the full Domain 5 toolkit.</p>
+        </div>
+
+        <h3 style="margin-top:1.75rem;">Memory &amp; Context Cert Topics &mdash; Where Each Lives</h3>
+        <p>Domain 5 (15% of the exam) tests context management as a single discipline, but the topics are taught across multiple modules. Use this as your study map:</p>
+
+        <div class="animation-container" aria-label="Cert Domain 5 memory and context topic map" style="padding:1.25rem;">
+          <div class="animation-title">Cert Domain 5 &mdash; Topic-to-Module Map</div>
+          <table style="width:100%;border-collapse:collapse;font-size:0.85rem;">
+            <thead>
+              <tr style="background:var(--bg-surface);">
+                <th style="padding:0.55rem 0.75rem;text-align:left;font-family:'Bricolage Grotesque',sans-serif;font-size:0.78rem;color:var(--text-secondary);border-bottom:1px solid var(--code-border);">Cert topic</th>
+                <th style="padding:0.55rem 0.75rem;text-align:left;font-family:'Bricolage Grotesque',sans-serif;font-size:0.78rem;color:var(--text-secondary);border-bottom:1px solid var(--code-border);">Primary module</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td style="padding:0.45rem 0.75rem;border-bottom:1px solid var(--code-border);">"Lost in the middle" effect &amp; position-aware ordering</td><td style="padding:0.45rem 0.75rem;border-bottom:1px solid var(--code-border);color:var(--text-muted);"><a href="M03B-context-engineering.html">M03B</a> Concept 4 + <a href="M08-conversation-management.html">M08</a></td></tr>
+              <tr><td style="padding:0.45rem 0.75rem;border-bottom:1px solid var(--code-border);">Immutable "case facts" blocks at START position</td><td style="padding:0.45rem 0.75rem;border-bottom:1px solid var(--code-border);color:var(--text-muted);"><a href="M03B-context-engineering.html">M03B</a> + <a href="M08-conversation-management.html">M08</a></td></tr>
+              <tr><td style="padding:0.45rem 0.75rem;border-bottom:1px solid var(--code-border);">Progressive summarization risks &amp; context rot</td><td style="padding:0.45rem 0.75rem;border-bottom:1px solid var(--code-border);color:var(--text-muted);"><a href="M03B-context-engineering.html">M03B</a> Concept 5</td></tr>
+              <tr><td style="padding:0.45rem 0.75rem;border-bottom:1px solid var(--code-border);">3-tier memory (working / episodic / procedural)</td><td style="padding:0.45rem 0.75rem;border-bottom:1px solid var(--code-border);color:var(--text-muted);"><strong>M11 (this module)</strong></td></tr>
+              <tr><td style="padding:0.45rem 0.75rem;border-bottom:1px solid var(--code-border);">Managed memory tool (Anthropic-hosted)</td><td style="padding:0.45rem 0.75rem;border-bottom:1px solid var(--code-border);color:var(--text-muted);"><strong>M11 (this module)</strong></td></tr>
+              <tr><td style="padding:0.45rem 0.75rem;border-bottom:1px solid var(--code-border);">Auto Memory (Claude Code, machine-local)</td><td style="padding:0.45rem 0.75rem;border-bottom:1px solid var(--code-border);color:var(--text-muted);"><strong>M11 Auto Memory section</strong></td></tr>
+              <tr><td style="padding:0.45rem 0.75rem;border-bottom:1px solid var(--code-border);">Crash recovery manifests</td><td style="padding:0.45rem 0.75rem;border-bottom:1px solid var(--code-border);color:var(--text-muted);"><strong>M11 (this section)</strong></td></tr>
+              <tr><td style="padding:0.45rem 0.75rem;border-bottom:1px solid var(--code-border);">Trimming verbose tool outputs</td><td style="padding:0.45rem 0.75rem;border-bottom:1px solid var(--code-border);color:var(--text-muted);"><strong>M11 (this section)</strong></td></tr>
+              <tr><td style="padding:0.45rem 0.75rem;border-bottom:1px solid var(--code-border);"><code>/compact</code> discipline (manual at 50%)</td><td style="padding:0.45rem 0.75rem;border-bottom:1px solid var(--code-border);color:var(--text-muted);"><a href="M26-hooks-sessions-agent-sdk.html">M26</a> Compaction section</td></tr>
+              <tr><td style="padding:0.45rem 0.75rem;border-bottom:1px solid var(--code-border);">CLAUDE.md compaction preservation directive</td><td style="padding:0.45rem 0.75rem;border-bottom:1px solid var(--code-border);color:var(--text-muted);"><a href="M26-hooks-sessions-agent-sdk.html">M26</a> Compaction section</td></tr>
+              <tr><td style="padding:0.45rem 0.75rem;border-bottom:1px solid var(--code-border);"><code>PreCompact</code> hook for critical state</td><td style="padding:0.45rem 0.75rem;border-bottom:1px solid var(--code-border);color:var(--text-muted);"><a href="M26-hooks-sessions-agent-sdk.html">M26</a> 12 hook events</td></tr>
+              <tr><td style="padding:0.45rem 0.75rem;border-bottom:1px solid var(--code-border);">Subagent context isolation</td><td style="padding:0.45rem 0.75rem;border-bottom:1px solid var(--code-border);color:var(--text-muted);"><a href="M14-multi-agent-systems.html">M14</a> + <a href="M26-hooks-sessions-agent-sdk.html">M26</a></td></tr>
+              <tr><td style="padding:0.45rem 0.75rem;border-bottom:1px solid var(--code-border);">Session forking (<code>fork_session</code>) vs resume</td><td style="padding:0.45rem 0.75rem;border-bottom:1px solid var(--code-border);color:var(--text-muted);"><a href="M26-hooks-sessions-agent-sdk.html">M26</a> Sessions</td></tr>
+              <tr><td style="padding:0.45rem 0.75rem;border-bottom:1px solid var(--code-border);">Information provenance &amp; claim-source mappings</td><td style="padding:0.45rem 0.75rem;border-bottom:1px solid var(--code-border);color:var(--text-muted);"><a href="M27B-cert-domain-5-6-deep-dive.html">M27B</a></td></tr>
+              <tr><td style="padding:0.45rem 0.75rem;border-bottom:1px solid var(--code-border);">Temporal data &amp; as-of reasoning</td><td style="padding:0.45rem 0.75rem;border-bottom:1px solid var(--code-border);color:var(--text-muted);"><a href="M27B-cert-domain-5-6-deep-dive.html">M27B</a></td></tr>
+              <tr><td style="padding:0.45rem 0.75rem;border-bottom:1px solid var(--code-border);">Stratified sampling + field-level confidence</td><td style="padding:0.45rem 0.75rem;border-bottom:1px solid var(--code-border);color:var(--text-muted);"><a href="M27B-cert-domain-5-6-deep-dive.html">M27B</a></td></tr>
+              <tr><td style="padding:0.45rem 0.75rem;">Synthesis output: well-established vs contested</td><td style="padding:0.45rem 0.75rem;color:var(--text-muted);"><a href="M27B-cert-domain-5-6-deep-dive.html">M27B</a></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="bridge">With crash recovery and tool-output trimming closing the cert-critical patterns, you now have the complete memory toolkit. Time to drop into code: implementing the 3-tier system end-to-end, the version you'd reach for when the managed memory tool isn't a fit.</div>
       </section>
 
       <!-- ========== CODE WALKTHROUGH ========== -->
@@ -1554,7 +1985,7 @@ async def summarize_conversation(
 
     try:
         response = await client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model="claude-sonnet-4-6",
             max_tokens=500,
             system=(
                 "You are a conversation summarizer. Extract the key information "
@@ -1608,7 +2039,7 @@ async function summarizeConversation(
 
   try {
     const response = await anthropic.messages.create({
-      model: "claude-sonnet-4-20250514",
+      model: "claude-sonnet-4-6",
       max_tokens: 500,
       system:
         "You are a conversation summarizer. Extract key information " +
@@ -1768,7 +2199,7 @@ If you find relevant past interactions, reference them naturally."""
 
     # Call Claude with memory context
     response = await client.messages.create(
-        model="claude-sonnet-4-20250514",
+        model="claude-sonnet-4-6",
         max_tokens=1024,
         system=system_prompt,
         messages=[{"role": "user", "content": user_msg}],
@@ -1885,7 +2316,7 @@ ${memoryContext}
 Use the memory context above to provide informed, personalized responses.`;
 
   const response = await client.messages.create({
-    model: "claude-sonnet-4-20250514",
+    model: "claude-sonnet-4-6",
     max_tokens: 1024,
     system: systemPrompt,
     messages: [{ role: "user", content: userMsg }],
@@ -2102,7 +2533,7 @@ class MemoryManager:
             transcript = "\n".join(f"{m['role']}: {m['content']}" for m in self.conversation_log)
             try:
                 response = client.messages.create(
-                    model="claude-sonnet-4-20250514", max_tokens=300,
+                    model="claude-sonnet-4-6", max_tokens=300,
                     system="Summarize this conversation in 2-3 sentences. Preserve key decisions, preferences, and facts.",
                     messages=[{"role": "user", "content": transcript}],
                 )
@@ -2127,7 +2558,7 @@ class MemoryManager:
         memory_context = self.build_context(user_message)
 
         response = client.messages.create(
-            model="claude-sonnet-4-20250514", max_tokens=1024,
+            model="claude-sonnet-4-6", max_tokens=1024,
             system=(
                 "You are a helpful assistant with multi-session memory. "
                 "Use the memory context below to inform your responses.\n\n"

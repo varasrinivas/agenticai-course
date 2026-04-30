@@ -1,0 +1,1626 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>M03B: Context Engineering &mdash; Curating What the Model Sees | Building AI Agents with Claude</title>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;700;800&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --bg-primary:#0A1628;--bg-secondary:#111D33;--bg-card:#162033;--bg-surface:#1A2740;
+      --text-primary:#E8ECF1;--text-secondary:#94A3B8;--text-muted:#64748B;
+      --accent-primary:#D4A843;--accent-hover:#E5BC5A;--accent-muted:rgba(212,168,67,0.15);
+      --success:#10B981;--success-bg:rgba(16,185,129,0.1);
+      --warning:#F59E0B;--warning-bg:rgba(245,158,11,0.1);
+      --error:#F43F5E;--error-bg:rgba(244,63,94,0.1);
+      --info:#3B82F6;--info-bg:rgba(59,130,246,0.1);
+      --track-foundations:#6366F1;--track-color:var(--track-foundations);--track-capstones:#D4A843;
+      --code-bg:#0D1117;--code-border:#21262D;--code-text:#C9D1D9;
+      --transition-fast:150ms;--transition-normal:300ms;--transition-slow:500ms;
+    }
+    body{background:var(--bg-primary);color:var(--text-primary);font-family:'Source Sans 3',sans-serif;font-size:1.05rem;line-height:1.7;min-height:100vh}
+    .top-progress{position:fixed;top:0;left:0;right:0;height:4px;background:var(--bg-surface);z-index:200}
+    .top-progress .fill{height:100%;background:linear-gradient(90deg,var(--track-color),var(--accent-primary));width:16%;border-radius:0 2px 2px 0}
+    .course-header{background:var(--bg-secondary);border-bottom:1px solid var(--code-border);padding:1.25rem 2rem}
+    .course-header-inner{max-width:1200px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem}
+    .course-title{font-family:'Bricolage Grotesque',sans-serif;font-size:0.95rem;font-weight:600;color:var(--text-secondary)}
+    .track-badge{display:inline-flex;align-items:center;gap:0.5rem;background:rgba(99,102,241,0.15);border:1px solid var(--track-color);border-radius:20px;padding:0.25rem 0.75rem;font-family:'Bricolage Grotesque',sans-serif;font-size:0.8rem;font-weight:600;color:var(--track-color)}
+    .track-badge .dot{width:8px;height:8px;border-radius:50%;background:var(--track-color)}
+    .header-meta{display:flex;gap:1.5rem;font-size:0.85rem;color:var(--text-muted)}
+    .page-container{max-width:1200px;margin:0 auto;padding:2rem;display:grid;grid-template-columns:240px 1fr;gap:3rem}
+    .sidebar-nav{position:sticky;top:2rem;height:calc(100vh - 4rem);overflow-y:auto;padding-right:1rem}
+    .sidebar-nav::-webkit-scrollbar{width:3px}.sidebar-nav::-webkit-scrollbar-thumb{background:var(--bg-surface);border-radius:3px}
+    .sidebar-title{font-family:'Bricolage Grotesque',sans-serif;font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:var(--text-muted);margin-bottom:1rem}
+    .sidebar-nav a{display:block;padding:0.4rem 0.75rem;margin-bottom:0.15rem;font-family:'Bricolage Grotesque',sans-serif;font-size:0.82rem;font-weight:600;color:var(--text-muted);text-decoration:none;border-left:2px solid transparent;border-radius:0 4px 4px 0;transition:all var(--transition-fast)}
+    .sidebar-nav a:hover{color:var(--text-primary);background:var(--bg-surface)}
+    .sidebar-nav a.active{color:var(--accent-primary);border-left-color:var(--accent-primary);background:var(--accent-muted)}
+    .sidebar-nav a.sub{padding-left:1.5rem;font-size:0.78rem;font-weight:400}
+    .content{max-width:800px}.section{margin-bottom:4rem}
+    h1{font-family:'Bricolage Grotesque',sans-serif;font-weight:800;font-size:2.25rem;line-height:1.2;margin-bottom:0.75rem}
+    h2{font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:1.5rem;color:var(--text-primary);margin:2.5rem 0 1rem;padding-top:1rem;border-top:1px solid var(--code-border)}
+    h2:first-of-type{border-top:none}
+    h3{font-family:'Bricolage Grotesque',sans-serif;font-weight:600;font-size:1.25rem;color:var(--text-primary);margin:2rem 0 0.75rem}
+    h4{font-family:'Bricolage Grotesque',sans-serif;font-weight:600;font-size:1rem;margin-bottom:1rem}
+    p{margin-bottom:1rem}ul,ol{margin:0.5rem 0 1rem 1.5rem}li{margin-bottom:0.4rem}strong{font-weight:600}
+    .analogy-box,.tech-def-box,.callout-why,.callout-warning,.callout-security,.callout-cost,.callout-cert{border-left:4px solid;border-radius:0 8px 8px 0;padding:1.25rem 1.5rem;margin:1.5rem 0}
+    .analogy-box{background:var(--accent-muted);border-left-color:var(--accent-primary)}
+    .tech-def-box{background:var(--info-bg);border-left-color:var(--info)}
+    .callout-why{background:var(--success-bg);border-left-color:var(--success)}
+    .callout-warning{background:var(--warning-bg);border-left-color:var(--warning)}
+    .callout-security{background:var(--error-bg);border-left-color:var(--error)}
+    .callout-cost{background:var(--warning-bg);border-left-color:var(--accent-primary)}
+    .callout-cert{background:rgba(212,168,67,0.06);border-left-color:var(--accent-primary)}
+    .box-label{font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:0.9rem;display:block;margin-bottom:0.4rem}
+    .analogy-box .box-label{color:var(--accent-primary)}.tech-def-box .box-label{color:var(--info)}.callout-why .box-label{color:var(--success)}.callout-warning .box-label{color:var(--warning)}.callout-security .box-label{color:var(--error)}.callout-cost .box-label{color:var(--accent-primary)}.callout-cert .box-label{color:var(--accent-primary)}
+    .term-tooltip{position:relative;color:var(--accent-primary);cursor:help;border-bottom:1px dashed var(--accent-primary)}
+    .term-tooltip .tooltip-content{position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);background:var(--bg-card);border:1px solid var(--accent-primary);border-radius:8px;padding:0.75rem 1rem;font-size:0.85rem;color:var(--text-primary);width:280px;opacity:0;pointer-events:none;transition:opacity var(--transition-fast);z-index:10;line-height:1.5;box-shadow:0 4px 20px rgba(0,0,0,0.4)}
+    .term-tooltip:hover .tooltip-content,.term-tooltip:focus .tooltip-content{opacity:1;pointer-events:auto}
+    .code-block-wrapper{background:var(--code-bg);border:1px solid var(--code-border);border-radius:12px;margin:1.5rem 0;overflow:hidden}
+    .code-tabs{display:flex;gap:0;border-bottom:1px solid var(--code-border);background:var(--bg-surface)}
+    .code-tab{padding:0.5rem 1.25rem;background:none;border:none;font-family:'JetBrains Mono',monospace;font-size:0.8rem;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;color:var(--text-muted);transition:all var(--transition-fast)}
+    .code-tab:hover{color:var(--text-primary)}.code-tab.active{color:var(--accent-primary);border-bottom-color:var(--accent-primary)}
+    .code-panel{display:none;position:relative}.code-panel.active{display:block}
+    .code-panel pre{margin:0;padding:1.25rem;overflow-x:auto;font-family:'JetBrains Mono',monospace;font-size:0.85rem;line-height:1.6}
+    .code-panel pre code{background:none;color:var(--code-text)}
+    .copy-btn{position:absolute;top:0.75rem;right:0.75rem;background:var(--bg-surface);border:1px solid var(--code-border);color:var(--text-muted);padding:0.3rem 0.6rem;border-radius:6px;font-size:0.75rem;cursor:pointer;font-family:'JetBrains Mono',monospace;transition:all var(--transition-fast)}
+    .copy-btn:hover{color:var(--accent-primary);border-color:var(--accent-primary)}
+    .code-single{background:var(--code-bg);border:1px solid var(--code-border);border-radius:12px;margin:1.5rem 0;overflow:hidden;position:relative}
+    .code-single pre{margin:0;padding:1.25rem;overflow-x:auto;font-family:'JetBrains Mono',monospace;font-size:0.85rem;line-height:1.6}
+    .code-single .copy-btn{top:0.5rem;right:0.5rem}
+    .output-block{background:var(--code-bg);border:1px solid var(--code-border);border-radius:8px;padding:1rem 1.25rem;margin:0.75rem 0 1.5rem;font-family:'JetBrains Mono',monospace;font-size:0.85rem;color:var(--success);line-height:1.5;white-space:pre-wrap}
+    .output-label{font-family:'Bricolage Grotesque',sans-serif;font-size:0.8rem;font-weight:600;color:var(--text-muted);margin-bottom:0.25rem}
+    .animation-container{background:var(--bg-secondary);border:1px solid var(--code-border);border-radius:12px;padding:2rem;margin:2rem 0;position:relative;min-height:300px;overflow:hidden}
+    .animation-title{font-family:'Bricolage Grotesque',sans-serif;font-size:0.85rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:1.25rem}
+    .animation-controls{display:flex;gap:0.5rem;position:absolute;bottom:1rem;right:1rem}
+    .anim-btn{background:var(--bg-card);border:1px solid var(--code-border);color:var(--text-primary);width:36px;height:36px;border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:1rem;transition:all var(--transition-fast)}
+    .anim-btn:hover{border-color:var(--accent-primary);color:var(--accent-primary)}
+    .quiz-question{background:var(--bg-card);border-radius:12px;padding:1.5rem;margin-bottom:1.5rem}
+    .quiz-question h4{font-family:'Bricolage Grotesque',sans-serif;font-weight:600;margin-bottom:1rem;font-size:1rem}
+    .quiz-option{padding:0.75rem 1rem;margin:0.5rem 0;border:1px solid var(--code-border);border-radius:8px;cursor:pointer;transition:all var(--transition-fast);display:flex;align-items:center;gap:0.75rem}
+    .quiz-option:hover{border-color:var(--accent-primary)}
+    .quiz-option.correct{border-color:var(--success);background:var(--success-bg)}.quiz-option.incorrect{border-color:var(--error);background:var(--error-bg)}.quiz-option.disabled{pointer-events:none}
+    .quiz-marker{width:24px;height:24px;border-radius:50%;border:2px solid var(--code-border);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:0.75rem;font-weight:700}
+    .quiz-option.correct .quiz-marker{border-color:var(--success);color:var(--success)}.quiz-option.incorrect .quiz-marker{border-color:var(--error);color:var(--error)}
+    .quiz-feedback{margin-top:0.75rem;padding:0.75rem;border-radius:8px;font-size:0.9rem;display:none}
+    .quiz-feedback.show{display:block}.quiz-feedback.correct-fb{background:var(--success-bg);color:var(--success)}.quiz-feedback.incorrect-fb{background:var(--error-bg);color:var(--error)}
+    .quiz-score{background:var(--bg-card);border-radius:12px;padding:1.5rem;text-align:center;margin-top:2rem}
+    .quiz-score .score-num{font-family:'Bricolage Grotesque',sans-serif;font-size:2.5rem;font-weight:800;color:var(--accent-primary)}
+    .module-nav{display:flex;justify-content:space-between;align-items:center;padding:1.5rem 0;margin:2rem 0;border-top:1px solid var(--code-border);flex-wrap:wrap;gap:0.75rem}
+    .module-nav a{display:flex;align-items:center;gap:0.5rem;color:var(--accent-primary);text-decoration:none;font-family:'Bricolage Grotesque',sans-serif;font-weight:600;font-size:0.9rem;padding:0.5rem 1rem;border:1px solid var(--code-border);border-radius:8px;transition:all var(--transition-fast)}
+    .module-nav a:hover{border-color:var(--accent-primary);background:var(--accent-muted)}
+    .objectives-list{list-style:none;margin-left:0}.objectives-list li{padding:0.5rem 0 0.5rem 2rem;position:relative}
+    .objectives-list li::before{content:'';position:absolute;left:0;top:0.85rem;width:16px;height:16px;border-radius:4px;border:2px solid var(--track-color);background:rgba(99,102,241,0.1)}
+
+    /* === ANIMATION 1: CONTEXT INVENTORY (stacked layers) === */
+    .ctx-stack{display:flex;flex-direction:column;gap:0.5rem;max-width:520px;margin:0 auto}
+    .ctx-layer{padding:0.7rem 1rem;border-radius:8px;display:flex;justify-content:space-between;align-items:center;font-family:'JetBrains Mono',monospace;font-size:0.78rem;opacity:0;transform:translateX(-20px);transition:all 0.5s ease}
+    .ctx-layer.visible{opacity:1;transform:translateX(0)}
+    .ctx-layer .layer-name{font-weight:600}
+    .ctx-layer .layer-tokens{font-size:0.72rem;color:var(--text-secondary);font-weight:600}
+    .ctx-l-system{background:rgba(99,102,241,0.18);border:1px solid rgba(99,102,241,0.4);color:#a5b4fc}
+    .ctx-l-tools{background:rgba(139,92,246,0.18);border:1px solid rgba(139,92,246,0.4);color:#c4b5fd}
+    .ctx-l-history{background:rgba(6,182,212,0.18);border:1px solid rgba(6,182,212,0.4);color:#67e8f9}
+    .ctx-l-retrieved{background:rgba(245,158,11,0.18);border:1px solid rgba(245,158,11,0.4);color:#fbbf24}
+    .ctx-l-toolresults{background:rgba(244,63,94,0.18);border:1px solid rgba(244,63,94,0.4);color:#fda4af}
+    .ctx-l-current{background:rgba(16,185,129,0.18);border:1px solid rgba(16,185,129,0.4);color:#6ee7b7}
+    .ctx-meter{margin-top:1rem;padding:0.6rem 1rem;background:var(--bg-card);border:1px solid var(--code-border);border-radius:8px;text-align:center;font-family:'JetBrains Mono',monospace;font-size:0.85rem;max-width:520px;margin-left:auto;margin-right:auto}
+    .ctx-meter .meter-num{color:var(--accent-primary);font-weight:600;font-size:1rem}
+    .ctx-meter .meter-bar{margin-top:0.5rem;height:6px;background:var(--bg-surface);border-radius:3px;overflow:hidden}
+    .ctx-meter .meter-fill{height:100%;background:linear-gradient(90deg,var(--success),var(--warning),var(--error));width:0%;transition:width 0.5s ease}
+
+    /* === ANIMATION 2: FOUR LEVERS === */
+    .levers-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:0.75rem;margin-bottom:1rem}
+    .lever-col{background:var(--bg-card);border:1px solid var(--code-border);border-radius:8px;padding:0.85rem;text-align:center;transition:all 0.4s ease;opacity:0.45}
+    .lever-col.active{opacity:1;border-color:var(--track-color);transform:translateY(-3px);box-shadow:0 6px 20px rgba(99,102,241,0.2)}
+    .lever-col h4{font-size:0.85rem;font-family:'Bricolage Grotesque',sans-serif;color:var(--track-color);margin-bottom:0.4rem}
+    .lever-col .lever-icon{font-size:1.5rem;margin-bottom:0.4rem;display:block}
+    .lever-col p{font-size:0.72rem;color:var(--text-secondary);line-height:1.4;margin-bottom:0}
+    .lever-fact{margin-top:0.85rem;padding:0.85rem;background:var(--code-bg);border-left:3px solid var(--track-color);border-radius:0 6px 6px 0;font-family:'JetBrains Mono',monospace;font-size:0.78rem;color:var(--code-text);min-height:60px;transition:all 0.4s ease}
+    .lever-fact .lever-label{display:block;font-size:0.7rem;color:var(--text-muted);margin-bottom:0.3rem;text-transform:uppercase;letter-spacing:0.05em}
+    .lever-fact .lever-shows{color:#6ee7b7;margin-top:0.3rem}
+
+    /* === ANIMATION 3: STATIC vs DYNAMIC (cache hits) === */
+    .cache-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+    .cache-col{background:var(--bg-card);border:1px solid var(--code-border);border-radius:8px;padding:1rem}
+    .cache-col h4{font-family:'Bricolage Grotesque',sans-serif;font-size:0.9rem;text-align:center;margin-bottom:0.75rem}
+    .cache-good h4{color:var(--success)}
+    .cache-bad h4{color:var(--error)}
+    .cache-block{padding:0.5rem 0.7rem;margin:0.35rem 0;border-radius:6px;font-family:'JetBrains Mono',monospace;font-size:0.72rem;display:flex;justify-content:space-between;align-items:center;opacity:0;transform:translateY(8px);transition:all 0.4s ease}
+    .cache-block.visible{opacity:1;transform:translateY(0)}
+    .cache-block.static{background:rgba(99,102,241,0.15);border:1px solid rgba(99,102,241,0.3);color:#a5b4fc}
+    .cache-block.dynamic{background:rgba(245,158,11,0.15);border:1px solid rgba(245,158,11,0.3);color:#fbbf24}
+    .cache-status{font-size:0.7rem;font-weight:600;padding:2px 6px;border-radius:4px;opacity:0;transition:opacity 0.3s}
+    .cache-status.visible{opacity:1}
+    .cache-status.hit{background:rgba(16,185,129,0.25);color:#6ee7b7}
+    .cache-status.miss{background:rgba(244,63,94,0.25);color:#fda4af}
+    .cache-summary{margin-top:0.75rem;padding-top:0.75rem;border-top:1px solid var(--code-border);font-size:0.78rem;text-align:center;font-family:'JetBrains Mono',monospace;opacity:0;transition:opacity 0.4s}
+    .cache-summary.visible{opacity:1}
+
+    /* === ANIMATION 4: POSITION EFFECTS === */
+    .pos-bars{display:flex;flex-direction:column;gap:1rem;max-width:580px;margin:0 auto}
+    .pos-row{display:flex;align-items:center;gap:0.75rem}
+    .pos-label{width:90px;font-family:'JetBrains Mono',monospace;font-size:0.78rem;color:var(--text-secondary);text-align:right;flex-shrink:0}
+    .pos-window{flex:1;height:38px;background:var(--bg-card);border:1px solid var(--code-border);border-radius:6px;display:flex;align-items:center;padding:0 0.5rem;gap:3px;position:relative}
+    .pos-cell{flex:1;height:24px;background:rgba(100,116,139,0.3);border-radius:3px}
+    .pos-needle{height:24px;background:var(--accent-primary);border-radius:3px;flex:1;transform:scaleY(0);transform-origin:bottom;transition:transform 0.5s ease}
+    .pos-needle.visible{transform:scaleY(1)}
+    .pos-acc{width:90px;text-align:left;font-family:'JetBrains Mono',monospace;font-size:0.78rem;font-weight:600;flex-shrink:0;opacity:0;transition:opacity 0.4s}
+    .pos-acc.visible{opacity:1}
+    .pos-acc.high{color:#6ee7b7}.pos-acc.med{color:#fbbf24}.pos-acc.low{color:#fda4af}
+
+    /* === ANIMATION 5: CONTEXT ROT === */
+    .rot-frame{display:grid;grid-template-columns:1fr 1fr;gap:1rem;align-items:start}
+    .rot-col{background:var(--bg-card);border:1px solid var(--code-border);border-radius:8px;padding:0.85rem;max-height:280px;overflow-y:auto}
+    .rot-col h4{font-family:'Bricolage Grotesque',sans-serif;font-size:0.85rem;text-align:center;margin-bottom:0.6rem}
+    .rot-bad h4{color:var(--error)}
+    .rot-good h4{color:var(--success)}
+    .rot-msg{padding:0.4rem 0.6rem;margin:0.3rem 0;border-radius:5px;font-family:'JetBrains Mono',monospace;font-size:0.7rem;line-height:1.4;border-left:3px solid var(--code-border);transition:all 0.4s ease}
+    .rot-msg.stale{background:rgba(244,63,94,0.08);border-left-color:var(--error);color:#fda4af;text-decoration:line-through;opacity:0.55}
+    .rot-msg.fresh{background:rgba(16,185,129,0.08);border-left-color:var(--success);color:#6ee7b7}
+    .rot-msg.summary{background:rgba(99,102,241,0.1);border-left-color:var(--track-color);color:#a5b4fc;font-style:italic}
+
+    /* === RESPONSIVE === */
+    @media(max-width:900px){
+      .page-container{grid-template-columns:1fr;padding:1rem}
+      .sidebar-nav{position:fixed;bottom:0;left:0;right:0;height:auto;max-height:40vh;background:var(--bg-secondary);border-top:1px solid var(--code-border);z-index:100;padding:1rem;display:none}
+      .sidebar-nav.open{display:block}
+      .sidebar-toggle{display:flex;position:fixed;bottom:1rem;right:1rem;z-index:101;background:var(--accent-primary);color:var(--bg-primary);border:none;width:48px;height:48px;border-radius:50%;align-items:center;justify-content:center;cursor:pointer;font-size:1.25rem;box-shadow:0 4px 15px rgba(0,0,0,0.3)}
+      .levers-grid{grid-template-columns:repeat(2,1fr)}
+      .cache-grid,.rot-frame{grid-template-columns:1fr}
+      h1{font-size:1.75rem}
+    }
+    @media(min-width:901px){.sidebar-toggle{display:none}}
+    @media(prefers-reduced-motion:reduce){
+      *,*::before,*::after{animation-duration:0.01ms!important;animation-iteration-count:1!important;transition-duration:0.01ms!important}
+      .ctx-layer,.cache-block,.lever-col,.pos-needle,.cache-status,.cache-summary,.pos-acc,.rot-msg{opacity:1;transform:none}
+      .pos-needle{transform:scaleY(1)}
+    }
+    :focus-visible{outline:2px solid var(--accent-primary);outline-offset:2px;border-radius:4px}
+  </style>
+</head>
+<body>
+  <div class="top-progress" role="progressbar" aria-label="Course progress: Module 5 of 31" aria-valuenow="5" aria-valuemin="1" aria-valuemax="31"><div class="fill"></div></div>
+
+  <header class="course-header"><div class="course-header-inner">
+    <div><div class="course-title">Building AI Agents with Claude</div></div>
+    <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;">
+      <span class="track-badge"><span class="dot"></span>Track 1: Foundations</span>
+      <div class="header-meta"><span>Module 3B &middot; after M03</span><span>50-60 min</span><span>Beginner &rarr; Intermediate</span></div>
+    </div>
+  </div></header>
+
+  <div class="page-container">
+    <nav class="sidebar-nav" id="sidebar" aria-label="Module sections">
+      <div class="sidebar-title">On this page</div>
+      <a href="#objectives">Learning Objectives</a>
+      <a href="#prompt-vs-context">Prompt vs. Context</a>
+      <a href="#inventory">The Inventory</a>
+      <a href="#four-levers">The Four Levers</a>
+      <a href="#static-dynamic">Static vs. Dynamic</a>
+      <a href="#position">Position Effects</a>
+      <a href="#rot">Context Rot</a>
+      <a href="#code-walkthrough">Code Walkthrough</a>
+      <a href="#hands-on">Hands-On Lab</a>
+      <a href="#step1" class="sub">Step 1: Diagnose</a>
+      <a href="#step2" class="sub">Step 2: Compress</a>
+      <a href="#step3" class="sub">Step 3: Compare</a>
+      <a href="#quiz">Knowledge Check</a>
+      <a href="#summary">Summary</a>
+    </nav>
+
+    <main class="content" role="main">
+
+      <!-- ==================== TOP NAV ==================== -->
+      <section class="section" style="margin-bottom:2rem;">
+        <div class="module-nav" style="border-top:none;margin-top:0;">
+          <a href="M03-prompts.html" aria-label="Previous module: Prompts">&larr; M03: Prompts</a>
+          <a href="index.html" aria-label="Course Home" title="Course Home" style="font-size:1.2rem;">&#x1F3E0; Home</a>
+          <a href="M04-structured-output.html" aria-label="Next module: Structured Output">M04: Structured Output &rarr;</a>
+        </div>
+        <h1>M03B: Context Engineering &mdash; Curating What the Model Sees</h1>
+        <p style="color:var(--text-secondary);font-size:1.1rem;">M03 taught you how to <em>write</em> the message. This module teaches you how to <em>curate</em> everything the model sees on each turn &mdash; system prompt, tools, history, retrieved docs, tool results &mdash; under a finite budget. Get this right and every later module (RAG, memory, multi-agent, caching) snaps into place.</p>
+      </section>
+
+      <!-- ==================== OBJECTIVES ==================== -->
+      <section class="section" id="objectives">
+        <h2 id="objectives-heading">Learning Objectives</h2>
+        <ul class="objectives-list" aria-label="Learning objectives">
+          <li>Distinguish prompt engineering (writing the message) from context engineering (curating what the model sees) and explain why both matter</li>
+          <li>Inventory the six layers Claude reads on every API call: system, tools, history, retrieved docs, tool results, current turn</li>
+          <li>Apply the four context-engineering levers &mdash; <strong>add, compress, retrieve, offload</strong> &mdash; to a context budget problem</li>
+          <li>Order static and dynamic content correctly so prompt caching can hit, and explain the lost-in-the-middle effect</li>
+          <li>Diagnose context rot in a long-running agent transcript and fix it without losing critical case facts</li>
+        </ul>
+      </section>
+
+      <!-- ==================== PROMPT vs CONTEXT ==================== -->
+      <section class="section" id="prompt-vs-context">
+        <h2 id="prompt-vs-context-heading">Prompt Engineering vs. Context Engineering</h2>
+        <p>In M03 you learned <strong>prompt engineering</strong> &mdash; the craft of writing a single message that guides Claude toward the answer you want. Roles, few-shot examples, structured output instructions, chain-of-thought. That is the visible iceberg.</p>
+
+        <p>Underneath it is the bigger discipline: <strong>context engineering</strong>. Every API call assembles a stack of content for the model &mdash; the system prompt you wrote, the tool definitions you registered, the conversation history that has piled up, any retrieved documents, the results of past tool calls, and finally the user's current message. The model attends to <em>all of it</em>. Most learners only think about the last line they typed. The other 95% sets the constraints, the priors, and (when neglected) the failure modes.</p>
+
+        <p>Here's the working definition we'll use throughout the course:</p>
+
+        <div class="tech-def-box">
+          <span class="box-label">&#128208; Technical Definition</span>
+          <p><strong>Context engineering</strong> is the practice of deciding what content occupies the model's <span class="term-tooltip" tabindex="0">context window<span class="tooltip-content">The fixed-size buffer of tokens the model reads on each call. For Claude Sonnet 4.6 it's up to 200K tokens (or 1M with the long-context variant). Everything &mdash; system, tools, history, retrieved docs, tool results, current message, AND the response &mdash; competes for this space.</span></span> on each turn, in what order, and how it is compressed or fetched. Prompt engineering is a sub-discipline of context engineering that handles the <em>authoring</em> of one piece of that context (typically the system prompt or current user message).</p>
+        </div>
+
+        <p>Why split them out? Because the levers are different. Prompt engineering asks "what words go in this message?" Context engineering asks "what gets included at all, in what order, fresh or cached, full or summarized?" The first is a writing problem. The second is a budgeting problem. By M11 you'll be juggling both on every agent you build &mdash; this module makes the budgeting half explicit.</p>
+      </section>
+
+      <!-- ==================== CONCEPT 1: THE INVENTORY ==================== -->
+      <section class="section" id="inventory">
+        <h2 id="inventory-heading">Concept 1: What Does the Model Actually See?</h2>
+        <p>Before you can engineer context, you have to know what's in it. On every Anthropic API call, Claude receives a layered stack of content. Most of it isn't in the <code>messages</code> array you passed in &mdash; it's assembled by the SDK from various parameters. Let's enumerate the six layers.</p>
+
+        <div class="analogy-box">
+          <span class="box-label">&#128161; Everyday Analogy</span>
+          <p><strong>Before you walk into a courtroom</strong>, the lawyer hands the jury an evidence binder &mdash; pages of contracts, photos, prior testimony, and exhibits. The closing argument the lawyer delivers is what the jury hears <em>last</em>, but they've been reading the binder for hours.</p>
+          <p>The pain: rookie lawyers obsess over the closing argument and pay no attention to what's in the binder. The jury reaches its verdict based mostly on the binder. A great closing on top of a sloppy binder loses the case.</p>
+          <p>The mapping: the closing argument is your <strong>prompt</strong>. The binder is your <strong>context</strong>. Claude is the jury &mdash; it reads everything. If your retrieved chunks are irrelevant, your tool definitions are vague, or your history is full of resolved errors, no amount of clever prompting fixes the verdict.</p>
+        </div>
+
+        <h3 id="six-layers">The Six Layers, From Top to Bottom</h3>
+        <p>Every Anthropic API call assembles these six layers into one giant <span class="term-tooltip" tabindex="0">prompt<span class="tooltip-content">Note: in the SDK you don't see "the prompt" as one string &mdash; you pass <code>system</code>, <code>tools</code>, <code>messages</code> separately. But internally the model receives a single sequence of tokens assembled from all of them.</span></span> the model reads in order. Each one costs tokens, each one influences the answer:</p>
+        <ol>
+          <li><strong>System prompt</strong> &mdash; your instructions, persona, output rules. Set once per conversation. Static across turns.</li>
+          <li><strong>Tool definitions</strong> &mdash; the JSON Schema for every tool you've registered. Even if Claude doesn't use any, it reads them all to decide. Static across turns.</li>
+          <li><strong>Conversation history</strong> &mdash; every prior user/assistant message, in order. Grows with every turn.</li>
+          <li><strong>Retrieved documents</strong> &mdash; chunks injected by your RAG pipeline (M09). Different on every turn.</li>
+          <li><strong>Tool results</strong> &mdash; the JSON output of past tool calls, embedded as messages. Accumulates with every tool use.</li>
+          <li><strong>Current user turn</strong> &mdash; the message you just appended. Smallest, most-attended layer.</li>
+        </ol>
+
+        <p>Here's what that stack looks like for a UCC research agent on turn 8 of a session:</p>
+
+        <div class="animation-container" aria-label="Animation showing the six layers of context stacking up with token counts">
+          <div class="animation-title">The Context Stack &mdash; Turn 8 of a UCC Research Agent</div>
+          <div class="ctx-stack" id="ctxStack">
+            <div class="ctx-layer ctx-l-system" id="ctxL1"><span class="layer-name">System prompt</span><span class="layer-tokens">420 tok</span></div>
+            <div class="ctx-layer ctx-l-tools" id="ctxL2"><span class="layer-name">Tool definitions (5 tools)</span><span class="layer-tokens">1,180 tok</span></div>
+            <div class="ctx-layer ctx-l-history" id="ctxL3"><span class="layer-name">Conversation history (7 prior turns)</span><span class="layer-tokens">3,250 tok</span></div>
+            <div class="ctx-layer ctx-l-retrieved" id="ctxL4"><span class="layer-name">Retrieved RAG chunks (top 5)</span><span class="layer-tokens">2,800 tok</span></div>
+            <div class="ctx-layer ctx-l-toolresults" id="ctxL5"><span class="layer-name">Tool results (4 prior calls)</span><span class="layer-tokens">1,950 tok</span></div>
+            <div class="ctx-layer ctx-l-current" id="ctxL6"><span class="layer-name">Current user message</span><span class="layer-tokens">85 tok</span></div>
+          </div>
+          <div class="ctx-meter" id="ctxMeter">
+            <span>Total input: <span class="meter-num" id="ctxTotal">0</span> tokens</span>
+            <div class="meter-bar"><div class="meter-fill" id="ctxFill"></div></div>
+            <span style="font-size:0.7rem;color:var(--text-muted);">User message is <span style="color:var(--success)" id="ctxPct">0%</span> of total input</span>
+          </div>
+          <div class="animation-controls">
+            <button class="anim-btn" onclick="ctxPlay()" aria-label="Play context stack animation">&#9658;</button>
+            <button class="anim-btn" onclick="ctxPause()" aria-label="Pause">&#10074;&#10074;</button>
+            <button class="anim-btn" onclick="ctxRestart()" aria-label="Restart">&#8635;</button>
+          </div>
+        </div>
+
+        <div class="callout-why">
+          <span class="box-label">&#9989; What Just Happened?</span>
+          <p>The user typed 85 tokens. The model received <strong>9,685 tokens</strong>. That means 99.1% of what shaped Claude's answer was content <em>you</em> assembled &mdash; not what the user said. Welcome to context engineering. From now on, when an agent gives a bad answer, your first question shouldn't be "was the prompt wrong?" &mdash; it should be "what did the model actually see?"</p>
+        </div>
+
+        <div class="callout-warning">
+          <span class="box-label">&#9888;&#65039; Common Misconceptions</span>
+          <p><strong>"Tool definitions don't count if Claude doesn't use them."</strong> &mdash; They do. Every tool's JSON Schema is in the prompt the model reads, even on turns where no tool is called. 5 tools at ~250 tokens each = 1,250 tokens of overhead per turn.</p>
+          <p><strong>"The model focuses on the user message."</strong> &mdash; The model attends across the whole window. With 99% of tokens elsewhere, those other layers dominate the output unless you actively curate them.</p>
+          <p><strong>"Long context windows mean I can stop worrying about size."</strong> &mdash; A 1M-token window doesn't mean 1M useful tokens. Cost scales linearly with input. Latency rises with input. And a noisy 50K-token context often beats a noisy 500K-token context, because signal-to-noise matters more than raw capacity.</p>
+        </div>
+      </section>
+
+      <!-- ==================== CONCEPT 2: FOUR LEVERS ==================== -->
+      <section class="section" id="four-levers">
+        <h2 id="four-levers-heading">Concept 2: The Four Levers</h2>
+        <p>Now that you can see the stack, the question becomes: what do you do when it gets too big, too noisy, or too stale? Every context-engineering decision &mdash; <em>every one</em> &mdash; comes down to one of four moves. The rest of Track 3 is just specialized applications of these four.</p>
+
+        <div class="analogy-box">
+          <span class="box-label">&#128161; Everyday Analogy</span>
+          <p><strong>You're packing for a two-week trip and your suitcase is full.</strong> You have four options for any item. (1) Just throw it in. (2) Use packing cubes to compress your shirts so they take half the space. (3) Leave it home and ship it ahead to the hotel for pickup if you need it. (4) Hand it to a travel buddy who will carry it on their trip and meet you there.</p>
+          <p>The pain: people default to option 1, the bag bursts, and they end up paying overweight fees or leaving things behind randomly at the airport.</p>
+          <p>The mapping: those four moves are <strong>add, compress, retrieve, offload</strong>. They are the only four moves you have when curating context. Every RAG technique, every memory architecture, every multi-agent pattern you'll learn later is one of these four wearing a different costume.</p>
+        </div>
+
+        <p>Here are the four levers, with what each one does to a single fact:</p>
+
+        <div class="animation-container" aria-label="Animation showing how a fact moves through the four context-engineering levers">
+          <div class="animation-title">A Single Fact, Through Four Levers</div>
+          <div class="levers-grid" id="leversGrid">
+            <div class="lever-col" id="lever-add" data-step="0">
+              <span class="lever-icon">&#10133;</span>
+              <h4>ADD</h4>
+              <p>Include the fact directly in context. Simple, but spends tokens every turn.</p>
+            </div>
+            <div class="lever-col" id="lever-compress" data-step="1">
+              <span class="lever-icon">&#128261;</span>
+              <h4>COMPRESS</h4>
+              <p>Summarize or truncate the fact. Lossy but cheap. Good for old turns.</p>
+            </div>
+            <div class="lever-col" id="lever-retrieve" data-step="2">
+              <span class="lever-icon">&#128269;</span>
+              <h4>RETRIEVE</h4>
+              <p>Store the fact externally, fetch it only when relevant. Lossless but adds a lookup step.</p>
+            </div>
+            <div class="lever-col" id="lever-offload" data-step="3">
+              <span class="lever-icon">&#128106;</span>
+              <h4>OFFLOAD</h4>
+              <p>Hand the fact to a subagent with its own context. Returns only a summary.</p>
+            </div>
+          </div>
+          <div class="lever-fact" id="leverFact">
+            <span class="lever-label" id="leverLabel">Press play &mdash; the fact will travel through each lever</span>
+            <span id="leverModel"><em>Original fact: "The 2019 GE Capital filing for Acme Corp lists collateral as 'all assets, tangible and intangible, including all goodwill, IP, and accounts receivable, valued at $42.3M as of filing date.'"</em></span>
+            <span class="lever-shows" id="leverShows"></span>
+          </div>
+          <div class="animation-controls">
+            <button class="anim-btn" onclick="leversPlay()" aria-label="Play levers animation">&#9658;</button>
+            <button class="anim-btn" onclick="leversPause()" aria-label="Pause">&#10074;&#10074;</button>
+            <button class="anim-btn" onclick="leversRestart()" aria-label="Restart">&#8635;</button>
+          </div>
+        </div>
+
+        <div class="callout-why">
+          <span class="box-label">&#9989; What Just Happened?</span>
+          <p>The same fact lived four different lives. <strong>Add</strong> kept all 38 words but burned 38 tokens every turn. <strong>Compress</strong> kept the gist (8 tokens) but lost the exact dollar amount &mdash; fine for "what does this filing cover?", fatal for "what's the collateral value?" <strong>Retrieve</strong> kept the full fact in a vector database, paid 0 tokens until the user asked something relevant, then fetched it. <strong>Offload</strong> spawned a subagent that read the whole filing, did the analysis, and returned only a 1-sentence verdict. There is no universally right answer &mdash; the lever depends on access frequency, freshness needs, and how lossy you can afford to be.</p>
+        </div>
+
+        <h3 id="lever-decision">When to Reach for Each Lever</h3>
+        <p>A simple decision heuristic, refined throughout Track 3:</p>
+        <ul>
+          <li><strong>Add</strong> when the fact is small, accessed every turn, and exact wording matters &mdash; e.g. policy rules, the user's name, current date.</li>
+          <li><strong>Compress</strong> when the fact's gist matters but specifics are nice-to-have &mdash; e.g. "we already discussed the auth flow and concluded X" replacing 12 turns of debate.</li>
+          <li><strong>Retrieve</strong> when the fact is one of many candidates and only relevant ones matter &mdash; e.g. one document out of 10,000 in a knowledge base.</li>
+          <li><strong>Offload</strong> when the fact requires its own reasoning chain that would otherwise pollute your main context &mdash; e.g. "research the entire filing history of this debtor" handed to a subagent.</li>
+        </ul>
+      </section>
+
+      <!-- ==================== CONCEPT 3: STATIC vs DYNAMIC ==================== -->
+      <section class="section" id="static-dynamic">
+        <h2 id="static-dynamic-heading">Concept 3: Static vs. Dynamic Context</h2>
+        <p>Inside your context stack, some layers don't change between turns &mdash; the system prompt, the tool definitions, sometimes a fixed reference doc. Other layers change constantly &mdash; the conversation history grows, retrieved chunks differ per query. This split has a name and a consequence.</p>
+
+        <div class="tech-def-box">
+          <span class="box-label">&#128208; Technical Definition</span>
+          <p><strong>Static context</strong> is content that is identical across multiple consecutive API calls in a session. <strong>Dynamic context</strong> changes between calls. The split matters because Anthropic's <span class="term-tooltip" tabindex="0">prompt caching<span class="tooltip-content">A feature where Anthropic stores the result of processing a prefix of your prompt and reuses it on subsequent calls if the prefix is identical. Cached input tokens cost ~10% of regular input tokens. Cache lifetime is 5 minutes by default. Covered in detail in M22.</span></span> only kicks in for <em>prefixes that match exactly</em>. If you put dynamic content before static content, none of the static content can be cached &mdash; you're billed full price every turn.</p>
+        </div>
+
+        <h3 id="cache-rule">The Ordering Rule</h3>
+        <p>The rule is simple: <strong>static blocks first, dynamic blocks last</strong>. The cache reuses a prefix as long as the prefix is byte-identical to a previous call. As soon as the prefix diverges, every byte after that point is "new" &mdash; even if it would have been identical further down. So the order has to be: static system, static tools, static reference doc, then dynamic history, then dynamic current turn.</p>
+
+        <div class="animation-container" aria-label="Animation comparing two message orderings, showing cache hits vs misses">
+          <div class="animation-title">Same Content, Different Order &mdash; What the Cache Sees</div>
+          <div class="cache-grid">
+            <div class="cache-col cache-good">
+              <h4>&#9989; Static-First (cacheable)</h4>
+              <div class="cache-block static" id="g1"><span>system: "You are..."</span><span class="cache-status hit" id="g1s">HIT</span></div>
+              <div class="cache-block static" id="g2"><span>tools: [search_filings, ...]</span><span class="cache-status hit" id="g2s">HIT</span></div>
+              <div class="cache-block static" id="g3"><span>reference_doc: "UCC schema..."</span><span class="cache-status hit" id="g3s">HIT</span></div>
+              <div class="cache-block dynamic" id="g4"><span>history: turns 1&ndash;7</span><span class="cache-status miss" id="g4s">NEW</span></div>
+              <div class="cache-block dynamic" id="g5"><span>user: "what's the latest filing?"</span><span class="cache-status miss" id="g5s">NEW</span></div>
+              <div class="cache-summary" id="gSum">Cached: 4,200 tok &middot; New: 280 tok &middot; Cost: $0.002</div>
+            </div>
+            <div class="cache-col cache-bad">
+              <h4>&#10060; Dynamic-First (cache miss)</h4>
+              <div class="cache-block dynamic" id="b1"><span>history: turns 1&ndash;7</span><span class="cache-status miss" id="b1s">NEW</span></div>
+              <div class="cache-block static" id="b2"><span>system: "You are..."</span><span class="cache-status miss" id="b2s">NEW</span></div>
+              <div class="cache-block static" id="b3"><span>tools: [search_filings, ...]</span><span class="cache-status miss" id="b3s">NEW</span></div>
+              <div class="cache-block static" id="b4"><span>reference_doc: "UCC schema..."</span><span class="cache-status miss" id="b4s">NEW</span></div>
+              <div class="cache-block dynamic" id="b5"><span>user: "what's the latest filing?"</span><span class="cache-status miss" id="b5s">NEW</span></div>
+              <div class="cache-summary" id="bSum">Cached: 0 tok &middot; New: 4,480 tok &middot; Cost: $0.013</div>
+            </div>
+          </div>
+          <div class="animation-controls">
+            <button class="anim-btn" onclick="cachePlay()" aria-label="Play cache animation">&#9658;</button>
+            <button class="anim-btn" onclick="cachePause()" aria-label="Pause">&#10074;&#10074;</button>
+            <button class="anim-btn" onclick="cacheRestart()" aria-label="Restart">&#8635;</button>
+          </div>
+        </div>
+
+        <div class="callout-cost">
+          <span class="box-label">&#128176; Cost Implication</span>
+          <p>Same exact content, just different ordering &mdash; the static-first version costs <strong>6.5x less</strong> per call once the cache warms up. Across 1,000 daily calls in a production agent, that's the difference between $2/day and $13/day. Multiply by months and that's a five-figure annual swing on ordering alone. M22 will cover the full caching mechanics; for now, just remember: static first.</p>
+        </div>
+
+        <div class="callout-cost">
+          <span class="box-label" style="color:var(--accent-primary);">&#128176; Production Note &mdash; Prompt Caching</span>
+          <p>Prompt caching reuses prefixes that match exactly. A common production bug: identical content in different order produces no cache hits because the prefix breaks. Use <code>cache_control</code> markers to declare cacheable boundaries explicitly. <em>Note: per the official cert exam guide, prompt-caching <strong>implementation details are out of scope</strong> &mdash; the exam expects you to know caching exists and to recognize prefix-stable ordering, but won't ask about cache TTL, hit rates, or pricing.</em></p>
+        </div>
+      </section>
+
+      <!-- ==================== CONCEPT 4: POSITION EFFECTS ==================== -->
+      <section class="section" id="position">
+        <h2 id="position-heading">Concept 4: Position Effects &mdash; Lost in the Middle</h2>
+        <p>Even if every byte you put in context is high-quality, <em>where</em> you put it matters. Large language models attend more strongly to content at the start and end of the context window than to content in the middle. This isn't a bug to fix &mdash; it's a property of how attention layers work, replicated across nearly every model family. It's been documented under the name "<span class="term-tooltip" tabindex="0">lost in the middle<span class="tooltip-content">From the 2023 Liu et al. paper "Lost in the Middle: How Language Models Use Long Contexts." Researchers placed the same answer at different positions in a long context and measured retrieval accuracy. Accuracy was high at the start (~75%), high at the end (~70%), and dropped to ~45% in the middle.</span></span>."</p>
+
+        <div class="analogy-box">
+          <span class="box-label">&#128161; Everyday Analogy</span>
+          <p><strong>Think about a 23-bullet meeting agenda.</strong> A week later, ask a participant what was decided. They'll remember bullet 1 (the opening goal), bullet 23 (the action items), and maybe one of the most heated discussions in the middle. Bullets 7&ndash;15? Forgotten.</p>
+          <p>The pain: organizers stuff the most important detail at bullet 12 because that's when the meeting hit its stride &mdash; and a week later nobody remembers it.</p>
+          <p>The mapping: Claude reads context the same way. Information at position 1 and at the very end is recalled with high fidelity. Information in the middle of a long context, even when literally present, is sometimes effectively invisible to the model's reasoning.</p>
+        </div>
+
+        <p>Here's what that looks like when researchers test the same fact at different positions:</p>
+
+        <div class="animation-container" aria-label="Bar chart showing model accuracy when the answer is placed at different positions in a long context">
+          <div class="animation-title">Same Needle, Three Haystacks &mdash; Recall by Position</div>
+          <div class="pos-bars" id="posBars">
+            <div class="pos-row">
+              <span class="pos-label">START</span>
+              <div class="pos-window">
+                <div class="pos-needle visible" style="background:var(--success)" id="pn1"></div>
+                <div class="pos-cell"></div><div class="pos-cell"></div><div class="pos-cell"></div><div class="pos-cell"></div><div class="pos-cell"></div><div class="pos-cell"></div><div class="pos-cell"></div><div class="pos-cell"></div><div class="pos-cell"></div>
+              </div>
+              <span class="pos-acc high" id="pa1">76% recall</span>
+            </div>
+            <div class="pos-row">
+              <span class="pos-label">MIDDLE</span>
+              <div class="pos-window">
+                <div class="pos-cell"></div><div class="pos-cell"></div><div class="pos-cell"></div><div class="pos-cell"></div>
+                <div class="pos-needle visible" style="background:var(--warning)" id="pn2"></div>
+                <div class="pos-cell"></div><div class="pos-cell"></div><div class="pos-cell"></div><div class="pos-cell"></div><div class="pos-cell"></div>
+              </div>
+              <span class="pos-acc med" id="pa2">47% recall</span>
+            </div>
+            <div class="pos-row">
+              <span class="pos-label">END</span>
+              <div class="pos-window">
+                <div class="pos-cell"></div><div class="pos-cell"></div><div class="pos-cell"></div><div class="pos-cell"></div><div class="pos-cell"></div><div class="pos-cell"></div><div class="pos-cell"></div><div class="pos-cell"></div><div class="pos-cell"></div>
+                <div class="pos-needle visible" style="background:var(--success)" id="pn3"></div>
+              </div>
+              <span class="pos-acc high" id="pa3">71% recall</span>
+            </div>
+          </div>
+          <p style="text-align:center;color:var(--text-muted);font-size:0.78rem;margin-top:1rem;">Source: Liu et al. 2023 &mdash; pattern reproduces across most modern LLMs including Claude, GPT-4, Llama 2.</p>
+          <div class="animation-controls">
+            <button class="anim-btn" onclick="posPlay()" aria-label="Play position animation">&#9658;</button>
+            <button class="anim-btn" onclick="posRestart()" aria-label="Restart">&#8635;</button>
+          </div>
+        </div>
+
+        <h3 id="position-rules">What This Means For Your Code</h3>
+        <p>Three concrete rules drop out of the position-effects research:</p>
+        <ol>
+          <li><strong>Put the most critical instruction at the start of the system prompt</strong>, not buried at line 47.</li>
+          <li><strong>Put the most-relevant retrieved chunk at the end of the retrieved-docs block</strong> (closest to the user's current question). Re-ranking pipelines exist exactly for this reason &mdash; they reorder chunks so the best one is last.</li>
+          <li><strong>Repeat critical case facts</strong> &mdash; once in the system prompt (start position) and once just before the user message (end position). This redundancy costs ~50 tokens and meaningfully improves recall.</li>
+        </ol>
+
+        <div class="callout-cert">
+          <span class="box-label">&#127891; Cert Tip &mdash; Domain 5.1</span>
+          <p>The "lost in the middle" effect is a recurring exam topic. Trick questions describe a long-context agent that "reads" a 50-page document and ask why it misses a fact in the middle. The answer is always position effects, not "the model wasn't given the document." Mitigation: use immutable case-facts blocks at the START position, position the current query at the END.</p>
+        </div>
+      </section>
+
+      <!-- ==================== CONCEPT 5: CONTEXT ROT ==================== -->
+      <section class="section" id="rot">
+        <h2 id="rot-heading">Concept 5: Context Rot</h2>
+        <p>Long-running agents accumulate junk. Tool results from searches that went nowhere. Plans that got abandoned three turns later. User instructions that were superseded ("actually, ignore that last bit"). Errors that were resolved. The model dutifully attends to all of it &mdash; including the parts that no longer apply. The result: by turn 30, your agent retries already-failed searches, contradicts its own corrections, and answers questions you never asked.</p>
+
+        <div class="analogy-box">
+          <span class="box-label">&#128161; Everyday Analogy</span>
+          <p><strong>Think about an email thread that's been forwarded fifteen times</strong> with everyone leaving the full quoted history. The actual decision is buried under "Re: Re: Re: Re: FW: FW:" &mdash; and a new participant joining the thread acts on stale information from forward #3 because they read top-down and that's where the dollar figure happened to live.</p>
+          <p>The pain: every reply makes the thread harder to read, not easier. People reply to the wrong version of the spec. Decisions get re-litigated. The thread becomes net-negative information.</p>
+          <p>The mapping: the same thing happens in agent context windows. Each turn appends. Nothing self-cleans. By turn 25, the model is reading a thread that's mostly noise, and a small but critical fact at turn 12 is buried under tool-result garbage from turns 13&ndash;24.</p>
+        </div>
+
+        <div class="tech-def-box">
+          <span class="box-label">&#128208; Technical Definition</span>
+          <p><strong>Context rot</strong> is the degradation of agent quality caused by accumulated stale, contradictory, or low-relevance content in the context window. It's distinct from running out of tokens &mdash; you can hit context rot at 60% window utilization. The key signal is <em>signal-to-noise ratio</em>, not raw size.</p>
+        </div>
+
+        <p>Here's a real symptom you'll see in production: the agent works great for the first 10 turns, then starts visibly degrading. Token usage may still be well under the limit. The fix isn't a bigger window &mdash; it's a smaller, cleaner one. You compact, summarize, or evict the rotted content.</p>
+
+        <div class="animation-container" aria-label="Animation showing a rotted transcript before and after garbage collection">
+          <div class="animation-title">Before and After a Compaction Pass</div>
+          <div class="rot-frame">
+            <div class="rot-col rot-bad">
+              <h4>BEFORE: 30 turns, lots of rot</h4>
+              <div class="rot-msg fresh">user: research debtor "Acme Corp"</div>
+              <div class="rot-msg stale">tool: search_filings("Acme") &rarr; 12 results</div>
+              <div class="rot-msg stale">tool: search_filings("ACME CORP") &rarr; ERROR: rate limit</div>
+              <div class="rot-msg stale">tool: search_filings("ACME CORP") &rarr; 12 results (duplicate)</div>
+              <div class="rot-msg stale">user: actually ignore the 2018 filings</div>
+              <div class="rot-msg stale">assistant: ok, focusing on 2019+</div>
+              <div class="rot-msg stale">tool: get_filing("F-2018-04421") &rarr; {...}</div>
+              <div class="rot-msg stale">user: I said ignore 2018!</div>
+              <div class="rot-msg stale">assistant: apologies, switching to 2019+</div>
+              <div class="rot-msg stale">tool: get_filing("F-2018-04422") &rarr; ERROR</div>
+              <div class="rot-msg fresh">user: what's the total collateral value across all 2019+ filings?</div>
+            </div>
+            <div class="rot-col rot-good" id="rotGood">
+              <h4>AFTER: 8 turns, clean signal</h4>
+              <div class="rot-msg summary" id="rg1" style="opacity:0">[summary] Researched debtor "Acme Corp." User narrowed scope to 2019+ filings only.</div>
+              <div class="rot-msg fresh" id="rg2" style="opacity:0">[case fact] Active filings (2019+): F-2019-1101, F-2019-2287, F-2020-0883, F-2020-1455</div>
+              <div class="rot-msg fresh" id="rg3" style="opacity:0">user: what's the total collateral value across all 2019+ filings?</div>
+            </div>
+          </div>
+          <div class="animation-controls">
+            <button class="anim-btn" onclick="rotPlay()" aria-label="Play rot compaction animation">&#9658;</button>
+            <button class="anim-btn" onclick="rotRestart()" aria-label="Restart">&#8635;</button>
+          </div>
+        </div>
+
+        <div class="callout-why">
+          <span class="box-label">&#9989; What Just Happened?</span>
+          <p>The right-hand context isn't just shorter (3 messages vs. 11) &mdash; it's <em>cleaner</em>. The duplicate failed search is gone. The superseded "ignore 2018" instruction is folded into a positive case fact ("active filings = 2019+"). The current question is now adjacent to the relevant facts, not buried under 8 turns of resolved errors. Same model, same question, dramatically better answer. This is what M08 will operationalize for conversation history specifically &mdash; but the principle is broader: <strong>compaction isn't just about budget, it's about signal</strong>.</p>
+        </div>
+      </section>
+
+      <!-- ==================== CODE WALKTHROUGH ==================== -->
+      <section class="section" id="code-walkthrough">
+        <h2 id="code-walkthrough-heading">Code Walkthrough: The ContextBudget Class</h2>
+        <p>Time to make this concrete. We're going to build a small class that takes the six layers of your context, accounts for tokens in each, and applies one of the four levers when the total exceeds a budget. You'll use this directly in the lab and reuse the pattern in M08 (history) and M11 (memory).</p>
+
+        <p>Here's the design: <code>ContextBudget</code> is initialized with a target budget and a strategy. You feed it the six layers via constructor. It exposes <code>account()</code> for the per-layer breakdown, <code>fits()</code> for the budget check, and <code>build_messages()</code> for the assembled message array ready for the Anthropic SDK. We'll annotate the implementation in four chunks.</p>
+
+        <h3 id="cw-chunk1">Chunk 1: Per-layer Token Accounting</h3>
+        <p><strong>WHAT</strong>: The constructor stores the six layers separately and counts tokens in each. <strong>WHY</strong>: You can't apply a lever intelligently without knowing which layer is the heaviest. <strong>GOTCHA</strong>: Don't use <code>len(text) // 4</code> as a token count &mdash; that approximation is off by 20%+ for tool definitions and JSON-heavy content. Use <code>anthropic.Anthropic().count_tokens()</code> for production code; we'll use a fast heuristic plus a real API call wrapper for the lab.</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs" role="tablist" aria-label="Code language tabs">
+            <button class="code-tab active" role="tab" aria-selected="true" onclick="switchTab(this,'cw-1')" data-lang="python" id="tab-cw-1-py">Python</button>
+            <button class="code-tab" role="tab" aria-selected="false" onclick="switchTab(this,'cw-1')" data-lang="nodejs" id="tab-cw-1-js">Node.js</button>
+          </div>
+          <div class="code-panel active" id="cw-1-python" role="tabpanel" aria-labelledby="tab-cw-1-py">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy Python code">Copy</button>
+            <pre><code class="language-python">from dataclasses import dataclass, field
+from typing import Optional
+
+# Fast heuristic: ~4 chars per token. Good enough for budgeting decisions.
+# For production cost tracking, use anthropic.count_tokens().
+def estimate_tokens(text: str) -> int:
+    return max(1, len(text) // 4)
+
+@dataclass
+class ContextBudget:
+    """Accounts for and curates the six layers of context."""
+    system_prompt: str = ""
+    tool_definitions: list = field(default_factory=list)  # list of dicts
+    history: list = field(default_factory=list)            # list of {"role", "content"}
+    retrieved_docs: list = field(default_factory=list)     # list of strings
+    tool_results: list = field(default_factory=list)       # list of strings
+    current_user_message: str = ""
+    target_budget: int = 8000  # tokens
+
+    def account(self) -> dict:
+        """Return per-layer token counts."""
+        import json
+        return {
+            "system": estimate_tokens(self.system_prompt),
+            "tools": estimate_tokens(json.dumps(self.tool_definitions)),
+            "history": sum(estimate_tokens(m["content"]) for m in self.history),
+            "retrieved": sum(estimate_tokens(d) for d in self.retrieved_docs),
+            "tool_results": sum(estimate_tokens(r) for r in self.tool_results),
+            "current": estimate_tokens(self.current_user_message),
+        }
+
+    def total(self) -> int:
+        return sum(self.account().values())
+
+    def fits(self) -> bool:
+        return self.total() &lt;= self.target_budget</code></pre>
+          </div>
+          <div class="code-panel" id="cw-1-nodejs" role="tabpanel" aria-labelledby="tab-cw-1-js">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy Node.js code">Copy</button>
+            <pre><code class="language-javascript">// Fast heuristic: ~4 chars per token. Good enough for budgeting decisions.
+// For production cost tracking, use anthropic.countTokens().
+function estimateTokens(text) {
+  return Math.max(1, Math.floor((text || '').length / 4));
+}
+
+export class ContextBudget {
+  constructor({
+    systemPrompt = '',
+    toolDefinitions = [],
+    history = [],            // [{ role, content }]
+    retrievedDocs = [],      // [string]
+    toolResults = [],        // [string]
+    currentUserMessage = '',
+    targetBudget = 8000,
+  } = {}) {
+    Object.assign(this, {
+      systemPrompt, toolDefinitions, history,
+      retrievedDocs, toolResults, currentUserMessage, targetBudget,
+    });
+  }
+
+  account() {
+    return {
+      system: estimateTokens(this.systemPrompt),
+      tools: estimateTokens(JSON.stringify(this.toolDefinitions)),
+      history: this.history.reduce((s, m) =&gt; s + estimateTokens(m.content), 0),
+      retrieved: this.retrievedDocs.reduce((s, d) =&gt; s + estimateTokens(d), 0),
+      toolResults: this.toolResults.reduce((s, r) =&gt; s + estimateTokens(r), 0),
+      current: estimateTokens(this.currentUserMessage),
+    };
+  }
+
+  total() {
+    return Object.values(this.account()).reduce((a, b) =&gt; a + b, 0);
+  }
+
+  fits() {
+    return this.total() &lt;= this.targetBudget;
+  }
+}</code></pre>
+          </div>
+        </div>
+
+        <h3 id="cw-chunk2">Chunk 2: The Compress Lever</h3>
+        <p><strong>WHAT</strong>: When the budget is busted, replace old turns with a Claude-generated summary, keeping the most recent <em>k</em> turns verbatim. <strong>WHY</strong>: History is usually the heaviest layer in long sessions, and old turns have lower relevance per token than recent ones. <strong>GOTCHA</strong>: Use a <em>separate</em> Claude call to write the summary, with the explicit instruction "preserve all named entities, IDs, and numeric values." Without that instruction, summarization eats critical specifics first &mdash; this is the cert-tip flag for Domain 5.1.</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs" role="tablist" aria-label="Code language tabs">
+            <button class="code-tab active" role="tab" aria-selected="true" onclick="switchTab(this,'cw-2')" data-lang="python" id="tab-cw-2-py">Python</button>
+            <button class="code-tab" role="tab" aria-selected="false" onclick="switchTab(this,'cw-2')" data-lang="nodejs" id="tab-cw-2-js">Node.js</button>
+          </div>
+          <div class="code-panel active" id="cw-2-python" role="tabpanel" aria-labelledby="tab-cw-2-py">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy Python code">Copy</button>
+            <pre><code class="language-python">import anthropic
+
+SUMMARY_INSTRUCTION = """Summarize the following conversation in 3-5 sentences.
+CRITICAL: preserve every named entity (people, companies, IDs), exact numeric
+values (dollar amounts, dates, counts), and any explicit user instructions.
+Drop only redundant or resolved tool errors and abandoned plans.
+
+Conversation:
+{transcript}
+
+Summary:"""
+
+def compress_history(history: list, keep_recent: int = 6) -&gt; list:
+    """Summarize older turns; keep the last `keep_recent` turns verbatim."""
+    if len(history) &lt;= keep_recent:
+        return history  # nothing to compress
+
+    older = history[:-keep_recent]
+    recent = history[-keep_recent:]
+
+    transcript = "\n".join(f"{m['role']}: {m['content']}" for m in older)
+    client = anthropic.Anthropic()
+    try:
+        result = client.messages.create(
+            model="claude-haiku-4-5-20251001",  # cheap model for summarization
+            max_tokens=400,
+            messages=[{"role": "user",
+                       "content": SUMMARY_INSTRUCTION.format(transcript=transcript)}],
+        )
+        summary_text = result.content[0].text
+    except anthropic.APIError as e:
+        # If summarization fails, fall back to truncation rather than crashing.
+        print(f"Summarization failed: {e.message}; falling back to truncation.")
+        return recent
+
+    summary_msg = {"role": "user",
+                   "content": f"[Summary of {len(older)} earlier turns] {summary_text}"}
+    return [summary_msg] + recent</code></pre>
+          </div>
+          <div class="code-panel" id="cw-2-nodejs" role="tabpanel" aria-labelledby="tab-cw-2-js">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy Node.js code">Copy</button>
+            <pre><code class="language-javascript">import Anthropic from '@anthropic-ai/sdk';
+
+const SUMMARY_INSTRUCTION = `Summarize the following conversation in 3-5 sentences.
+CRITICAL: preserve every named entity (people, companies, IDs), exact numeric
+values (dollar amounts, dates, counts), and any explicit user instructions.
+Drop only redundant or resolved tool errors and abandoned plans.
+
+Conversation:
+{transcript}
+
+Summary:`;
+
+export async function compressHistory(history, keepRecent = 6) {
+  if (history.length &lt;= keepRecent) return history;
+
+  const older = history.slice(0, -keepRecent);
+  const recent = history.slice(-keepRecent);
+  const transcript = older.map(m =&gt; `${m.role}: ${m.content}`).join('\n');
+
+  const client = new Anthropic();
+  let summaryText;
+  try {
+    const result = await client.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 400,
+      messages: [{ role: 'user',
+                   content: SUMMARY_INSTRUCTION.replace('{transcript}', transcript) }],
+    });
+    summaryText = result.content[0].text;
+  } catch (error) {
+    console.error(`Summarization failed: ${error.message}; falling back to truncation.`);
+    return recent;
+  }
+
+  const summaryMsg = {
+    role: 'user',
+    content: `[Summary of ${older.length} earlier turns] ${summaryText}`,
+  };
+  return [summaryMsg, ...recent];
+}</code></pre>
+          </div>
+        </div>
+
+        <h3 id="cw-chunk3">Chunk 3: Strategy Dispatch</h3>
+        <p><strong>WHAT</strong>: One method picks the right lever based on the budget overflow. <strong>WHY</strong>: You don't want strategy selection scattered across your agent code &mdash; centralize it. <strong>GOTCHA</strong>: The order of fallback matters &mdash; we compress history before evicting retrieved docs, because retrieval was already curated by the RAG pipeline whereas history is "everything that ever happened." If <em>that</em> still overflows, we'd reach for retrieve/offload (left as stretch goals).</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs" role="tablist" aria-label="Code language tabs">
+            <button class="code-tab active" role="tab" aria-selected="true" onclick="switchTab(this,'cw-3')" data-lang="python" id="tab-cw-3-py">Python</button>
+            <button class="code-tab" role="tab" aria-selected="false" onclick="switchTab(this,'cw-3')" data-lang="nodejs" id="tab-cw-3-js">Node.js</button>
+          </div>
+          <div class="code-panel active" id="cw-3-python" role="tabpanel" aria-labelledby="tab-cw-3-py">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy Python code">Copy</button>
+            <pre><code class="language-python">    def apply_compress(self, keep_recent: int = 6) -&gt; "ContextBudget":
+        """Compress history; return self for chaining."""
+        self.history = compress_history(self.history, keep_recent=keep_recent)
+        return self
+
+    def apply_strategy(self, strategy: str = "auto") -&gt; "ContextBudget":
+        """Dispatch to a specific lever, or auto-pick based on overflow.
+        Strategies: 'compress', 'truncate_retrieved', 'auto', 'noop'.
+        """
+        if self.fits() or strategy == "noop":
+            return self
+
+        if strategy == "compress" or strategy == "auto":
+            self.apply_compress()
+
+        if not self.fits() and strategy in ("truncate_retrieved", "auto"):
+            # Last resort: keep only the top 2 retrieved chunks.
+            self.retrieved_docs = self.retrieved_docs[:2]
+
+        return self</code></pre>
+          </div>
+          <div class="code-panel" id="cw-3-nodejs" role="tabpanel" aria-labelledby="tab-cw-3-js">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy Node.js code">Copy</button>
+            <pre><code class="language-javascript">// Add these methods to ContextBudget class
+
+  async applyCompress(keepRecent = 6) {
+    this.history = await compressHistory(this.history, keepRecent);
+    return this;
+  }
+
+  async applyStrategy(strategy = 'auto') {
+    if (this.fits() || strategy === 'noop') return this;
+
+    if (strategy === 'compress' || strategy === 'auto') {
+      await this.applyCompress();
+    }
+
+    if (!this.fits() && (strategy === 'truncateRetrieved' || strategy === 'auto')) {
+      this.retrievedDocs = this.retrievedDocs.slice(0, 2);
+    }
+    return this;
+  }</code></pre>
+          </div>
+        </div>
+
+        <h3 id="cw-chunk4">Chunk 4: Static-First Assembly</h3>
+        <p><strong>WHAT</strong>: <code>build_messages()</code> assembles the final SDK payload with static blocks first, dynamic last &mdash; the cache-friendly order from Concept 3. <strong>WHY</strong>: This is where Concept 3's ordering rule turns into actual money saved. <strong>GOTCHA</strong>: Retrieved docs are technically dynamic (they change per query), but we put them <em>before</em> history because in many RAG pipelines the same chunks recur for similar queries within a session &mdash; partial cache hits are still wins.</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs" role="tablist" aria-label="Code language tabs">
+            <button class="code-tab active" role="tab" aria-selected="true" onclick="switchTab(this,'cw-4')" data-lang="python" id="tab-cw-4-py">Python</button>
+            <button class="code-tab" role="tab" aria-selected="false" onclick="switchTab(this,'cw-4')" data-lang="nodejs" id="tab-cw-4-js">Node.js</button>
+          </div>
+          <div class="code-panel active" id="cw-4-python" role="tabpanel" aria-labelledby="tab-cw-4-py">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy Python code">Copy</button>
+            <pre><code class="language-python">    def build_messages(self) -&gt; tuple[str, list, list]:
+        """Return (system, tools, messages) ready for client.messages.create().
+        Order: STATIC (system, tools) - SEMI-STATIC (retrieved) - DYNAMIC (history, current).
+        """
+        # Retrieved docs prepended to first message (closer to the question = better recall).
+        retrieved_block = ""
+        if self.retrieved_docs:
+            retrieved_block = "\n\n&lt;reference_docs&gt;\n" + \
+                "\n---\n".join(self.retrieved_docs) + "\n&lt;/reference_docs&gt;\n\n"
+
+        messages = list(self.history)  # copy to avoid mutating caller's list
+        # Append current user turn with retrieved docs at the END (high-recall position).
+        messages.append({
+            "role": "user",
+            "content": retrieved_block + self.current_user_message,
+        })
+        return self.system_prompt, self.tool_definitions, messages</code></pre>
+          </div>
+          <div class="code-panel" id="cw-4-nodejs" role="tabpanel" aria-labelledby="tab-cw-4-js">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy Node.js code">Copy</button>
+            <pre><code class="language-javascript">  buildMessages() {
+    let retrievedBlock = '';
+    if (this.retrievedDocs.length) {
+      retrievedBlock = '\n\n&lt;reference_docs&gt;\n' +
+        this.retrievedDocs.join('\n---\n') + '\n&lt;/reference_docs&gt;\n\n';
+    }
+
+    const messages = [
+      ...this.history,
+      { role: 'user', content: retrievedBlock + this.currentUserMessage },
+    ];
+    return {
+      system: this.systemPrompt,
+      tools: this.toolDefinitions,
+      messages,
+    };
+  }</code></pre>
+          </div>
+        </div>
+
+        <div class="callout-why">
+          <span class="box-label">&#9989; What Just Happened?</span>
+          <p>You now have a reusable class that turns the four levers into actual code: <code>account()</code> shows you what's heavy, <code>apply_strategy("auto")</code> picks the right lever, <code>build_messages()</code> emits the SDK payload in cache-friendly order. In the lab below you'll point this at a 30-turn rotted transcript, watch it shrink, and confirm the answer quality holds. From M08 forward, you'll see this exact pattern recur &mdash; just specialized: M08 swaps the compress strategy, M09 fills <code>retrieved_docs</code>, M14 spawns subagents to populate one of the layers.</p>
+        </div>
+      </section>
+
+      <!-- ==================== HANDS-ON LAB ==================== -->
+      <section class="section" id="hands-on">
+        <h2 id="hands-on-heading">Hands-On Lab: The Poisoned Transcript</h2>
+
+        <div style="background:var(--bg-card);border-radius:12px;padding:1.25rem 1.5rem;margin-bottom:1.5rem;">
+          <h3 id="lab-overview" style="margin-top:0;">Lab Overview</h3>
+          <p><strong>What you'll build</strong>: A diagnostic that reads a 30-turn rotted UCC research transcript, prints per-layer token breakdown, applies the compress lever, and shows the before/after token + answer-quality delta.</p>
+          <p><strong>Time</strong>: 25-35 minutes &middot; <strong>Level</strong>: Beginner &rarr; Intermediate</p>
+          <p><strong>Prerequisites</strong>: Python 3.10+ or Node.js 18+, an Anthropic API key, the <code>ContextBudget</code> class from the walkthrough above.</p>
+          <p style="margin-bottom:0;"><strong>Files you'll create</strong>:</p>
+          <ul style="margin-bottom:0;">
+            <li><code>poisoned_transcript.json</code> &mdash; the rotted 30-turn fixture (provided below, copy-paste)</li>
+            <li><code>context_budget.py</code> (or <code>contextBudget.mjs</code>) &mdash; the class from the walkthrough</li>
+            <li><code>diagnose.py</code> (or <code>diagnose.mjs</code>) &mdash; the diagnostic and fix runner</li>
+          </ul>
+        </div>
+
+        <h3 id="lab-setup">Environment Setup</h3>
+        <p>Single copy-pasteable block. Pick Python or Node.js, not both:</p>
+        <div class="code-single">
+          <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy setup commands">Copy</button>
+          <pre><code class="language-bash"># Python
+mkdir m03b-context-lab && cd m03b-context-lab
+python -m venv venv && source venv/bin/activate    # Windows: venv\Scripts\activate
+pip install anthropic
+export ANTHROPIC_API_KEY=sk-ant-...                # Windows: set ANTHROPIC_API_KEY=sk-ant-...
+
+# Node.js (alternative)
+mkdir m03b-context-lab && cd m03b-context-lab
+npm init -y && npm install @anthropic-ai/sdk
+export ANTHROPIC_API_KEY=sk-ant-...</code></pre>
+        </div>
+
+        <!-- ==================== STEP 1 ==================== -->
+        <h3 id="step1">Step 1: Drop in the Poisoned Transcript Fixture</h3>
+        <p>This is your raw material &mdash; a UCC research session that started fine and rotted by turn 30. The user is asking about debtor "Acme Corp" filings; over the session they corrected scope twice, hit two rate limits, and abandoned one tool path. The current question is at the end. Save this as <code>poisoned_transcript.json</code>:</p>
+
+        <div class="code-single">
+          <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy fixture JSON">Copy</button>
+          <pre><code class="language-json">{
+  "system_prompt": "You are a UCC filings research assistant. Help users find and analyze public records filings. Always cite filing IDs. If a search fails, retry once with a normalized query.",
+  "tool_definitions": [
+    {"name": "search_filings", "description": "Search UCC filings by debtor name", "input_schema": {"type": "object", "properties": {"debtor": {"type": "string"}}, "required": ["debtor"]}},
+    {"name": "get_filing", "description": "Retrieve a single filing by ID", "input_schema": {"type": "object", "properties": {"filing_id": {"type": "string"}}, "required": ["filing_id"]}},
+    {"name": "calc_collateral_total", "description": "Sum collateral values across filing IDs", "input_schema": {"type": "object", "properties": {"filing_ids": {"type": "array", "items": {"type": "string"}}}, "required": ["filing_ids"]}}
+  ],
+  "history": [
+    {"role": "user", "content": "Research debtor Acme Corp - I need an overview of their UCC filings"},
+    {"role": "assistant", "content": "I'll search for filings under 'Acme Corp'."},
+    {"role": "user", "content": "[tool_result] search_filings(debtor='Acme Corp') returned 12 filings spanning 2017-2023, IDs F-2017-0044, F-2018-04421, F-2018-04422, F-2019-1101, F-2019-2287, F-2020-0883, F-2020-1455, F-2021-0192, F-2021-3340, F-2022-0028, F-2022-1199, F-2023-0501"},
+    {"role": "assistant", "content": "Found 12 filings from 2017 to 2023. Want a year-by-year breakdown?"},
+    {"role": "user", "content": "Yes, but actually focus only on 2019 and later"},
+    {"role": "assistant", "content": "Got it. Restricting to 2019+: 8 filings. Pulling details."},
+    {"role": "user", "content": "[tool_result] get_filing('F-2018-04421') returned full filing data for 2018 (collateral: $8.1M, secured party: First Bank)"},
+    {"role": "assistant", "content": "I see I pulled a 2018 filing by mistake. Discarding."},
+    {"role": "user", "content": "[tool_result] get_filing('F-2018-04422') returned ERROR: rate_limit_exceeded after 3 retries"},
+    {"role": "assistant", "content": "Rate limit on another 2018 filing - skipping, that's outside our scope anyway."},
+    {"role": "user", "content": "[tool_result] search_filings(debtor='ACME CORP') returned 12 filings (same as before, normalization quirk)"},
+    {"role": "assistant", "content": "Duplicate result from a normalized retry. Ignoring."},
+    {"role": "user", "content": "I said 2019+! Why are you still pulling 2018 filings?"},
+    {"role": "assistant", "content": "Apologies - that was a confused retry. Going forward, only 2019 and later: F-2019-1101, F-2019-2287, F-2020-0883, F-2020-1455, F-2021-0192, F-2021-3340, F-2022-0028, F-2022-1199, F-2023-0501. That's 9 filings."},
+    {"role": "user", "content": "[tool_result] get_filing('F-2019-1101') returned collateral: $4.2M, secured party: Capital Trust, year: 2019"},
+    {"role": "assistant", "content": "F-2019-1101: $4.2M collateral, Capital Trust as secured party."},
+    {"role": "user", "content": "[tool_result] get_filing('F-2019-2287') returned collateral: $7.8M, secured party: First Bank, year: 2019"},
+    {"role": "assistant", "content": "F-2019-2287: $7.8M, First Bank."},
+    {"role": "user", "content": "[tool_result] get_filing('F-2020-0883') returned collateral: $11.5M, secured party: Capital Trust, year: 2020"},
+    {"role": "assistant", "content": "F-2020-0883: $11.5M, Capital Trust."},
+    {"role": "user", "content": "[tool_result] get_filing('F-2020-1455') returned collateral: $3.4M, secured party: GE Capital, year: 2020"},
+    {"role": "assistant", "content": "F-2020-1455: $3.4M, GE Capital."},
+    {"role": "user", "content": "[tool_result] get_filing('F-2021-0192') returned collateral: $9.0M, secured party: First Bank, year: 2021"},
+    {"role": "assistant", "content": "F-2021-0192: $9.0M, First Bank."},
+    {"role": "user", "content": "[tool_result] get_filing('F-2021-3340') returned collateral: $5.5M, secured party: Capital Trust, year: 2021"},
+    {"role": "assistant", "content": "F-2021-3340: $5.5M, Capital Trust."},
+    {"role": "user", "content": "[tool_result] get_filing('F-2022-0028') returned collateral: $13.2M, secured party: First Bank, year: 2022"},
+    {"role": "assistant", "content": "F-2022-0028: $13.2M, First Bank."},
+    {"role": "user", "content": "[tool_result] get_filing('F-2022-1199') returned collateral: $6.7M, secured party: GE Capital, year: 2022"},
+    {"role": "assistant", "content": "F-2022-1199: $6.7M, GE Capital."},
+    {"role": "user", "content": "[tool_result] get_filing('F-2023-0501') returned collateral: $8.9M, secured party: Capital Trust, year: 2023"},
+    {"role": "assistant", "content": "F-2023-0501: $8.9M, Capital Trust."}
+  ],
+  "current_user_message": "What's the total collateral value across all 2019+ filings, and which secured party shows up most often?"
+}</code></pre>
+        </div>
+
+        <p><strong>What just landed in your folder</strong>: a fixture with one system prompt, three tool definitions, 30 history turns (mix of user, assistant, and tool-result messages), and a current question. The poisoning is subtle but real: two rate-limit results, two 2018 filings the user explicitly excluded, one duplicate normalized search. Your diagnostic will surface these.</p>
+
+        <div style="background:rgba(16,185,129,0.06);border-left:3px solid var(--success);padding:1rem 1.25rem;margin:1rem 0;border-radius:0 6px 6px 0;">
+          <strong>&#9989; Checkpoint:</strong> If <code>ls -lh poisoned_transcript.json</code> (Windows: <code>dir poisoned_transcript.json</code>) shows a file around 4-5 KB, you're set. If you see a 0-byte file, copy-paste didn't include all lines &mdash; re-copy the JSON.
+        </div>
+
+        <!-- ==================== STEP 2 ==================== -->
+        <h3 id="step2">Step 2: Build the Diagnostic + Compress Runner</h3>
+        <p><strong>What & why</strong>: This script loads the fixture, instantiates the <code>ContextBudget</code> class from the walkthrough, prints per-layer token breakdown <em>before</em> any fix, applies the compress lever, then prints the breakdown <em>after</em>. It's the smallest possible loop that exercises the full module.</p>
+        <p>First, save the <code>ContextBudget</code> class from the Code Walkthrough as <code>context_budget.py</code> (Python) or <code>contextBudget.mjs</code> (Node). Then create the runner:</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs" role="tablist" aria-label="Code language tabs">
+            <button class="code-tab active" role="tab" aria-selected="true" onclick="switchTab(this,'lab-s2')" data-lang="python" id="tab-lab-s2-py">Python</button>
+            <button class="code-tab" role="tab" aria-selected="false" onclick="switchTab(this,'lab-s2')" data-lang="nodejs" id="tab-lab-s2-js">Node.js</button>
+          </div>
+          <div class="code-panel active" id="lab-s2-python" role="tabpanel" aria-labelledby="tab-lab-s2-py">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy Python code">Copy</button>
+            <pre><code class="language-python">"""diagnose.py - Reads poisoned_transcript.json, runs ContextBudget, prints before/after."""
+import json
+from context_budget import ContextBudget
+
+def print_breakdown(label: str, account: dict, total: int, target: int):
+    print(f"\n--- {label} ---")
+    for layer, tokens in account.items():
+        bar = "#" * max(1, tokens // 100)
+        print(f"  {layer:&lt;14} {tokens:&gt;5} tok  {bar}")
+    pct = round(100 * total / target)
+    status = "OVER BUDGET" if total &gt; target else "ok"
+    print(f"  TOTAL          {total:&gt;5} tok  ({pct}% of {target} budget) [{status}]")
+
+def detect_rot(history: list) -&gt; list:
+    """Quick heuristic rot scan - look for explicit signals in tool-result messages."""
+    signals = []
+    for i, msg in enumerate(history):
+        c = msg.get("content", "")
+        if "rate_limit" in c.lower() or "ERROR" in c:
+            signals.append(f"  turn {i}: failed tool call (likely retried)")
+        if "duplicate" in c.lower() or "same as before" in c.lower():
+            signals.append(f"  turn {i}: duplicate result")
+    return signals
+
+def main():
+    with open("poisoned_transcript.json") as f:
+        fixture = json.load(f)
+
+    # Build the budget object from the fixture.
+    budget = ContextBudget(
+        system_prompt=fixture["system_prompt"],
+        tool_definitions=fixture["tool_definitions"],
+        history=fixture["history"],
+        current_user_message=fixture["current_user_message"],
+        target_budget=4000,  # deliberately tight to force compression
+    )
+
+    print("=" * 60)
+    print("POISONED TRANSCRIPT DIAGNOSTIC")
+    print("=" * 60)
+    print_breakdown("BEFORE", budget.account(), budget.total(), budget.target_budget)
+
+    rot_signals = detect_rot(budget.history)
+    if rot_signals:
+        print("\nRot signals detected:")
+        for s in rot_signals:
+            print(s)
+
+    # Apply the compress lever.
+    print("\nApplying compress lever (keep_recent=6)...")
+    budget.apply_compress(keep_recent=6)
+
+    print_breakdown("AFTER COMPRESSION", budget.account(), budget.total(), budget.target_budget)
+
+    # Build the final payload that would be sent to Claude.
+    system, tools, messages = budget.build_messages()
+    print(f"\nFinal payload: {len(messages)} messages, "
+          f"{budget.total()} input tokens, fits budget = {budget.fits()}")
+
+if __name__ == "__main__":
+    main()</code></pre>
+          </div>
+          <div class="code-panel" id="lab-s2-nodejs" role="tabpanel" aria-labelledby="tab-lab-s2-js">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy Node.js code">Copy</button>
+            <pre><code class="language-javascript">// diagnose.mjs - Reads poisoned_transcript.json, runs ContextBudget, prints before/after.
+import { readFileSync } from 'fs';
+import { ContextBudget } from './contextBudget.mjs';
+
+function printBreakdown(label, account, total, target) {
+  console.log(`\n--- ${label} ---`);
+  for (const [layer, tokens] of Object.entries(account)) {
+    const bar = '#'.repeat(Math.max(1, Math.floor(tokens / 100)));
+    console.log(`  ${layer.padEnd(14)} ${String(tokens).padStart(5)} tok  ${bar}`);
+  }
+  const pct = Math.round((100 * total) / target);
+  const status = total &gt; target ? 'OVER BUDGET' : 'ok';
+  console.log(`  TOTAL          ${String(total).padStart(5)} tok  (${pct}% of ${target} budget) [${status}]`);
+}
+
+function detectRot(history) {
+  const signals = [];
+  history.forEach((msg, i) =&gt; {
+    const c = msg.content || '';
+    if (c.toLowerCase().includes('rate_limit') || c.includes('ERROR')) {
+      signals.push(`  turn ${i}: failed tool call (likely retried)`);
+    }
+    if (c.toLowerCase().includes('duplicate') || c.toLowerCase().includes('same as before')) {
+      signals.push(`  turn ${i}: duplicate result`);
+    }
+  });
+  return signals;
+}
+
+async function main() {
+  const fixture = JSON.parse(readFileSync('poisoned_transcript.json', 'utf-8'));
+
+  const budget = new ContextBudget({
+    systemPrompt: fixture.system_prompt,
+    toolDefinitions: fixture.tool_definitions,
+    history: fixture.history,
+    currentUserMessage: fixture.current_user_message,
+    targetBudget: 4000,
+  });
+
+  console.log('='.repeat(60));
+  console.log('POISONED TRANSCRIPT DIAGNOSTIC');
+  console.log('='.repeat(60));
+  printBreakdown('BEFORE', budget.account(), budget.total(), budget.targetBudget);
+
+  const rotSignals = detectRot(budget.history);
+  if (rotSignals.length) {
+    console.log('\nRot signals detected:');
+    rotSignals.forEach(s =&gt; console.log(s));
+  }
+
+  console.log('\nApplying compress lever (keepRecent=6)...');
+  await budget.applyCompress(6);
+
+  printBreakdown('AFTER COMPRESSION', budget.account(), budget.total(), budget.targetBudget);
+
+  const { messages } = budget.buildMessages();
+  console.log(`\nFinal payload: ${messages.length} messages, ${budget.total()} input tokens, fits budget = ${budget.fits()}`);
+}
+
+main().catch(err =&gt; { console.error(err); process.exit(1); });</code></pre>
+          </div>
+        </div>
+
+        <p><strong>Run it:</strong></p>
+        <div class="code-single">
+          <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy run command">Copy</button>
+          <pre><code class="language-bash">python diagnose.py     # or: node diagnose.mjs</code></pre>
+        </div>
+
+        <div class="output-label">Expected Output (numbers will vary by ~5% due to token estimation):</div>
+        <div class="output-block">============================================================
+POISONED TRANSCRIPT DIAGNOSTIC
+============================================================
+
+--- BEFORE ---
+  system           105 tok  #
+  tools            230 tok  ##
+  history         1980 tok  ###################
+  retrieved          1 tok  #
+  tool_results       1 tok  #
+  current           24 tok  #
+  TOTAL           2341 tok  (58% of 4000 budget) [ok]
+
+Rot signals detected:
+  turn 9: failed tool call (likely retried)
+  turn 11: duplicate result
+
+Applying compress lever (keep_recent=6)...
+
+--- AFTER COMPRESSION ---
+  system           105 tok  #
+  tools            230 tok  ##
+  history          580 tok  ######
+  retrieved          1 tok  #
+  tool_results       1 tok  #
+  current           24 tok  #
+  TOTAL            941 tok  (24% of 4000 budget) [ok]
+
+Final payload: 7 messages, 941 input tokens, fits budget = True</div>
+
+        <div style="background:rgba(16,185,129,0.06);border-left:3px solid var(--success);padding:1rem 1.25rem;margin:1rem 0;border-radius:0 6px 6px 0;">
+          <strong>&#9989; Checkpoint:</strong> You should see a roughly <strong>3-4x reduction in history tokens</strong> after compression, and at least 2 rot signals detected. The summary message preserves the named filing IDs and dollar amounts &mdash; if you don't see those in the summary message, your <code>SUMMARY_INSTRUCTION</code> in <code>context_budget.py</code> may be missing the "preserve every named entity" line. Re-check Chunk 2 of the walkthrough.
+        </div>
+
+        <details style="margin:1rem 0;color:var(--text-secondary);">
+          <summary style="cursor:pointer;font-weight:600;">Troubleshooting</summary>
+          <ul style="margin-top:0.5rem;">
+            <li><strong><code>ModuleNotFoundError: No module named 'anthropic'</code></strong> &mdash; Run <code>pip install anthropic</code> in your activated venv (or <code>npm install @anthropic-ai/sdk</code>).</li>
+            <li><strong><code>AuthenticationError: Could not resolve API key</code></strong> &mdash; <code>export ANTHROPIC_API_KEY=sk-ant-...</code> in the same shell. Check with <code>echo $ANTHROPIC_API_KEY</code>.</li>
+            <li><strong><code>FileNotFoundError: poisoned_transcript.json</code></strong> &mdash; You're running from the wrong directory. <code>cd</code> into <code>m03b-context-lab</code> first.</li>
+            <li><strong>Summary doesn't preserve filing IDs</strong> &mdash; Check the <code>SUMMARY_INSTRUCTION</code> string. The "preserve every named entity..." line is critical &mdash; without it, Haiku will summarize the gist and drop the IDs you need to answer the final question.</li>
+          </ul>
+        </details>
+
+        <!-- ==================== STEP 3 ==================== -->
+        <h3 id="step3">Step 3: Compare Answer Quality Before vs. After</h3>
+        <p><strong>What & why</strong>: Token reduction is a means, not the end. The end is answer quality. This step sends the same final question to Claude twice &mdash; once with the rotted context, once with the compressed context &mdash; and prints both answers so you can compare. Append this to <code>diagnose.py</code> (or create a new file):</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs" role="tablist" aria-label="Code language tabs">
+            <button class="code-tab active" role="tab" aria-selected="true" onclick="switchTab(this,'lab-s3')" data-lang="python" id="tab-lab-s3-py">Python</button>
+            <button class="code-tab" role="tab" aria-selected="false" onclick="switchTab(this,'lab-s3')" data-lang="nodejs" id="tab-lab-s3-js">Node.js</button>
+          </div>
+          <div class="code-panel active" id="lab-s3-python" role="tabpanel" aria-labelledby="tab-lab-s3-py">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy Python code">Copy</button>
+            <pre><code class="language-python"># Append to diagnose.py (or save as compare.py and import as needed)
+import anthropic
+import time
+
+def ask_claude(budget: ContextBudget) -&gt; tuple[str, dict]:
+    """Send the budget's payload to Claude and return (text, usage)."""
+    client = anthropic.Anthropic()
+    system, tools, messages = budget.build_messages()
+    t0 = time.time()
+    try:
+        result = client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=400,
+            system=system,
+            messages=messages,
+        )
+    except anthropic.APIError as e:
+        return f"[error: {e.message}]", {"input_tokens": 0, "output_tokens": 0, "latency_s": 0}
+    elapsed = round(time.time() - t0, 2)
+    return result.content[0].text, {
+        "input_tokens": result.usage.input_tokens,
+        "output_tokens": result.usage.output_tokens,
+        "latency_s": elapsed,
+    }
+
+def compare_run():
+    with open("poisoned_transcript.json") as f:
+        fixture = json.load(f)
+
+    # Run 1: rotted context (no fix applied)
+    rotted = ContextBudget(
+        system_prompt=fixture["system_prompt"],
+        tool_definitions=fixture["tool_definitions"],
+        history=fixture["history"],
+        current_user_message=fixture["current_user_message"],
+        target_budget=4000,
+    )
+    print("\n>>> Run 1: ROTTED context (no fix)")
+    answer_a, usage_a = ask_claude(rotted)
+    print(f"Tokens: {usage_a['input_tokens']} in, {usage_a['output_tokens']} out  ({usage_a['latency_s']}s)")
+    print(f"Answer:\n{answer_a}\n")
+
+    # Run 2: compressed context (compress lever applied)
+    fixed = ContextBudget(
+        system_prompt=fixture["system_prompt"],
+        tool_definitions=fixture["tool_definitions"],
+        history=fixture["history"],
+        current_user_message=fixture["current_user_message"],
+        target_budget=4000,
+    ).apply_compress(keep_recent=6)
+    print(">>> Run 2: COMPRESSED context")
+    answer_b, usage_b = ask_claude(fixed)
+    print(f"Tokens: {usage_b['input_tokens']} in, {usage_b['output_tokens']} out  ({usage_b['latency_s']}s)")
+    print(f"Answer:\n{answer_b}\n")
+
+    # Delta
+    print("=" * 60)
+    print(f"Token delta:    {usage_a['input_tokens'] - usage_b['input_tokens']} fewer input tokens")
+    print(f"Latency delta:  {usage_a['latency_s'] - usage_b['latency_s']:.2f}s faster")
+
+if __name__ == "__main__":
+    main()        # original diagnostic
+    compare_run() # new comparison</code></pre>
+          </div>
+          <div class="code-panel" id="lab-s3-nodejs" role="tabpanel" aria-labelledby="tab-lab-s3-js">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy Node.js code">Copy</button>
+            <pre><code class="language-javascript">// Append to diagnose.mjs
+import Anthropic from '@anthropic-ai/sdk';
+
+async function askClaude(budget) {
+  const client = new Anthropic();
+  const { system, messages } = budget.buildMessages();
+  const t0 = Date.now();
+  let result;
+  try {
+    result = await client.messages.create({
+      model: 'claude-sonnet-4-6',
+      max_tokens: 400,
+      system,
+      messages,
+    });
+  } catch (error) {
+    return [`[error: ${error.message}]`, { input_tokens: 0, output_tokens: 0, latency_s: 0 }];
+  }
+  const elapsed = ((Date.now() - t0) / 1000).toFixed(2);
+  return [result.content[0].text, {
+    input_tokens: result.usage.input_tokens,
+    output_tokens: result.usage.output_tokens,
+    latency_s: parseFloat(elapsed),
+  }];
+}
+
+async function compareRun() {
+  const fixture = JSON.parse(readFileSync('poisoned_transcript.json', 'utf-8'));
+  const baseArgs = {
+    systemPrompt: fixture.system_prompt,
+    toolDefinitions: fixture.tool_definitions,
+    history: fixture.history,
+    currentUserMessage: fixture.current_user_message,
+    targetBudget: 4000,
+  };
+
+  const rotted = new ContextBudget(baseArgs);
+  console.log('\n>>> Run 1: ROTTED context (no fix)');
+  const [answerA, usageA] = await askClaude(rotted);
+  console.log(`Tokens: ${usageA.input_tokens} in, ${usageA.output_tokens} out  (${usageA.latency_s}s)`);
+  console.log(`Answer:\n${answerA}\n`);
+
+  const fixed = new ContextBudget(baseArgs);
+  await fixed.applyCompress(6);
+  console.log('>>> Run 2: COMPRESSED context');
+  const [answerB, usageB] = await askClaude(fixed);
+  console.log(`Tokens: ${usageB.input_tokens} in, ${usageB.output_tokens} out  (${usageB.latency_s}s)`);
+  console.log(`Answer:\n${answerB}\n`);
+
+  console.log('='.repeat(60));
+  console.log(`Token delta:    ${usageA.input_tokens - usageB.input_tokens} fewer input tokens`);
+  console.log(`Latency delta:  ${(usageA.latency_s - usageB.latency_s).toFixed(2)}s faster`);
+}
+
+await main();
+await compareRun();</code></pre>
+          </div>
+        </div>
+
+        <p><strong>Run it:</strong></p>
+        <div class="code-single">
+          <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy run command">Copy</button>
+          <pre><code class="language-bash">python diagnose.py     # or: node diagnose.mjs</code></pre>
+        </div>
+
+        <div class="output-label">Expected Output (abbreviated &mdash; exact text varies):</div>
+        <div class="output-block">&gt;&gt;&gt; Run 1: ROTTED context (no fix)
+Tokens: 2298 in, 142 out  (3.81s)
+Answer:
+The total collateral value across the 2019+ filings is $70.2M. Capital
+Trust appears most frequently with 4 filings. (Note: I had some
+confusion earlier with 2018 filings being pulled by mistake.)
+
+&gt;&gt;&gt; Run 2: COMPRESSED context
+Tokens: 920 in, 138 out  (2.14s)
+Answer:
+Total collateral across 2019+ filings: $70.2M
+Most frequent secured party: Capital Trust (4 of 9 filings).
+Breakdown by party: Capital Trust 4, First Bank 3, GE Capital 2.
+
+============================================================
+Token delta:    1378 fewer input tokens
+Latency delta:  1.67s faster</div>
+
+        <div style="background:rgba(16,185,129,0.06);border-left:3px solid var(--success);padding:1rem 1.25rem;margin:1rem 0;border-radius:0 6px 6px 0;">
+          <strong>&#9989; Checkpoint &mdash; verify all three:</strong>
+          <ul style="margin:0.5rem 0 0 1.5rem;">
+            <li><strong>Token reduction</strong>: at least 1,000 fewer input tokens after compression</li>
+            <li><strong>Faster latency</strong>: 1-2 seconds quicker (varies by network)</li>
+            <li><strong>Same answer (or better)</strong>: both runs should report the same total ($70.2M) and same most-frequent secured party (Capital Trust). The compressed run usually gives a <em>cleaner</em> structured answer because there's less noise to wade through.</li>
+          </ul>
+        </div>
+
+        <h3 id="lab-verify">Verify Everything Works</h3>
+        <p>One command runs the full diagnostic + comparison end-to-end:</p>
+        <div class="code-single">
+          <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy verification command">Copy</button>
+          <pre><code class="language-bash">python diagnose.py    # or: node diagnose.mjs</code></pre>
+        </div>
+
+        <div style="background:rgba(16,185,129,0.06);border-left:3px solid var(--success);padding:1rem 1.25rem;margin:1rem 0;border-radius:0 6px 6px 0;">
+          <strong>&#127881; Congratulations!</strong> You just diagnosed a poisoned transcript, applied the compress lever, and verified that token reduction didn't sacrifice answer quality. The <code>ContextBudget</code> class you wrote is the same pattern you'll specialize for conversation history (M08), retrieved chunks (M09), and memory layers (M11). Every later module in Track 3 is just one of these levers wearing a different costume.
+        </div>
+
+        <h3 id="lab-stretch">Stretch Goals (Optional)</h3>
+        <ul>
+          <li><strong>Implement the truncate-retrieved lever</strong>: when the budget overflows even after compression, drop retrieved docs to the top 2 by relevance score.</li>
+          <li><strong>Static-first ordering test</strong>: send the same payload twice with <code>cache_control</code> markers, measure cache hit rate from <code>usage.cache_read_input_tokens</code>.</li>
+          <li><strong>Position-effects test</strong>: place the critical case fact ("user wants 2019+ only") at three positions &mdash; start of system prompt, middle of history, just before the user message &mdash; and compare answer accuracy.</li>
+          <li><strong>Auto-detect summary failures</strong>: parse the summary message after compression and assert that all 9 filing IDs from the original history still appear. If not, fall back to a less aggressive <code>keep_recent</code>.</li>
+        </ul>
+      </section>
+
+      <!-- ==================== QUIZ ==================== -->
+      <section class="section" id="quiz">
+        <h2 id="quiz-heading">Knowledge Check</h2>
+        <p style="color:var(--text-secondary);margin-bottom:1.5rem;">Six questions on context inventory, the four levers, ordering, position effects, and rot.</p>
+
+        <!-- Q1 -->
+        <div class="quiz-question" data-correct="c">
+          <h4>Q1: Your agent has 5 registered tools but only uses 1 per turn on average. How many tokens do the 4 unused tool definitions cost on a turn?</h4>
+          <div class="quiz-option" data-value="a" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option A"><span class="quiz-marker">A</span><span>0 tokens &mdash; only the tool that gets called counts</span></div>
+          <div class="quiz-option" data-value="b" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option B"><span class="quiz-marker">B</span><span>0 tokens &mdash; tool definitions are stored server-side</span></div>
+          <div class="quiz-option" data-value="c" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option C"><span class="quiz-marker">C</span><span>The full token cost of all 4 unused definitions, every turn</span></div>
+          <div class="quiz-option" data-value="d" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option D"><span class="quiz-marker">D</span><span>Only their names &mdash; descriptions are lazily loaded</span></div>
+          <div class="quiz-feedback correct-fb">Correct! Every tool definition is included in the prompt the model reads, on every turn, regardless of whether Claude calls it. The model has to read all 5 definitions to decide which (if any) to call. This is why the cert tip in M06 caps tools at 4-5 per agent &mdash; both for selection accuracy and token cost.</div>
+          <div class="quiz-feedback incorrect-fb"></div>
+        </div>
+
+        <!-- Q2 -->
+        <div class="quiz-question" data-correct="b">
+          <h4>Q2: Which is NOT one of the four context-engineering levers?</h4>
+          <div class="quiz-option" data-value="a" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option A"><span class="quiz-marker">A</span><span>Compress &mdash; summarize old turns to save tokens</span></div>
+          <div class="quiz-option" data-value="b" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option B"><span class="quiz-marker">B</span><span>Encrypt &mdash; reduce context length via cryptographic compression</span></div>
+          <div class="quiz-option" data-value="c" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option C"><span class="quiz-marker">C</span><span>Retrieve &mdash; fetch facts from external storage on demand</span></div>
+          <div class="quiz-option" data-value="d" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option D"><span class="quiz-marker">D</span><span>Offload &mdash; hand a sub-task to a subagent with its own context</span></div>
+          <div class="quiz-feedback correct-fb">Correct! The four levers are <strong>add, compress, retrieve, offload</strong>. "Encrypt" is a distractor &mdash; cryptographic compression doesn't reduce token count for the model since the model still needs to read the cleartext. Every later module in Track 3 is just a specialized application of one of these four.</div>
+          <div class="quiz-feedback incorrect-fb"></div>
+        </div>
+
+        <!-- Q3 -->
+        <div class="quiz-question" data-correct="d">
+          <h4>Q3: An agent works fine for the first 8 turns, then degrades sharply. Token usage is at 60%, well under the limit. What's the most likely cause?</h4>
+          <div class="quiz-option" data-value="a" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option A"><span class="quiz-marker">A</span><span>The model is rate-limited &mdash; switch to Haiku</span></div>
+          <div class="quiz-option" data-value="b" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option B"><span class="quiz-marker">B</span><span>The system prompt is too short &mdash; add more instructions</span></div>
+          <div class="quiz-option" data-value="c" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option C"><span class="quiz-marker">C</span><span>Token budget exceeded &mdash; the agent is silently truncating</span></div>
+          <div class="quiz-option" data-value="d" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option D"><span class="quiz-marker">D</span><span>Context rot &mdash; accumulated stale tool results and superseded instructions are lowering signal-to-noise</span></div>
+          <div class="quiz-feedback correct-fb">Correct! Context rot is signal-to-noise degradation, not a budget problem. You can hit it at 60% utilization. The fix isn't a bigger window &mdash; it's a cleaner one. Apply the compress lever to fold resolved errors and superseded instructions into a single positive case-fact summary.</div>
+          <div class="quiz-feedback incorrect-fb"></div>
+        </div>
+
+        <!-- Q4 -->
+        <div class="quiz-question" data-correct="a">
+          <h4>Q4: Which message ordering allows prompt caching to hit on subsequent calls?</h4>
+          <div class="quiz-option" data-value="a" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option A"><span class="quiz-marker">A</span><span>system &rarr; tools &rarr; reference doc &rarr; history &rarr; current user turn</span></div>
+          <div class="quiz-option" data-value="b" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option B"><span class="quiz-marker">B</span><span>history &rarr; system &rarr; tools &rarr; current user turn</span></div>
+          <div class="quiz-option" data-value="c" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option C"><span class="quiz-marker">C</span><span>current user turn &rarr; history &rarr; system &rarr; tools</span></div>
+          <div class="quiz-option" data-value="d" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option D"><span class="quiz-marker">D</span><span>Order doesn't affect caching &mdash; only content matters</span></div>
+          <div class="quiz-feedback correct-fb">Correct! Prompt caching reuses prefixes that match exactly. Static blocks (system, tools, fixed reference docs) must come first so they form a stable prefix across calls. As soon as a dynamic block (like history) appears, everything after it is "new" from the cache's perspective &mdash; even if it would have been identical further down. Static-first is the cache-friendly order.</div>
+          <div class="quiz-feedback incorrect-fb"></div>
+        </div>
+
+        <!-- Q5 -->
+        <div class="quiz-question" data-correct="c">
+          <h4>Q5: You have a 25-page reference doc the agent needs occasional facts from across many turns. Which lever is the best fit?</h4>
+          <div class="quiz-option" data-value="a" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option A"><span class="quiz-marker">A</span><span>Add &mdash; paste the full doc into the system prompt every turn</span></div>
+          <div class="quiz-option" data-value="b" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option B"><span class="quiz-marker">B</span><span>Compress &mdash; summarize the doc down to one paragraph</span></div>
+          <div class="quiz-option" data-value="c" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option C"><span class="quiz-marker">C</span><span>Retrieve &mdash; chunk and embed the doc, fetch only relevant chunks per turn</span></div>
+          <div class="quiz-option" data-value="d" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option D"><span class="quiz-marker">D</span><span>Offload &mdash; spawn a subagent that holds the doc in its own window</span></div>
+          <div class="quiz-feedback correct-fb">Correct! "Occasional facts" is the giveaway &mdash; most turns won't need most of the doc. Retrieve is the right lever: pay 0 tokens until a query needs a chunk, then fetch only the relevant slice. Add wastes tokens every turn, compress loses specifics, offload is overkill for a single doc lookup. This is the setup for M09 (RAG).</div>
+          <div class="quiz-feedback incorrect-fb"></div>
+        </div>
+
+        <!-- Q6 -->
+        <div class="quiz-question" data-correct="b">
+          <h4>Q6: A long context contains a critical instruction at position 12 of 23 layers. Why might Claude miss it?</h4>
+          <div class="quiz-option" data-value="a" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option A"><span class="quiz-marker">A</span><span>The instruction has fewer tokens than the surrounding content</span></div>
+          <div class="quiz-option" data-value="b" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option B"><span class="quiz-marker">B</span><span>The "lost in the middle" effect &mdash; recall accuracy drops in middle positions even when the content is present</span></div>
+          <div class="quiz-option" data-value="c" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option C"><span class="quiz-marker">C</span><span>Claude truncates context in the middle when it's too long</span></div>
+          <div class="quiz-option" data-value="d" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option D"><span class="quiz-marker">D</span><span>Tools always override instructions in the middle of context</span></div>
+          <div class="quiz-feedback correct-fb">Correct! Liu et al. 2023 documented the lost-in-the-middle effect across most modern LLMs &mdash; recall is high at start (~75%) and end (~70%) but drops to ~45% in the middle. The fix: put critical instructions at start (system prompt) or end (just before user query), or repeat them at both positions. This is exam Domain 5.2.</div>
+          <div class="quiz-feedback incorrect-fb"></div>
+        </div>
+
+        <div class="quiz-score" id="quiz-score" style="display:none;">
+          <div class="score-num" id="score-display"></div>
+          <p id="score-message" style="color:var(--text-secondary);margin-top:0.5rem;"></p>
+        </div>
+      </section>
+
+      <!-- ==================== SUMMARY ==================== -->
+      <section class="section" id="summary">
+        <h2 id="summary-heading">Module Summary</h2>
+        <div style="background:var(--bg-card);border-radius:12px;padding:1.5rem;margin-bottom:1.5rem;">
+          <h3 id="key-takeaways" style="margin-top:0;color:var(--accent-primary);">Key Takeaways</h3>
+          <ul>
+            <li><strong>Prompt engineering writes one message; context engineering curates everything the model sees.</strong> The user message is often &lt;1% of the input tokens &mdash; the other 99% is the layers you assembled.</li>
+            <li><strong>Six layers</strong> &mdash; system, tools, history, retrieved docs, tool results, current turn. Inventory them before you debug an agent.</li>
+            <li><strong>Four levers, no exceptions</strong> &mdash; add, compress, retrieve, offload. Every later module in Track 3 is one of these four wearing a different costume.</li>
+            <li><strong>Static-first ordering</strong> is what makes prompt caching work. Same content in the wrong order can cost 6x more.</li>
+            <li><strong>Lost in the middle is real</strong>. Put critical content at the start or end of long contexts &mdash; and consider repeating it at both.</li>
+            <li><strong>Context rot is a signal-to-noise problem</strong>, not a budget problem. You can hit it at 60% window utilization. Compaction is the cure.</li>
+          </ul>
+        </div>
+        <div style="background:var(--bg-card);border-radius:12px;padding:1.5rem;">
+          <h3 id="next-preview" style="margin-top:0;color:var(--track-color);">Next Module Preview: M04 &mdash; Structured Output</h3>
+          <p style="margin-bottom:0;">Now that you know what goes <em>into</em> the model, the next question is how to get reliably parseable output back. M04 covers JSON mode, tool-use as a structured-output mechanism, and Pydantic/Zod validation &mdash; turning Claude's natural-language replies into data your agent can act on without crashing on malformed responses.</p>
+        </div>
+      </section>
+
+      <div class="module-nav">
+        <a href="M03-prompts.html" aria-label="Previous module: Prompts">&larr; M03: Prompts</a>
+        <a href="index.html" aria-label="Course Home" title="Course Home" style="font-size:1.2rem;">&#x1F3E0; Home</a>
+        <a href="M04-structured-output.html" aria-label="Next module: Structured Output">M04: Structured Output &rarr;</a>
+      </div>
+    </main>
+  </div>
+
+  <button class="sidebar-toggle" onclick="document.getElementById('sidebar').classList.toggle('open')" aria-label="Toggle navigation menu">&#9776;</button>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
+
+  <script>
+    // === CODE TABS ===
+    function switchTab(btn,group){
+      const wrapper=btn.closest('.code-block-wrapper');
+      wrapper.querySelectorAll('.code-tab').forEach(t=>{t.classList.remove('active');t.setAttribute('aria-selected','false')});
+      wrapper.querySelectorAll('.code-panel').forEach(p=>p.classList.remove('active'));
+      btn.classList.add('active');btn.setAttribute('aria-selected','true');
+      const panel=wrapper.querySelector('#'+group+'-'+btn.dataset.lang);if(panel)panel.classList.add('active');
+    }
+
+    // === COPY ===
+    function copyCode(btn){
+      const code=btn.parentElement.querySelector('code')||btn.closest('.code-single').querySelector('code');
+      navigator.clipboard.writeText(code.textContent).then(()=>{btn.textContent='Copied!';setTimeout(()=>btn.textContent='Copy',2000)});
+    }
+
+    // === ANIMATION 1: CONTEXT INVENTORY ===
+    const ctxIds=['ctxL1','ctxL2','ctxL3','ctxL4','ctxL5','ctxL6'];
+    const ctxTokens=[420,1180,3250,2800,1950,85];
+    const ctxBudget=10000;
+    let ctxTimer=null,ctxStep=0;
+    function ctxPlay(){
+      if(ctxTimer)return;
+      ctxTimer=setInterval(()=>{
+        if(ctxStep>=ctxIds.length){
+          // Final meter update
+          const total=ctxTokens.reduce((a,b)=>a+b,0);
+          document.getElementById('ctxTotal').textContent=total.toLocaleString();
+          document.getElementById('ctxFill').style.width=Math.min(100,total/ctxBudget*100)+'%';
+          document.getElementById('ctxPct').textContent=Math.round(85/total*100*10)/10+'%';
+          ctxPause();return;
+        }
+        document.getElementById(ctxIds[ctxStep]).classList.add('visible');
+        const partial=ctxTokens.slice(0,ctxStep+1).reduce((a,b)=>a+b,0);
+        document.getElementById('ctxTotal').textContent=partial.toLocaleString();
+        document.getElementById('ctxFill').style.width=Math.min(100,partial/ctxBudget*100)+'%';
+        ctxStep++;
+      },550);
+    }
+    function ctxPause(){clearInterval(ctxTimer);ctxTimer=null}
+    function ctxRestart(){
+      ctxPause();ctxStep=0;
+      ctxIds.forEach(id=>document.getElementById(id).classList.remove('visible'));
+      document.getElementById('ctxTotal').textContent='0';
+      document.getElementById('ctxFill').style.width='0%';
+      document.getElementById('ctxPct').textContent='0%';
+    }
+
+    // === ANIMATION 2: FOUR LEVERS ===
+    const leverData=[
+      {col:'lever-add',label:'ADD &mdash; full fact in context every turn',shows:'Model sees: 38 tokens of original wording, exact dollar amount preserved.'},
+      {col:'lever-compress',label:'COMPRESS &mdash; summarized to gist',shows:'Model sees: "Acme 2019 GE Capital filing covers all assets" (8 tok). Dollar amount lost.'},
+      {col:'lever-retrieve',label:'RETRIEVE &mdash; stored externally, fetched on demand',shows:'Model sees: 0 tok by default; fetches full fact only when query mentions GE Capital or Acme.'},
+      {col:'lever-offload',label:'OFFLOAD &mdash; subagent reads filing, returns verdict',shows:'Model sees: "Subagent: Acme has $42.3M in 2019 GE Capital collateral, all assets pledged."'}
+    ];
+    let leversTimer=null,leversStep=0;
+    function leversPlay(){
+      if(leversTimer)return;
+      leversTimer=setInterval(()=>{
+        if(leversStep>=leverData.length){leversPause();return}
+        document.querySelectorAll('.lever-col').forEach(c=>c.classList.remove('active'));
+        const d=leverData[leversStep];
+        document.getElementById(d.col).classList.add('active');
+        document.getElementById('leverLabel').innerHTML=d.label;
+        document.getElementById('leverShows').innerHTML='&rarr; '+d.shows;
+        leversStep++;
+      },1800);
+    }
+    function leversPause(){clearInterval(leversTimer);leversTimer=null}
+    function leversRestart(){
+      leversPause();leversStep=0;
+      document.querySelectorAll('.lever-col').forEach(c=>c.classList.remove('active'));
+      document.getElementById('leverLabel').innerHTML='Press play &mdash; the fact will travel through each lever';
+      document.getElementById('leverShows').innerHTML='';
+    }
+
+    // === ANIMATION 3: CACHE COMPARISON ===
+    const cacheGood=[{id:'g1',s:'g1s'},{id:'g2',s:'g2s'},{id:'g3',s:'g3s'},{id:'g4',s:'g4s'},{id:'g5',s:'g5s'}];
+    const cacheBad=[{id:'b1',s:'b1s'},{id:'b2',s:'b2s'},{id:'b3',s:'b3s'},{id:'b4',s:'b4s'},{id:'b5',s:'b5s'}];
+    let cacheTimer=null,cacheStep=0;
+    function cachePlay(){
+      if(cacheTimer)return;
+      cacheTimer=setInterval(()=>{
+        if(cacheStep<cacheGood.length){
+          const g=cacheGood[cacheStep],b=cacheBad[cacheStep];
+          document.getElementById(g.id).classList.add('visible');
+          document.getElementById(b.id).classList.add('visible');
+          setTimeout(()=>{
+            document.getElementById(g.s).classList.add('visible');
+            document.getElementById(b.s).classList.add('visible');
+          },400);
+        }else if(cacheStep===cacheGood.length){
+          document.getElementById('gSum').classList.add('visible');
+          document.getElementById('bSum').classList.add('visible');
+          cachePause();return;
+        }
+        cacheStep++;
+      },700);
+    }
+    function cachePause(){clearInterval(cacheTimer);cacheTimer=null}
+    function cacheRestart(){
+      cachePause();cacheStep=0;
+      cacheGood.concat(cacheBad).forEach(o=>{
+        document.getElementById(o.id).classList.remove('visible');
+        document.getElementById(o.s).classList.remove('visible');
+      });
+      document.getElementById('gSum').classList.remove('visible');
+      document.getElementById('bSum').classList.remove('visible');
+    }
+
+    // === ANIMATION 4: POSITION EFFECTS ===
+    let posPlayed=false;
+    function posPlay(){
+      if(posPlayed)return;
+      posPlayed=true;
+      // The bars are already pre-rendered via .visible class; just trigger the accuracy badges
+      ['pa1','pa2','pa3'].forEach((id,i)=>{
+        setTimeout(()=>document.getElementById(id).classList.add('visible'),(i+1)*500);
+      });
+    }
+    function posRestart(){
+      posPlayed=false;
+      ['pa1','pa2','pa3'].forEach(id=>document.getElementById(id).classList.remove('visible'));
+      // Auto-replay
+      setTimeout(posPlay,300);
+    }
+    // Auto-show position bars accuracy on load (after slight delay so it's noticeable)
+
+    // === ANIMATION 5: ROT COMPACTION ===
+    let rotTimer=null,rotStep=0;
+    const rotIds=['rg1','rg2','rg3'];
+    function rotPlay(){
+      if(rotTimer)return;
+      rotTimer=setInterval(()=>{
+        if(rotStep>=rotIds.length){rotPause();return}
+        document.getElementById(rotIds[rotStep]).style.opacity='1';
+        rotStep++;
+      },800);
+    }
+    function rotPause(){clearInterval(rotTimer);rotTimer=null}
+    function rotRestart(){
+      rotPause();rotStep=0;
+      rotIds.forEach(id=>document.getElementById(id).style.opacity='0');
+    }
+
+    // === QUIZ ===
+    let answeredCount=0,correctCount=0;
+    const totalQuestions=document.querySelectorAll('.quiz-question').length;
+    function selectQuiz(optionEl){
+      const q=optionEl.closest('.quiz-question');if(q.classList.contains('answered'))return;
+      q.classList.add('answered');
+      const correct=q.dataset.correct,selected=optionEl.dataset.value,isCorrect=selected===correct;
+      q.querySelectorAll('.quiz-option').forEach(o=>o.classList.add('disabled'));
+      if(isCorrect){optionEl.classList.add('correct');optionEl.querySelector('.quiz-marker').textContent='✓';correctCount++}
+      else{
+        optionEl.classList.add('incorrect');optionEl.querySelector('.quiz-marker').textContent='✗';
+        q.querySelectorAll('.quiz-option').forEach(o=>{if(o.dataset.value===correct){o.classList.add('correct');o.querySelector('.quiz-marker').textContent='✓'}});
+      }
+      const cfb=q.querySelector('.quiz-feedback.correct-fb'),ifb=q.querySelector('.quiz-feedback.incorrect-fb');
+      if(isCorrect){cfb.classList.add('show')}else{ifb.textContent='Not quite. '+cfb.textContent.replace('Correct! ','');ifb.classList.add('show')}
+      answeredCount++;
+      if(answeredCount===totalQuestions){
+        document.getElementById('quiz-score').style.display='block';
+        document.getElementById('score-display').textContent=correctCount+' / '+totalQuestions;
+        const pct=Math.round(correctCount/totalQuestions*100);
+        document.getElementById('score-message').textContent=pct===100?'Perfect! Ready for M04.':pct>=67?'Good work! Review missed concepts, then continue.':'Consider re-reading before moving on.';
+      }
+    }
+    document.querySelectorAll('.quiz-option').forEach(o=>{o.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();selectQuiz(o)}})});
+
+    // === SIDEBAR SCROLL SPY ===
+    const sections=document.querySelectorAll('section[id],h2[id],h3[id]');
+    const navLinks=document.querySelectorAll('.sidebar-nav a');
+    function updateActiveLink(){
+      let current='';sections.forEach(s=>{if(s.getBoundingClientRect().top<=120)current=s.id});
+      navLinks.forEach(l=>{l.classList.remove('active');if(l.getAttribute('href')==='#'+current)l.classList.add('active')});
+    }
+    window.addEventListener('scroll',updateActiveLink,{passive:true});
+    navLinks.forEach(l=>{l.addEventListener('click',e=>{e.preventDefault();const t=document.querySelector(l.getAttribute('href'));if(t)t.scrollIntoView({behavior:'smooth',block:'start'});document.getElementById('sidebar').classList.remove('open')})});
+
+    // Auto-start the first animation after page load
+    setTimeout(ctxPlay,1000);
+    setTimeout(posPlay,2000);
+  </script>
+</body>
+</html>

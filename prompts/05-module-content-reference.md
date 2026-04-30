@@ -22,6 +22,24 @@ Concepts:
 
 ---
 
+## MODULE 3B: [M03B] Context Engineering — Curating What the Model Sees
+Track: 1 — Foundations | Position: After M03, before M04 | Level: Beginner → Intermediate
+Prerequisites: M01, M02, M03
+Estimated Time: 50-60 minutes
+Track Color: var(--track-foundations) / #6366F1
+
+Concepts:
+- Prompt engineering vs. context engineering — writing the message vs. curating everything the model sees
+- The "what does the model actually see?" inventory: system + tools + history + retrieved + tool results + current turn (animated stacked layers with token meter)
+- The four levers: add, compress, retrieve, offload — the organizing frame for Track 3
+- Static vs. dynamic context — why ordering matters for prompt caching (sets up M22)
+- Position effects — lost-in-the-middle, putting critical content at the edges
+- Context rot — stale tool results, superseded instructions, resolved errors poisoning long-running agents
+- Hands-on: The Poisoned Transcript lab — diagnose a 30-turn rotting agent, fix it three ways (compress / retrieve / offload), compare answer quality + tokens + latency
+- Visual: Side-by-side naive vs. engineered context solving the same task with token counts and quality scores
+
+---
+
 ## MODULE 4: [M04] Structured Output & Parsing
 Track: 1 — Foundations | Position: 4 of 30 | Level: Beginner → Intermediate
 Prerequisites: M01-M03
@@ -371,3 +389,22 @@ Concepts:
 - Building responsibly: Ethics, alignment, and human oversight
 - Resources: Communities, papers, open-source frameworks
 - Your personal agent development roadmap
+
+---
+
+## MODULE 27B: [M27B] Cert Domain 5.6 Deep Dive — Provenance, Temporal, Stratified Review, Synthesis
+Track: 9 — Cert Prep | Position: After M27, before exam | Level: Intermediate → Advanced
+Prerequisites: M09, M11, M17, M18, M27
+Estimated Time: 60-75 minutes
+Track Color: var(--track-capstones) / #D4A843
+
+Concepts:
+- Information provenance — claim-source mappings, retraction propagation, structured output schema (not prose with parens)
+- Temporal data handling — {value, valid_from, valid_to, source} fields, current vs as-of queries, missing-valid_to bug class
+- Stratified sampling for human review — N from each confidence bucket, beats top-N and uniform
+- Field-level confidence — beats document-level for high-stakes extraction, composes with stratified
+- Synthesis output buckets — established / contested / single-source / temporal-warning, with paraphrase = agreement
+- Hands-on: Healthcare Pre-Auth Synthesizer — 8-chunk fixture, 4 output buckets, stratified review queue, regression test for contested-claims trap
+- Visual: Source retraction propagation, temporal timeline scrubber, stratified-vs-top-N sampling comparison, agreement detection
+
+This module exists because Domain 5.6 has the most under-covered topics in the cert. Cert tips were added to M09, M11, M17, M18 but the cert tests these as a unified discipline. Take this module before any full timed practice exam.

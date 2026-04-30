@@ -190,7 +190,9 @@
       <a href="#agent-sdk">Agent SDK</a>
       <a href="#stop-reason">stop_reason</a>
       <a href="#hooks">Hooks</a>
+      <a href="#hook-events">12 Hook Events</a>
       <a href="#sessions">Session Management</a>
+      <a href="#compaction">Context Compaction</a>
       <a href="#subagents">Subagent Orchestration</a>
       <a href="#escalation">Escalation Patterns</a>
       <a href="#exercise">Hands-On Exercise</a>
@@ -532,7 +534,233 @@ process.stdin.on("end", () =&gt; {
           <p>Critical anti-pattern: relying on prompt-based enforcement for critical business rules. "Never issue refunds over $500" in a system prompt is probabilistic &mdash; the model CAN and WILL sometimes ignore it. Use hooks for anything that MUST be enforced 100% of the time. Prompts are for style and tone; hooks are for compliance and business rules.</p>
         </div>
 
-        <div class="bridge">Hooks enforce rules within a single session. But what about managing the session itself? Long-running sessions accumulate stale context, and parallel exploration pollutes the main conversation. Session management solves both problems.</div>
+        <div class="bridge">PreToolUse and PostToolUse are the two events you'll use most. But the SDK exposes <strong>twelve</strong> distinct lifecycle events &mdash; each unlocks a different category of automation, from session-start context loading to permission-routing.</div>
+      </section>
+
+      <!-- 12 HOOK EVENTS -->
+      <section class="section" id="hook-events">
+        <h2 id="hook-events-heading">The Hook Lifecycle &mdash; The 12 Most-Used Events</h2>
+
+        <p>Hooks aren't limited to wrapping individual tool calls. The SDK fires events at every meaningful boundary in the agent lifecycle &mdash; session start, prompt submission, permission requests, subagent spawning, context compaction, and shutdown. Each event is a deterministic place to inject business logic outside the model's control.</p>
+
+        <!-- HOOK SEQUENCE DIAGRAM -->
+        <div class="animation-container" aria-label="Hook lifecycle sequence diagram">
+          <div class="animation-title">Hook Lifecycle &mdash; Sequence Across One Tool Call</div>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 320" style="width:100%;max-width:600px;display:block;margin:0 auto;" role="img" aria-label="Sequence diagram showing You, Claude, Hooks, and Codebase swimlanes. User submits prompt; UserPromptSubmit fires; Claude requests Bash tool; PreToolUse fires (allowed); tool writes file; PostToolUse fires (formats file); test runs; Stop event fires producing a session summary.">
+            <defs><marker id="hk-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#94A3B8"/></marker><marker id="hk-arrow-r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#10B981"/></marker></defs>
+            <!-- Swimlanes -->
+            <rect x="20" y="10" width="100" height="28" rx="6" fill="rgba(212,168,67,0.15)" stroke="#D4A843"/>
+            <text x="70" y="29" text-anchor="middle" fill="#D4A843" font-family="Bricolage Grotesque" font-weight="700" font-size="11">You</text>
+            <rect x="170" y="10" width="100" height="28" rx="6" fill="rgba(236,72,153,0.15)" stroke="#EC4899"/>
+            <text x="220" y="29" text-anchor="middle" fill="#EC4899" font-family="Bricolage Grotesque" font-weight="700" font-size="11">Claude</text>
+            <rect x="320" y="10" width="100" height="28" rx="6" fill="rgba(245,158,11,0.15)" stroke="#F59E0B"/>
+            <text x="370" y="29" text-anchor="middle" fill="#F59E0B" font-family="Bricolage Grotesque" font-weight="700" font-size="11">Hooks</text>
+            <rect x="470" y="10" width="100" height="28" rx="6" fill="rgba(16,185,129,0.15)" stroke="#10B981"/>
+            <text x="520" y="29" text-anchor="middle" fill="#10B981" font-family="Bricolage Grotesque" font-weight="700" font-size="11">Codebase</text>
+            <!-- Lifelines -->
+            <line x1="70" y1="38" x2="70" y2="310" stroke="#21262D" stroke-width="1" stroke-dasharray="3,3"/>
+            <line x1="220" y1="38" x2="220" y2="310" stroke="#21262D" stroke-width="1" stroke-dasharray="3,3"/>
+            <line x1="370" y1="38" x2="370" y2="310" stroke="#21262D" stroke-width="1" stroke-dasharray="3,3"/>
+            <line x1="520" y1="38" x2="520" y2="310" stroke="#21262D" stroke-width="1" stroke-dasharray="3,3"/>
+            <!-- 1. UserPromptSubmit -->
+            <line x1="70" y1="60" x2="217" y2="60" stroke="#94A3B8" stroke-width="1.5" marker-end="url(#hk-arrow)"/>
+            <text x="143" y="55" text-anchor="middle" fill="#E8ECF1" font-family="Source Sans 3" font-size="10">"implement the auth module"</text>
+            <line x1="220" y1="68" x2="367" y2="68" stroke="#F59E0B" stroke-width="1" stroke-dasharray="2,2" marker-end="url(#hk-arrow)"/>
+            <text x="293" y="64" text-anchor="middle" fill="#F59E0B" font-family="JetBrains Mono" font-size="9">UserPromptSubmit</text>
+            <!-- 2. PreToolUse (Bash) -->
+            <line x1="220" y1="98" x2="367" y2="98" stroke="#94A3B8" stroke-width="1.5" marker-end="url(#hk-arrow)"/>
+            <text x="293" y="93" text-anchor="middle" fill="#94A3B8" font-family="JetBrains Mono" font-size="9">PreToolUse(Bash)</text>
+            <line x1="370" y1="108" x2="223" y2="108" stroke="#10B981" stroke-width="1.5" stroke-dasharray="2,2" marker-end="url(#hk-arrow-r)"/>
+            <text x="293" y="120" text-anchor="middle" fill="#10B981" font-family="Source Sans 3" font-size="9">&#9989; allowed</text>
+            <!-- 3. Bash writes file -->
+            <line x1="220" y1="140" x2="517" y2="140" stroke="#94A3B8" stroke-width="1.5" marker-end="url(#hk-arrow)"/>
+            <text x="365" y="135" text-anchor="middle" fill="#E8ECF1" font-family="Source Sans 3" font-size="10">writes auth.ts</text>
+            <!-- 4. PostToolUse (Write) -->
+            <line x1="220" y1="170" x2="367" y2="170" stroke="#94A3B8" stroke-width="1.5" marker-end="url(#hk-arrow)"/>
+            <text x="293" y="165" text-anchor="middle" fill="#94A3B8" font-family="JetBrains Mono" font-size="9">PostToolUse(Write)</text>
+            <line x1="370" y1="180" x2="517" y2="180" stroke="#F59E0B" stroke-width="1" stroke-dasharray="2,2" marker-end="url(#hk-arrow)"/>
+            <text x="445" y="175" text-anchor="middle" fill="#F59E0B" font-family="Source Sans 3" font-size="9">auto-runs ESLint + Prettier</text>
+            <!-- 5. PostToolUse (Test) -->
+            <line x1="220" y1="218" x2="517" y2="218" stroke="#94A3B8" stroke-width="1.5" marker-end="url(#hk-arrow)"/>
+            <text x="365" y="213" text-anchor="middle" fill="#E8ECF1" font-family="Source Sans 3" font-size="10">runs test suite</text>
+            <line x1="520" y1="232" x2="223" y2="232" stroke="#F43F5E" stroke-width="1.2" stroke-dasharray="2,2" marker-end="url(#hk-arrow-r)"/>
+            <text x="365" y="248" text-anchor="middle" fill="#F43F5E" font-family="Source Sans 3" font-size="9">3 failures &mdash; Claude fixes</text>
+            <!-- 6. Stop -->
+            <line x1="220" y1="270" x2="367" y2="270" stroke="#94A3B8" stroke-width="1.5" marker-end="url(#hk-arrow)"/>
+            <text x="293" y="265" text-anchor="middle" fill="#94A3B8" font-family="JetBrains Mono" font-size="9">Stop</text>
+            <line x1="370" y1="285" x2="73" y2="285" stroke="#F59E0B" stroke-width="1" stroke-dasharray="2,2" marker-end="url(#hk-arrow-r)"/>
+            <text x="220" y="298" text-anchor="middle" fill="#F59E0B" font-family="Source Sans 3" font-size="9">session summary + Slack notification</text>
+          </svg>
+        </div>
+
+        <div class="animation-container" aria-label="12 hook events reference table" style="padding:1.25rem;">
+          <div class="animation-title">The 12 Events &mdash; What Fires When</div>
+          <table style="width:100%;border-collapse:collapse;font-size:0.85rem;">
+            <thead>
+              <tr style="background:var(--bg-surface);">
+                <th style="padding:0.55rem 0.75rem;text-align:left;font-family:'Bricolage Grotesque',sans-serif;font-size:0.78rem;color:var(--text-secondary);border-bottom:1px solid var(--code-border);">Event</th>
+                <th style="padding:0.55rem 0.75rem;text-align:left;font-family:'Bricolage Grotesque',sans-serif;font-size:0.78rem;color:var(--text-secondary);border-bottom:1px solid var(--code-border);">Fires</th>
+                <th style="padding:0.55rem 0.75rem;text-align:left;font-family:'Bricolage Grotesque',sans-serif;font-size:0.78rem;color:var(--text-secondary);border-bottom:1px solid var(--code-border);">Primary use</th>
+              </tr>
+            </thead>
+            <tbody style="font-family:JetBrains Mono,monospace;">
+              <tr><td style="padding:0.45rem 0.75rem;border-bottom:1px solid var(--code-border);"><code style="color:#F59E0B;">PreToolUse</code></td><td style="padding:0.45rem 0.75rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-secondary);">Before any tool call</td><td style="padding:0.45rem 0.75rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-muted);">Block dangerous commands, inject context</td></tr>
+              <tr><td style="padding:0.45rem 0.75rem;border-bottom:1px solid var(--code-border);"><code style="color:#F59E0B;">PostToolUse</code></td><td style="padding:0.45rem 0.75rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-secondary);">After any tool call</td><td style="padding:0.45rem 0.75rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-muted);">Auto-lint, auto-format, auto-test</td></tr>
+              <tr><td style="padding:0.45rem 0.75rem;border-bottom:1px solid var(--code-border);"><code style="color:#F43F5E;">PostToolUseFailure</code></td><td style="padding:0.45rem 0.75rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-secondary);">On tool error</td><td style="padding:0.45rem 0.75rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-muted);">Log failures, alert on-call</td></tr>
+              <tr><td style="padding:0.45rem 0.75rem;border-bottom:1px solid var(--code-border);"><code style="color:#8B5CF6;">PermissionRequest</code></td><td style="padding:0.45rem 0.75rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-secondary);">When Claude asks for permission</td><td style="padding:0.45rem 0.75rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-muted);">Route approvals to Opus / on-call human</td></tr>
+              <tr><td style="padding:0.45rem 0.75rem;border-bottom:1px solid var(--code-border);"><code style="color:#06B6D4;">UserPromptSubmit</code></td><td style="padding:0.45rem 0.75rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-secondary);">When you send a message</td><td style="padding:0.45rem 0.75rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-muted);">Validate inputs, log prompts</td></tr>
+              <tr><td style="padding:0.45rem 0.75rem;border-bottom:1px solid var(--code-border);"><code style="color:#3B82F6;">Stop</code></td><td style="padding:0.45rem 0.75rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-secondary);">Session ends naturally</td><td style="padding:0.45rem 0.75rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-muted);">Summary generation, Slack notification</td></tr>
+              <tr><td style="padding:0.45rem 0.75rem;border-bottom:1px solid var(--code-border);"><code style="color:#F97316;">SubagentStart</code></td><td style="padding:0.45rem 0.75rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-secondary);">A subagent starts</td><td style="padding:0.45rem 0.75rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-muted);">Inject parent context, log spawn</td></tr>
+              <tr><td style="padding:0.45rem 0.75rem;border-bottom:1px solid var(--code-border);"><code style="color:#F97316;">SubagentStop</code></td><td style="padding:0.45rem 0.75rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-secondary);">A subagent finishes</td><td style="padding:0.45rem 0.75rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-muted);">Chain next agent in CI/CD pipeline</td></tr>
+              <tr><td style="padding:0.45rem 0.75rem;border-bottom:1px solid var(--code-border);"><code style="color:#10B981;">PreCompact</code></td><td style="padding:0.45rem 0.75rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-secondary);">Before context compaction</td><td style="padding:0.45rem 0.75rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-muted);">Preserve critical state across compaction</td></tr>
+              <tr><td style="padding:0.45rem 0.75rem;border-bottom:1px solid var(--code-border);"><code style="color:#10B981;">SessionStart</code></td><td style="padding:0.45rem 0.75rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-secondary);">Session opens</td><td style="padding:0.45rem 0.75rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-muted);">Load dynamic context, kick off observability</td></tr>
+              <tr><td style="padding:0.45rem 0.75rem;border-bottom:1px solid var(--code-border);"><code style="color:#10B981;">SessionEnd</code></td><td style="padding:0.45rem 0.75rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-secondary);">Session closes</td><td style="padding:0.45rem 0.75rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-muted);">Archive transcript, emit metrics</td></tr>
+              <tr><td style="padding:0.45rem 0.75rem;"><code style="color:#D4A843;">Notification</code></td><td style="padding:0.45rem 0.75rem;font-family:Source Sans 3,sans-serif;color:var(--text-secondary);">Permission prompts, idle</td><td style="padding:0.45rem 0.75rem;font-family:Source Sans 3,sans-serif;color:var(--text-muted);">Custom TTS, Slack alerts, push notifications</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3>The CI/CD Chain Pattern with <code>SubagentStop</code></h3>
+        <p>The single most powerful event for production pipelines is <code>SubagentStop</code> &mdash; it fires when a specialist subagent finishes, which lets you chain the next agent in a pipeline without human intervention. The pattern: a queue file holds the next command, the hook reads the next line and prints it to stdout, the SDK treats that as Claude's next suggested action.</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-panel active" style="display:block;">
+            <pre><code class="language-json">{
+  "hooks": {
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "head -1 .claude/pipeline_queue.txt &amp;&amp; sed -i '1d' .claude/pipeline_queue.txt"
+          }
+        ]
+      }
+    ]
+  }
+}</code></pre>
+          </div>
+        </div>
+        <p style="font-size:0.9rem;color:var(--text-secondary);margin-top:0.5rem;">When the <code>pm-spec</code> subagent finishes, the hook reads the next command from the queue (e.g. <em>"now run the code-reviewer subagent on the new SPEC.md"</em>) and emits it. The pipeline auto-advances. This is how the article's "programmable engineering team" pattern is wired together.</p>
+
+        <div class="callout-warning">
+          <span class="box-label">When to Use Each Class of Event</span>
+          <p><strong>Per-tool events</strong> (PreToolUse, PostToolUse, PostToolUseFailure): granular guardrails &mdash; refund limits, PII redaction, lint-on-write.<br>
+          <strong>Per-session events</strong> (SessionStart, SessionEnd, Stop): observability and lifecycle hygiene &mdash; transcript archival, cost reporting, dynamic context loading.<br>
+          <strong>Per-prompt events</strong> (UserPromptSubmit, PermissionRequest, Notification): UX customization &mdash; intent classification, custom TTS, escalation to a human reviewer.<br>
+          <strong>Per-subagent events</strong> (SubagentStart, SubagentStop): pipeline chaining and parent-context injection.<br>
+          <strong>Compaction event</strong> (PreCompact): preserve must-keep state (modified file list, test status, unresolved issues) before the SDK summarizes older history.</p>
+        </div>
+
+        <h3 style="margin-top:2.25rem;">The Full Hook Catalog &mdash; 28 Events Across 6 Categories</h3>
+        <p>The 12 events above are the most-used. The complete reference adds 16 more for fine-grained workflows: separate failure events, slash-command interception, batch boundaries, agent-team coordination, worktree lifecycle, MCP elicitation, instruction-file loads, and config-change interception. The full catalog:</p>
+
+        <div class="animation-container" aria-label="Full 28-event hook catalog grouped by category" style="padding:1.1rem;">
+          <div class="animation-title">All 28 Hook Events &mdash; Grouped by Category</div>
+          <table style="width:100%;border-collapse:collapse;font-size:0.8rem;">
+            <thead>
+              <tr style="background:var(--bg-surface);">
+                <th style="padding:0.45rem 0.6rem;text-align:left;font-family:'Bricolage Grotesque',sans-serif;font-size:0.75rem;color:var(--text-secondary);border-bottom:1px solid var(--code-border);">Category</th>
+                <th style="padding:0.45rem 0.6rem;text-align:left;font-family:'Bricolage Grotesque',sans-serif;font-size:0.75rem;color:var(--text-secondary);border-bottom:1px solid var(--code-border);">Event</th>
+                <th style="padding:0.45rem 0.6rem;text-align:left;font-family:'Bricolage Grotesque',sans-serif;font-size:0.75rem;color:var(--text-secondary);border-bottom:1px solid var(--code-border);">Can block? (exit 2)</th>
+                <th style="padding:0.45rem 0.6rem;text-align:left;font-family:'Bricolage Grotesque',sans-serif;font-size:0.75rem;color:var(--text-secondary);border-bottom:1px solid var(--code-border);">Use case</th>
+              </tr>
+            </thead>
+            <tbody style="font-family:JetBrains Mono,monospace;">
+              <tr><td rowspan="3" style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:#10B981;vertical-align:top;font-weight:600;">Session</td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);"><code style="color:#10B981;">SessionStart</code></td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-muted);">no</td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-secondary);">Inject branch/CI/issue context (matchers: startup/resume/clear/compact)</td></tr>
+              <tr><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);"><code style="color:#10B981;">Setup</code></td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-muted);">no</td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-secondary);">First-launch (init) or periodic (maintenance) bootstrapping</td></tr>
+              <tr><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);"><code style="color:#10B981;">SessionEnd</code></td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-muted);">no</td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-secondary);">Archive transcript, emit metrics (matchers include logout, prompt_input_exit)</td></tr>
+              <tr><td rowspan="2" style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:#06B6D4;vertical-align:top;font-weight:600;">Prompt</td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);"><code style="color:#06B6D4;">UserPromptSubmit</code></td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:#10B981;">yes</td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-secondary);">Validate / classify / inject context for typed prompts</td></tr>
+              <tr><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);"><code style="color:#06B6D4;">UserPromptExpansion</code></td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:#10B981;">yes</td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-secondary);">Intercept slash commands & MCP prompts before expansion</td></tr>
+              <tr><td rowspan="6" style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:#F59E0B;vertical-align:top;font-weight:600;">Tool</td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);"><code style="color:#F59E0B;">PreToolUse</code></td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:#10B981;">yes</td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-secondary);">Block / modify tool inputs (precedence: deny &gt; defer &gt; ask &gt; allow)</td></tr>
+              <tr><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);"><code style="color:#F59E0B;">PostToolUse</code></td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-muted);">no</td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-secondary);">Lint, format, validate output</td></tr>
+              <tr><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);"><code style="color:#F43F5E;">PostToolUseFailure</code></td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-muted);">no</td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-secondary);">Alert on errors, capture stack traces</td></tr>
+              <tr><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);"><code style="color:#F59E0B;">PostToolBatch</code></td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:#10B981;">yes</td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-secondary);">Stop the agentic loop after a tool batch (validation gates)</td></tr>
+              <tr><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);"><code style="color:#8B5CF6;">PermissionRequest</code></td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:#10B981;">yes</td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-secondary);">Allow / deny / update permissions; can interrupt Claude</td></tr>
+              <tr><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);"><code style="color:#8B5CF6;">PermissionDenied</code></td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-muted);">no</td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-secondary);">Tell model it may retry (<code>retry: true</code>)</td></tr>
+              <tr><td rowspan="2" style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:#3B82F6;vertical-align:top;font-weight:600;">Stop</td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);"><code style="color:#3B82F6;">Stop</code></td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:#10B981;">yes</td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-secondary);">Block normal stop &mdash; force more iterations</td></tr>
+              <tr><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);"><code style="color:#F43F5E;">StopFailure</code></td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-muted);">no</td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-secondary);">Triage rate_limit, billing_error, max_output_tokens, etc.</td></tr>
+              <tr><td rowspan="5" style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:#F97316;vertical-align:top;font-weight:600;">Subagent / Team</td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);"><code style="color:#F97316;">SubagentStart</code></td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-muted);">no</td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-secondary);">Inject parent context into newborn subagents</td></tr>
+              <tr><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);"><code style="color:#F97316;">SubagentStop</code></td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:#10B981;">yes</td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-secondary);">Pipeline chaining (most powerful event for CI/CD)</td></tr>
+              <tr><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);"><code style="color:#F97316;">TaskCreated</code></td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:#10B981;">yes</td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-secondary);">Veto Agent-tool spawn requests at the source</td></tr>
+              <tr><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);"><code style="color:#F97316;">TaskCompleted</code></td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:#10B981;">yes</td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-secondary);">Validate subagent results before they return to parent</td></tr>
+              <tr><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);"><code style="color:#F97316;">TeammateIdle</code></td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:#10B981;">yes</td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-secondary);">Wake idle agent-team members with new work</td></tr>
+              <tr><td rowspan="4" style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:#06B6D4;vertical-align:top;font-weight:600;">Filesystem / Worktree</td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);"><code style="color:#06B6D4;">FileChanged</code></td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-muted);">no</td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-secondary);">React to env-file edits (direnv pattern)</td></tr>
+              <tr><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);"><code style="color:#06B6D4;">CwdChanged</code></td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-muted);">no</td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-secondary);">Reload project context when working dir moves</td></tr>
+              <tr><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);"><code style="color:#06B6D4;">WorktreeCreate</code></td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:#10B981;">yes</td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-secondary);">Override default worktree path; copy gitignored files in</td></tr>
+              <tr><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);"><code style="color:#06B6D4;">WorktreeRemove</code></td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-muted);">no</td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-secondary);">Snapshot artifacts before cleanup</td></tr>
+              <tr><td rowspan="6" style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:#EC4899;vertical-align:top;font-weight:600;">Compact / Config / Misc</td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);"><code style="color:#10B981;">PreCompact</code></td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:#10B981;">yes</td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-secondary);">Snapshot critical state before summarization</td></tr>
+              <tr><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);"><code style="color:#10B981;">PostCompact</code></td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-muted);">no</td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-secondary);">Re-inject context after compaction</td></tr>
+              <tr><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);"><code style="color:#EC4899;">ConfigChange</code></td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:#10B981;">yes (except policy)</td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-secondary);">Audit / veto edits to settings.json or skills</td></tr>
+              <tr><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);"><code style="color:#EC4899;">InstructionsLoaded</code></td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-muted);">no</td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-secondary);">Track which CLAUDE.md files loaded (5 reasons: session_start, nested_traversal, path_glob_match, include, compact)</td></tr>
+              <tr><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);"><code style="color:#8B5CF6;">Elicitation</code></td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:#10B981;">yes</td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-secondary);">Auto-respond to MCP server input requests</td></tr>
+              <tr><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);"><code style="color:#8B5CF6;">ElicitationResult</code></td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:#10B981;">yes</td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-secondary);">Override MCP form responses</td></tr>
+              <tr><td style="padding:0.4rem 0.6rem;font-family:Source Sans 3,sans-serif;color:#D4A843;font-weight:600;">User</td><td style="padding:0.4rem 0.6rem;"><code style="color:#D4A843;">Notification</code></td><td style="padding:0.4rem 0.6rem;font-family:Source Sans 3,sans-serif;color:var(--text-muted);">no</td><td style="padding:0.4rem 0.6rem;font-family:Source Sans 3,sans-serif;color:var(--text-secondary);">Custom TTS, Slack, push notifications (matchers: permission_prompt, idle_prompt, etc.)</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 style="margin-top:2rem;">Hooks Aren't Just Shell Commands &mdash; Five Handler Types</h3>
+        <p>Most hook examples use <code>type: command</code>, but the SDK supports five handler types. Pick the one that matches your enforcement style:</p>
+
+        <div class="animation-container" aria-label="Five hook handler types comparison" style="padding:1.1rem;">
+          <table style="width:100%;border-collapse:collapse;font-size:0.85rem;font-family:Source Sans 3,sans-serif;">
+            <thead>
+              <tr style="background:var(--bg-surface);">
+                <th style="padding:0.5rem 0.6rem;text-align:left;border-bottom:1px solid var(--code-border);font-family:'Bricolage Grotesque',sans-serif;font-size:0.78rem;color:var(--text-secondary);">Type</th>
+                <th style="padding:0.5rem 0.6rem;text-align:left;border-bottom:1px solid var(--code-border);font-family:'Bricolage Grotesque',sans-serif;font-size:0.78rem;color:var(--text-secondary);">Handler</th>
+                <th style="padding:0.5rem 0.6rem;text-align:left;border-bottom:1px solid var(--code-border);font-family:'Bricolage Grotesque',sans-serif;font-size:0.78rem;color:var(--text-secondary);">Default timeout</th>
+                <th style="padding:0.5rem 0.6rem;text-align:left;border-bottom:1px solid var(--code-border);font-family:'Bricolage Grotesque',sans-serif;font-size:0.78rem;color:var(--text-secondary);">When to pick it</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td style="padding:0.45rem 0.6rem;border-bottom:1px solid var(--code-border);"><code style="color:#F59E0B;">command</code></td><td style="padding:0.45rem 0.6rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Shell script via stdin/stdout</td><td style="padding:0.45rem 0.6rem;border-bottom:1px solid var(--code-border);color:var(--text-muted);">600 s</td><td style="padding:0.45rem 0.6rem;border-bottom:1px solid var(--code-border);color:var(--text-muted);">Default; supports <code>shell: bash</code> or <code>powershell</code>, <code>async</code>, <code>asyncRewake</code></td></tr>
+              <tr><td style="padding:0.45rem 0.6rem;border-bottom:1px solid var(--code-border);"><code style="color:#06B6D4;">http</code></td><td style="padding:0.45rem 0.6rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">POST to URL with JSON body</td><td style="padding:0.45rem 0.6rem;border-bottom:1px solid var(--code-border);color:var(--text-muted);">30 s</td><td style="padding:0.45rem 0.6rem;border-bottom:1px solid var(--code-border);color:var(--text-muted);">Centralized policy engine; needs <code>allowedHttpHookUrls</code> + <code>allowedEnvVars</code></td></tr>
+              <tr><td style="padding:0.45rem 0.6rem;border-bottom:1px solid var(--code-border);"><code style="color:#10B981;">mcp_tool</code></td><td style="padding:0.45rem 0.6rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Calls a tool on a configured MCP server</td><td style="padding:0.45rem 0.6rem;border-bottom:1px solid var(--code-border);color:var(--text-muted);">&mdash;</td><td style="padding:0.45rem 0.6rem;border-bottom:1px solid var(--code-border);color:var(--text-muted);">Reuse existing MCP capability for enforcement</td></tr>
+              <tr><td style="padding:0.45rem 0.6rem;border-bottom:1px solid var(--code-border);"><code style="color:#8B5CF6;">prompt</code></td><td style="padding:0.45rem 0.6rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">LLM yes/no judgment</td><td style="padding:0.45rem 0.6rem;border-bottom:1px solid var(--code-border);color:var(--text-muted);">30 s</td><td style="padding:0.45rem 0.6rem;border-bottom:1px solid var(--code-border);color:var(--text-muted);">Soft semantic checks (e.g. "is this prompt off-topic?")</td></tr>
+              <tr><td style="padding:0.45rem 0.6rem;"><code style="color:#EC4899;">agent</code></td><td style="padding:0.45rem 0.6rem;color:var(--text-secondary);">Subagent verification with tools</td><td style="padding:0.45rem 0.6rem;color:var(--text-muted);">60 s</td><td style="padding:0.45rem 0.6rem;color:var(--text-muted);">Deep policy checks needing file access (PII scans, license audits)</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 style="margin-top:2rem;">HTTP Hook with Async + Permission Defer &mdash; The Modern Pattern</h3>
+        <p>For production deployments, the combination of <code>type: http</code>, <code>async: true</code>, and <code>permissionDecision: "defer"</code> turns hooks into a real policy fabric: requests fan out to a central policy engine, the agent doesn't block on slow checks, and unresolved tool calls can be parked and resumed later via <code>--resume</code>.</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-panel active" style="display:block;">
+            <pre><code class="language-json">{
+  "allowedHttpHookUrls": ["https://policy.acme.internal/*"],
+  "httpHookAllowedEnvVars": ["POLICY_TOKEN"],
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|Write|Edit",
+        "hooks": [
+          {
+            "type": "http",
+            "url": "https://policy.acme.internal/check",
+            "headers": { "Authorization": "Bearer $POLICY_TOKEN" },
+            "allowedEnvVars": ["POLICY_TOKEN"],
+            "async": true,
+            "asyncRewake": true,
+            "timeout": 5,
+            "statusMessage": "Checking corporate policy..."
+          }
+        ]
+      }
+    ]
+  }
+}</code></pre>
+          </div>
+        </div>
+        <p style="font-size:0.9rem;color:var(--text-secondary);margin-top:0.5rem;">The endpoint returns JSON with <code>hookSpecificOutput.permissionDecision</code> set to <code>allow</code> / <code>deny</code> / <code>ask</code> / <code>defer</code>. <code>defer</code> requires Claude Code v2.1.89+ in non-interactive (<code>-p</code>) mode &mdash; the SDK returns <code>stop_reason: "tool_deferred"</code> with a <code>deferred_tool_use</code> object, and you resume with <code>claude --resume &lt;session-id&gt;</code> after the policy engine emits its decision.</p>
+
+        <div class="callout-warning">
+          <span class="box-label">Hook Hygiene &mdash; The Limits That Bite You</span>
+          <p><strong>Output cap:</strong> hook output is truncated at 10,000 characters; excess is saved to a file with a path stub. <strong>Deduplication:</strong> identical command strings or HTTP URLs run only once per event &mdash; don't expect side effects from "two copies." <strong>Stale context:</strong> mid-session <code>additionalContext</code> is saved in the transcript with timestamps and SHAs that go stale on resume; use <code>SessionStart</code> with the <code>resume</code> matcher to refresh. <strong>Browse hooks:</strong> type <code>/hooks</code> to see every active hook with source labels (User / Project / Local / Plugin / Session / Built-in) &mdash; read-only verification before you debug.</p>
+        </div>
+
+        <div class="bridge">Hooks enforce rules within a session. But what about managing the session itself? Long-running sessions accumulate stale context, and parallel exploration pollutes the main conversation. Session management solves both problems.</div>
       </section>
 
       <!-- SESSION MANAGEMENT -->
@@ -588,11 +816,83 @@ claude --session fix-bug-427 # resumes that specific session
         </div>
 
         <div class="callout-cert">
-          <span class="box-label" style="color:#D4A843;">&#127891; Cert Tip &mdash; Domain 5.4</span>
-          <p><code>fork_session</code> is tested on the exam for parallel exploration scenarios. Know when to use fork_session (exploring approaches within a single user's session) vs subagents via the Task tool (delegating work to independent agents with separate context). Fork preserves shared history; subagents start with only the context you explicitly pass.</p>
+          <span class="box-label" style="color:#D4A843;">&#127891; Cert Tip &mdash; Domain 1.7 (Session State, Resumption, Forking)</span>
+          <p><code>fork_session</code> is tested on the exam for parallel exploration scenarios. The full set of session-management exam topics: <code>--resume &lt;session-name&gt;</code> for named session continuation, <code>fork_session</code> for branched exploration from a shared baseline, and the decision between resuming (when prior context is mostly valid) vs. starting fresh with an injected summary (when prior tool results are stale). Know when to use fork_session (exploring approaches within a single user's session) vs subagents via the Task tool (delegating work to independent agents with separate context). Fork preserves shared history; subagents start with only the context you explicitly pass.</p>
         </div>
 
-        <div class="bridge">Session forks let a single user explore in parallel. But for multi-agent workflows &mdash; where different specialists handle different parts of a complex task &mdash; you need the Task tool and subagent orchestration.</div>
+        <div class="bridge">Session forks let a single user explore in parallel. But long-running sessions hit a different problem &mdash; the context window fills up, and the SDK has to compact older history to make room. Mismanaging that compaction is one of the top reasons production agents lose state mid-task.</div>
+      </section>
+
+      <!-- CONTEXT COMPACTION -->
+      <section class="section" id="compaction">
+        <h2 id="compaction-heading">Context Compaction &mdash; Don't Let It Surprise You</h2>
+
+        <p>Every Claude Code or Agent SDK session has a context window. When it fills up, the SDK <strong>compacts automatically</strong> &mdash; summarizing older messages to free up room for new ones. The summary is shorter than the original, but lossy: details, file paths, partial test output, intermediate decisions can vanish into a one-line summary that no longer captures what your agent actually needs.</p>
+
+        <p>The top-1% discipline is to <strong>never let auto-compaction surprise you</strong>. Compact <em>manually</em>, on your terms, while you still have full context to decide what's worth preserving.</p>
+
+        <div class="animation-container" aria-label="Manual compaction at 50 percent versus auto-compaction at 100 percent" style="padding:1.25rem;">
+          <div class="animation-title">Manual at 50% vs Auto at 100%</div>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 280" style="width:100%;max-width:600px;display:block;margin:0 auto;" role="img" aria-label="Two horizontal context window bars compared. Top bar: auto-compaction. The window fills to 100 percent, then the SDK compacts older content into a summary, losing key details. Bottom bar: manual compaction at 50 percent. The user runs slash compact while there is still plenty of room, controlling exactly what gets preserved (modified files, test status, unresolved issues).">
+            <defs><marker id="cmp-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#94A3B8"/></marker></defs>
+            <!-- Auto compaction (top) -->
+            <text x="20" y="40" fill="#F43F5E" font-family="Bricolage Grotesque" font-weight="700" font-size="12">Auto-compaction (default)</text>
+            <text x="20" y="55" fill="#94A3B8" font-family="Source Sans 3" font-size="10" font-style="italic">SDK decides what to keep when the window is already full</text>
+            <rect x="20" y="65" width="540" height="32" rx="4" fill="rgba(244,63,94,0.10)" stroke="#F43F5E"/>
+            <rect x="20" y="65" width="540" height="32" rx="4" fill="url(#warnGrad)"/>
+            <text x="290" y="86" text-anchor="middle" fill="#F43F5E" font-family="Bricolage Grotesque" font-weight="700" font-size="11">100% &mdash; auto-compaction triggers</text>
+            <line x1="290" y1="100" x2="290" y2="120" stroke="#F43F5E" stroke-width="1.5" marker-end="url(#cmp-arrow)"/>
+            <text x="290" y="135" text-anchor="middle" fill="#F43F5E" font-family="Source Sans 3" font-size="10">&#10005; lossy summary &mdash; loses file paths, test state, decision history</text>
+
+            <!-- Divider -->
+            <line x1="20" y1="155" x2="580" y2="155" stroke="#21262D" stroke-width="1" stroke-dasharray="3,3"/>
+
+            <!-- Manual compaction (bottom) -->
+            <text x="20" y="178" fill="#10B981" font-family="Bricolage Grotesque" font-weight="700" font-size="12">Manual /compact at ~50%</text>
+            <text x="20" y="193" fill="#94A3B8" font-family="Source Sans 3" font-size="10" font-style="italic">You compact while you still have room and full context to steer what gets kept</text>
+            <rect x="20" y="203" width="540" height="32" rx="4" fill="rgba(16,185,129,0.05)" stroke="#10B981"/>
+            <rect x="20" y="203" width="270" height="32" rx="4" fill="rgba(16,185,129,0.20)"/>
+            <text x="155" y="224" text-anchor="middle" fill="#10B981" font-family="Bricolage Grotesque" font-weight="700" font-size="11">50% &mdash; you run /compact</text>
+            <text x="425" y="224" text-anchor="middle" fill="#94A3B8" font-family="Source Sans 3" font-size="10">headroom for the next phase</text>
+            <line x1="155" y1="237" x2="155" y2="255" stroke="#10B981" stroke-width="1.5" marker-end="url(#cmp-arrow)"/>
+            <text x="290" y="270" text-anchor="middle" fill="#10B981" font-family="Source Sans 3" font-size="10">&#9989; controlled summary &mdash; you decide what survives</text>
+          </svg>
+        </div>
+
+        <h3>The Two Rules</h3>
+
+        <div class="callout-why">
+          <span class="box-label">Rule 1 &mdash; <code>/compact</code> Manually at ~50%</span>
+          <p>Run <code>/compact</code> yourself when context usage hits roughly half-full, <em>before</em> the SDK forces it on you. At 50% you still have room to write a deliberate summary; at 100% you're triaging in panic. This is the difference between a clean handoff to the next phase and losing your test status mid-debugging.</p>
+        </div>
+
+        <div class="callout-why">
+          <span class="box-label">Rule 2 &mdash; Tell Claude What to Preserve in CLAUDE.md</span>
+          <p>Add a compaction directive to your project CLAUDE.md so every session inherits the same preservation policy:</p>
+          <pre style="background:var(--code-bg);border:1px solid var(--code-border);border-radius:8px;padding:0.85rem;font-family:'JetBrains Mono',monospace;font-size:0.82rem;color:var(--code-text);overflow-x:auto;margin:0.75rem 0 0.25rem;"><code>## When compacting context
+Always preserve:
+- The list of files modified in this session (with one-line summaries)
+- Current test status (pass/fail, last failing test name)
+- Any unresolved errors or open questions
+- The plan we agreed on (if a plan exists)
+Discard freely:
+- Verbose tool output that's been acted on
+- Old file contents (we can re-read if needed)
+- Earlier conversation about decisions already made</code></pre>
+          <p>This single block turns compaction from "Claude guesses what matters" into "Claude follows your preservation contract." It's the cheapest 10 lines you'll ever add to CLAUDE.md.</p>
+        </div>
+
+        <div class="callout-warning">
+          <span class="box-label">PreCompact Hook for Critical State</span>
+          <p>For high-stakes pipelines (long-running migrations, multi-step deploys, debugging sessions where every test failure matters), pair the CLAUDE.md directive with the <code>PreCompact</code> hook event you saw earlier in this module. The hook fires <em>before</em> the compaction runs &mdash; use it to dump the modified-files list, current test output, or open task list to a scratchpad file outside the context window. After compaction, the agent can re-read the scratchpad and pick up exactly where it left off, even if the summary lost details.</p>
+        </div>
+
+        <div class="callout-cert">
+          <span class="box-label" style="color:#D4A843;">&#127891; Cert Tip &mdash; Domain 5.4 (Context Management)</span>
+          <p>The exam tests recognition of compaction as a <em>controllable</em> event, not an inevitable one. Anti-pattern: a long-running agent that "loses track" mid-task, with the answer being "switch to a more capable model." The actual answer: manual compaction discipline + CLAUDE.md preservation directive + (optional) <code>PreCompact</code> hook to checkpoint critical state.</p>
+        </div>
+
+        <div class="bridge">Compaction handles the <em>length</em> of conversation history. But for multi-agent workflows where different specialists handle different parts of a complex task, you need a different tool: the Task tool and subagent orchestration.</div>
       </section>
 
       <!-- SUBAGENT ORCHESTRATION -->
@@ -613,6 +913,62 @@ claude --session fix-bug-427 # resumes that specific session
           <p><strong>3. Subagents execute independently:</strong> Each has its own context window. They do NOT see the coordinator's full conversation history. The coordinator must explicitly include relevant context in the Task prompt.</p>
           <p><strong>4. Results aggregate:</strong> Subagent results flow back to the coordinator, which combines them into a final response.</p>
           <p>Critical configuration: <code>allowedTools</code> must explicitly include <code>'Task'</code> for the coordinator to spawn subagents. Without it, the coordinator cannot delegate.</p>
+        </div>
+
+        <!-- SUBAGENT TOPOLOGY SVG -->
+        <div class="animation-container" aria-label="Subagent topology diagram showing main session delegating to specialist subagents">
+          <div class="animation-title">Subagent Topology &mdash; Main Session as Architect</div>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 280" style="width:100%;max-width:600px;display:block;margin:0 auto;" role="img" aria-label="Main Claude session at center delegates to four specialist subagents (pm-spec, code-reviewer, test-writer, security-auditor), each in its own isolated context with its own tools. Results flow back to main session for aggregation.">
+            <defs><marker id="sa-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#94A3B8"/></marker><marker id="sa-arrow-r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#10B981"/></marker></defs>
+            <!-- Main session -->
+            <rect x="200" y="20" width="200" height="60" rx="10" fill="rgba(236,72,153,0.18)" stroke="#EC4899" stroke-width="2"/>
+            <text x="300" y="44" text-anchor="middle" fill="#EC4899" font-family="Bricolage Grotesque" font-weight="700" font-size="13">Main Claude Session</text>
+            <text x="300" y="60" text-anchor="middle" fill="#94A3B8" font-family="Source Sans 3" font-size="10">Architecture &amp; Coordination</text>
+            <text x="300" y="73" text-anchor="middle" fill="#94A3B8" font-family="Source Sans 3" font-size="10">stays clean and high-level</text>
+
+            <!-- Delegation arrows -->
+            <line x1="240" y1="80" x2="80" y2="135" stroke="#94A3B8" stroke-width="1.5" marker-end="url(#sa-arrow)"/>
+            <text x="125" y="118" fill="#64748B" font-family="JetBrains Mono" font-size="9">Task tool</text>
+            <line x1="280" y1="80" x2="220" y2="135" stroke="#94A3B8" stroke-width="1.5" marker-end="url(#sa-arrow)"/>
+            <line x1="320" y1="80" x2="380" y2="135" stroke="#94A3B8" stroke-width="1.5" marker-end="url(#sa-arrow)"/>
+            <line x1="360" y1="80" x2="520" y2="135" stroke="#94A3B8" stroke-width="1.5" marker-end="url(#sa-arrow)"/>
+
+            <!-- Subagent: pm-spec -->
+            <rect x="20" y="140" width="120" height="68" rx="8" fill="rgba(99,102,241,0.15)" stroke="#6366F1" stroke-width="1.5"/>
+            <text x="80" y="160" text-anchor="middle" fill="#6366F1" font-family="Bricolage Grotesque" font-weight="700" font-size="11">pm-spec</text>
+            <text x="80" y="175" text-anchor="middle" fill="#94A3B8" font-family="Source Sans 3" font-size="9">reads enhancement</text>
+            <text x="80" y="187" text-anchor="middle" fill="#94A3B8" font-family="Source Sans 3" font-size="9">writes SPEC.md</text>
+            <text x="80" y="201" text-anchor="middle" fill="#64748B" font-family="JetBrains Mono" font-size="8">Read, Write</text>
+            <!-- Subagent: code-reviewer -->
+            <rect x="160" y="140" width="120" height="68" rx="8" fill="rgba(139,92,246,0.15)" stroke="#8B5CF6" stroke-width="1.5"/>
+            <text x="220" y="160" text-anchor="middle" fill="#8B5CF6" font-family="Bricolage Grotesque" font-weight="700" font-size="11">code-reviewer</text>
+            <text x="220" y="175" text-anchor="middle" fill="#94A3B8" font-family="Source Sans 3" font-size="9">reviews diffs</text>
+            <text x="220" y="187" text-anchor="middle" fill="#94A3B8" font-family="Source Sans 3" font-size="9">checks bugs</text>
+            <text x="220" y="201" text-anchor="middle" fill="#64748B" font-family="JetBrains Mono" font-size="8">Read, Grep, Bash</text>
+            <!-- Subagent: test-writer -->
+            <rect x="320" y="140" width="120" height="68" rx="8" fill="rgba(6,182,212,0.15)" stroke="#06B6D4" stroke-width="1.5"/>
+            <text x="380" y="160" text-anchor="middle" fill="#06B6D4" font-family="Bricolage Grotesque" font-weight="700" font-size="11">test-writer</text>
+            <text x="380" y="175" text-anchor="middle" fill="#94A3B8" font-family="Source Sans 3" font-size="9">generates tests</text>
+            <text x="380" y="187" text-anchor="middle" fill="#94A3B8" font-family="Source Sans 3" font-size="9">runs &amp; fixes</text>
+            <text x="380" y="201" text-anchor="middle" fill="#64748B" font-family="JetBrains Mono" font-size="8">Read, Write, Bash</text>
+            <!-- Subagent: security-auditor -->
+            <rect x="460" y="140" width="120" height="68" rx="8" fill="rgba(244,63,94,0.15)" stroke="#F43F5E" stroke-width="1.5"/>
+            <text x="520" y="160" text-anchor="middle" fill="#F43F5E" font-family="Bricolage Grotesque" font-weight="700" font-size="11">security-auditor</text>
+            <text x="520" y="175" text-anchor="middle" fill="#94A3B8" font-family="Source Sans 3" font-size="9">scans for vulns</text>
+            <text x="520" y="187" text-anchor="middle" fill="#94A3B8" font-family="Source Sans 3" font-size="9">CVE checks</text>
+            <text x="520" y="201" text-anchor="middle" fill="#64748B" font-family="JetBrains Mono" font-size="8">Read, Grep</text>
+
+            <!-- Result arrows back -->
+            <line x1="80" y1="208" x2="280" y2="80" stroke="#10B981" stroke-width="1.2" stroke-dasharray="3,3" marker-end="url(#sa-arrow-r)"/>
+            <line x1="220" y1="208" x2="295" y2="83" stroke="#10B981" stroke-width="1.2" stroke-dasharray="3,3" marker-end="url(#sa-arrow-r)"/>
+            <line x1="380" y1="208" x2="305" y2="83" stroke="#10B981" stroke-width="1.2" stroke-dasharray="3,3" marker-end="url(#sa-arrow-r)"/>
+            <line x1="520" y1="208" x2="320" y2="80" stroke="#10B981" stroke-width="1.2" stroke-dasharray="3,3" marker-end="url(#sa-arrow-r)"/>
+            <text x="300" y="232" text-anchor="middle" fill="#10B981" font-family="Source Sans 3" font-size="10" font-style="italic">concise summaries flow back &mdash; main session never sees the noise</text>
+
+            <!-- Caption -->
+            <text x="300" y="260" text-anchor="middle" fill="#64748B" font-family="Source Sans 3" font-size="10">Each subagent: own context window &middot; own tool allowlist &middot; own model (optionally)</text>
+            <text x="300" y="274" text-anchor="middle" fill="#64748B" font-family="Source Sans 3" font-size="10" font-style="italic">Heavy work happens in isolation; only summaries return to your main thread.</text>
+          </svg>
         </div>
 
         <!-- SUBAGENT FLOW ANIMATION -->
@@ -715,7 +1071,7 @@ def handle_task(prompt: str, allowed_tools: list[str] | None = None) -> dict:
 
     try:
         response = client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model="claude-sonnet-4-6",
             max_tokens=2048,
             messages=[{"role": "user", "content": prompt}],
         )
@@ -740,7 +1096,7 @@ def run_coordinator(query: str) -> str:
     for _ in range(10):  # safety net
         try:
             response = client.messages.create(
-                model="claude-sonnet-4-20250514",
+                model="claude-sonnet-4-6",
                 max_tokens=4096,
                 system=SYSTEM_PROMPT,
                 tools=TOOLS,
@@ -830,7 +1186,7 @@ async function handleTask(prompt: string): Promise&lt;unknown&gt; {
   const client = new Anthropic();
   try {
     const response = await client.messages.create({
-      model: "claude-sonnet-4-20250514",
+      model: "claude-sonnet-4-6",
       max_tokens: 2048,
       messages: [{ role: "user", content: prompt }],
     });
@@ -859,7 +1215,7 @@ export async function runCoordinator(query: string): Promise&lt;string&gt; {
     let response: Anthropic.Message;
     try {
       response = await client.messages.create({
-        model: "claude-sonnet-4-20250514",
+        model: "claude-sonnet-4-6",
         max_tokens: 4096,
         system: SYSTEM_PROMPT,
         tools: TOOLS,
@@ -908,8 +1264,173 @@ export async function runCoordinator(query: string): Promise&lt;string&gt; {
         </div>
 
         <div class="callout-cert">
-          <span class="box-label" style="color:#D4A843;">&#127891; Cert Tip &mdash; Domain 1.5</span>
+          <span class="box-label" style="color:#D4A843;">&#127891; Cert Tip &mdash; Domain 1.6</span>
           <p>Overly narrow task decomposition creates coverage gaps &mdash; subtasks may not cover the full scope. Overly broad decomposition overwhelms individual subagents. The exam tests your ability to find the right granularity. In the UCC example, "search filings," "resolve entities," and "score risk" are at the right level. Splitting "search filings" into 50 per-state subagents would be too narrow; combining everything into one subagent would be too broad.</p>
+        </div>
+
+        <h3 style="margin-top:2.25rem;">Subagent Configuration Reference &mdash; The Full Spec</h3>
+        <p>The Task-tool example above is the SDK-level view. Inside Claude Code, every reusable subagent is a Markdown file with YAML frontmatter living in <code>.claude/agents/</code> (project) or <code>~/.claude/agents/</code> (user). The <code>/agents</code> command opens a tabbed UI to create, edit, and inspect them; <code>claude agents</code> lists them from the CLI. Subagents resolve in this priority order: <strong>Managed</strong> (organization) &gt; <strong><code>--agents</code> CLI flag</strong> (session) &gt; <strong>Project</strong> (<code>.claude/agents/</code>) &gt; <strong>User</strong> (<code>~/.claude/agents/</code>) &gt; <strong>Plugin</strong>.</p>
+
+        <div class="animation-container" aria-label="Subagent scope precedence diagram">
+          <div class="animation-title">Subagent Scope Precedence &mdash; Who Wins on Name Collision</div>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 230" style="width:100%;max-width:600px;display:block;margin:0 auto;" role="img" aria-label="Five horizontal bands showing subagent priority from highest to lowest: Managed (organization-wide), --agents CLI (current session), Project (.claude/agents/), User (~/.claude/agents/), Plugin. Higher entries override lower entries with the same name.">
+            <defs><marker id="sc-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#F43F5E"/></marker></defs>
+            <rect x="40" y="20" width="520" height="32" rx="6" fill="rgba(244,63,94,0.16)" stroke="#F43F5E" stroke-width="1.5"/>
+            <text x="60" y="40" fill="#F43F5E" font-family="Bricolage Grotesque" font-weight="700" font-size="12">1. Managed</text>
+            <text x="200" y="40" fill="#94A3B8" font-family="Source Sans 3" font-size="11">organization-wide via managed settings &mdash; admin-controlled</text>
+            <rect x="40" y="58" width="520" height="32" rx="6" fill="rgba(245,158,11,0.16)" stroke="#F59E0B" stroke-width="1.5"/>
+            <text x="60" y="78" fill="#F59E0B" font-family="Bricolage Grotesque" font-weight="700" font-size="12">2. <tspan font-family="JetBrains Mono">--agents</tspan> CLI</text>
+            <text x="220" y="78" fill="#94A3B8" font-family="Source Sans 3" font-size="11">JSON passed at launch &mdash; session-only, never saved</text>
+            <rect x="40" y="96" width="520" height="32" rx="6" fill="rgba(212,168,67,0.16)" stroke="#D4A843" stroke-width="1.5"/>
+            <text x="60" y="116" fill="#D4A843" font-family="Bricolage Grotesque" font-weight="700" font-size="12">3. Project</text>
+            <text x="220" y="116" fill="#94A3B8" font-family="Source Sans 3" font-size="11"><tspan font-family="JetBrains Mono">.claude/agents/</tspan> &mdash; checked into git, team-shared</text>
+            <rect x="40" y="134" width="520" height="32" rx="6" fill="rgba(99,102,241,0.16)" stroke="#6366F1" stroke-width="1.5"/>
+            <text x="60" y="154" fill="#6366F1" font-family="Bricolage Grotesque" font-weight="700" font-size="12">4. User</text>
+            <text x="220" y="154" fill="#94A3B8" font-family="Source Sans 3" font-size="11"><tspan font-family="JetBrains Mono">~/.claude/agents/</tspan> &mdash; personal, all your projects</text>
+            <rect x="40" y="172" width="520" height="32" rx="6" fill="rgba(139,92,246,0.16)" stroke="#8B5CF6" stroke-width="1.5"/>
+            <text x="60" y="192" fill="#8B5CF6" font-family="Bricolage Grotesque" font-weight="700" font-size="12">5. Plugin</text>
+            <text x="220" y="192" fill="#94A3B8" font-family="Source Sans 3" font-size="11">distributed via plugins &mdash; namespaced as <tspan font-family="JetBrains Mono">plugin:agent</tspan></text>
+            <line x1="20" y1="20" x2="20" y2="200" stroke="#F43F5E" stroke-width="2" marker-end="url(#sc-arrow)"/>
+            <text x="10" y="115" fill="#F43F5E" font-family="Source Sans 3" font-size="10" transform="rotate(-90 10 115)">priority</text>
+            <text x="300" y="222" text-anchor="middle" fill="#64748B" font-family="Source Sans 3" font-size="10" font-style="italic">Same name at multiple levels &rarr; the highest-priority definition wins. <tspan font-family="JetBrains Mono">/agents</tspan> shows which is active.</text>
+          </svg>
+        </div>
+
+        <p>The frontmatter has 16 supported fields. Only <code>name</code> and <code>description</code> are required &mdash; everything else lets you tighten tool access, lock the model, scope MCP servers, attach hooks, or carve out an isolated workspace. This is the full table:</p>
+
+        <div class="animation-container" aria-label="Subagent frontmatter reference table" style="padding:1.25rem;">
+          <div class="animation-title">Subagent Frontmatter &mdash; All 16 Fields</div>
+          <table style="width:100%;border-collapse:collapse;font-size:0.82rem;">
+            <thead>
+              <tr style="background:var(--bg-surface);">
+                <th style="padding:0.5rem 0.6rem;text-align:left;font-family:'Bricolage Grotesque',sans-serif;font-size:0.75rem;color:var(--text-secondary);border-bottom:1px solid var(--code-border);">Field</th>
+                <th style="padding:0.5rem 0.6rem;text-align:left;font-family:'Bricolage Grotesque',sans-serif;font-size:0.75rem;color:var(--text-secondary);border-bottom:1px solid var(--code-border);">Required</th>
+                <th style="padding:0.5rem 0.6rem;text-align:left;font-family:'Bricolage Grotesque',sans-serif;font-size:0.75rem;color:var(--text-secondary);border-bottom:1px solid var(--code-border);">Purpose</th>
+              </tr>
+            </thead>
+            <tbody style="font-family:JetBrains Mono,monospace;">
+              <tr><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);"><code style="color:#F43F5E;">name</code></td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:#F43F5E;">yes</td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-secondary);">Lowercase-hyphen identifier; must be unique within scope</td></tr>
+              <tr><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);"><code style="color:#F43F5E;">description</code></td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:#F43F5E;">yes</td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-secondary);">When Claude should delegate &mdash; include "use proactively" to encourage delegation</td></tr>
+              <tr><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);"><code style="color:#F59E0B;">tools</code></td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-muted);">no</td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-secondary);">Allowlist (e.g. <code>Read, Grep, Bash</code>); inherits all if omitted</td></tr>
+              <tr><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);"><code style="color:#F59E0B;">disallowedTools</code></td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-muted);">no</td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-secondary);">Denylist applied first; <code>tools</code> resolves against the remainder</td></tr>
+              <tr><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);"><code style="color:#06B6D4;">model</code></td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-muted);">no</td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-secondary);"><code>sonnet</code>, <code>opus</code>, <code>haiku</code>, full ID, or <code>inherit</code> (default)</td></tr>
+              <tr><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);"><code style="color:#8B5CF6;">permissionMode</code></td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-muted);">no</td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-secondary);"><code>default</code>, <code>acceptEdits</code>, <code>auto</code>, <code>dontAsk</code>, <code>bypassPermissions</code>, <code>plan</code></td></tr>
+              <tr><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);"><code style="color:#06B6D4;">maxTurns</code></td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-muted);">no</td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-secondary);">Hard cap on agentic turns &mdash; safety circuit breaker</td></tr>
+              <tr><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);"><code style="color:#10B981;">skills</code></td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-muted);">no</td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-secondary);">Skills <em>preloaded</em> at startup &mdash; full body injected, not just descriptions</td></tr>
+              <tr><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);"><code style="color:#10B981;">mcpServers</code></td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-muted);">no</td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-secondary);">Inline server defs (scoped to subagent) or string refs to existing servers</td></tr>
+              <tr><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);"><code style="color:#F59E0B;">hooks</code></td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-muted);">no</td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-secondary);">Lifecycle hooks scoped to this subagent only &mdash; cleaned up on finish</td></tr>
+              <tr><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);"><code style="color:#EC4899;">memory</code></td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-muted);">no</td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-secondary);"><code>user</code> / <code>project</code> / <code>local</code> &mdash; persistent <code>MEMORY.md</code> across sessions</td></tr>
+              <tr><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);"><code style="color:#3B82F6;">background</code></td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-muted);">no</td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-secondary);"><code>true</code> &rarr; always run concurrently with permission pre-approval</td></tr>
+              <tr><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);"><code style="color:#06B6D4;">effort</code></td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-muted);">no</td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-secondary);"><code>low</code> / <code>medium</code> / <code>high</code> / <code>xhigh</code> / <code>max</code> &mdash; thinking budget</td></tr>
+              <tr><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);"><code style="color:#F97316;">isolation</code></td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-muted);">no</td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-secondary);"><code>worktree</code> &rarr; runs in temp git worktree &mdash; auto-cleaned if no changes</td></tr>
+              <tr><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);"><code style="color:#94A3B8;">color</code></td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-muted);">no</td><td style="padding:0.4rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:Source Sans 3,sans-serif;color:var(--text-secondary);"><code>red blue green yellow purple orange pink cyan</code> &mdash; UI badge</td></tr>
+              <tr><td style="padding:0.4rem 0.6rem;"><code style="color:#94A3B8;">initialPrompt</code></td><td style="padding:0.4rem 0.6rem;font-family:Source Sans 3,sans-serif;color:var(--text-muted);">no</td><td style="padding:0.4rem 0.6rem;font-family:Source Sans 3,sans-serif;color:var(--text-secondary);">Auto-submitted first user turn when run as main session via <code>--agent</code></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 style="margin-top:2rem;">Built-in Subagents &mdash; What Ships in the Box</h3>
+        <p>Claude Code includes five built-in subagents Claude delegates to automatically. You don't define them; you can disable them with <code>Agent(name)</code> deny rules or override their behavior with same-named custom agents.</p>
+
+        <div class="animation-container" aria-label="Built-in subagents reference table" style="padding:1.25rem;">
+          <div class="animation-title">The Five Built-in Subagents</div>
+          <table style="width:100%;border-collapse:collapse;font-size:0.85rem;">
+            <thead>
+              <tr style="background:var(--bg-surface);">
+                <th style="padding:0.5rem 0.6rem;text-align:left;font-family:'Bricolage Grotesque',sans-serif;font-size:0.78rem;color:var(--text-secondary);border-bottom:1px solid var(--code-border);">Subagent</th>
+                <th style="padding:0.5rem 0.6rem;text-align:left;font-family:'Bricolage Grotesque',sans-serif;font-size:0.78rem;color:var(--text-secondary);border-bottom:1px solid var(--code-border);">Model</th>
+                <th style="padding:0.5rem 0.6rem;text-align:left;font-family:'Bricolage Grotesque',sans-serif;font-size:0.78rem;color:var(--text-secondary);border-bottom:1px solid var(--code-border);">Tools</th>
+                <th style="padding:0.5rem 0.6rem;text-align:left;font-family:'Bricolage Grotesque',sans-serif;font-size:0.78rem;color:var(--text-secondary);border-bottom:1px solid var(--code-border);">When Claude uses it</th>
+              </tr>
+            </thead>
+            <tbody style="font-family:Source Sans 3,sans-serif;">
+              <tr><td style="padding:0.45rem 0.6rem;border-bottom:1px solid var(--code-border);"><code style="color:#06B6D4;">Explore</code></td><td style="padding:0.45rem 0.6rem;border-bottom:1px solid var(--code-border);">Haiku</td><td style="padding:0.45rem 0.6rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Read-only</td><td style="padding:0.45rem 0.6rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Codebase search at <em>quick</em>, <em>medium</em>, or <em>very thorough</em> levels</td></tr>
+              <tr><td style="padding:0.45rem 0.6rem;border-bottom:1px solid var(--code-border);"><code style="color:#10B981;">Plan</code></td><td style="padding:0.45rem 0.6rem;border-bottom:1px solid var(--code-border);">inherit</td><td style="padding:0.45rem 0.6rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Read-only</td><td style="padding:0.45rem 0.6rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Research during plan mode &mdash; prevents nesting</td></tr>
+              <tr><td style="padding:0.45rem 0.6rem;border-bottom:1px solid var(--code-border);"><code style="color:#F59E0B;">general-purpose</code></td><td style="padding:0.45rem 0.6rem;border-bottom:1px solid var(--code-border);">inherit</td><td style="padding:0.45rem 0.6rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">All</td><td style="padding:0.45rem 0.6rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Multi-step tasks needing both exploration AND modification</td></tr>
+              <tr><td style="padding:0.45rem 0.6rem;border-bottom:1px solid var(--code-border);"><code style="color:#8B5CF6;">statusline-setup</code></td><td style="padding:0.45rem 0.6rem;border-bottom:1px solid var(--code-border);">Sonnet</td><td style="padding:0.45rem 0.6rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Read, Edit</td><td style="padding:0.45rem 0.6rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">When you run <code>/statusline</code> to configure your status line</td></tr>
+              <tr><td style="padding:0.45rem 0.6rem;"><code style="color:#EC4899;">Claude Code Guide</code></td><td style="padding:0.45rem 0.6rem;">Haiku</td><td style="padding:0.45rem 0.6rem;color:var(--text-secondary);">WebFetch, WebSearch</td><td style="padding:0.45rem 0.6rem;color:var(--text-secondary);">When you ask "how do I &hellip; in Claude Code?"</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 style="margin-top:2rem;">Three Ways to Invoke a Subagent</h3>
+        <p>Beyond letting Claude auto-delegate based on the <code>description</code> field, there are three explicit invocation patterns that escalate from one-off to session-wide:</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-panel active" style="display:block;">
+            <pre><code class="language-bash"># 1. Natural language &mdash; Claude usually delegates
+"Use the test-runner subagent to fix failing tests"
+
+# 2. @-mention &mdash; guarantees this specific subagent runs once
+@agent-code-reviewer look at the auth changes
+@agent-acme-plugin:linter check src/api/
+
+# 3. Whole-session agent &mdash; replaces the default system prompt for the entire session
+claude --agent code-reviewer
+# Or pin it for every session in this project (.claude/settings.json):
+# { "agent": "code-reviewer" }
+
+# Bonus: list configured subagents from the CLI
+claude agents
+
+# Bonus: define ad-hoc subagents for one session via JSON
+claude --agents '{"reviewer":{"description":"Reviews code","prompt":"You are a senior reviewer.","tools":["Read","Grep"],"model":"sonnet"}}'</code></pre>
+          </div>
+        </div>
+
+        <h3 style="margin-top:2rem;">Persistent Memory &mdash; Subagents That Learn</h3>
+        <p>Set <code>memory: user</code>, <code>memory: project</code>, or <code>memory: local</code> in the frontmatter and Claude Code creates a directory the subagent reads from and writes to across conversations. The first 200 lines (or 25 KB) of <code>MEMORY.md</code> are auto-injected into the subagent's system prompt, with curate-if-larger instructions. Read, Write, and Edit are auto-enabled regardless of <code>tools</code>. Storage location depends on scope:</p>
+
+        <div class="animation-container" aria-label="Subagent memory scope locations" style="padding:1.1rem;">
+          <table style="width:100%;border-collapse:collapse;font-size:0.85rem;font-family:Source Sans 3,sans-serif;">
+            <thead>
+              <tr style="background:var(--bg-surface);">
+                <th style="padding:0.5rem 0.6rem;text-align:left;border-bottom:1px solid var(--code-border);font-family:'Bricolage Grotesque',sans-serif;font-size:0.78rem;color:var(--text-secondary);">Scope</th>
+                <th style="padding:0.5rem 0.6rem;text-align:left;border-bottom:1px solid var(--code-border);font-family:'Bricolage Grotesque',sans-serif;font-size:0.78rem;color:var(--text-secondary);">Path</th>
+                <th style="padding:0.5rem 0.6rem;text-align:left;border-bottom:1px solid var(--code-border);font-family:'Bricolage Grotesque',sans-serif;font-size:0.78rem;color:var(--text-secondary);">Best for</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td style="padding:0.45rem 0.6rem;border-bottom:1px solid var(--code-border);"><code style="color:#6366F1;">user</code></td><td style="padding:0.45rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:JetBrains Mono,monospace;color:var(--text-secondary);">~/.claude/agent-memory/&lt;name&gt;/</td><td style="padding:0.45rem 0.6rem;border-bottom:1px solid var(--code-border);color:var(--text-muted);">Cross-project learnings (e.g. universal review patterns)</td></tr>
+              <tr><td style="padding:0.45rem 0.6rem;border-bottom:1px solid var(--code-border);"><code style="color:#10B981;">project</code></td><td style="padding:0.45rem 0.6rem;border-bottom:1px solid var(--code-border);font-family:JetBrains Mono,monospace;color:var(--text-secondary);">.claude/agent-memory/&lt;name&gt;/</td><td style="padding:0.45rem 0.6rem;border-bottom:1px solid var(--code-border);color:var(--text-muted);">Codebase-specific knowledge, shareable via git (recommended default)</td></tr>
+              <tr><td style="padding:0.45rem 0.6rem;"><code style="color:#F59E0B;">local</code></td><td style="padding:0.45rem 0.6rem;font-family:JetBrains Mono,monospace;color:var(--text-secondary);">.claude/agent-memory-local/&lt;name&gt;/</td><td style="padding:0.45rem 0.6rem;color:var(--text-muted);">Project-specific but private &mdash; not checked into version control</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 style="margin-top:2rem;">Foreground vs Background vs Forks</h3>
+        <p>Subagents execute in three modes. Foreground blocks the conversation and surfaces permission prompts. Background runs concurrently with permissions <em>pre-approved</em> at spawn time and auto-denies anything else. Forks (experimental, requires <code>CLAUDE_CODE_FORK_SUBAGENT=1</code> and v2.1.117+) inherit the entire conversation history instead of starting fresh, sharing the parent's prompt cache so the first request is cheaper.</p>
+
+        <div class="animation-container" aria-label="Subagent execution mode comparison" style="padding:1.1rem;">
+          <table style="width:100%;border-collapse:collapse;font-size:0.85rem;font-family:Source Sans 3,sans-serif;">
+            <thead>
+              <tr style="background:var(--bg-surface);">
+                <th style="padding:0.5rem 0.6rem;text-align:left;border-bottom:1px solid var(--code-border);font-family:'Bricolage Grotesque',sans-serif;font-size:0.78rem;color:var(--text-secondary);">Property</th>
+                <th style="padding:0.5rem 0.6rem;text-align:left;border-bottom:1px solid var(--code-border);font-family:'Bricolage Grotesque',sans-serif;font-size:0.78rem;color:var(--text-secondary);">Foreground</th>
+                <th style="padding:0.5rem 0.6rem;text-align:left;border-bottom:1px solid var(--code-border);font-family:'Bricolage Grotesque',sans-serif;font-size:0.78rem;color:var(--text-secondary);">Background</th>
+                <th style="padding:0.5rem 0.6rem;text-align:left;border-bottom:1px solid var(--code-border);font-family:'Bricolage Grotesque',sans-serif;font-size:0.78rem;color:var(--text-secondary);">Fork (<code>/fork</code>)</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td style="padding:0.45rem 0.6rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Blocks main session</td><td style="padding:0.45rem 0.6rem;border-bottom:1px solid var(--code-border);color:#10B981;">yes</td><td style="padding:0.45rem 0.6rem;border-bottom:1px solid var(--code-border);color:#F43F5E;">no</td><td style="padding:0.45rem 0.6rem;border-bottom:1px solid var(--code-border);color:#F43F5E;">no</td></tr>
+              <tr><td style="padding:0.45rem 0.6rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Starting context</td><td style="padding:0.45rem 0.6rem;border-bottom:1px solid var(--code-border);color:var(--text-muted);">fresh + Task prompt</td><td style="padding:0.45rem 0.6rem;border-bottom:1px solid var(--code-border);color:var(--text-muted);">fresh + Task prompt</td><td style="padding:0.45rem 0.6rem;border-bottom:1px solid var(--code-border);color:var(--text-muted);">full conversation</td></tr>
+              <tr><td style="padding:0.45rem 0.6rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Permissions</td><td style="padding:0.45rem 0.6rem;border-bottom:1px solid var(--code-border);color:var(--text-muted);">interactive prompts</td><td style="padding:0.45rem 0.6rem;border-bottom:1px solid var(--code-border);color:var(--text-muted);">pre-approved at spawn</td><td style="padding:0.45rem 0.6rem;border-bottom:1px solid var(--code-border);color:var(--text-muted);">interactive prompts</td></tr>
+              <tr><td style="padding:0.45rem 0.6rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Prompt cache</td><td style="padding:0.45rem 0.6rem;border-bottom:1px solid var(--code-border);color:var(--text-muted);">separate</td><td style="padding:0.45rem 0.6rem;border-bottom:1px solid var(--code-border);color:var(--text-muted);">separate</td><td style="padding:0.45rem 0.6rem;border-bottom:1px solid var(--code-border);color:#10B981;">shared with parent</td></tr>
+              <tr><td style="padding:0.45rem 0.6rem;color:var(--text-secondary);">Trigger</td><td style="padding:0.45rem 0.6rem;color:var(--text-muted);">default behavior</td><td style="padding:0.45rem 0.6rem;color:var(--text-muted);"><code>background: true</code> or <kbd>Ctrl</kbd>+<kbd>B</kbd></td><td style="padding:0.45rem 0.6rem;color:var(--text-muted);"><code>/fork &lt;task&gt;</code> or general-purpose with fork mode on</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p style="font-size:0.9rem;color:var(--text-secondary);margin-top:0.75rem;">Disable background entirely with <code>CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1</code>. Override the model for every subagent invocation in a session via <code>CLAUDE_CODE_SUBAGENT_MODEL=haiku</code>. Trigger auto-compaction earlier with <code>CLAUDE_AUTOCOMPACT_PCT_OVERRIDE=50</code>. Each subagent's transcript persists at <code>~/.claude/projects/&lt;project&gt;/&lt;sessionId&gt;/subagents/agent-&lt;agentId&gt;.jsonl</code> &mdash; main-conversation compaction does not touch it.</p>
+
+        <div class="callout-warning">
+          <span class="box-label">Plugin Subagent Restrictions</span>
+          <p>For security reasons, plugin-distributed subagents <strong>silently ignore</strong> three frontmatter fields: <code>hooks</code>, <code>mcpServers</code>, and <code>permissionMode</code>. If you need them, copy the agent file into <code>.claude/agents/</code> or <code>~/.claude/agents/</code>. Plugin subagents appear in the <code>@</code>-typeahead as <code>@agent-&lt;plugin-name&gt;:&lt;agent-name&gt;</code>.</p>
+        </div>
+
+        <div class="callout-cert">
+          <span class="box-label" style="color:#D4A843;">&#127891; Cert Tip &mdash; Domain 2 / Domain 4</span>
+          <p>The exam tests three discrimination skills here: (1) <strong>scope precedence</strong> &mdash; managed beats <code>--agents</code> beats project beats user beats plugin; (2) <strong>permission inheritance</strong> &mdash; if the parent uses <code>bypassPermissions</code> or <code>acceptEdits</code>, the subagent <em>cannot</em> override it; auto-mode parents force auto-mode children regardless of frontmatter; (3) <strong>fork vs subagent</strong> &mdash; forks share history and prompt cache, named subagents start blank with their own definition. Memorize which fields plugin subagents silently drop.</p>
         </div>
 
         <div class="bridge">Subagents handle delegation. But what happens when neither the agent nor its subagents can handle a request? Correct escalation &mdash; knowing WHEN and WHY to escalate &mdash; is the final critical pattern.</div>
@@ -953,7 +1474,7 @@ export async function runCoordinator(query: string): Promise&lt;string&gt; {
         <p>Compare that to a bad escalation: <code>{"message": "I could not help the customer, please take over."}</code>. The human reviewer now has to start from scratch, re-asking the customer every question the agent already asked. That is wasted time for both the human and the customer.</p>
 
         <div class="callout-cert">
-          <span class="box-label" style="color:#D4A843;">&#127891; Cert Tip &mdash; Domain 5.3</span>
+          <span class="box-label" style="color:#D4A843;">&#127891; Cert Tip &mdash; Domain 5.2</span>
           <p>Critical anti-pattern: sentiment-based escalation. An angry customer with a simple password reset does NOT need a human. A calm customer hitting a policy gap DOES. The exam tests this distinction directly. Escalate on task complexity and policy gaps, never on sentiment alone.</p>
         </div>
       </section>

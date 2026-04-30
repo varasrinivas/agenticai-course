@@ -194,6 +194,7 @@
       <a href="#token-optimization">Token Optimization</a>
       <a href="#code-walkthrough">Code Walkthrough</a>
       <a href="#prompt-caching">Prompt Caching</a>
+      <a href="#extended-thinking">Extended Thinking</a>
       <a href="#batch-api">Batch API</a>
       <a href="#hands-on">Hands-On Lab</a>
       <a href="#quiz">Knowledge Check</a>
@@ -380,9 +381,9 @@
           <p>You learned the six cost components of an agent call: input tokens, output tokens (5x more expensive), tool execution, embeddings, compute, and multi-turn multiplication. The two biggest cost drivers are output token pricing asymmetry and conversation history compounding. Every optimization strategy in this module targets one or both of these.</p>
         </div>
 
-        <div class="callout-cert">
-          <strong style="color:var(--accent-primary)">&#127891; Cert Tip &mdash; Domain 5.2</strong><br>
-          <span style="color:#94a3b8;font-size:13px">The exam tests your understanding of token economics. Know that output tokens cost 3-5x more than input tokens across all Claude models, and that multi-turn conversations compound input costs geometrically (not linearly). When asked "what is the highest-leverage cost optimization," the answer is always: reduce output length first, then cache repeated input.</span>
+        <div class="callout-cost">
+          <strong style="color:var(--accent-primary)">&#128176; Production Note &mdash; Token Economics</strong><br>
+          <span style="color:#94a3b8;font-size:13px">Output tokens cost 3-5x more than input tokens across all Claude models, and multi-turn conversations compound input costs geometrically (not linearly) since the full history is resent every turn. The highest-leverage cost optimization is almost always: reduce output length first, then cache repeated input. (Note: per the official cert exam guide, pricing and token-counting specifics are <em>out of scope</em> for the cert &mdash; this is practical engineering knowledge, not a tested topic.)</span>
         </div>
 
         <div class="bridge">Now that you understand where the money goes, the next question is: how do you avoid paying for the same work twice? The answer is caching &mdash; at three different layers.</div>
@@ -485,7 +486,7 @@ system: [{
 
         <div class="analogy-box">
           <span class="box-label">Analogy: Do Not Hire a Brain Surgeon for a Band-Aid</span>
-          <p><strong>Before:</strong> Imagine a hospital that sends every patient &mdash; whether they have a paper cut, a broken arm, or a brain tumor &mdash; to the chief neurosurgeon. The neurosurgeon is brilliant and can handle anything, but they cost $5,000/hour, there is only one of them, and most patients just need a nurse to apply a bandage. <strong>Pain:</strong> The hospital goes bankrupt paying neurosurgeon rates for band-aids. Wait times skyrocket because the neurosurgeon is backed up with trivial cases. Patients with actual brain tumors cannot get appointments. <strong>Mapping:</strong> <span class="term-tooltip" tabindex="0" aria-label="Model routing definition">Model routing<span class="tooltip-content" role="tooltip">Model routing is the practice of classifying incoming requests by complexity and sending each request to the most cost-effective model that can handle it. Simple requests (greetings, FAQs, status checks) go to the cheapest model (Haiku), standard requests go to a mid-tier model (Sonnet), and only complex requests (multi-step reasoning, nuanced analysis) go to the most expensive model (Opus). The classifier itself can be a cheap Haiku call, keyword rules, or an embedding similarity check.</span></span> is the triage nurse for your agent. Simple greetings go to Haiku (the band-aid nurse, 10-20x cheaper). Standard requests go to Sonnet (the general practitioner). Only genuinely complex reasoning tasks go to Opus (the neurosurgeon). Since 60-70% of real-world requests are simple, you save 50-70% without any quality loss.</p>
+          <p><strong>Before:</strong> Imagine a hospital that sends every patient &mdash; whether they have a paper cut, a broken arm, or a brain tumor &mdash; to the chief neurosurgeon. The neurosurgeon is brilliant and can handle anything, but they cost $5,000/hour, there is only one of them, and most patients just need a nurse to apply a bandage. <strong>Pain:</strong> The hospital goes bankrupt paying neurosurgeon rates for band-aids. Wait times skyrocket because the neurosurgeon is backed up with trivial cases. Patients with actual brain tumors cannot get appointments. <strong>Mapping:</strong> <span class="term-tooltip" tabindex="0" aria-label="Model routing definition">Model routing<span class="tooltip-content" role="tooltip">Model routing is the practice of classifying incoming requests by complexity and sending each request to the most cost-effective model that can handle it. Simple requests (greetings, FAQs, status checks) go to the cheapest model (Haiku), standard requests go to a mid-tier model (Sonnet), and only complex requests (multi-step reasoning, nuanced analysis) go to the most expensive model (Opus). The classifier itself can be a cheap Haiku call, keyword rules, or an embedding similarity check.</span></span> is the triage nurse for your agent. Simple greetings go to Haiku (the band-aid nurse, 3x cheaper). Standard requests go to Sonnet (the general practitioner). Only genuinely complex reasoning tasks go to Opus (the neurosurgeon). Since 60-70% of real-world requests are simple, you save 50-70% without any quality loss.</p>
         </div>
 
         <p>Here is what the "triage nurse" actually looks like &mdash; a routing decision object your system produces for every request:</p>
@@ -495,15 +496,18 @@ system: [{
 {
   "user_message": "Hi there, how are you?",
   "classified_tier": "simple",
-  "routed_model": "claude-haiku-3-5-20241022",
-  "classifier_cost": "$0.0001",
-  "actual_request_cost": "$0.000042",
-  "cost_if_sonnet": "$0.000504",   // 12x more expensive
-  "savings": "92%"
+  "routed_model": "claude-haiku-4-5-20251001",
+  "classifier_cost": "$0.00001",       // embedding similarity (cheap classifier)
+  "actual_request_cost": "$0.000168",
+  "cost_if_sonnet": "$0.000504",       // 3x more expensive
+  "savings": "67%"
 }
 // Without routing, this greeting costs $0.000504 on Sonnet.
-// With routing, it costs $0.000042 on Haiku + $0.0001 classifier = $0.000142.
-// That is a 72% savings on this single request.</code></pre>
+// With routing: $0.000168 on Haiku + $0.00001 embedding classifier = $0.000178.
+// That is a 65% savings on this single request.
+// Note: a Haiku-classifier call (~$0.0004) would erase savings on a tiny
+// greeting like this. Use embedding/keyword classifiers for short messages,
+// Haiku-classifier for longer multi-sentence requests where it pays off.</code></pre>
           </div>
         </div>
 
@@ -511,25 +515,25 @@ system: [{
           <span class="box-label">Technical Definition: Tiered Model Routing</span>
           <p>A model router sits between the user request and the LLM API call. It classifies each request into a complexity tier and selects the appropriate model:</p>
           <ul>
-            <li><strong>Tier 1 &mdash; Haiku ($0.25/$1.25 per MTok in/out):</strong> Handles greetings, simple FAQs, yes/no questions, status checks, and format conversions. 10-20x cheaper than Sonnet.</li>
+            <li><strong>Tier 1 &mdash; Haiku ($1/$5 per MTok in/out):</strong> Handles greetings, simple FAQs, yes/no questions, status checks, and format conversions. 3x cheaper than Sonnet (15x cheaper than Opus on output).</li>
             <li><strong>Tier 2 &mdash; Sonnet ($3/$15 per MTok in/out):</strong> Handles standard reasoning, multi-step instructions, code generation, and tool orchestration. The default tier for most agent workflows.</li>
-            <li><strong>Tier 3 &mdash; Opus ($15/$75 per MTok in/out):</strong> Reserved for complex analysis, nuanced judgment calls, long-form synthesis, and tasks where quality is more important than cost.</li>
+            <li><strong>Tier 3 &mdash; Opus ($5/$25 per MTok in/out):</strong> Reserved for complex analysis, nuanced judgment calls, long-form synthesis, and tasks where quality is more important than cost. Note: Opus pricing dropped sharply in 4.5+; older guides citing $15/$75 are out of date.</li>
           </ul>
           <p>Three classification approaches, from simplest to most accurate:</p>
           <ol>
             <li><strong>Keyword rules:</strong> Pattern matching on the input (e.g., "hello", "hi", "thanks" &rarr; Haiku). Fast and free, but brittle.</li>
-            <li><strong>Haiku classifier call:</strong> Send the user message to Haiku with a classification prompt ("Is this simple, standard, or complex?"). Costs ~$0.0001 per classification but is much more accurate than keywords.</li>
+            <li><strong>Haiku classifier call:</strong> Send the user message to Haiku with a classification prompt ("Is this simple, standard, or complex?"). Costs ~$0.0004 per classification but is much more accurate than keywords.</li>
             <li><strong>Embedding similarity:</strong> Compare the query embedding against clusters of known simple/standard/complex queries. You pre-build three clusters from labeled examples (e.g., 50 simple queries, 50 standard queries, 50 complex queries), then classify new queries by which cluster they are closest to. No LLM call needed after initial setup &mdash; just an embedding API call (~$0.00001) and a cosine similarity comparison.</li>
           </ol>
         </div>
 
         <p>How does the classifier actually make its decision? When you send a user message to Haiku with the classification prompt, Haiku examines the message structure and content. Short messages with common social patterns ("Hi", "Thanks", "What time do you close?") get classified as simple. Messages with multi-part requests, conditional logic, or domain-specific terminology ("Compare the Q3 and Q4 revenue trends and explain the variance") get classified as complex. Everything in between &mdash; single-step but substantive questions, straightforward code requests, tool-use tasks &mdash; falls into the standard tier.</p>
-        <p>This is different from hard-coded keyword rules, which might route "Hi there, I need help analyzing a complex financial model" to Haiku just because it starts with "Hi." The Haiku classifier understands the full intent of the message, which is why it achieves much higher routing accuracy than pattern matching. The tradeoff is one additional API call (~50ms latency, ~$0.0001 cost), but that is negligible compared to the savings from correct routing.</p>
+        <p>This is different from hard-coded keyword rules, which might route "Hi there, I need help analyzing a complex financial model" to Haiku just because it starts with "Hi." The Haiku classifier understands the full intent of the message, which is why it achieves much higher routing accuracy than pattern matching. The tradeoff is one additional API call (~50ms latency, ~$0.0004 cost), but that is negligible compared to the savings from correct routing.</p>
 
         <!-- SVG Diagram: Model Routing Decision Tree -->
         <div class="animation-container" aria-label="Decision tree diagram for model routing showing how requests are classified to Haiku, Sonnet, or Opus">
           <div class="animation-title">Diagram: Model Routing Decision Tree</div>
-          <svg viewBox="0 0 600 340" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Decision tree: incoming request goes to complexity classifier. If simple (greeting, FAQ, status) route to Haiku at $0.25/MTok. If moderate (multi-step, code gen, tool use) route to Sonnet at $3/MTok. If complex (analysis, synthesis, judgment) route to Opus at $15/MTok. 65% of traffic goes to Haiku, 25% to Sonnet, 10% to Opus." style="width:100%;max-width:600px;margin:0 auto;display:block;">
+          <svg viewBox="0 0 600 340" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Decision tree: incoming request goes to complexity classifier. If simple (greeting, FAQ, status) route to Haiku at $1/MTok. If moderate (multi-step, code gen, tool use) route to Sonnet at $3/MTok. If complex (analysis, synthesis, judgment) route to Opus at $5/MTok. 65% of traffic goes to Haiku, 25% to Sonnet, 10% to Opus." style="width:100%;max-width:600px;margin:0 auto;display:block;">
             <style>
               @media(prefers-reduced-motion:reduce){.route-pulse{animation:none!important}}
               @keyframes route-glow{0%,100%{opacity:0.5}50%{opacity:1}}
@@ -553,7 +557,7 @@ system: [{
             <text x="300" y="127" text-anchor="middle" fill="#8B5CF6" font-size="8" font-weight="bold" font-family="system-ui,sans-serif">Haiku</text>
             <text x="300" y="139" text-anchor="middle" fill="#8B5CF6" font-size="8" font-family="system-ui,sans-serif">Classifier</text>
             <!-- Decision label: cost -->
-            <text x="300" y="95" text-anchor="middle" fill="#9ca3af" font-size="7" font-family="system-ui,sans-serif">~$0.0001 per classification</text>
+            <text x="300" y="95" text-anchor="middle" fill="#9ca3af" font-size="7" font-family="system-ui,sans-serif">~$0.0004 per classification</text>
             <!-- Branch LEFT: Simple → Haiku -->
             <line x1="230" y1="130" x2="120" y2="190" stroke="#10B981" stroke-width="2" marker-end="url(#route-arrow-green)"/>
             <text x="160" y="155" text-anchor="middle" fill="#10B981" font-size="9" font-weight="bold" font-family="system-ui,sans-serif">SIMPLE</text>
@@ -566,7 +570,7 @@ system: [{
             <!-- Haiku box -->
             <rect x="40" y="194" width="160" height="80" rx="8" fill="#1a2a1a" stroke="#10B981" stroke-width="1.5"/>
             <text x="120" y="214" text-anchor="middle" fill="#10B981" font-size="12" font-weight="bold" font-family="system-ui,sans-serif">Haiku  $</text>
-            <text x="120" y="230" text-anchor="middle" fill="#10B981" font-size="9" font-family="system-ui,sans-serif">$0.25 / MTok input</text>
+            <text x="120" y="230" text-anchor="middle" fill="#10B981" font-size="9" font-family="system-ui,sans-serif">$1 / MTok input</text>
             <text x="120" y="246" text-anchor="middle" fill="#9ca3af" font-size="8" font-family="system-ui,sans-serif">Greetings | FAQ | Status</text>
             <text x="120" y="260" text-anchor="middle" fill="#9ca3af" font-size="8" font-family="system-ui,sans-serif">Format conversion</text>
             <!-- Traffic volume badge -->
@@ -594,7 +598,7 @@ system: [{
             <rect x="40" y="302" width="520" height="28" rx="5" fill="#10B981" opacity="0.08" stroke="#10B981" stroke-width="0.5"/>
             <text x="54" y="320" fill="#10B981" font-size="10" font-family="system-ui,sans-serif">&#9889;</text>
             <text x="72" y="320" fill="#10B981" font-size="9" font-weight="bold" font-family="system-ui,sans-serif">Result:</text>
-            <text x="120" y="320" fill="#9ca3af" font-size="9" font-family="system-ui,sans-serif">65% on Haiku + 25% on Sonnet + 10% on Opus = 50-70% cost savings vs all-Sonnet</text>
+            <text x="120" y="320" fill="#9ca3af" font-size="9" font-family="system-ui,sans-serif">65% on Haiku + 25% on Sonnet + 10% on Opus = 30-40% cost savings vs all-Sonnet</text>
           </svg>
         </div>
 
@@ -609,7 +613,7 @@ system: [{
             <div class="router-lanes">
               <div class="router-lane">
                 <div class="router-lane-label haiku" id="router-haiku-label">Haiku</div>
-                <div class="router-cost" id="router-haiku-cost" style="color:var(--success);">$0.25/MTok</div>
+                <div class="router-cost" id="router-haiku-cost" style="color:var(--success);">$1/MTok</div>
                 <div class="router-lane-box" id="router-haiku-1">Greetings</div>
                 <div class="router-lane-box" id="router-haiku-2">Simple FAQ</div>
                 <div class="router-lane-box" id="router-haiku-3">Status check</div>
@@ -623,14 +627,14 @@ system: [{
               </div>
               <div class="router-lane">
                 <div class="router-lane-label opus" id="router-opus-label">Opus</div>
-                <div class="router-cost" id="router-opus-cost" style="color:var(--accent-primary);">$15/MTok</div>
+                <div class="router-cost" id="router-opus-cost" style="color:var(--accent-primary);">$5/MTok</div>
                 <div class="router-lane-box" id="router-opus-1">Analysis</div>
                 <div class="router-lane-box" id="router-opus-2">Synthesis</div>
                 <div class="router-lane-box" id="router-opus-3">Judgment</div>
               </div>
             </div>
           </div>
-          <div class="anim-static-fallback">Request "Hi there, how are you?" passes through a Haiku classifier and routes to the Haiku tier ($0.25/MTok) since it is a simple greeting. Three tiers shown: Haiku (greetings, FAQ, status), Sonnet (multi-step, code gen, tool use), Opus (analysis, synthesis, judgment).</div>
+          <div class="anim-static-fallback">Request "Hi there, how are you?" passes through a Haiku classifier and routes to the Haiku tier ($1/MTok) since it is a simple greeting. Three tiers shown: Haiku (greetings, FAQ, status), Sonnet (multi-step, code gen, tool use), Opus (analysis, synthesis, judgment).</div>
           <div class="animation-controls">
             <button class="anim-btn" onclick="animRouter.play()" aria-label="Play animation">&#9654;</button>
             <button class="anim-btn" onclick="animRouter.pause()" aria-label="Pause animation">&#10074;&#10074;</button>
@@ -641,12 +645,12 @@ system: [{
 
         <div class="callout-why">
           <span class="box-label">Why It Matters</span>
-          <p>Analysis of production agent traffic consistently shows that <strong>60-70% of requests are Haiku-eligible</strong>: greetings, simple questions, confirmations, and format conversions. Routing these to Haiku instead of Sonnet saves 10-20x per request. For an agent handling 100,000 requests/day where 65% route to Haiku, the monthly savings are approximately <strong>$15,000-$25,000</strong> compared to sending everything to Sonnet. The classifier cost (a Haiku call at $0.0001) is negligible compared to the savings.</p>
+          <p>Analysis of production agent traffic consistently shows that <strong>60-70% of requests are Haiku-eligible</strong>: greetings, simple questions, confirmations, and format conversions. Routing these to Haiku instead of Sonnet saves about 3x per request (Haiku $1/$5 vs Sonnet $3/$15 per MTok &mdash; same ratio on input and output). For an agent handling 100,000 requests/day where 65% route to Haiku, the monthly savings are approximately <strong>$10,000-$18,000</strong> compared to sending everything to Sonnet. The classifier cost (a Haiku call at $0.0004 or an embedding lookup at $0.00001) is small relative to the savings on substantive requests.</p>
         </div>
 
         <div class="callout-warning">
           <span class="box-label">&#9888;&#65039; Common Misconceptions</span>
-          <p><strong>"The classifier adds too much latency."</strong> &mdash; A Haiku classifier call takes about 50-100ms and costs ~$0.0001. The request it routes might save $0.01-$0.10. That is a 100-1000x return on the classifier investment. The latency is negligible compared to the main LLM call (which takes 500-2000ms).</p>
+          <p><strong>"The classifier adds too much latency."</strong> &mdash; A Haiku classifier call takes about 50-100ms and costs ~$0.0004. The request it routes might save $0.01-$0.10. That is a 100-1000x return on the classifier investment. The latency is negligible compared to the main LLM call (which takes 500-2000ms).</p>
           <p><strong>"I should start with keyword rules and upgrade later."</strong> &mdash; Keyword rules are tempting because they are "free," but they misroute surprisingly often. A message like "Hi, can you help me analyze the Q3 revenue variance across product lines?" starts with "Hi" but is clearly complex. The Haiku classifier catches this; keyword rules do not. Start with the Haiku classifier &mdash; it costs almost nothing and routes correctly from day one.</p>
           <p><strong>"Model routing degrades quality."</strong> &mdash; Only if you route incorrectly. Haiku handles simple tasks (greetings, status checks) with the same quality as Sonnet &mdash; the tasks are just too easy for model capability to matter. Quality only degrades if complex requests get misrouted to Haiku, which is why the classifier accuracy matters and why the fallback-to-Sonnet pattern exists.</p>
         </div>
@@ -828,7 +832,7 @@ def call_with_caching(user_message: str, conversation_history: list) -> dict:
     """
     try:
         response = client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model="claude-sonnet-4-6",
             max_tokens=1024,
             system=SYSTEM_PROMPT,
             messages=conversation_history + [
@@ -891,7 +895,7 @@ async function callWithCaching(userMessage, conversationHistory = []) {
    */
   try {
     const response = await client.messages.create({
-      model: "claude-sonnet-4-20250514",
+      model: "claude-sonnet-4-6",
       max_tokens: 1024,
       system: SYSTEM_PROMPT,
       messages: [
@@ -1103,7 +1107,7 @@ if (cached) {
 
         <!-- Code Block 3: Model Router -->
         <h3>3. Model Router with Haiku Classifier</h3>
-        <p>Here is where the cost savings get dramatic. Instead of sending every request to Sonnet (your default model), you first ask Haiku &mdash; the cheapest Claude model &mdash; a simple question: "Is this request simple, standard, or complex?" That classifier call costs about $0.0001, but the routing decision it enables saves $0.01-$0.10 per request by steering simple queries away from expensive models.</p>
+        <p>Here is where the cost savings get dramatic. Instead of sending every request to Sonnet (your default model), you first ask Haiku &mdash; the cheapest Claude model &mdash; a simple question: "Is this request simple, standard, or complex?" That classifier call costs about $0.0004, but the routing decision it enables saves $0.01-$0.10 per request by steering simple queries away from expensive models.</p>
         <p>The key engineering decision is the fallback behavior. If the classifier call itself fails (network error, rate limit), you should default to Sonnet &mdash; the safe middle ground. Never default to Haiku on failure (you might degrade quality on complex requests) and never default to Opus (you might burn budget unnecessarily).</p>
 
         <div class="code-block-wrapper">
@@ -1121,19 +1125,19 @@ client = anthropic.Anthropic()
 # WHY: Centralizes the routing logic for easy updates.
 MODEL_TIERS = {
     "simple": {
-        "model": "claude-haiku-3-5-20241022",
-        "cost_per_mtok_in": 0.25,
-        "cost_per_mtok_out": 1.25,
+        "model": "claude-haiku-4-5-20251001",
+        "cost_per_mtok_in": 1.0,
+        "cost_per_mtok_out": 5.0,
     },
     "standard": {
-        "model": "claude-sonnet-4-20250514",
+        "model": "claude-sonnet-4-6",
         "cost_per_mtok_in": 3.0,
         "cost_per_mtok_out": 15.0,
     },
     "complex": {
-        "model": "claude-opus-4-20250514",
-        "cost_per_mtok_in": 15.0,
-        "cost_per_mtok_out": 75.0,
+        "model": "claude-opus-4-7",
+        "cost_per_mtok_in": 5.0,
+        "cost_per_mtok_out": 25.0,
     },
 }
 
@@ -1141,11 +1145,11 @@ def classify_complexity(user_message: str) -> str:
     """Use Haiku to classify request complexity.
 
     Returns: 'simple', 'standard', or 'complex'.
-    Cost: ~$0.0001 per classification.
+    Cost: ~$0.0004 per classification.
     """
     try:
         response = client.messages.create(
-            model="claude-haiku-3-5-20241022",
+            model="claude-haiku-4-5-20251001",
             max_tokens=10,
             system=[{
                 "type": "text",
@@ -1169,7 +1173,7 @@ def classify_complexity(user_message: str) -> str:
 def route_request(user_message: str, conversation_history: list) -> dict:
     """Classify and route a request to the appropriate model."""
     # WHAT: Classify, then call the selected model.
-    # WHY: 60-70% of requests route to Haiku at 10-20x savings.
+    # WHY: 60-70% of requests route to Haiku at 3x savings.
     # GOTCHA: Always fall back to Sonnet, never silently fail.
     tier = classify_complexity(user_message)
     model_config = MODEL_TIERS[tier]
@@ -1195,7 +1199,7 @@ def route_request(user_message: str, conversation_history: list) -> dict:
 # Usage
 result = route_request("Hi there!", [])
 print(f"Tier: {result['tier']}, Model: {result['model']}, Cost: ${result['cost']}")
-# Output: Tier: simple, Model: claude-haiku-3-5-20241022, Cost: $0.000042</code></pre>
+# Output: Tier: simple, Model: claude-haiku-4-5-20251001, Cost: $0.000168</code></pre>
           </div>
           <div class="code-panel" id="router-ts">
             <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
@@ -1207,19 +1211,19 @@ const client = new Anthropic();
 // WHY: Centralizes the routing logic for easy updates.
 const MODEL_TIERS = {
   simple: {
-    model: "claude-haiku-3-5-20241022",
-    costPerMtokIn: 0.25,
-    costPerMtokOut: 1.25,
+    model: "claude-haiku-4-5-20251001",
+    costPerMtokIn: 1.0,
+    costPerMtokOut: 5.0,
   },
   standard: {
-    model: "claude-sonnet-4-20250514",
+    model: "claude-sonnet-4-6",
     costPerMtokIn: 3.0,
     costPerMtokOut: 15.0,
   },
   complex: {
-    model: "claude-opus-4-20250514",
-    costPerMtokIn: 15.0,
-    costPerMtokOut: 75.0,
+    model: "claude-opus-4-7",
+    costPerMtokIn: 5.0,
+    costPerMtokOut: 25.0,
   },
 };
 
@@ -1227,11 +1231,11 @@ async function classifyComplexity(userMessage) {
   /**
    * Use Haiku to classify request complexity.
    * Returns: 'simple', 'standard', or 'complex'.
-   * Cost: ~$0.0001 per classification.
+   * Cost: ~$0.0004 per classification.
    */
   try {
     const response = await client.messages.create({
-      model: "claude-haiku-3-5-20241022",
+      model: "claude-haiku-4-5-20251001",
       max_tokens: 10,
       system: [
         {
@@ -1255,7 +1259,7 @@ async function classifyComplexity(userMessage) {
 
 async function routeRequest(userMessage, conversationHistory = []) {
   // WHAT: Classify, then call the selected model.
-  // WHY: 60-70% of requests route to Haiku at 10-20x savings.
+  // WHY: 60-70% of requests route to Haiku at 3x savings.
   // GOTCHA: Always fall back to Sonnet, never silently fail.
   const tier = await classifyComplexity(userMessage);
   const config = MODEL_TIERS[tier];
@@ -1280,20 +1284,20 @@ async function routeRequest(userMessage, conversationHistory = []) {
 // Usage
 const result = await routeRequest("Hi there!", []);
 console.log(`Tier: ${result.tier}, Model: ${result.model}, Cost: $${result.cost}`);
-// Output: Tier: simple, Model: claude-haiku-3-5-20241022, Cost: $0.000042</code></pre>
+// Output: Tier: simple, Model: claude-haiku-4-5-20251001, Cost: $0.000168</code></pre>
           </div>
         </div>
 
         <div class="checkpoint">
           <div class="checkpoint-label">What Just Happened?</div>
-          <p>You built a model router that uses a Haiku classifier call (~$0.0001) to determine request complexity and routes to the cheapest capable model. The fallback-to-Sonnet pattern ensures the system never silently fails. The cost tracking on each response lets you measure the actual savings from routing.</p>
+          <p>You built a model router that uses a Haiku classifier call (~$0.0004) to determine request complexity and routes to the cheapest capable model. The fallback-to-Sonnet pattern ensures the system never silently fails. The cost tracking on each response lets you measure the actual savings from routing.</p>
         </div>
 
         <!-- Code Block 4: History Summarization -->
         <h3>4. Conversation History Summarization</h3>
         <p>This technique tackles the most insidious cost driver: multi-turn history accumulation. Here is the problem in concrete terms: without intervention, a 20-turn conversation resends all previous turns as input tokens on every call. Turn 1 sends 2K tokens. Turn 10 sends 20K tokens. Turn 20 sends 40K tokens. Cumulative cost grows geometrically, and your budget drains faster with every message.</p>
         <p>The fix is a sliding-window strategy. Keep the last N turns verbatim &mdash; they contain the most relevant context for the current question. Compress everything older into a rolling summary paragraph. The result? A 20-turn conversation that would cost 40K input tokens drops to about 8K. That is an 80% reduction in input cost for long conversations.</p>
-        <p>Two practical tips to get this right: First, use Haiku to generate the summary. It is 10-20x cheaper than Sonnet and more than capable of producing a concise conversation summary. Second, explicitly instruct the summarizer to preserve unresolved issues and user preferences. If your user said "I prefer email over phone" in turn 2 and that gets lost in the summary, your agent might ask for a phone number in turn 15 &mdash; frustrating the user and wasting a turn.</p>
+        <p>Two practical tips to get this right: First, use Haiku to generate the summary. It is 3x cheaper than Sonnet and more than capable of producing a concise conversation summary. Second, explicitly instruct the summarizer to preserve unresolved issues and user preferences. If your user said "I prefer email over phone" in turn 2 and that gets lost in the summary, your agent might ask for a phone number in turn 15 &mdash; frustrating the user and wasting a turn.</p>
 
         <div class="code-block-wrapper">
           <div class="code-tabs">
@@ -1319,11 +1323,11 @@ def summarize_history(messages: list[dict]) -> str:
     """
     try:
         # WHAT: Ask Haiku to summarize the conversation.
-        # WHY: Haiku is 10-20x cheaper than Sonnet for this task.
+        # WHY: Haiku is 3x cheaper than Sonnet for this task.
         # GOTCHA: Include "preserve unresolved issues" to avoid
         #         losing important context in the summary.
         response = client.messages.create(
-            model="claude-haiku-3-5-20241022",
+            model="claude-haiku-4-5-20251001",
             max_tokens=300,
             system=[{
                 "type": "text",
@@ -1407,11 +1411,11 @@ async function summarizeHistory(messages) {
    */
   try {
     // WHAT: Ask Haiku to summarize the conversation.
-    // WHY: Haiku is 10-20x cheaper than Sonnet for this task.
+    // WHY: Haiku is 3x cheaper than Sonnet for this task.
     // GOTCHA: Include "preserve unresolved issues" to avoid
     //         losing important context in the summary.
     const response = await client.messages.create({
-      model: "claude-haiku-3-5-20241022",
+      model: "claude-haiku-4-5-20251001",
       max_tokens: 300,
       system: [
         {
@@ -1495,9 +1499,9 @@ from datetime import datetime
 # WHAT: Pricing table for all Claude models.
 # WHY: Centralizes pricing for easy updates when Anthropic changes rates.
 PRICING = {
-    "claude-haiku-3-5-20241022": {"input": 0.25, "output": 1.25, "cache_read": 0.025},
-    "claude-sonnet-4-20250514": {"input": 3.0, "output": 15.0, "cache_read": 0.30},
-    "claude-opus-4-20250514": {"input": 15.0, "output": 75.0, "cache_read": 1.50},
+    "claude-haiku-4-5-20251001": {"input": 1.0, "output": 5.0, "cache_read": 0.10},
+    "claude-sonnet-4-6": {"input": 3.0, "output": 15.0, "cache_read": 0.30},
+    "claude-opus-4-7": {"input": 5.0, "output": 25.0, "cache_read": 0.50},
 }
 
 @dataclass
@@ -1511,18 +1515,18 @@ class RequestCost:
 
     @property
     def input_cost(self) -> float:
-        prices = PRICING.get(self.model, PRICING["claude-sonnet-4-20250514"])
+        prices = PRICING.get(self.model, PRICING["claude-sonnet-4-6"])
         regular_input = self.input_tokens - self.cache_read_tokens
         return (regular_input / 1_000_000) * prices["input"]
 
     @property
     def cache_cost(self) -> float:
-        prices = PRICING.get(self.model, PRICING["claude-sonnet-4-20250514"])
+        prices = PRICING.get(self.model, PRICING["claude-sonnet-4-6"])
         return (self.cache_read_tokens / 1_000_000) * prices["cache_read"]
 
     @property
     def output_cost(self) -> float:
-        prices = PRICING.get(self.model, PRICING["claude-sonnet-4-20250514"])
+        prices = PRICING.get(self.model, PRICING["claude-sonnet-4-6"])
         return (self.output_tokens / 1_000_000) * prices["output"]
 
     @property
@@ -1541,7 +1545,7 @@ class RequestCost:
 
     def _cache_savings(self) -> float:
         """How much caching saved vs full-price input."""
-        prices = PRICING.get(self.model, PRICING["claude-sonnet-4-20250514"])
+        prices = PRICING.get(self.model, PRICING["claude-sonnet-4-6"])
         full_price = (self.cache_read_tokens / 1_000_000) * prices["input"]
         return full_price - self.cache_cost
 
@@ -1576,7 +1580,7 @@ class CostTracker:
 # Usage
 tracker = CostTracker()
 # After each API call:
-# cost = tracker.track(response, model="claude-sonnet-4-20250514")
+# cost = tracker.track(response, model="claude-sonnet-4-6")
 # print(cost.breakdown())
 # At end of day:
 # print(tracker.summary())</code></pre>
@@ -1586,9 +1590,9 @@ tracker = CostTracker()
             <pre><code class="language-javascript">// WHAT: Pricing table for all Claude models.
 // WHY: Centralizes pricing for easy updates when Anthropic changes rates.
 const PRICING = {
-  "claude-haiku-3-5-20241022": { input: 0.25, output: 1.25, cacheRead: 0.025 },
-  "claude-sonnet-4-20250514": { input: 3.0, output: 15.0, cacheRead: 0.30 },
-  "claude-opus-4-20250514": { input: 15.0, output: 75.0, cacheRead: 1.50 },
+  "claude-haiku-4-5-20251001": { input: 1.0, output: 5.0, cacheRead: 0.10 },
+  "claude-sonnet-4-6": { input: 3.0, output: 15.0, cacheRead: 0.30 },
+  "claude-opus-4-7": { input: 5.0, output: 25.0, cacheRead: 0.50 },
 };
 
 class RequestCost {
@@ -1601,7 +1605,7 @@ class RequestCost {
   }
 
   get prices() {
-    return PRICING[this.model] ?? PRICING["claude-sonnet-4-20250514"];
+    return PRICING[this.model] ?? PRICING["claude-sonnet-4-6"];
   }
 
   get inputCost() {
@@ -1672,7 +1676,7 @@ class CostTracker {
 
 // Usage
 const tracker = new CostTracker();
-// const cost = tracker.track(response, "claude-sonnet-4-20250514");
+// const cost = tracker.track(response, "claude-sonnet-4-6");
 // console.log(cost.breakdown());
 // console.log(tracker.summary());</code></pre>
           </div>
@@ -1707,6 +1711,75 @@ const tracker = new CostTracker();
         </div>
       </section>
 
+      <!-- Extended Thinking -->
+      <section class="section" id="extended-thinking">
+        <h2 id="extended-thinking-heading">Extended Thinking &mdash; Pay for Reasoning, Not Length</h2>
+
+        <p>Sometimes the right cost lever is to spend <em>more</em> tokens on the right thing. Anthropic's Claude Opus and Sonnet models support an <strong>extended thinking</strong> mode where the model produces a private reasoning trace before its final answer. You pay for those thinking tokens, but on hard tasks (math, multi-step planning, code refactors that touch a dependency graph) the win in answer quality dwarfs the marginal cost &mdash; and the alternative is paying many more tokens across a buggy multi-turn agent loop.</p>
+
+        <div class="tech-def-box">
+          <span class="box-label">Technical Definition</span>
+          <p><strong>Extended thinking</strong> is enabled per request via the <code>thinking</code> parameter in the Messages API. You set a token <em>budget</em> for the reasoning trace; the model uses up to that budget privately before producing its final response. The budget is billed at the same rate as output tokens.</p>
+          <pre style="background:var(--code-bg);border:1px solid var(--code-border);border-radius:8px;padding:0.85rem;font-family:'JetBrains Mono',monospace;font-size:0.78rem;color:var(--code-text);overflow-x:auto;margin:0.75rem 0 0.25rem;"><code>response = client.messages.create(
+    model="claude-opus-4-7",
+    max_tokens=8000,
+    thinking={"type": "enabled", "budget_tokens": 4000},  # &larr; budget for reasoning
+    messages=[{"role": "user", "content": "Refactor this 12-file module..."}]
+)</code></pre>
+        </div>
+
+        <div class="animation-container" aria-label="Extended thinking budget allocation diagram">
+          <div class="animation-title">Where Your Tokens Go &mdash; Standard vs Extended Thinking</div>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 220" style="width:100%;max-width:600px;display:block;margin:0 auto;" role="img" aria-label="Two horizontal bars comparing token allocation. Standard mode: input tokens, then output tokens. Extended thinking mode: input tokens, thinking budget tokens (private reasoning), then output tokens (final answer). Extended thinking improves quality on hard tasks at the cost of additional thinking tokens.">
+            <!-- Standard mode -->
+            <text x="20" y="40" fill="#94A3B8" font-family="Bricolage Grotesque" font-weight="700" font-size="12">Standard</text>
+            <rect x="20" y="55" width="180" height="32" fill="rgba(6,182,212,0.25)" stroke="#06B6D4"/>
+            <text x="110" y="76" text-anchor="middle" fill="#06B6D4" font-family="Bricolage Grotesque" font-weight="700" font-size="11">Input</text>
+            <rect x="200" y="55" width="200" height="32" fill="rgba(16,185,129,0.25)" stroke="#10B981"/>
+            <text x="300" y="76" text-anchor="middle" fill="#10B981" font-family="Bricolage Grotesque" font-weight="700" font-size="11">Output (final answer)</text>
+            <text x="20" y="105" fill="#94A3B8" font-family="Source Sans 3" font-size="10" font-style="italic">may produce a wrong answer on hard tasks &mdash; you then pay again to retry</text>
+
+            <!-- Divider -->
+            <line x1="20" y1="125" x2="580" y2="125" stroke="#21262D" stroke-width="1" stroke-dasharray="4,3"/>
+
+            <!-- Extended -->
+            <text x="20" y="155" fill="#F97316" font-family="Bricolage Grotesque" font-weight="700" font-size="12">Extended Thinking</text>
+            <rect x="20" y="170" width="120" height="32" fill="rgba(6,182,212,0.25)" stroke="#06B6D4"/>
+            <text x="80" y="191" text-anchor="middle" fill="#06B6D4" font-family="Bricolage Grotesque" font-weight="700" font-size="11">Input</text>
+            <rect x="140" y="170" width="200" height="32" fill="rgba(249,115,22,0.25)" stroke="#F97316"/>
+            <text x="240" y="187" text-anchor="middle" fill="#F97316" font-family="Bricolage Grotesque" font-weight="700" font-size="11">Thinking budget</text>
+            <text x="240" y="199" text-anchor="middle" fill="#94A3B8" font-family="Source Sans 3" font-size="9">private reasoning trace</text>
+            <rect x="340" y="170" width="160" height="32" fill="rgba(16,185,129,0.25)" stroke="#10B981"/>
+            <text x="420" y="191" text-anchor="middle" fill="#10B981" font-family="Bricolage Grotesque" font-weight="700" font-size="11">Output (final)</text>
+          </svg>
+        </div>
+
+        <h3>When Extended Thinking Pays Off</h3>
+        <ul>
+          <li><strong>Hard math &amp; logic puzzles</strong> &mdash; multi-step proofs, combinatorics, careful unit reasoning</li>
+          <li><strong>Multi-file code refactors</strong> &mdash; renaming a function across a dependency graph, planning a schema migration</li>
+          <li><strong>Complex planning &amp; scheduling</strong> &mdash; capstone-grade decomposition where one wrong step cascades</li>
+          <li><strong>Self-checked extraction</strong> &mdash; the model can use thinking to validate its JSON before committing to it</li>
+        </ul>
+
+        <h3>When NOT to Use It</h3>
+        <ul>
+          <li>Simple lookups, one-line transforms, format conversions &mdash; thinking adds latency for no quality gain</li>
+          <li>Anything Haiku already nails &mdash; stay on Haiku without thinking; you're optimizing the wrong axis</li>
+          <li>Streaming UX where token-by-token feedback matters &mdash; thinking output is not streamed to the user</li>
+        </ul>
+
+        <div class="callout-cost">
+          <span class="box-label">Cost Math</span>
+          <p>A 4,000-token thinking budget on Claude Sonnet costs roughly <code>4,000 &times; $15/MTok = $0.06</code> extra per request. If extended thinking lifts your task-success rate from 70% to 95%, you're avoiding a cascade of multi-turn retries that would have cost <em>several</em> 0.06's anyway. The only honest test is to A/B it on your task: same prompt, same examples, with vs without thinking. If task success goes up enough to offset the budget, ship it; if not, don't pay for it.</p>
+        </div>
+
+        <div class="callout-cert">
+          <span class="box-label" style="color:#D4A843;">&#127891; Cert Tip &mdash; Domain 4.2 (Reasoning Modes)</span>
+          <p>The exam tests recognition that extended thinking is a <em>per-request</em> opt-in, not a model variant &mdash; same Opus/Sonnet model, different parameter. Anti-pattern: enabling thinking on every request "to be safe." That just inflates cost on tasks that don't need it. Match the mode to task difficulty.</p>
+        </div>
+      </section>
+
       <!-- Batch API -->
       <section class="section" id="batch-api">
         <h2 id="batch-api-heading">Batch API</h2>
@@ -1726,6 +1799,11 @@ const tracker = new CostTracker();
         <div class="checkpoint">
           <div class="checkpoint-label">What Just Happened?</div>
           <p>You learned that the Batch API trades latency for cost &mdash; 50% off for results within 24 hours. For any workload that does not need an immediate response (evals, bulk processing, overnight jobs), batch mode dramatically reduces your bill while processing at scale.</p>
+        </div>
+
+        <div class="callout-cert" style="background:rgba(212,168,67,.06);border-left:4px solid #D4A843;border-radius:0 8px 8px 0;padding:1.25rem 1.5rem;margin:1.5rem 0;">
+          <span class="box-label" style="color:#D4A843;">&#127891; Cert Tip &mdash; Domain 4.5 (Batch Processing)</span>
+          <p>The exam tests whether you recognize <em>"this can wait until tomorrow morning"</em> as the trigger for batch over synchronous. Specifically: <strong>50% cost reduction</strong> with up to a <strong>24-hour processing window</strong> and no guaranteed latency SLA. Ideal for nightly evaluations, bulk extraction, and retroactive scoring. Use <code>custom_id</code> to correlate request/response pairs. Note: the Batch API does NOT support multi-turn tool calling within a single request &mdash; pre-merge checks and other blocking workflows must use synchronous calls. Anti-pattern: paying full price for a 10,000-row nightly enrichment job that nobody is waiting on.</p>
         </div>
       </section>
 
@@ -1784,8 +1862,8 @@ client = anthropic.Anthropic()
 
 # --- Pricing Table ---
 PRICING = {
-    "claude-haiku-3-5-20241022": {"input": 0.25, "output": 1.25, "cache_read": 0.025},
-    "claude-sonnet-4-20250514": {"input": 3.0, "output": 15.0, "cache_read": 0.30},
+    "claude-haiku-4-5-20251001": {"input": 1.0, "output": 5.0, "cache_read": 0.10},
+    "claude-sonnet-4-6": {"input": 3.0, "output": 15.0, "cache_read": 0.30},
 }
 
 # --- Cost Tracker ---
@@ -1800,7 +1878,7 @@ class RequestCost:
 
     @property
     def total_cost(self) -> float:
-        prices = PRICING.get(self.model, PRICING["claude-sonnet-4-20250514"])
+        prices = PRICING.get(self.model, PRICING["claude-sonnet-4-6"])
         regular_input = self.input_tokens - self.cache_read_tokens
         input_cost = (regular_input / 1_000_000) * prices["input"]
         cache_cost = (self.cache_read_tokens / 1_000_000) * prices["cache_read"]
@@ -1810,7 +1888,7 @@ class RequestCost:
     @property
     def cost_if_sonnet_no_cache(self) -> float:
         """What this request would have cost on Sonnet without caching."""
-        prices = PRICING["claude-sonnet-4-20250514"]
+        prices = PRICING["claude-sonnet-4-6"]
         input_cost = (self.input_tokens / 1_000_000) * prices["input"]
         output_cost = (self.output_tokens / 1_000_000) * prices["output"]
         return input_cost + output_cost
@@ -1863,7 +1941,7 @@ def classify_complexity(user_message: str) -> str:
     """Use Haiku to classify request complexity."""
     try:
         response = client.messages.create(
-            model="claude-haiku-3-5-20241022",
+            model="claude-haiku-4-5-20251001",
             max_tokens=10,
             system=[{
                 "type": "text",
@@ -1883,9 +1961,9 @@ def classify_complexity(user_message: str) -> str:
         return "standard"
 
 TIER_TO_MODEL = {
-    "simple": "claude-haiku-3-5-20241022",
-    "standard": "claude-sonnet-4-20250514",
-    "complex": "claude-sonnet-4-20250514",  # Use Sonnet for lab (Opus requires separate access)
+    "simple": "claude-haiku-4-5-20251001",
+    "standard": "claude-sonnet-4-6",
+    "complex": "claude-sonnet-4-6",  # Use Sonnet for lab (Opus requires separate access)
 }
 
 # --- Main Pipeline ---
@@ -1924,23 +2002,23 @@ import Anthropic from "@anthropic-ai/sdk";
 const client = new Anthropic();
 
 const PRICING = {
-  "claude-haiku-3-5-20241022": { input: 0.25, output: 1.25, cacheRead: 0.025 },
-  "claude-sonnet-4-20250514": { input: 3.0, output: 15.0, cacheRead: 0.30 },
+  "claude-haiku-4-5-20251001": { input: 1.0, output: 5.0, cacheRead: 0.10 },
+  "claude-sonnet-4-6": { input: 3.0, output: 15.0, cacheRead: 0.30 },
 };
 
 class CostTracker {
   constructor() { this.requests = []; }
 
   track(response, model, tier) {
-    const prices = PRICING[model] ?? PRICING["claude-sonnet-4-20250514"];
+    const prices = PRICING[model] ?? PRICING["claude-sonnet-4-6"];
     const inp = response.usage.input_tokens;
     const out = response.usage.output_tokens;
     const cached = response.usage.cache_read_input_tokens ?? 0;
     const totalCost = ((inp - cached) / 1e6) * prices.input
       + (cached / 1e6) * prices.cacheRead
       + (out / 1e6) * prices.output;
-    const baseline = (inp / 1e6) * PRICING["claude-sonnet-4-20250514"].input
-      + (out / 1e6) * PRICING["claude-sonnet-4-20250514"].output;
+    const baseline = (inp / 1e6) * PRICING["claude-sonnet-4-6"].input
+      + (out / 1e6) * PRICING["claude-sonnet-4-6"].output;
     const entry = { model, tier, totalCost, baseline, inp, out, cached };
     this.requests.push(entry);
     return entry;
@@ -1970,7 +2048,7 @@ const SYSTEM_PROMPT = [{
 async function classifyComplexity(msg) {
   try {
     const r = await client.messages.create({
-      model: "claude-haiku-3-5-20241022", max_tokens: 10,
+      model: "claude-haiku-4-5-20251001", max_tokens: 10,
       system: [{ type: "text", text:
         "Classify the user message complexity. Reply EXACTLY one word: simple, standard, or complex.\n" +
         "simple: greetings, yes/no, FAQs, status checks, thanks\n" +
@@ -1984,9 +2062,9 @@ async function classifyComplexity(msg) {
 }
 
 const TIER_TO_MODEL = {
-  simple: "claude-haiku-3-5-20241022",
-  standard: "claude-sonnet-4-20250514",
-  complex: "claude-sonnet-4-20250514",
+  simple: "claude-haiku-4-5-20251001",
+  standard: "claude-sonnet-4-6",
+  complex: "claude-sonnet-4-6",
 };
 
 export const tracker = new CostTracker();
@@ -2015,7 +2093,7 @@ export async function optimizedCall(userMessage, history = []) {
           </div>
         </div>
         <div class="output-label">Expected Output</div>
-        <div class="output-block">{'response': 'Hello! How can I help you today?', 'tier': 'simple', 'model': 'claude-haiku-3-5-20241022', 'cost': '$0.000042', 'baseline': '$0.000504'}</div>
+        <div class="output-block">{'response': 'Hello! How can I help you today?', 'tier': 'simple', 'model': 'claude-haiku-4-5-20251001', 'cost': '$0.000168', 'baseline': '$0.000504'}</div>
         <div class="checkpoint">
           <div class="checkpoint-label">&#9989; Checkpoint</div>
           <p>If you see a response with <code>'tier': 'simple'</code> and a cost significantly lower than the baseline, Step 1 is working. The request was routed to Haiku instead of Sonnet.</p>
@@ -2131,8 +2209,8 @@ COST OPTIMIZATION PIPELINE TEST
 --- Request 1 ---
   Message:  Hi there!
   Tier:     simple
-  Model:    claude-haiku-3-5-20241022
-  Cost:     $0.000042
+  Model:    claude-haiku-4-5-20251001
+  Cost:     $0.000168
   Baseline: $0.000504
   Response: Hello! How can I help you today?...
 
@@ -2233,11 +2311,11 @@ AGGREGATE RESULTS
         <div class="quiz-question">
           <h4>Q4: If 70% of your agent's requests are routed from Sonnet to Haiku, approximately how much do you save on those requests?</h4>
           <div class="quiz-option" role="button" tabindex="0" aria-label="Option A" onclick="checkAnswer(this, false)"><span class="quiz-marker">A</span><span>About 2x savings (50% cheaper)</span></div>
-          <div class="quiz-option" role="button" tabindex="0" aria-label="Option B" onclick="checkAnswer(this, false)"><span class="quiz-marker">B</span><span>About 5x savings (80% cheaper)</span></div>
-          <div class="quiz-option" role="button" tabindex="0" aria-label="Option C" onclick="checkAnswer(this, true)"><span class="quiz-marker">C</span><span>About 10-12x savings (90-92% cheaper per routed request)</span></div>
+          <div class="quiz-option" role="button" tabindex="0" aria-label="Option B" onclick="checkAnswer(this, true)"><span class="quiz-marker">B</span><span>About 3x savings (~67% cheaper per routed request)</span></div>
+          <div class="quiz-option" role="button" tabindex="0" aria-label="Option C" onclick="checkAnswer(this, false)"><span class="quiz-marker">C</span><span>About 12x savings (90%+ cheaper)</span></div>
           <div class="quiz-option" role="button" tabindex="0" aria-label="Option D" onclick="checkAnswer(this, false)"><span class="quiz-marker">D</span><span>About 100x savings (99% cheaper)</span></div>
-          <div class="quiz-feedback correct-fb">Correct! Haiku input costs $0.25/MTok vs Sonnet's $3/MTok (12x cheaper on input), and Haiku output costs $1.25/MTok vs Sonnet's $15/MTok (12x cheaper on output). Each routed request is roughly 10-12x cheaper. With 70% of traffic routed, overall savings are approximately 50-70% of total spend.</div>
-          <div class="quiz-feedback incorrect-fb">Haiku is 12x cheaper than Sonnet on both input ($0.25 vs $3/MTok) and output ($1.25 vs $15/MTok). Each request routed to Haiku saves about 90-92%. With 70% of traffic routed, overall cost drops by approximately 50-70%.</div>
+          <div class="quiz-feedback correct-fb">Correct! Haiku input costs $1/MTok vs Sonnet's $3/MTok (3x cheaper on input), and Haiku output costs $5/MTok vs Sonnet's $15/MTok (3x cheaper on output). Each routed request is roughly 3x cheaper, or about 67% savings per routed request. With 70% of traffic routed, overall spend drops by roughly 30-40%. Note: older guides cite 12x &mdash; that was true when Haiku was $0.25/$1.25, but Haiku 4.5 priced up to $1/$5 while Sonnet stayed at $3/$15.</div>
+          <div class="quiz-feedback incorrect-fb">Under current pricing (Haiku 4.5), Haiku is 3x cheaper than Sonnet on both input ($1 vs $3/MTok) and output ($5 vs $15/MTok) &mdash; not 12x as older guides suggest. Each routed request saves about 67%. With 70% of traffic routed, overall cost drops by roughly 30-40%.</div>
         </div>
 
         <!-- Q5 -->
@@ -2276,7 +2354,7 @@ AGGREGATE RESULTS
         <ul>
           <li><strong>Cost Anatomy:</strong> Six components drive agent cost &mdash; input tokens, output tokens (5x more expensive), tool calls, embeddings, compute, and multi-turn multiplication. Output pricing asymmetry and history compounding are the two biggest cost drivers.</li>
           <li><strong>Caching Strategies:</strong> Three layers &mdash; prompt caching (Anthropic native, 90% input savings, 5-min TTL), response caching (semantic similarity, 100% savings on hits), and embedding caching (Redis LRU). Together they cut costs 50-90%.</li>
-          <li><strong>Model Routing:</strong> Classify requests by complexity and route to Haiku (simple, 10-20x cheaper), Sonnet (standard), or Opus (complex). 60-70% of production traffic is Haiku-eligible, yielding 50-70% overall savings.</li>
+          <li><strong>Model Routing:</strong> Classify requests by complexity and route to Haiku (simple, 3x cheaper), Sonnet (standard), or Opus (complex). 60-70% of production traffic is Haiku-eligible, yielding 30-40% overall savings.</li>
           <li><strong>Token Optimization:</strong> Compress system prompts (-63%), summarize conversation history (-72%), constrain outputs with max_tokens, and prune RAG chunks to top-3 (-70%). The cheapest token is the one you never send.</li>
           <li><strong>Cost Tracking:</strong> Instrument every request with per-component cost breakdowns. You cannot optimize what you do not measure.</li>
         </ul>

@@ -293,6 +293,7 @@
       <a href="#combining-patterns">Combining Patterns</a>
       <a href="#pattern-matrix">Pattern Comparison</a>
       <a href="#anti-patterns">Anti-Patterns</a>
+      <a href="#anthropic-reference">Anthropic Reference</a>
       <a href="#what-is-agent">What Is an Agent?</a>
       <a href="#react-loop">The ReAct Loop</a>
       <a href="#implementing-react">Implementing ReAct</a>
@@ -412,7 +413,7 @@ def find_lien_exposure(question):
     messages = [{"role": "user", "content": question}]
     while True:
         response = client.messages.create(
-            model="claude-sonnet-4-20250514", max_tokens=4096,
+            model="claude-sonnet-4-6", max_tokens=4096,
             system="You are a UCC filing research agent. Search thoroughly.",
             tools=tools, messages=messages
         )
@@ -1151,7 +1152,405 @@ def find_lien_exposure(question):
         </div>
       </section>
 
-      <div class="bridge">You now have the complete landscape: 8 patterns, a decision tree for choosing between them, examples of how production systems combine them, and 5 anti-patterns to avoid. For the rest of this module, we'll deep-dive into the most important pattern — ReAct — because it's the foundation that most other patterns build upon. Everything from Plan-Execute to Supervisor+Workers uses a ReAct-like loop at its core.</div>
+      <!-- ============================================================ -->
+      <!-- ANTHROPIC REFERENCE FRAMEWORK                                -->
+      <!-- Source: anthropic.com/engineering/building-effective-agents  -->
+      <!-- ============================================================ -->
+      <section class="section" id="anthropic-reference">
+        <h2 id="anthropic-reference-heading">Anthropic Reference: Workflows vs Agents</h2>
+
+        <p>The 8 patterns above are the working catalog for this course. But Anthropic's own engineering team published a canonical framework that simplifies all of this into <strong>two categories</strong>: <em>workflows</em> (predetermined paths) and <em>agents</em> (autonomous loops). Every pattern you've seen is one of these two things wearing a different costume. Before you start building, learn the canonical vocabulary &mdash; it's how Anthropic engineers and the broader community talk about agent architectures.</p>
+
+        <div class="tech-def-box">
+          <span class="box-label">Technical Definition</span>
+          <p><strong>Workflow:</strong> An LLM and tools orchestrated through <em>predefined code paths</em>. The developer decides the sequence; the LLM fills in the steps.<br>
+          <strong>Agent:</strong> An LLM that <em>dynamically directs its own processes and tool usage</em>, deciding the sequence itself based on environmental feedback.</p>
+        </div>
+
+        <p>Both build on the same foundation: <strong>the augmented LLM</strong> &mdash; an LLM enhanced with retrieval, tools, and memory.</p>
+
+        <!-- ====================== Augmented LLM diagram ====================== -->
+        <div class="animation-container" aria-label="Augmented LLM: LLM core with retrieval, tools, and memory augmentations">
+          <div class="animation-title">The Augmented LLM &mdash; Foundation of Every Agentic System</div>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 580 260" style="width:100%;max-width:580px;display:block;margin:0 auto;" role="img" aria-label="Augmented LLM with three augmentations: retrieval (top), tools (right), memory (bottom). User input enters the LLM core, which optionally calls augmentations before returning output.">
+            <defs>
+              <marker id="ar-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#94A3B8"/></marker>
+            </defs>
+            <!-- LLM core -->
+            <circle cx="290" cy="130" r="55" fill="rgba(212,168,67,0.15)" stroke="#D4A843" stroke-width="2"/>
+            <text x="290" y="125" text-anchor="middle" fill="#E8ECF1" font-family="Bricolage Grotesque" font-weight="700" font-size="14">LLM</text>
+            <text x="290" y="142" text-anchor="middle" fill="#94A3B8" font-family="Bricolage Grotesque" font-size="10">core</text>
+
+            <!-- Retrieval -->
+            <rect x="230" y="20" width="120" height="42" rx="8" fill="rgba(6,182,212,0.15)" stroke="#06B6D4" stroke-width="1.5"/>
+            <text x="290" y="38" text-anchor="middle" fill="#06B6D4" font-family="Bricolage Grotesque" font-weight="700" font-size="12">Retrieval</text>
+            <text x="290" y="54" text-anchor="middle" fill="#94A3B8" font-family="Source Sans 3" font-size="10">RAG, embeddings, search</text>
+            <line x1="290" y1="62" x2="290" y2="73" stroke="#94A3B8" stroke-width="1.5" marker-end="url(#ar-arrow)"/>
+
+            <!-- Tools -->
+            <rect x="430" y="108" width="130" height="42" rx="8" fill="rgba(139,92,246,0.15)" stroke="#8B5CF6" stroke-width="1.5"/>
+            <text x="495" y="126" text-anchor="middle" fill="#8B5CF6" font-family="Bricolage Grotesque" font-weight="700" font-size="12">Tools</text>
+            <text x="495" y="142" text-anchor="middle" fill="#94A3B8" font-family="Source Sans 3" font-size="10">APIs, code, MCP</text>
+            <line x1="427" y1="129" x2="350" y2="129" stroke="#94A3B8" stroke-width="1.5" marker-end="url(#ar-arrow)"/>
+
+            <!-- Memory -->
+            <rect x="230" y="200" width="120" height="42" rx="8" fill="rgba(16,185,129,0.15)" stroke="#10B981" stroke-width="1.5"/>
+            <text x="290" y="218" text-anchor="middle" fill="#10B981" font-family="Bricolage Grotesque" font-weight="700" font-size="12">Memory</text>
+            <text x="290" y="234" text-anchor="middle" fill="#94A3B8" font-family="Source Sans 3" font-size="10">conversation, scratchpad</text>
+            <line x1="290" y1="200" x2="290" y2="187" stroke="#94A3B8" stroke-width="1.5" marker-end="url(#ar-arrow)"/>
+
+            <!-- Input/Output -->
+            <text x="60" y="125" text-anchor="middle" fill="#E8ECF1" font-family="Bricolage Grotesque" font-weight="600" font-size="11">Input</text>
+            <line x1="90" y1="130" x2="232" y2="130" stroke="#94A3B8" stroke-width="1.5" marker-end="url(#ar-arrow)"/>
+            <text x="60" y="170" text-anchor="middle" fill="#64748B" font-family="Source Sans 3" font-size="9">user query</text>
+          </svg>
+          <p style="font-size:0.85rem;color:var(--text-muted);text-align:center;margin-top:0.75rem;max-width:520px;margin-left:auto;margin-right:auto;">Every agentic system starts here. <em>Augmentations</em> are how the LLM reaches outside its parametric memory &mdash; pulling fresh facts (retrieval), taking actions (tools), or remembering past turns (memory).</p>
+        </div>
+
+        <h3>The 5 Workflow Patterns (Anthropic Canonical)</h3>
+        <p>These are the named compositions Anthropic recommends. Each one uses the augmented LLM as its building block but wires up a different control flow.</p>
+
+        <!-- ====================== Pattern 1: Prompt Chaining ====================== -->
+        <h4 style="margin-top:1.75rem;color:#3B82F6;">1. Prompt Chaining &mdash; sequential decomposition</h4>
+        <div class="animation-container" aria-label="Prompt chaining pattern" style="min-height:auto;padding:1.5rem;">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 580 110" style="width:100%;max-width:580px;display:block;margin:0 auto;" role="img" aria-label="Prompt chaining: input flows through LLM 1, an optional gate check, then LLM 2, producing the final output">
+            <defs><marker id="pc-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#94A3B8"/></marker></defs>
+            <text x="30" y="58" text-anchor="middle" fill="#94A3B8" font-family="Bricolage Grotesque" font-size="11">In</text>
+            <line x1="50" y1="55" x2="80" y2="55" stroke="#94A3B8" stroke-width="1.5" marker-end="url(#pc-arrow)"/>
+            <rect x="85" y="35" width="80" height="40" rx="6" fill="rgba(59,130,246,0.15)" stroke="#3B82F6"/><text x="125" y="59" text-anchor="middle" fill="#3B82F6" font-family="Bricolage Grotesque" font-weight="700" font-size="11">LLM 1</text>
+            <line x1="170" y1="55" x2="200" y2="55" stroke="#94A3B8" stroke-width="1.5" marker-end="url(#pc-arrow)"/>
+            <polygon points="205,35 245,55 205,75 215,55" fill="rgba(245,158,11,0.15)" stroke="#F59E0B"/><text x="225" y="59" text-anchor="middle" fill="#F59E0B" font-family="Bricolage Grotesque" font-weight="700" font-size="10">gate</text>
+            <line x1="248" y1="55" x2="278" y2="55" stroke="#94A3B8" stroke-width="1.5" marker-end="url(#pc-arrow)"/>
+            <rect x="283" y="35" width="80" height="40" rx="6" fill="rgba(59,130,246,0.15)" stroke="#3B82F6"/><text x="323" y="59" text-anchor="middle" fill="#3B82F6" font-family="Bricolage Grotesque" font-weight="700" font-size="11">LLM 2</text>
+            <line x1="368" y1="55" x2="398" y2="55" stroke="#94A3B8" stroke-width="1.5" marker-end="url(#pc-arrow)"/>
+            <rect x="403" y="35" width="80" height="40" rx="6" fill="rgba(59,130,246,0.15)" stroke="#3B82F6"/><text x="443" y="59" text-anchor="middle" fill="#3B82F6" font-family="Bricolage Grotesque" font-weight="700" font-size="11">LLM 3</text>
+            <line x1="488" y1="55" x2="518" y2="55" stroke="#94A3B8" stroke-width="1.5" marker-end="url(#pc-arrow)"/>
+            <text x="540" y="58" text-anchor="middle" fill="#94A3B8" font-family="Bricolage Grotesque" font-size="11">Out</text>
+            <text x="225" y="93" text-anchor="middle" fill="#64748B" font-family="Source Sans 3" font-size="9">programmatic check (fail &rarr; stop)</text>
+          </svg>
+        </div>
+        <p><strong>When to use:</strong> task decomposes into fixed, ordered subtasks. Trades latency for accuracy by giving each call a smaller, simpler job. <strong>Example:</strong> outline &rarr; check criteria &rarr; full document. <strong>Maps to course P6 Pipeline.</strong></p>
+
+        <!-- ====================== Pattern 2: Routing ====================== -->
+        <h4 style="margin-top:1.75rem;color:#3B82F6;">2. Routing &mdash; classify, then specialize</h4>
+        <div class="animation-container" aria-label="Routing pattern" style="min-height:auto;padding:1.5rem;">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 580 180" style="width:100%;max-width:580px;display:block;margin:0 auto;" role="img" aria-label="Routing: classifier directs input to one of three specialized LLM paths based on input type">
+            <defs><marker id="rt-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#94A3B8"/></marker></defs>
+            <text x="30" y="93" text-anchor="middle" fill="#94A3B8" font-family="Bricolage Grotesque" font-size="11">In</text>
+            <line x1="50" y1="90" x2="90" y2="90" stroke="#94A3B8" stroke-width="1.5" marker-end="url(#rt-arrow)"/>
+            <polygon points="95,65 165,65 180,90 165,115 95,115 110,90" fill="rgba(245,158,11,0.15)" stroke="#F59E0B" stroke-width="1.5"/>
+            <text x="138" y="86" text-anchor="middle" fill="#F59E0B" font-family="Bricolage Grotesque" font-weight="700" font-size="11">Classifier</text>
+            <text x="138" y="100" text-anchor="middle" fill="#94A3B8" font-family="Source Sans 3" font-size="9">LLM</text>
+            <line x1="180" y1="80" x2="270" y2="35" stroke="#94A3B8" stroke-width="1.5" marker-end="url(#rt-arrow)"/>
+            <line x1="180" y1="90" x2="270" y2="90" stroke="#94A3B8" stroke-width="1.5" marker-end="url(#rt-arrow)"/>
+            <line x1="180" y1="100" x2="270" y2="145" stroke="#94A3B8" stroke-width="1.5" marker-end="url(#rt-arrow)"/>
+            <rect x="275" y="15" width="130" height="40" rx="6" fill="rgba(59,130,246,0.15)" stroke="#3B82F6"/><text x="340" y="40" text-anchor="middle" fill="#3B82F6" font-family="Bricolage Grotesque" font-weight="700" font-size="11">Path A: refunds</text>
+            <rect x="275" y="70" width="130" height="40" rx="6" fill="rgba(59,130,246,0.15)" stroke="#3B82F6"/><text x="340" y="95" text-anchor="middle" fill="#3B82F6" font-family="Bricolage Grotesque" font-weight="700" font-size="11">Path B: support</text>
+            <rect x="275" y="125" width="130" height="40" rx="6" fill="rgba(59,130,246,0.15)" stroke="#3B82F6"/><text x="340" y="150" text-anchor="middle" fill="#3B82F6" font-family="Bricolage Grotesque" font-weight="700" font-size="11">Path C: technical</text>
+            <line x1="408" y1="35" x2="450" y2="85" stroke="#94A3B8" stroke-width="1.5"/>
+            <line x1="408" y1="90" x2="450" y2="90" stroke="#94A3B8" stroke-width="1.5"/>
+            <line x1="408" y1="145" x2="450" y2="95" stroke="#94A3B8" stroke-width="1.5"/>
+            <line x1="450" y1="90" x2="510" y2="90" stroke="#94A3B8" stroke-width="1.5" marker-end="url(#rt-arrow)"/>
+            <text x="540" y="93" text-anchor="middle" fill="#94A3B8" font-family="Bricolage Grotesque" font-size="11">Out</text>
+          </svg>
+        </div>
+        <p><strong>When to use:</strong> input falls into distinct categories that benefit from specialized prompts. Also the canonical pattern for <em>cost routing</em>: easy queries to Haiku, hard queries to Sonnet. <strong>Maps to course P4 Router.</strong></p>
+
+        <!-- ====================== Pattern 3: Parallelization ====================== -->
+        <h4 style="margin-top:1.75rem;color:#3B82F6;">3. Parallelization &mdash; sectioning or voting</h4>
+        <div class="animation-container" aria-label="Parallelization pattern" style="min-height:auto;padding:1.5rem;">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 580 200" style="width:100%;max-width:580px;display:block;margin:0 auto;" role="img" aria-label="Parallelization: input fans out to three concurrent LLM calls, results aggregate to a single output">
+            <defs><marker id="pl-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#94A3B8"/></marker></defs>
+            <text x="30" y="103" text-anchor="middle" fill="#94A3B8" font-family="Bricolage Grotesque" font-size="11">In</text>
+            <line x1="50" y1="100" x2="90" y2="100" stroke="#94A3B8" stroke-width="1.5" marker-end="url(#pl-arrow)"/>
+            <rect x="95" y="80" width="70" height="40" rx="6" fill="rgba(245,158,11,0.15)" stroke="#F59E0B" stroke-width="1.5"/>
+            <text x="130" y="98" text-anchor="middle" fill="#F59E0B" font-family="Bricolage Grotesque" font-weight="700" font-size="10">Split</text>
+            <text x="130" y="113" text-anchor="middle" fill="#94A3B8" font-family="Source Sans 3" font-size="9">/ broadcast</text>
+            <line x1="167" y1="90" x2="240" y2="35" stroke="#94A3B8" stroke-width="1.5" marker-end="url(#pl-arrow)"/>
+            <line x1="167" y1="100" x2="240" y2="100" stroke="#94A3B8" stroke-width="1.5" marker-end="url(#pl-arrow)"/>
+            <line x1="167" y1="110" x2="240" y2="165" stroke="#94A3B8" stroke-width="1.5" marker-end="url(#pl-arrow)"/>
+            <rect x="245" y="15" width="100" height="40" rx="6" fill="rgba(59,130,246,0.15)" stroke="#3B82F6"/><text x="295" y="40" text-anchor="middle" fill="#3B82F6" font-family="Bricolage Grotesque" font-weight="700" font-size="11">LLM A</text>
+            <rect x="245" y="80" width="100" height="40" rx="6" fill="rgba(59,130,246,0.15)" stroke="#3B82F6"/><text x="295" y="105" text-anchor="middle" fill="#3B82F6" font-family="Bricolage Grotesque" font-weight="700" font-size="11">LLM B</text>
+            <rect x="245" y="145" width="100" height="40" rx="6" fill="rgba(59,130,246,0.15)" stroke="#3B82F6"/><text x="295" y="170" text-anchor="middle" fill="#3B82F6" font-family="Bricolage Grotesque" font-weight="700" font-size="11">LLM C</text>
+            <line x1="348" y1="35" x2="420" y2="90" stroke="#94A3B8" stroke-width="1.5"/>
+            <line x1="348" y1="100" x2="420" y2="100" stroke="#94A3B8" stroke-width="1.5"/>
+            <line x1="348" y1="165" x2="420" y2="110" stroke="#94A3B8" stroke-width="1.5"/>
+            <rect x="425" y="80" width="80" height="40" rx="6" fill="rgba(245,158,11,0.15)" stroke="#F59E0B" stroke-width="1.5"/>
+            <text x="465" y="98" text-anchor="middle" fill="#F59E0B" font-family="Bricolage Grotesque" font-weight="700" font-size="10">Aggregate</text>
+            <text x="465" y="113" text-anchor="middle" fill="#94A3B8" font-family="Source Sans 3" font-size="9">vote / merge</text>
+            <line x1="508" y1="100" x2="538" y2="100" stroke="#94A3B8" stroke-width="1.5" marker-end="url(#pl-arrow)"/>
+            <text x="558" y="103" text-anchor="middle" fill="#94A3B8" font-family="Bricolage Grotesque" font-size="11">Out</text>
+          </svg>
+        </div>
+        <p><strong>Two flavors:</strong> <em>Sectioning</em> (split independent subtasks: one LLM screens for unsafe content while another generates a response). <em>Voting</em> (run the same task N times: 3 reviewers flag a vulnerability, 2-of-3 majority wins). <strong>Maps to course P5 Fan-Out / Parallel Tools.</strong></p>
+
+        <!-- ====================== Pattern 4: Orchestrator-Workers ====================== -->
+        <h4 style="margin-top:1.75rem;color:#3B82F6;">4. Orchestrator-Workers &mdash; dynamic decomposition</h4>
+        <div class="animation-container" aria-label="Orchestrator-workers pattern" style="min-height:auto;padding:1.5rem;">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 580 220" style="width:100%;max-width:580px;display:block;margin:0 auto;" role="img" aria-label="Orchestrator-workers: a central orchestrator LLM dynamically decomposes the input into worker tasks and synthesizes their results">
+            <defs><marker id="ow-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#94A3B8"/></marker></defs>
+            <text x="30" y="113" text-anchor="middle" fill="#94A3B8" font-family="Bricolage Grotesque" font-size="11">In</text>
+            <line x1="50" y1="110" x2="90" y2="110" stroke="#94A3B8" stroke-width="1.5" marker-end="url(#ow-arrow)"/>
+            <rect x="95" y="85" width="120" height="50" rx="8" fill="rgba(249,115,22,0.18)" stroke="#F97316" stroke-width="2"/>
+            <text x="155" y="108" text-anchor="middle" fill="#F97316" font-family="Bricolage Grotesque" font-weight="700" font-size="12">Orchestrator</text>
+            <text x="155" y="124" text-anchor="middle" fill="#94A3B8" font-family="Source Sans 3" font-size="9">decides subtasks</text>
+            <line x1="218" y1="95" x2="290" y2="40" stroke="#94A3B8" stroke-width="1.5" marker-end="url(#ow-arrow)"/>
+            <line x1="218" y1="110" x2="290" y2="110" stroke="#94A3B8" stroke-width="1.5" marker-end="url(#ow-arrow)"/>
+            <line x1="218" y1="125" x2="290" y2="180" stroke="#94A3B8" stroke-width="1.5" marker-end="url(#ow-arrow)"/>
+            <rect x="295" y="20" width="100" height="40" rx="6" fill="rgba(139,92,246,0.15)" stroke="#8B5CF6"/><text x="345" y="38" text-anchor="middle" fill="#8B5CF6" font-family="Bricolage Grotesque" font-weight="700" font-size="11">Worker 1</text><text x="345" y="51" text-anchor="middle" fill="#94A3B8" font-size="9">edit file A</text>
+            <rect x="295" y="90" width="100" height="40" rx="6" fill="rgba(139,92,246,0.15)" stroke="#8B5CF6"/><text x="345" y="108" text-anchor="middle" fill="#8B5CF6" font-family="Bricolage Grotesque" font-weight="700" font-size="11">Worker 2</text><text x="345" y="121" text-anchor="middle" fill="#94A3B8" font-size="9">edit file B</text>
+            <rect x="295" y="160" width="100" height="40" rx="6" fill="rgba(139,92,246,0.15)" stroke="#8B5CF6"/><text x="345" y="178" text-anchor="middle" fill="#8B5CF6" font-family="Bricolage Grotesque" font-weight="700" font-size="11">Worker 3</text><text x="345" y="191" text-anchor="middle" fill="#94A3B8" font-size="9">update tests</text>
+            <line x1="395" y1="40" x2="445" y2="100" stroke="#94A3B8" stroke-width="1.5" stroke-dasharray="3,2"/>
+            <line x1="395" y1="110" x2="445" y2="110" stroke="#94A3B8" stroke-width="1.5" stroke-dasharray="3,2"/>
+            <line x1="395" y1="180" x2="445" y2="120" stroke="#94A3B8" stroke-width="1.5" stroke-dasharray="3,2"/>
+            <rect x="450" y="85" width="100" height="50" rx="8" fill="rgba(249,115,22,0.18)" stroke="#F97316" stroke-width="2"/>
+            <text x="500" y="108" text-anchor="middle" fill="#F97316" font-family="Bricolage Grotesque" font-weight="700" font-size="11">Synthesize</text>
+            <text x="500" y="123" text-anchor="middle" fill="#94A3B8" font-family="Source Sans 3" font-size="9">orchestrator</text>
+            <text x="500" y="160" text-anchor="middle" fill="#64748B" font-family="Source Sans 3" font-size="9">&rarr; Out</text>
+          </svg>
+        </div>
+        <p><strong>Critical distinction from parallelization:</strong> the subtasks are <em>not predetermined</em>. The orchestrator inspects the input and decides at runtime what work to spawn. This is how Anthropic's own coding agents make complex multi-file changes. <strong>Maps to course P7 Supervisor / M14 multi-agent systems.</strong></p>
+
+        <!-- ====================== Pattern 5: Evaluator-Optimizer ====================== -->
+        <h4 style="margin-top:1.75rem;color:#3B82F6;">5. Evaluator-Optimizer &mdash; iterative refinement loop</h4>
+        <div class="animation-container" aria-label="Evaluator-optimizer pattern" style="min-height:auto;padding:1.5rem;">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 580 180" style="width:100%;max-width:580px;display:block;margin:0 auto;" role="img" aria-label="Evaluator-optimizer: generator produces output, evaluator scores it, feedback loops back to generator until quality is acceptable">
+            <defs><marker id="eo-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#94A3B8"/></marker><marker id="eo-arrow-r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#F43F5E"/></marker></defs>
+            <text x="30" y="93" text-anchor="middle" fill="#94A3B8" font-family="Bricolage Grotesque" font-size="11">In</text>
+            <line x1="50" y1="90" x2="90" y2="90" stroke="#94A3B8" stroke-width="1.5" marker-end="url(#eo-arrow)"/>
+            <rect x="95" y="65" width="120" height="50" rx="8" fill="rgba(59,130,246,0.15)" stroke="#3B82F6" stroke-width="2"/>
+            <text x="155" y="88" text-anchor="middle" fill="#3B82F6" font-family="Bricolage Grotesque" font-weight="700" font-size="12">Generator</text>
+            <text x="155" y="104" text-anchor="middle" fill="#94A3B8" font-family="Source Sans 3" font-size="9">drafts response</text>
+            <line x1="218" y1="90" x2="265" y2="90" stroke="#94A3B8" stroke-width="1.5" marker-end="url(#eo-arrow)"/>
+            <rect x="270" y="65" width="120" height="50" rx="8" fill="rgba(16,185,129,0.15)" stroke="#10B981" stroke-width="2"/>
+            <text x="330" y="88" text-anchor="middle" fill="#10B981" font-family="Bricolage Grotesque" font-weight="700" font-size="12">Evaluator</text>
+            <text x="330" y="104" text-anchor="middle" fill="#94A3B8" font-family="Source Sans 3" font-size="9">scores + critiques</text>
+            <line x1="393" y1="90" x2="430" y2="90" stroke="#94A3B8" stroke-width="1.5" marker-end="url(#eo-arrow)"/>
+            <polygon points="435,70 475,90 435,110 445,90" fill="rgba(245,158,11,0.15)" stroke="#F59E0B"/><text x="455" y="94" text-anchor="middle" fill="#F59E0B" font-family="Bricolage Grotesque" font-weight="700" font-size="10">pass?</text>
+            <line x1="478" y1="90" x2="510" y2="90" stroke="#10B981" stroke-width="1.5" marker-end="url(#eo-arrow)"/>
+            <text x="540" y="93" text-anchor="middle" fill="#10B981" font-family="Bricolage Grotesque" font-size="11">Out</text>
+            <!-- feedback loop -->
+            <path d="M 455 110 Q 455 155 155 155 L 155 116" stroke="#F43F5E" stroke-width="1.5" stroke-dasharray="4,3" fill="none" marker-end="url(#eo-arrow-r)"/>
+            <text x="305" y="170" text-anchor="middle" fill="#F43F5E" font-family="Source Sans 3" font-size="10" font-style="italic">no &mdash; revise with feedback</text>
+          </svg>
+        </div>
+        <p><strong>When to use:</strong> the LLM can articulate clear evaluation criteria <em>and</em> outputs improve measurably from feedback. The evaluator is often a separate prompt or a different model checking the generator's work. <strong>Examples:</strong> literary translation, multi-pass code review. <strong>Maps to course P8 HITL with an LLM-as-judge in the approval slot.</strong></p>
+
+        <!-- ====================== Autonomous Agent Loop ====================== -->
+        <h3 style="margin-top:2rem;">The Autonomous Agent Loop</h3>
+        <p>When the steps can't be predicted upfront &mdash; even by the orchestrator &mdash; you cross from <em>workflow</em> into <em>agent</em>. The agent decides, acts, observes the environment, and decides again. This is the architecture you'll deep-dive in Part B as <strong>ReAct</strong>.</p>
+
+        <div class="animation-container" aria-label="Autonomous agent loop" style="min-height:auto;padding:1.5rem;">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 580 260" style="width:100%;max-width:580px;display:block;margin:0 auto;" role="img" aria-label="Autonomous agent loop: human gives a command, agent plans, selects a tool, executes it, observes the environment feedback, then loops back to plan or finishes">
+            <defs><marker id="ag-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#94A3B8"/></marker></defs>
+            <!-- Human -->
+            <rect x="20" y="115" width="100" height="40" rx="8" fill="rgba(212,168,67,0.15)" stroke="#D4A843"/>
+            <text x="70" y="133" text-anchor="middle" fill="#D4A843" font-family="Bricolage Grotesque" font-weight="700" font-size="11">Human</text>
+            <text x="70" y="148" text-anchor="middle" fill="#94A3B8" font-family="Source Sans 3" font-size="9">command</text>
+            <line x1="123" y1="135" x2="170" y2="135" stroke="#94A3B8" stroke-width="1.5" marker-end="url(#ag-arrow)"/>
+            <!-- Plan -->
+            <rect x="175" y="115" width="100" height="40" rx="8" fill="rgba(249,115,22,0.18)" stroke="#F97316" stroke-width="2"/>
+            <text x="225" y="133" text-anchor="middle" fill="#F97316" font-family="Bricolage Grotesque" font-weight="700" font-size="11">Plan</text>
+            <text x="225" y="148" text-anchor="middle" fill="#94A3B8" font-family="Source Sans 3" font-size="9">choose next step</text>
+            <line x1="278" y1="135" x2="325" y2="135" stroke="#94A3B8" stroke-width="1.5" marker-end="url(#ag-arrow)"/>
+            <!-- Act -->
+            <rect x="330" y="115" width="100" height="40" rx="8" fill="rgba(139,92,246,0.15)" stroke="#8B5CF6"/>
+            <text x="380" y="133" text-anchor="middle" fill="#8B5CF6" font-family="Bricolage Grotesque" font-weight="700" font-size="11">Act</text>
+            <text x="380" y="148" text-anchor="middle" fill="#94A3B8" font-family="Source Sans 3" font-size="9">call tool</text>
+            <line x1="433" y1="135" x2="480" y2="135" stroke="#94A3B8" stroke-width="1.5" marker-end="url(#ag-arrow)"/>
+            <!-- Observe -->
+            <rect x="485" y="115" width="80" height="40" rx="8" fill="rgba(6,182,212,0.15)" stroke="#06B6D4"/>
+            <text x="525" y="133" text-anchor="middle" fill="#06B6D4" font-family="Bricolage Grotesque" font-weight="700" font-size="11">Observe</text>
+            <text x="525" y="148" text-anchor="middle" fill="#94A3B8" font-family="Source Sans 3" font-size="9">env feedback</text>
+            <!-- Loop back -->
+            <path d="M 525 158 Q 525 220 225 220 L 225 158" stroke="#F97316" stroke-width="1.5" stroke-dasharray="4,3" fill="none" marker-end="url(#ag-arrow)"/>
+            <text x="375" y="240" text-anchor="middle" fill="#F97316" font-family="Source Sans 3" font-size="10" font-style="italic">loop until done or max iterations</text>
+            <!-- Stop -->
+            <rect x="265" y="40" width="120" height="35" rx="8" fill="rgba(16,185,129,0.15)" stroke="#10B981"/>
+            <text x="325" y="62" text-anchor="middle" fill="#10B981" font-family="Bricolage Grotesque" font-weight="700" font-size="11">Stop &mdash; return result</text>
+            <line x1="225" y1="118" x2="280" y2="78" stroke="#10B981" stroke-width="1.2" stroke-dasharray="3,3" marker-end="url(#ag-arrow)"/>
+            <text x="220" y="95" text-anchor="middle" fill="#10B981" font-family="Source Sans 3" font-size="9">end_turn</text>
+          </svg>
+        </div>
+
+        <!-- ====================== Decision Framework ====================== -->
+        <h3 style="margin-top:2rem;">Decision: Workflow or Agent?</h3>
+
+        <!-- WORKFLOW VS AGENT COMPARISON SVG -->
+        <div class="animation-container" aria-label="Side-by-side comparison of workflow and agent architectures">
+          <div class="animation-title">Workflow vs Agent &mdash; Side-by-Side</div>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 360" style="width:100%;max-width:600px;display:block;margin:0 auto;" role="img" aria-label="Two-panel comparison. Left panel: Workflow architecture. The developer codes a fixed sequence of LLM calls; each step is predetermined. Right panel: Agent architecture. The developer hands the LLM tools and a goal; the LLM decides at each step what to do next based on environment feedback, looping autonomously until done. Below each panel: properties (predictable/debuggable/cheap for workflows; open-ended/autonomous/expensive for agents) and when to use.">
+            <defs><marker id="wa-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#94A3B8"/></marker><marker id="wa-arrow-loop" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#F97316"/></marker></defs>
+
+            <!-- LEFT PANEL: WORKFLOW -->
+            <rect x="10" y="10" width="285" height="320" rx="10" fill="rgba(59,130,246,0.05)" stroke="#3B82F6" stroke-width="1" stroke-dasharray="4,3"/>
+            <text x="152" y="32" text-anchor="middle" fill="#3B82F6" font-family="Bricolage Grotesque" font-weight="700" font-size="14">WORKFLOW</text>
+            <text x="152" y="48" text-anchor="middle" fill="#94A3B8" font-family="Source Sans 3" font-size="10" font-style="italic">developer codes the path</text>
+
+            <!-- Workflow steps: linear chain -->
+            <rect x="30" y="65" width="65" height="34" rx="5" fill="rgba(212,168,67,0.15)" stroke="#D4A843"/>
+            <text x="62" y="86" text-anchor="middle" fill="#D4A843" font-family="Bricolage Grotesque" font-weight="700" font-size="10">Input</text>
+            <line x1="98" y1="82" x2="115" y2="82" stroke="#94A3B8" stroke-width="1.5" marker-end="url(#wa-arrow)"/>
+            <rect x="118" y="65" width="55" height="34" rx="5" fill="rgba(59,130,246,0.18)" stroke="#3B82F6"/>
+            <text x="145" y="86" text-anchor="middle" fill="#3B82F6" font-family="Bricolage Grotesque" font-weight="700" font-size="10">LLM 1</text>
+            <line x1="176" y1="82" x2="193" y2="82" stroke="#94A3B8" stroke-width="1.5" marker-end="url(#wa-arrow)"/>
+            <rect x="196" y="65" width="55" height="34" rx="5" fill="rgba(59,130,246,0.18)" stroke="#3B82F6"/>
+            <text x="223" y="86" text-anchor="middle" fill="#3B82F6" font-family="Bricolage Grotesque" font-weight="700" font-size="10">LLM 2</text>
+            <line x1="254" y1="82" x2="270" y2="82" stroke="#94A3B8" stroke-width="1.5" marker-end="url(#wa-arrow)"/>
+            <text x="282" y="86" text-anchor="middle" fill="#10B981" font-family="Bricolage Grotesque" font-weight="700" font-size="11">&#10003;</text>
+
+            <!-- Code annotation -->
+            <rect x="30" y="115" width="245" height="44" rx="4" fill="#0D1117" stroke="#21262D"/>
+            <text x="40" y="131" fill="#94A3B8" font-family="JetBrains Mono" font-size="9">// the developer wrote this:</text>
+            <text x="40" y="144" fill="#A5D6FF" font-family="JetBrains Mono" font-size="9">step1 = llm(input)</text>
+            <text x="40" y="155" fill="#A5D6FF" font-family="JetBrains Mono" font-size="9">step2 = llm(step1); return step2</text>
+
+            <!-- Properties -->
+            <text x="30" y="185" fill="#3B82F6" font-family="Bricolage Grotesque" font-weight="700" font-size="11">Properties</text>
+            <text x="30" y="202" fill="#10B981" font-family="Source Sans 3" font-size="10">&#9989; predictable &mdash; same path every run</text>
+            <text x="30" y="218" fill="#10B981" font-family="Source Sans 3" font-size="10">&#9989; debuggable &mdash; trace one route</text>
+            <text x="30" y="234" fill="#10B981" font-family="Source Sans 3" font-size="10">&#9989; cheap &mdash; bounded LLM calls</text>
+            <text x="30" y="250" fill="#F43F5E" font-family="Source Sans 3" font-size="10">&#10005; rigid &mdash; can't adapt to surprises</text>
+
+            <!-- When to use -->
+            <text x="30" y="278" fill="#3B82F6" font-family="Bricolage Grotesque" font-weight="700" font-size="11">Use when</text>
+            <text x="30" y="295" fill="#94A3B8" font-family="Source Sans 3" font-size="10">&middot; steps are knowable upfront</text>
+            <text x="30" y="310" fill="#94A3B8" font-family="Source Sans 3" font-size="10">&middot; volume justifies optimization</text>
+            <text x="30" y="324" fill="#94A3B8" font-family="Source Sans 3" font-size="10">&middot; cost &amp; latency must be bounded</text>
+
+            <!-- RIGHT PANEL: AGENT -->
+            <rect x="305" y="10" width="285" height="320" rx="10" fill="rgba(249,115,22,0.05)" stroke="#F97316" stroke-width="1" stroke-dasharray="4,3"/>
+            <text x="447" y="32" text-anchor="middle" fill="#F97316" font-family="Bricolage Grotesque" font-weight="700" font-size="14">AGENT</text>
+            <text x="447" y="48" text-anchor="middle" fill="#94A3B8" font-family="Source Sans 3" font-size="10" font-style="italic">LLM decides the path</text>
+
+            <!-- Agent loop: circular -->
+            <circle cx="447" cy="105" r="42" fill="rgba(249,115,22,0.12)" stroke="#F97316" stroke-width="2"/>
+            <text x="447" y="100" text-anchor="middle" fill="#F97316" font-family="Bricolage Grotesque" font-weight="700" font-size="11">LLM</text>
+            <text x="447" y="115" text-anchor="middle" fill="#94A3B8" font-family="Source Sans 3" font-size="9">+ tools</text>
+            <!-- Loop arrows around the circle -->
+            <path d="M 489 105 A 42 42 0 1 1 489 104.5" fill="none" stroke="#F97316" stroke-width="1.5" stroke-dasharray="3,2" marker-end="url(#wa-arrow-loop)"/>
+            <text x="510" y="80" fill="#F97316" font-family="Source Sans 3" font-size="9" font-style="italic">think</text>
+            <text x="510" y="115" fill="#F97316" font-family="Source Sans 3" font-size="9" font-style="italic">act</text>
+            <text x="395" y="155" fill="#F97316" font-family="Source Sans 3" font-size="9" font-style="italic">observe</text>
+            <text x="395" y="80" fill="#F97316" font-family="Source Sans 3" font-size="9" font-style="italic">repeat</text>
+
+            <!-- Code annotation -->
+            <rect x="320" y="165" width="255" height="44" rx="4" fill="#0D1117" stroke="#21262D"/>
+            <text x="330" y="181" fill="#94A3B8" font-family="JetBrains Mono" font-size="9">// the developer wrote this:</text>
+            <text x="330" y="194" fill="#A5D6FF" font-family="JetBrains Mono" font-size="9">agent = LLM(goal, tools=[a, b, c])</text>
+            <text x="330" y="205" fill="#A5D6FF" font-family="JetBrains Mono" font-size="9">return agent.run()  &nbsp;// LLM picks steps</text>
+
+            <!-- Properties -->
+            <text x="320" y="232" fill="#F97316" font-family="Bricolage Grotesque" font-weight="700" font-size="11">Properties</text>
+            <text x="320" y="248" fill="#10B981" font-family="Source Sans 3" font-size="10">&#9989; adaptive &mdash; reacts to results</text>
+            <text x="320" y="263" fill="#10B981" font-family="Source Sans 3" font-size="10">&#9989; flexible &mdash; one agent, many tasks</text>
+            <text x="320" y="278" fill="#F43F5E" font-family="Source Sans 3" font-size="10">&#10005; expensive &mdash; many LLM calls</text>
+            <text x="320" y="293" fill="#F43F5E" font-family="Source Sans 3" font-size="10">&#10005; harder to debug &mdash; non-deterministic</text>
+            <text x="320" y="308" fill="#F43F5E" font-family="Source Sans 3" font-size="10">&#10005; can compound errors over turns</text>
+
+            <text x="320" y="324" fill="#F97316" font-family="Bricolage Grotesque" font-weight="700" font-size="11">Use when steps are unknowable</text>
+
+            <!-- Center divider -->
+            <line x1="300" y1="60" x2="300" y2="320" stroke="#21262D" stroke-width="1" stroke-dasharray="3,3"/>
+            <text x="300" y="350" text-anchor="middle" fill="#64748B" font-family="Source Sans 3" font-size="10" font-style="italic">Most production "agents" should actually have been workflows.</text>
+          </svg>
+        </div>
+
+        <!-- DECISION TREE -->
+        <div class="animation-container" aria-label="Decision tree for choosing between workflow and agent" style="padding:1.5rem;">
+          <div class="animation-title">Decision Tree &mdash; Which Should I Build?</div>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 320" style="width:100%;max-width:600px;display:block;margin:0 auto;" role="img" aria-label="Decision tree starting from a question. First question: Can the steps be predicted upfront? If yes, use a workflow. If no, second question: Does the task genuinely require LLM judgment at each turn? If no, use a workflow. If yes, third question: Are you willing to accept higher cost and compounding error risk for autonomy? If no, use a workflow. If yes, use an agent.">
+            <defs><marker id="dt-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#94A3B8"/></marker></defs>
+            <!-- Q1 -->
+            <rect x="180" y="10" width="240" height="44" rx="8" fill="rgba(212,168,67,0.15)" stroke="#D4A843" stroke-width="1.5"/>
+            <text x="300" y="30" text-anchor="middle" fill="#D4A843" font-family="Bricolage Grotesque" font-weight="700" font-size="11">Q1. Can the steps be predicted upfront?</text>
+            <text x="300" y="45" text-anchor="middle" fill="#94A3B8" font-family="Source Sans 3" font-size="9">e.g. "summarize, then translate, then send"</text>
+            <line x1="240" y1="55" x2="160" y2="80" stroke="#10B981" stroke-width="1.5" marker-end="url(#dt-arrow)"/>
+            <text x="190" y="75" fill="#10B981" font-family="Bricolage Grotesque" font-weight="700" font-size="11">YES</text>
+            <line x1="360" y1="55" x2="440" y2="80" stroke="#F97316" stroke-width="1.5" marker-end="url(#dt-arrow)"/>
+            <text x="410" y="75" fill="#F97316" font-family="Bricolage Grotesque" font-weight="700" font-size="11">NO</text>
+
+            <!-- Workflow leaf 1 -->
+            <rect x="40" y="85" width="240" height="46" rx="8" fill="rgba(59,130,246,0.18)" stroke="#3B82F6" stroke-width="2"/>
+            <text x="160" y="105" text-anchor="middle" fill="#3B82F6" font-family="Bricolage Grotesque" font-weight="700" font-size="13">&rarr; WORKFLOW</text>
+            <text x="160" y="123" text-anchor="middle" fill="#94A3B8" font-family="Source Sans 3" font-size="10">prompt chaining, routing, etc.</text>
+
+            <!-- Q2 -->
+            <rect x="320" y="85" width="240" height="44" rx="8" fill="rgba(212,168,67,0.15)" stroke="#D4A843" stroke-width="1.5"/>
+            <text x="440" y="105" text-anchor="middle" fill="#D4A843" font-family="Bricolage Grotesque" font-weight="700" font-size="11">Q2. Does the task require</text>
+            <text x="440" y="120" text-anchor="middle" fill="#D4A843" font-family="Bricolage Grotesque" font-weight="700" font-size="11">LLM judgment at each turn?</text>
+            <line x1="380" y1="130" x2="320" y2="158" stroke="#10B981" stroke-width="1.5" marker-end="url(#dt-arrow)"/>
+            <text x="345" y="155" fill="#10B981" font-family="Bricolage Grotesque" font-weight="700" font-size="11">YES</text>
+            <line x1="500" y1="130" x2="540" y2="158" stroke="#F97316" stroke-width="1.5" marker-end="url(#dt-arrow)"/>
+            <text x="525" y="155" fill="#F97316" font-family="Bricolage Grotesque" font-weight="700" font-size="11">NO</text>
+
+            <!-- Workflow leaf 2 -->
+            <rect x="430" y="160" width="160" height="46" rx="8" fill="rgba(59,130,246,0.18)" stroke="#3B82F6" stroke-width="2"/>
+            <text x="510" y="180" text-anchor="middle" fill="#3B82F6" font-family="Bricolage Grotesque" font-weight="700" font-size="13">&rarr; WORKFLOW</text>
+            <text x="510" y="198" text-anchor="middle" fill="#94A3B8" font-family="Source Sans 3" font-size="10">orchestrator-workers</text>
+
+            <!-- Q3 -->
+            <rect x="200" y="160" width="220" height="44" rx="8" fill="rgba(212,168,67,0.15)" stroke="#D4A843" stroke-width="1.5"/>
+            <text x="310" y="180" text-anchor="middle" fill="#D4A843" font-family="Bricolage Grotesque" font-weight="700" font-size="11">Q3. Accept higher cost &amp;</text>
+            <text x="310" y="195" text-anchor="middle" fill="#D4A843" font-family="Bricolage Grotesque" font-weight="700" font-size="11">compounding error risk?</text>
+            <line x1="270" y1="205" x2="200" y2="235" stroke="#10B981" stroke-width="1.5" marker-end="url(#dt-arrow)"/>
+            <text x="225" y="232" fill="#10B981" font-family="Bricolage Grotesque" font-weight="700" font-size="11">YES</text>
+            <line x1="350" y1="205" x2="420" y2="235" stroke="#F97316" stroke-width="1.5" marker-end="url(#dt-arrow)"/>
+            <text x="395" y="232" fill="#F97316" font-family="Bricolage Grotesque" font-weight="700" font-size="11">NO</text>
+
+            <!-- Agent leaf -->
+            <rect x="60" y="240" width="220" height="50" rx="8" fill="rgba(249,115,22,0.20)" stroke="#F97316" stroke-width="2"/>
+            <text x="170" y="262" text-anchor="middle" fill="#F97316" font-family="Bricolage Grotesque" font-weight="700" font-size="13">&rarr; AGENT</text>
+            <text x="170" y="280" text-anchor="middle" fill="#94A3B8" font-family="Source Sans 3" font-size="10">ReAct loop with tools, max-iters cap</text>
+
+            <!-- Workflow leaf 3 -->
+            <rect x="320" y="240" width="220" height="50" rx="8" fill="rgba(59,130,246,0.18)" stroke="#3B82F6" stroke-width="2"/>
+            <text x="430" y="262" text-anchor="middle" fill="#3B82F6" font-family="Bricolage Grotesque" font-weight="700" font-size="13">&rarr; WORKFLOW</text>
+            <text x="430" y="280" text-anchor="middle" fill="#94A3B8" font-family="Source Sans 3" font-size="10">use evaluator-optimizer / HITL gate</text>
+
+            <text x="300" y="312" text-anchor="middle" fill="#64748B" font-family="Source Sans 3" font-size="10" font-style="italic">3 of 4 paths land on workflow. Default to workflow; reach for agent only when forced.</text>
+          </svg>
+        </div>
+
+        <div class="callout-why">
+          <span class="box-label">Anthropic's Rule</span>
+          <p><strong>Use workflows</strong> when the task decomposes into known steps. They are predictable, debuggable, and cheap. <strong>Use agents</strong> only for open-ended problems where the number of steps is unknowable in advance and the LLM's judgment is genuinely required at each turn. Agents trade higher cost and compounding error risk for autonomy &mdash; only pay that price when you can't predict the path.</p>
+        </div>
+
+        <div class="callout-warning">
+          <span class="box-label">Start Simple</span>
+          <p>The Anthropic team's strongest recommendation: <em>"Success in the LLM space isn't about building the most sophisticated system. It's about building the right system for your needs."</em> Start with a single LLM call plus retrieval. Add a workflow when you need it. Reach for an agent only when no workflow can express the task. Most production "agents" should actually have been workflows.</p>
+        </div>
+
+        <h3 style="margin-top:2rem;">Pattern Mapping: Anthropic &harr; This Course</h3>
+        <table class="matrix-table" style="width:100%;border-collapse:collapse;margin:1rem 0;background:var(--bg-card);border-radius:8px;overflow:hidden;">
+          <thead>
+            <tr style="background:var(--bg-surface);">
+              <th style="padding:0.75rem 1rem;text-align:left;font-family:'Bricolage Grotesque',sans-serif;font-size:0.85rem;color:var(--text-secondary);border-bottom:1px solid var(--code-border);">Anthropic pattern</th>
+              <th style="padding:0.75rem 1rem;text-align:left;font-family:'Bricolage Grotesque',sans-serif;font-size:0.85rem;color:var(--text-secondary);border-bottom:1px solid var(--code-border);">Course pattern (M12)</th>
+              <th style="padding:0.75rem 1rem;text-align:left;font-family:'Bricolage Grotesque',sans-serif;font-size:0.85rem;color:var(--text-secondary);border-bottom:1px solid var(--code-border);">Module</th>
+            </tr>
+          </thead>
+          <tbody style="font-size:0.9rem;">
+            <tr><td style="padding:0.6rem 1rem;border-bottom:1px solid var(--code-border);">Augmented LLM</td><td style="padding:0.6rem 1rem;border-bottom:1px solid var(--code-border);">P1 Single-tool / RAG-augmented</td><td style="padding:0.6rem 1rem;border-bottom:1px solid var(--code-border);color:var(--text-muted);">M05, M09</td></tr>
+            <tr><td style="padding:0.6rem 1rem;border-bottom:1px solid var(--code-border);">Prompt Chaining</td><td style="padding:0.6rem 1rem;border-bottom:1px solid var(--code-border);">P6 Pipeline</td><td style="padding:0.6rem 1rem;border-bottom:1px solid var(--code-border);color:var(--text-muted);">M13</td></tr>
+            <tr><td style="padding:0.6rem 1rem;border-bottom:1px solid var(--code-border);">Routing</td><td style="padding:0.6rem 1rem;border-bottom:1px solid var(--code-border);">P4 Router</td><td style="padding:0.6rem 1rem;border-bottom:1px solid var(--code-border);color:var(--text-muted);">M12, M22</td></tr>
+            <tr><td style="padding:0.6rem 1rem;border-bottom:1px solid var(--code-border);">Parallelization</td><td style="padding:0.6rem 1rem;border-bottom:1px solid var(--code-border);">P5 Fan-Out / Parallel Tools</td><td style="padding:0.6rem 1rem;border-bottom:1px solid var(--code-border);color:var(--text-muted);">M06, M14</td></tr>
+            <tr><td style="padding:0.6rem 1rem;border-bottom:1px solid var(--code-border);">Orchestrator-Workers</td><td style="padding:0.6rem 1rem;border-bottom:1px solid var(--code-border);">P7 Supervisor + Workers</td><td style="padding:0.6rem 1rem;border-bottom:1px solid var(--code-border);color:var(--text-muted);">M14</td></tr>
+            <tr><td style="padding:0.6rem 1rem;">Evaluator-Optimizer</td><td style="padding:0.6rem 1rem;">P8 HITL (LLM-as-judge variant)</td><td style="padding:0.6rem 1rem;color:var(--text-muted);">M17, M18</td></tr>
+            <tr style="background:rgba(249,115,22,0.06);"><td style="padding:0.6rem 1rem;color:#F97316;font-weight:600;">Autonomous Agent</td><td style="padding:0.6rem 1rem;color:#F97316;font-weight:600;">P2 ReAct Loop</td><td style="padding:0.6rem 1rem;color:var(--text-muted);">M12 (rest of this module)</td></tr>
+          </tbody>
+        </table>
+
+        <div class="checkpoint">
+          <div class="checkpoint-label">What Just Happened?</div>
+          <p>You learned the canonical Anthropic vocabulary: workflows are predetermined paths (chain, route, parallel, orchestrator, evaluator) and agents are autonomous loops. Every pattern in this course's 8-pattern catalog is one of these wearing a different name. When teammates or interview panels reference these terms, you now know exactly what they mean &mdash; and which course pattern to reach for.</p>
+        </div>
+
+        <p style="font-size:0.85rem;color:var(--text-muted);margin-top:1rem;">Reference: <a href="https://www.anthropic.com/engineering/building-effective-agents" target="_blank" rel="noopener">Anthropic Engineering &mdash; Building Effective AI Agents</a></p>
+      </section>
+
+      <div class="bridge">You now have the complete landscape: 8 patterns, a decision tree for choosing between them, examples of how production systems combine them, 5 anti-patterns to avoid, and the canonical Anthropic vocabulary that maps it all together. For the rest of this module, we'll deep-dive into the most important pattern &mdash; ReAct &mdash; because it's the foundation that most other patterns build upon. Everything from Plan-Execute to Supervisor+Workers uses a ReAct-like loop at its core.</div>
 
       <!-- ============================================================ -->
       <!-- PART B: Deep Dive — The ReAct Pattern (existing content)     -->
@@ -1925,7 +2324,7 @@ function executeTool(name, toolInput) {
         iteration += 1
         try:
             response = client.messages.create(
-                model="claude-sonnet-4-6-20250514",
+                model="claude-sonnet-4-6",
                 max_tokens=1024,
                 system=system_prompt,
                 tools=tools,
@@ -2121,7 +2520,7 @@ if __name__ == "__main__":
     let response;
     try {
       response = await client.messages.create({
-        model: "claude-sonnet-4-6-20250514",
+        model: "claude-sonnet-4-6",
         max_tokens: 1024,
         system: systemPrompt,
         tools,
@@ -2426,7 +2825,7 @@ console.log(formatTrace(result.trace));</code></pre>
 
         <h3>The API Parameter</h3>
         <pre class="code-block"><code>response = client.messages.create(
-    model="claude-sonnet-4-20250514",
+    model="claude-sonnet-4-6",
     max_tokens=16000,
     thinking={
         "type": "enabled",
@@ -2607,7 +3006,7 @@ def react_agent(
     for iteration in range(1, max_iterations + 1):
         # Call Claude
         response = client.messages.create(
-            model="claude-sonnet-4-20250514",
+            model="claude-sonnet-4-6",
             max_tokens=2048,
             system=system_prompt,
             tools=tools,

@@ -238,7 +238,7 @@
             <li><strong>Multi-Layer Memory:</strong> Working memory (current request context), <span class="term-tooltip" tabindex="0">episodic memory<span class="tooltip-content" role="tooltip">A persistent store of past interactions and their outcomes. When the system encounters a similar case, it retrieves relevant past episodes to inform its current decision — like a clinician remembering how a similar case was resolved last month.</span></span> (past case outcomes and lessons), <span class="term-tooltip" tabindex="0">procedural memory<span class="tooltip-content" role="tooltip">Learned rules extracted from patterns in episodic memory. Example: "When clinical notes reference external PT records, request those records before denying." These rules automate insights that were previously only in human reviewers' heads.</span></span> (learned rules from reviewer corrections).</li>
             <li><strong>Advanced RAG:</strong> Hybrid search (keyword + semantic) on clinical policies with re-ranking and <span class="term-tooltip" tabindex="0">contextual compression<span class="tooltip-content" role="tooltip">A technique that extracts only the relevant sentences from retrieved chunks before sending them to the LLM. Reduces token usage by 40-60% while preserving answer quality and citations.</span></span>.</li>
             <li><strong>Full Observability:</strong> OpenTelemetry-compatible tracing on every LLM call, tool invocation, and agent handoff. Metrics dashboard with 8 panels.</li>
-            <li><strong>Cost Optimization:</strong> <span class="term-tooltip" tabindex="0">Model routing<span class="tooltip-content" role="tooltip">Directing different tasks to different Claude models based on complexity. Simple validation → Haiku ($0.80/M input, $4/M output). Standard reasoning → Sonnet ($3/M input, $15/M output). Complex edge cases → Opus ($15/M input, $75/M output). Reduces average cost by 60-70% vs. using Opus for everything.</span></span> (Haiku for intake, Sonnet for criteria, Opus for edge cases), prompt caching, response streaming.</li>
+            <li><strong>Cost Optimization:</strong> <span class="term-tooltip" tabindex="0">Model routing<span class="tooltip-content" role="tooltip">Directing different tasks to different Claude models based on complexity. Simple validation → Haiku ($1/M input, $5/M output). Standard reasoning → Sonnet ($3/M input, $15/M output). Complex edge cases → Opus ($5/M input, $25/M output, after the 4.5+ price drop). Reduces average cost vs. using Opus for everything.</span></span> (Haiku for intake, Sonnet for criteria, Opus for edge cases), prompt caching, response streaming.</li>
             <li><strong>Production Deployment:</strong> Docker container, FastAPI, Redis queue, ChromaDB, streaming responses, 20 concurrent requests.</li>
             <li><strong>Evaluation Harness:</strong> 100-case test suite: 30 approve, 15 deny, 15 request-info, 20 edge, 10 adversarial, 10 regression.</li>
           </ol>
@@ -426,7 +426,7 @@ pip install "anthropic>=0.30.0" chromadb pydantic fastapi uvicorn pytest</code><
   "model_routing": {
     "intake_validation": "claude-haiku-4-5-20251001",
     "criteria_evaluation": "claude-sonnet-4-6",
-    "complex_decision": "claude-opus-4-6",
+    "complex_decision": "claude-opus-4-7",
     "letter_generation": "claude-haiku-4-5-20251001",
     "routing_threshold": {
       "simple_case_confidence": 0.90,
@@ -500,14 +500,14 @@ MODEL_ROUTING = {
     "letter_generation":    {"model": "claude-haiku-4-5-20251001", "max_tokens": 2048},
     "criteria_evaluation":  {"model": "claude-sonnet-4-6",         "max_tokens": 4096},
     "standard_decision":    {"model": "claude-sonnet-4-6",         "max_tokens": 4096},
-    "complex_decision":     {"model": "claude-opus-4-6",           "max_tokens": 4096},
-    "edge_case_review":     {"model": "claude-opus-4-6",           "max_tokens": 4096},
+    "complex_decision":     {"model": "claude-opus-4-7",           "max_tokens": 4096},
+    "edge_case_review":     {"model": "claude-opus-4-7",           "max_tokens": 4096},
 }
 
 MODEL_COSTS_PER_1M = {
-    "claude-haiku-4-5-20251001": {"input": 0.80, "output": 4.00},
+    "claude-haiku-4-5-20251001": {"input": 1.00, "output": 5.00},
     "claude-sonnet-4-6":         {"input": 3.00, "output": 15.00},
-    "claude-opus-4-6":           {"input": 15.00, "output": 75.00},
+    "claude-opus-4-7":           {"input": 5.00, "output": 25.00},
 }
 
 # --- Memory ---
@@ -587,7 +587,7 @@ type nul > guardrails\__init__.py</code></pre>
 
         <!-- STEP 3: MODEL ROUTER -->
         <h3 id="step-3">Step 3: Build the Model Router</h3>
-        <p><strong>What &amp; Why:</strong> The model router selects the cheapest capable model for each task type. Intake validation goes to Haiku ($0.80/M input tokens). Criteria evaluation goes to Sonnet ($3.00/M). Complex edge cases &mdash; ambiguous criteria, multiple comorbidities &mdash; route to Opus ($15.00/M). This tiered approach cuts average cost per request from ~$0.15 to ~$0.034.</p>
+        <p><strong>What &amp; Why:</strong> The model router selects the cheapest capable model for each task type. Intake validation goes to Haiku ($1.00/M input tokens). Criteria evaluation goes to Sonnet ($3.00/M). Complex edge cases &mdash; ambiguous criteria, multiple comorbidities &mdash; route to Opus ($5.00/M, dropped sharply from $15/M in the 4.5+ generation). This tiered approach cuts average cost per request from ~$0.15 to ~$0.08.</p>
         <p>Create a new file called <code>routing/model_router.py</code>:</p>
         <div class="code-block-wrapper">
           <div class="code-tabs">
@@ -609,13 +609,13 @@ from enum import Enum
 class Model(Enum):
     HAIKU = "claude-haiku-4-5-20251001"
     SONNET = "claude-sonnet-4-6"
-    OPUS = "claude-opus-4-6"
+    OPUS = "claude-opus-4-7"
 
 # Cost per 1M tokens (input/output)
 MODEL_COSTS = {
-    Model.HAIKU: {"input": 0.80, "output": 4.00},
+    Model.HAIKU: {"input": 1.00, "output": 5.00},
     Model.SONNET: {"input": 3.00, "output": 15.00},
-    Model.OPUS: {"input": 15.00, "output": 75.00},
+    Model.OPUS: {"input": 5.00, "output": 25.00},
 }
 
 @dataclass
@@ -687,26 +687,26 @@ def route_to_model(task_type: str, complexity_score: float = 0.5,
             <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
             <pre><code>// routing/model_router.ts — Intelligent model selection
 
-type Model = "claude-haiku-4-5-20251001" | "claude-sonnet-4-6" | "claude-opus-4-6";
+type Model = "claude-haiku-4-5-20251001" | "claude-sonnet-4-6" | "claude-opus-4-7";
 
 const TASK_ROUTING: Record&lt;string, Model&gt; = {
   intake_validation: "claude-haiku-4-5-20251001",
   letter_generation: "claude-haiku-4-5-20251001",
   criteria_evaluation: "claude-sonnet-4-6",
   standard_decision: "claude-sonnet-4-6",
-  complex_decision: "claude-opus-4-6",
-  edge_case_review: "claude-opus-4-6",
+  complex_decision: "claude-opus-4-7",
+  edge_case_review: "claude-opus-4-7",
 };
 
 const LATENCY: Record&lt;Model, number&gt; = {
   "claude-haiku-4-5-20251001": 2000,
   "claude-sonnet-4-6": 8000,
-  "claude-opus-4-6": 20000,
+  "claude-opus-4-7": 20000,
 };
 
 export function routeToModel(taskType: string, complexityScore = 0.5, tokenBudget = 2000) {
   let model: Model = TASK_ROUTING[taskType] || "claude-sonnet-4-6";
-  if (complexityScore &gt; 0.85) model = "claude-opus-4-6";
+  if (complexityScore &gt; 0.85) model = "claude-opus-4-7";
   else if (complexityScore &lt; 0.3 &amp;&amp; model === "claude-sonnet-4-6") model = "claude-haiku-4-5-20251001";
 
   return {
