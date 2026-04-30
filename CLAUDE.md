@@ -30,7 +30,7 @@ This project generates the course "Building AI Agents with Claude: From Hello Wo
 6. Accessibility: `prefers-reduced-motion` media query, ARIA labels, keyboard nav
 7. All API calls use current Anthropic SDK format (Messages API, tool use — NOT legacy XML)
 8. Interactive quiz (5 questions minimum) at end of every module
-9. Progress indicator showing module position in the 30-module curriculum (M00-M27 + M15B + M22B)
+9. Progress indicator showing module position in the 30-module curriculum (M00-M27 + M03B + M15B + M22B + M27B)
 10. Responsive layout — must work on tablet (768px) and desktop (1440px)
 11. DEPTH RULES (read `prompts/07-depth-rules.md` before generating ANY content):
     - Analogies: minimum 3 sentences (BEFORE → PAIN → MAPPING)
