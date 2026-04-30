@@ -1,0 +1,1512 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>M27B: Cert Domain 5.6 Deep Dive | Building AI Agents with Claude</title>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;700;800&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+  <style>
+    *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+    :root{
+      --bg-primary:#0A1628;--bg-secondary:#111D33;--bg-card:#162033;--bg-surface:#1A2740;
+      --text-primary:#E8ECF1;--text-secondary:#94A3B8;--text-muted:#64748B;
+      --accent-primary:#D4A843;--accent-hover:#E5BC5A;--accent-muted:rgba(212,168,67,0.15);
+      --success:#10B981;--success-bg:rgba(16,185,129,0.1);
+      --warning:#F59E0B;--warning-bg:rgba(245,158,11,0.1);
+      --error:#F43F5E;--error-bg:rgba(244,63,94,0.1);
+      --info:#3B82F6;--info-bg:rgba(59,130,246,0.1);
+      --track-capstones:#D4A843;--track-color:var(--track-capstones);
+      --code-bg:#0D1117;--code-border:#21262D;--code-text:#C9D1D9;
+      --transition-fast:150ms;--transition-normal:300ms;--transition-slow:500ms;
+    }
+    body{background:var(--bg-primary);color:var(--text-primary);font-family:'Source Sans 3',sans-serif;font-size:1.05rem;line-height:1.7;min-height:100vh}
+    .top-progress{position:fixed;top:0;left:0;right:0;height:4px;background:var(--bg-surface);z-index:200}
+    .top-progress .fill{height:100%;background:linear-gradient(90deg,var(--track-color),var(--accent-primary));width:97%;border-radius:0 2px 2px 0}
+    .course-header{background:var(--bg-secondary);border-bottom:1px solid var(--code-border);padding:1.25rem 2rem}
+    .course-header-inner{max-width:1200px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:1rem}
+    .course-title{font-family:'Bricolage Grotesque',sans-serif;font-size:0.95rem;font-weight:600;color:var(--text-secondary)}
+    .track-badge{display:inline-flex;align-items:center;gap:0.5rem;background:rgba(212,168,67,0.15);border:1px solid var(--track-color);border-radius:20px;padding:0.25rem 0.75rem;font-family:'Bricolage Grotesque',sans-serif;font-size:0.8rem;font-weight:600;color:var(--track-color)}
+    .track-badge .dot{width:8px;height:8px;border-radius:50%;background:var(--track-color)}
+    .header-meta{display:flex;gap:1.5rem;font-size:0.85rem;color:var(--text-muted)}
+    .page-container{max-width:1200px;margin:0 auto;padding:2rem;display:grid;grid-template-columns:240px 1fr;gap:3rem}
+    .sidebar-nav{position:sticky;top:2rem;height:calc(100vh - 4rem);overflow-y:auto;padding-right:1rem}
+    .sidebar-nav::-webkit-scrollbar{width:3px}.sidebar-nav::-webkit-scrollbar-thumb{background:var(--bg-surface);border-radius:3px}
+    .sidebar-title{font-family:'Bricolage Grotesque',sans-serif;font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:var(--text-muted);margin-bottom:1rem}
+    .sidebar-nav a{display:block;padding:0.4rem 0.75rem;margin-bottom:0.15rem;font-family:'Bricolage Grotesque',sans-serif;font-size:0.82rem;font-weight:600;color:var(--text-muted);text-decoration:none;border-left:2px solid transparent;border-radius:0 4px 4px 0;transition:all var(--transition-fast)}
+    .sidebar-nav a:hover{color:var(--text-primary);background:var(--bg-surface)}
+    .sidebar-nav a.active{color:var(--accent-primary);border-left-color:var(--accent-primary);background:var(--accent-muted)}
+    .sidebar-nav a.sub{padding-left:1.5rem;font-size:0.78rem;font-weight:400}
+    .content{max-width:800px}.section{margin-bottom:4rem}
+    h1{font-family:'Bricolage Grotesque',sans-serif;font-weight:800;font-size:2.25rem;line-height:1.2;margin-bottom:0.75rem}
+    h2{font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:1.5rem;color:var(--text-primary);margin:2.5rem 0 1rem;padding-top:1rem;border-top:1px solid var(--code-border)}
+    h2:first-of-type{border-top:none}
+    h3{font-family:'Bricolage Grotesque',sans-serif;font-weight:600;font-size:1.25rem;color:var(--text-primary);margin:2rem 0 0.75rem}
+    h4{font-family:'Bricolage Grotesque',sans-serif;font-weight:600;font-size:1rem;margin-bottom:1rem}
+    p{margin-bottom:1rem}ul,ol{margin:0.5rem 0 1rem 1.5rem}li{margin-bottom:0.4rem}strong{font-weight:600}
+    .analogy-box,.tech-def-box,.callout-why,.callout-warning,.callout-security,.callout-cost,.callout-cert{border-left:4px solid;border-radius:0 8px 8px 0;padding:1.25rem 1.5rem;margin:1.5rem 0}
+    .analogy-box{background:var(--accent-muted);border-left-color:var(--accent-primary)}
+    .tech-def-box{background:var(--info-bg);border-left-color:var(--info)}
+    .callout-why{background:var(--success-bg);border-left-color:var(--success)}
+    .callout-warning{background:var(--warning-bg);border-left-color:var(--warning)}
+    .callout-security{background:var(--error-bg);border-left-color:var(--error)}
+    .callout-cost{background:var(--warning-bg);border-left-color:var(--accent-primary)}
+    .callout-cert{background:rgba(212,168,67,0.12);border-left-color:var(--accent-primary)}
+    .box-label{font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:0.9rem;display:block;margin-bottom:0.4rem}
+    .analogy-box .box-label{color:var(--accent-primary)}.tech-def-box .box-label{color:var(--info)}.callout-why .box-label{color:var(--success)}.callout-warning .box-label{color:var(--warning)}.callout-security .box-label{color:var(--error)}.callout-cost .box-label{color:var(--accent-primary)}.callout-cert .box-label{color:var(--accent-primary)}
+    .term-tooltip{position:relative;color:var(--accent-primary);cursor:help;border-bottom:1px dashed var(--accent-primary)}
+    .term-tooltip .tooltip-content{position:absolute;bottom:calc(100% + 8px);left:50%;transform:translateX(-50%);background:var(--bg-card);border:1px solid var(--accent-primary);border-radius:8px;padding:0.75rem 1rem;font-size:0.85rem;color:var(--text-primary);width:280px;opacity:0;pointer-events:none;transition:opacity var(--transition-fast);z-index:10;line-height:1.5;box-shadow:0 4px 20px rgba(0,0,0,0.4)}
+    .term-tooltip:hover .tooltip-content,.term-tooltip:focus .tooltip-content{opacity:1;pointer-events:auto}
+    .code-block-wrapper{background:var(--code-bg);border:1px solid var(--code-border);border-radius:12px;margin:1.5rem 0;overflow:hidden}
+    .code-tabs{display:flex;gap:0;border-bottom:1px solid var(--code-border);background:var(--bg-surface)}
+    .code-tab{padding:0.5rem 1.25rem;background:none;border:none;font-family:'JetBrains Mono',monospace;font-size:0.8rem;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-1px;color:var(--text-muted);transition:all var(--transition-fast)}
+    .code-tab:hover{color:var(--text-primary)}.code-tab.active{color:var(--accent-primary);border-bottom-color:var(--accent-primary)}
+    .code-panel{display:none;position:relative}.code-panel.active{display:block}
+    .code-panel pre{margin:0;padding:1.25rem;overflow-x:auto;font-family:'JetBrains Mono',monospace;font-size:0.85rem;line-height:1.6}
+    .code-panel pre code{background:none;color:var(--code-text)}
+    .copy-btn{position:absolute;top:0.75rem;right:0.75rem;background:var(--bg-surface);border:1px solid var(--code-border);color:var(--text-muted);padding:0.3rem 0.6rem;border-radius:6px;font-size:0.75rem;cursor:pointer;font-family:'JetBrains Mono',monospace;transition:all var(--transition-fast)}
+    .copy-btn:hover{color:var(--accent-primary);border-color:var(--accent-primary)}
+    .code-single{background:var(--code-bg);border:1px solid var(--code-border);border-radius:12px;margin:1.5rem 0;overflow:hidden;position:relative}
+    .code-single pre{margin:0;padding:1.25rem;overflow-x:auto;font-family:'JetBrains Mono',monospace;font-size:0.85rem;line-height:1.6}
+    .code-single .copy-btn{top:0.5rem;right:0.5rem}
+    .output-block{background:var(--code-bg);border:1px solid var(--code-border);border-radius:8px;padding:1rem 1.25rem;margin:0.75rem 0 1.5rem;font-family:'JetBrains Mono',monospace;font-size:0.85rem;color:var(--success);line-height:1.5;white-space:pre-wrap}
+    .output-label{font-family:'Bricolage Grotesque',sans-serif;font-size:0.8rem;font-weight:600;color:var(--text-muted);margin-bottom:0.25rem}
+    .animation-container{background:var(--bg-secondary);border:1px solid var(--code-border);border-radius:12px;padding:2rem;margin:2rem 0;position:relative;min-height:300px;overflow:hidden}
+    .animation-title{font-family:'Bricolage Grotesque',sans-serif;font-size:0.85rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:1.25rem}
+    .animation-controls{display:flex;gap:0.5rem;position:absolute;bottom:1rem;right:1rem}
+    .anim-btn{background:var(--bg-card);border:1px solid var(--code-border);color:var(--text-primary);width:36px;height:36px;border-radius:8px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:1rem;transition:all var(--transition-fast)}
+    .anim-btn:hover{border-color:var(--accent-primary);color:var(--accent-primary)}
+    .quiz-question{background:var(--bg-card);border-radius:12px;padding:1.5rem;margin-bottom:1.5rem}
+    .quiz-question h4{font-family:'Bricolage Grotesque',sans-serif;font-weight:600;margin-bottom:1rem;font-size:1rem}
+    .quiz-option{padding:0.75rem 1rem;margin:0.5rem 0;border:1px solid var(--code-border);border-radius:8px;cursor:pointer;transition:all var(--transition-fast);display:flex;align-items:center;gap:0.75rem}
+    .quiz-option:hover{border-color:var(--accent-primary)}
+    .quiz-option.correct{border-color:var(--success);background:var(--success-bg)}.quiz-option.incorrect{border-color:var(--error);background:var(--error-bg)}.quiz-option.disabled{pointer-events:none}
+    .quiz-marker{width:24px;height:24px;border-radius:50%;border:2px solid var(--code-border);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:0.75rem;font-weight:700}
+    .quiz-option.correct .quiz-marker{border-color:var(--success);color:var(--success)}.quiz-option.incorrect .quiz-marker{border-color:var(--error);color:var(--error)}
+    .quiz-feedback{margin-top:0.75rem;padding:0.75rem;border-radius:8px;font-size:0.9rem;display:none}
+    .quiz-feedback.show{display:block}.quiz-feedback.correct-fb{background:var(--success-bg);color:var(--success)}.quiz-feedback.incorrect-fb{background:var(--error-bg);color:var(--error)}
+    .quiz-score{background:var(--bg-card);border-radius:12px;padding:1.5rem;text-align:center;margin-top:2rem}
+    .quiz-score .score-num{font-family:'Bricolage Grotesque',sans-serif;font-size:2.5rem;font-weight:800;color:var(--accent-primary)}
+    .module-nav{display:flex;justify-content:space-between;align-items:center;padding:1.5rem 0;margin:2rem 0;border-top:1px solid var(--code-border);flex-wrap:wrap;gap:0.75rem}
+    .module-nav a{display:flex;align-items:center;gap:0.5rem;color:var(--accent-primary);text-decoration:none;font-family:'Bricolage Grotesque',sans-serif;font-weight:600;font-size:0.9rem;padding:0.5rem 1rem;border:1px solid var(--code-border);border-radius:8px;transition:all var(--transition-fast)}
+    .module-nav a:hover{border-color:var(--accent-primary);background:var(--accent-muted)}
+    .objectives-list{list-style:none;margin-left:0}.objectives-list li{padding:0.5rem 0 0.5rem 2rem;position:relative}
+    .objectives-list li::before{content:'';position:absolute;left:0;top:0.85rem;width:16px;height:16px;border-radius:4px;border:2px solid var(--track-color);background:rgba(212,168,67,0.1)}
+
+    /* === ANIMATION 1: PROVENANCE — claim-source map === */
+    .prov-grid{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+    .prov-col h4{font-family:'Bricolage Grotesque',sans-serif;font-size:0.85rem;text-align:center;margin-bottom:0.6rem;color:var(--text-secondary)}
+    .prov-claim{padding:0.55rem 0.75rem;margin:0.4rem 0;border-radius:6px;font-family:'JetBrains Mono',monospace;font-size:0.74rem;display:flex;justify-content:space-between;align-items:center;gap:0.5rem;background:var(--bg-card);border:1px solid var(--code-border);transition:all 0.4s ease}
+    .prov-claim .badge{font-size:0.65rem;padding:1px 6px;border-radius:3px;font-weight:700;flex-shrink:0}
+    .prov-claim.unsourced{background:rgba(244,63,94,0.1);border-color:rgba(244,63,94,0.4)}
+    .prov-claim.unsourced .badge{background:var(--error-bg);color:#fda4af}
+    .prov-claim.sourced .badge{background:var(--success-bg);color:#6ee7b7}
+    .prov-source{padding:0.5rem 0.75rem;margin:0.4rem 0;border-radius:6px;font-family:'JetBrains Mono',monospace;font-size:0.72rem;background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.3);color:#a5b4fc;transition:all 0.4s ease}
+    .prov-source.retracted{text-decoration:line-through;opacity:0.45;background:rgba(244,63,94,0.08);border-color:rgba(244,63,94,0.3);color:#fda4af}
+
+    /* === ANIMATION 2: TEMPORAL — timeline === */
+    .temporal-frame{background:var(--bg-card);border:1px solid var(--code-border);border-radius:8px;padding:1rem}
+    .temporal-row{display:grid;grid-template-columns:120px 1fr;gap:0.6rem;align-items:center;margin:0.5rem 0;font-family:'JetBrains Mono',monospace;font-size:0.74rem}
+    .temporal-label{color:var(--text-secondary);text-align:right;padding-right:0.5rem}
+    .temporal-bar{position:relative;height:24px;background:var(--bg-surface);border-radius:4px;overflow:hidden}
+    .temporal-segment{position:absolute;top:0;height:100%;border-radius:3px;display:flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:600;padding:0 6px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .temporal-seg-stale{background:rgba(244,63,94,0.25);color:#fda4af;border:1px solid rgba(244,63,94,0.4)}
+    .temporal-seg-current{background:rgba(16,185,129,0.25);color:#6ee7b7;border:1px solid rgba(16,185,129,0.4)}
+    .temporal-marker{position:absolute;top:-6px;width:2px;height:36px;background:var(--accent-primary);box-shadow:0 0 8px rgba(212,168,67,0.6);transition:left 0.5s ease}
+    .temporal-marker::after{content:attr(data-label);position:absolute;bottom:-22px;left:50%;transform:translateX(-50%);font-size:0.65rem;color:var(--accent-primary);white-space:nowrap;font-weight:700}
+    .temporal-controls{margin-top:1.5rem;display:flex;gap:0.75rem;align-items:center;justify-content:center}
+    .temporal-controls button{background:var(--bg-card);border:1px solid var(--code-border);color:var(--text-primary);padding:0.4rem 0.85rem;border-radius:6px;font-family:'JetBrains Mono',monospace;font-size:0.75rem;cursor:pointer;transition:all var(--transition-fast)}
+    .temporal-controls button:hover,.temporal-controls button.active{background:var(--accent-muted);border-color:var(--accent-primary);color:var(--accent-primary)}
+    .temporal-result{margin-top:1rem;padding:0.75rem;background:var(--code-bg);border:1px solid var(--code-border);border-radius:6px;font-family:'JetBrains Mono',monospace;font-size:0.78rem;text-align:center;color:var(--success)}
+
+    /* === ANIMATION 3: STRATIFIED SAMPLING === */
+    .strat-frame{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+    .strat-col{background:var(--bg-card);border:1px solid var(--code-border);border-radius:8px;padding:0.85rem}
+    .strat-col h4{font-family:'Bricolage Grotesque',sans-serif;font-size:0.85rem;text-align:center;margin-bottom:0.6rem}
+    .strat-bad h4{color:var(--error)}
+    .strat-good h4{color:var(--success)}
+    .strat-bucket{margin:0.4rem 0;padding:0.4rem;border-radius:6px;background:var(--bg-surface)}
+    .strat-bucket-label{font-family:'JetBrains Mono',monospace;font-size:0.7rem;font-weight:600;margin-bottom:0.3rem;display:flex;justify-content:space-between}
+    .strat-bucket-row{display:flex;gap:3px;flex-wrap:wrap}
+    .strat-dot{width:14px;height:14px;border-radius:50%;background:var(--bg-card);border:1px solid var(--code-border);transition:all 0.3s ease}
+    .strat-dot.sampled{background:var(--accent-primary);border-color:var(--accent-primary);box-shadow:0 0 6px rgba(212,168,67,0.5)}
+    .strat-summary{margin-top:0.6rem;padding-top:0.6rem;border-top:1px solid var(--code-border);font-size:0.74rem;text-align:center;font-family:'JetBrains Mono',monospace;color:var(--text-secondary)}
+
+    /* === ANIMATION 4: SYNTHESIS — agreement detection === */
+    .synth-frame{display:grid;grid-template-columns:1fr 1fr;gap:1rem;align-items:start}
+    .synth-col{background:var(--bg-card);border:1px solid var(--code-border);border-radius:8px;padding:0.85rem}
+    .synth-col h4{font-family:'Bricolage Grotesque',sans-serif;font-size:0.85rem;text-align:center;margin-bottom:0.6rem;color:var(--text-secondary)}
+    .synth-source{padding:0.5rem 0.7rem;margin:0.35rem 0;border-radius:5px;font-family:'JetBrains Mono',monospace;font-size:0.72rem;background:var(--bg-surface);border-left:3px solid var(--info);line-height:1.4}
+    .synth-card{padding:0.7rem 0.85rem;margin:0.45rem 0;border-radius:6px;font-family:'JetBrains Mono',monospace;font-size:0.74rem;line-height:1.45;opacity:0;transform:translateY(8px);transition:all 0.5s ease}
+    .synth-card.visible{opacity:1;transform:translateY(0)}
+    .synth-card.established{background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.4);color:#6ee7b7}
+    .synth-card.contested{background:rgba(245,158,11,0.12);border:1px solid rgba(245,158,11,0.4);color:#fbbf24}
+    .synth-card.single{background:rgba(99,102,241,0.12);border:1px solid rgba(99,102,241,0.3);color:#a5b4fc}
+    .synth-card .card-tag{display:inline-block;font-size:0.65rem;padding:1px 6px;border-radius:3px;background:rgba(0,0,0,0.3);margin-right:0.4rem;text-transform:uppercase;letter-spacing:0.05em}
+
+    /* === RESPONSIVE === */
+    @media(max-width:900px){
+      .page-container{grid-template-columns:1fr;padding:1rem}
+      .sidebar-nav{position:fixed;bottom:0;left:0;right:0;height:auto;max-height:40vh;background:var(--bg-secondary);border-top:1px solid var(--code-border);z-index:100;padding:1rem;display:none}
+      .sidebar-nav.open{display:block}
+      .sidebar-toggle{display:flex;position:fixed;bottom:1rem;right:1rem;z-index:101;background:var(--accent-primary);color:var(--bg-primary);border:none;width:48px;height:48px;border-radius:50%;align-items:center;justify-content:center;cursor:pointer;font-size:1.25rem;box-shadow:0 4px 15px rgba(0,0,0,0.3)}
+      .prov-grid,.strat-frame,.synth-frame{grid-template-columns:1fr}
+      h1{font-size:1.75rem}
+    }
+    @media(min-width:901px){.sidebar-toggle{display:none}}
+    @media(prefers-reduced-motion:reduce){
+      *,*::before,*::after{animation-duration:0.01ms!important;animation-iteration-count:1!important;transition-duration:0.01ms!important}
+      .synth-card,.prov-claim,.prov-source,.strat-dot{opacity:1;transform:none}
+    }
+    :focus-visible{outline:2px solid var(--accent-primary);outline-offset:2px;border-radius:4px}
+  </style>
+</head>
+<body>
+  <div class="top-progress" role="progressbar" aria-label="Course progress: nearly complete" aria-valuenow="30" aria-valuemin="1" aria-valuemax="31"><div class="fill"></div></div>
+
+  <header class="course-header"><div class="course-header-inner">
+    <div><div class="course-title">Building AI Agents with Claude</div></div>
+    <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;">
+      <span class="track-badge"><span class="dot"></span>Track 9: Cert Prep</span>
+      <div class="header-meta"><span>Module 27B &middot; cert deep dive</span><span>60-75 min</span><span>Intermediate &rarr; Advanced</span></div>
+    </div>
+  </div></header>
+
+  <div class="page-container">
+    <nav class="sidebar-nav" id="sidebar" aria-label="Module sections">
+      <div class="sidebar-title">On this page</div>
+      <a href="#objectives">Learning Objectives</a>
+      <a href="#why">Why This Module Exists</a>
+      <a href="#provenance">1. Provenance</a>
+      <a href="#temporal">2. Temporal Data</a>
+      <a href="#stratified">3. Stratified Sampling</a>
+      <a href="#synthesis">4. Synthesis Output</a>
+      <a href="#code-walkthrough">Code Walkthrough</a>
+      <a href="#hands-on">Hands-On Lab</a>
+      <a href="#step1" class="sub">Step 1: Synthesize</a>
+      <a href="#step2" class="sub">Step 2: Sample</a>
+      <a href="#step3" class="sub">Step 3: Temporal</a>
+      <a href="#step4" class="sub">Step 4: Regression</a>
+      <a href="#quiz">Knowledge Check</a>
+      <a href="#summary">Summary</a>
+    </nav>
+
+    <main class="content" role="main">
+
+      <section class="section" style="margin-bottom:2rem;">
+        <div class="module-nav" style="border-top:none;margin-top:0;">
+          <a href="M27-cert-exam-prep.html" aria-label="Previous module: Cert Exam Prep">&larr; M27: Cert Exam Prep</a>
+          <a href="index.html" aria-label="Course Home" title="Course Home" style="font-size:1.2rem;">&#x1F3E0; Home</a>
+          <a href="index.html" aria-label="Back to course home">Course Home &rarr;</a>
+        </div>
+        <h1>M27B: Cert Domain 5.5 + 5.6 Deep Dive &mdash; Human Review, Confidence, Provenance, Temporal Data, Synthesis</h1>
+        <p style="color:var(--text-secondary);font-size:1.1rem;">Per the official Anthropic cert exam guide, <strong>Domain 5.5</strong> covers human review workflows and confidence calibration (stratified sampling, field-level confidence, accuracy by document type/field), and <strong>Domain 5.6</strong> covers information provenance and uncertainty handling (claim-source mappings, temporal data, conflict annotation, coverage gaps). The cert tests these as one discipline. This module bundles them: <strong>stratified human review, field-level confidence, claim provenance, temporal as-of reasoning, and synthesis output for well-established vs. contested claims</strong>. Take it before any practice exam.</p>
+      </section>
+
+      <!-- ==================== OBJECTIVES ==================== -->
+      <section class="section" id="objectives">
+        <h2 id="objectives-heading">Learning Objectives</h2>
+        <ul class="objectives-list" aria-label="Learning objectives">
+          <li>Design output schemas that enforce claim &rarr; source mappings, with explicit <em>well-established</em> / <em>contested</em> / <em>single-source</em> / <em>temporal-warning</em> categories</li>
+          <li>Store and query temporal facts with <code>{value, valid_from, valid_to, source}</code>, distinguishing "current" from "as-of" queries</li>
+          <li>Apply stratified sampling for human review and field-level confidence scoring &mdash; and recognize why uniform and top-N sampling are exam anti-patterns</li>
+          <li>Build a synthesizer that surfaces source disagreement instead of silently picking one source</li>
+          <li>Recognize and avoid the four most common Domain 5.6 trap questions on the cert exam</li>
+        </ul>
+      </section>
+
+      <!-- ==================== WHY THIS MODULE ==================== -->
+      <section class="section" id="why">
+        <h2 id="why-heading">Why This Module Exists</h2>
+        <p>An audit of the course against the official <em>Claude Certified Architect &ndash; Foundations Certification Exam Guide</em> showed that Domains 5.5 and 5.6 had the most under-covered topics of any cert area. Cert tips were inserted into M09, M11, M17, and M18 to flag them in their natural homes &mdash; but the cert tests this material as a unified discipline, not as scattered footnotes across four modules.</p>
+
+        <p>This module exists to close that gap. The five sub-topics &mdash; stratified human review, field-level confidence, provenance, temporal handling, and synthesis output &mdash; share a single underlying skill: <strong>knowing what you don't know, and surfacing that uncertainty to humans in a structured form</strong>. Once you see them as one discipline, the cert questions stop looking like trick questions.</p>
+
+        <div class="callout-cert">
+          <span class="box-label">&#127891; This Module Maps Directly To Cert Topics</span>
+          <p style="margin:0;"><strong>Domain 5.5</strong> (human review workflows, confidence calibration) and <strong>Domain 5.6</strong> (information provenance, uncertainty handling) &mdash; full coverage. Reinforces <strong>Domain 4.6</strong> (multi-pass review &mdash; synthesis IS a second pass over per-chunk extractions) and <strong>Domain 5.4</strong> (temporal handling reinforces stale-context themes). If you can pass this module's quiz, you will likely pass every 5.5/5.6 question on the practice exams.</p>
+        </div>
+      </section>
+
+      <!-- ==================== CONCEPT 1: PROVENANCE ==================== -->
+      <section class="section" id="provenance">
+        <h2 id="provenance-heading">Concept 1: Information Provenance &mdash; Claim-Source Mappings</h2>
+        <p>Every claim a knowledge agent emits must be tagged to its source. Without provenance, you can't audit, can't recover from a retracted source, and can't honestly answer "where did this come from?" The cert tests whether your output schema <em>enforces</em> the claim &rarr; source link &mdash; not whether the answer happens to be right.</p>
+
+        <!-- PROVENANCE SCHEMA SVG -->
+        <div class="animation-container" aria-label="Provenance schema diagram showing claims linked to sources via structured IDs and confidence scores">
+          <div class="animation-title">Provenance Schema &mdash; Every Claim Points Back</div>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 280" style="width:100%;max-width:600px;display:block;margin:0 auto;" role="img" aria-label="Three source documents on the left feed into a synthesizer in the middle. The synthesizer produces a structured JSON output on the right where each claim has a sources array of source IDs and a confidence score. A retracted source can be traced through the source IDs back to the affected claims.">
+            <defs><marker id="pv-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#94A3B8"/></marker></defs>
+            <!-- Sources -->
+            <text x="80" y="22" text-anchor="middle" fill="#06B6D4" font-family="Bricolage Grotesque" font-weight="700" font-size="11">Sources</text>
+            <rect x="20" y="35" width="120" height="40" rx="6" fill="rgba(6,182,212,0.15)" stroke="#06B6D4"/>
+            <text x="80" y="51" text-anchor="middle" fill="#06B6D4" font-family="JetBrains Mono" font-weight="700" font-size="10">[chunk_3]</text>
+            <text x="80" y="65" text-anchor="middle" fill="#94A3B8" font-family="Source Sans 3" font-size="9">FDA letter 2024-Q1</text>
+            <rect x="20" y="90" width="120" height="40" rx="6" fill="rgba(6,182,212,0.15)" stroke="#06B6D4"/>
+            <text x="80" y="106" text-anchor="middle" fill="#06B6D4" font-family="JetBrains Mono" font-weight="700" font-size="10">[chunk_7]</text>
+            <text x="80" y="120" text-anchor="middle" fill="#94A3B8" font-family="Source Sans 3" font-size="9">Payer policy 2024-Q3</text>
+            <rect x="20" y="145" width="120" height="40" rx="6" fill="rgba(244,63,94,0.18)" stroke="#F43F5E" stroke-dasharray="3,2"/>
+            <text x="80" y="161" text-anchor="middle" fill="#F43F5E" font-family="JetBrains Mono" font-weight="700" font-size="10">[chunk_12]</text>
+            <text x="80" y="175" text-anchor="middle" fill="#94A3B8" font-family="Source Sans 3" font-size="9">vendor whitepaper</text>
+            <text x="80" y="200" text-anchor="middle" fill="#F43F5E" font-family="Source Sans 3" font-size="9" font-style="italic">retracted!</text>
+
+            <!-- Synthesizer -->
+            <line x1="143" y1="55" x2="218" y2="135" stroke="#94A3B8" stroke-width="1" marker-end="url(#pv-arrow)"/>
+            <line x1="143" y1="110" x2="218" y2="140" stroke="#94A3B8" stroke-width="1" marker-end="url(#pv-arrow)"/>
+            <line x1="143" y1="165" x2="218" y2="148" stroke="#F43F5E" stroke-width="1" marker-end="url(#pv-arrow)"/>
+            <rect x="220" y="115" width="120" height="60" rx="8" fill="rgba(212,168,67,0.18)" stroke="#D4A843" stroke-width="2"/>
+            <text x="280" y="138" text-anchor="middle" fill="#D4A843" font-family="Bricolage Grotesque" font-weight="700" font-size="12">Synthesizer</text>
+            <text x="280" y="155" text-anchor="middle" fill="#94A3B8" font-family="Source Sans 3" font-size="9">tags every claim</text>
+            <text x="280" y="167" text-anchor="middle" fill="#94A3B8" font-family="Source Sans 3" font-size="9">with source IDs</text>
+
+            <!-- Output -->
+            <line x1="343" y1="145" x2="378" y2="145" stroke="#94A3B8" stroke-width="1.5" marker-end="url(#pv-arrow)"/>
+            <text x="500" y="22" text-anchor="middle" fill="#10B981" font-family="Bricolage Grotesque" font-weight="700" font-size="11">Structured Output</text>
+            <rect x="380" y="35" width="200" height="40" rx="6" fill="rgba(16,185,129,0.10)" stroke="#10B981"/>
+            <text x="390" y="50" fill="#10B981" font-family="JetBrains Mono" font-size="9" font-weight="700">CPT 99213 covered</text>
+            <text x="390" y="63" fill="#94A3B8" font-family="JetBrains Mono" font-size="8">sources: [3, 7]  confidence: 0.92</text>
+            <rect x="380" y="80" width="200" height="40" rx="6" fill="rgba(16,185,129,0.10)" stroke="#10B981"/>
+            <text x="390" y="95" fill="#10B981" font-family="JetBrains Mono" font-size="9" font-weight="700">Prior auth if &gt; $5K</text>
+            <text x="390" y="108" fill="#94A3B8" font-family="JetBrains Mono" font-size="8">sources: [7]    confidence: 0.95</text>
+            <rect x="380" y="125" width="200" height="40" rx="6" fill="rgba(244,63,94,0.10)" stroke="#F43F5E" stroke-dasharray="3,2"/>
+            <text x="390" y="140" fill="#F43F5E" font-family="JetBrains Mono" font-size="9" font-weight="700">Off-label excluded</text>
+            <text x="390" y="153" fill="#94A3B8" font-family="JetBrains Mono" font-size="8">sources: [12]   &mdash; needs review</text>
+            <rect x="380" y="170" width="200" height="40" rx="6" fill="rgba(244,63,94,0.10)" stroke="#F43F5E" stroke-dasharray="3,2"/>
+            <text x="390" y="185" fill="#F43F5E" font-family="JetBrains Mono" font-size="9" font-weight="700">Step therapy required</text>
+            <text x="390" y="198" fill="#94A3B8" font-family="JetBrains Mono" font-size="8">sources: [3, 12] &mdash; partial review</text>
+
+            <!-- Caption -->
+            <text x="300" y="235" text-anchor="middle" fill="#64748B" font-family="Source Sans 3" font-size="10" font-style="italic">When chunk_12 is retracted, the schema lets you pull the thread:</text>
+            <text x="300" y="250" text-anchor="middle" fill="#F43F5E" font-family="Source Sans 3" font-size="10" font-weight="700">2 claims surface for review &mdash; instantly, with no re-synthesis pass</text>
+            <text x="300" y="270" text-anchor="middle" fill="#10B981" font-family="JetBrains Mono" font-size="9">{claim, sources: [id], confidence}  &mdash; not prose with [1][2] markers</text>
+          </svg>
+        </div>
+
+
+        <div class="analogy-box">
+          <span class="box-label">&#128161; Everyday Analogy</span>
+          <p><strong>Compare a Wikipedia article without citations to one with [1][2] markers on every sentence.</strong> The first might be perfectly correct &mdash; but you can't tell, and you can't recover when one of its sources turns out to be wrong.</p>
+          <p>The pain: a journalist quotes the unsourced article. Six months later the original Wikipedia author admits they made up paragraph 4. The journalist's editor asks "which paragraphs of your article relied on that source?" &mdash; and the journalist can't answer.</p>
+          <p>The mapping: the unsourced article is your RAG agent's output without provenance. Every claim looks fine until something breaks. With <code>{claim, source_id, confidence}</code> markers, you can pull the thread on any retraction and immediately find every downstream claim that needs review.</p>
+        </div>
+
+        <div class="tech-def-box">
+          <span class="box-label">&#128208; Technical Definition</span>
+          <p><strong>Information provenance</strong> is the property of an output schema in which every emitted claim carries a structured pointer back to the source(s) it derives from. It is distinct from <em>citation</em> (a writing convention) because provenance lives in the schema &mdash; the output is <code>{claims:[{text, sources:[id], confidence}]}</code>, not prose with parenthetical references. The schema makes provenance enforceable; prose makes it optional.</p>
+        </div>
+
+        <p>Here's what happens when a source is retracted in a system <em>with</em> provenance: every claim that relied on that source gets flagged. Watch:</p>
+
+        <div class="animation-container" aria-label="Animation showing how retracting a source surfaces affected claims">
+          <div class="animation-title">A Source Retraction, With and Without Provenance</div>
+          <div class="prov-grid">
+            <div class="prov-col" id="provLeft">
+              <h4>Sources</h4>
+              <div class="prov-source" id="src1">[chunk_3] FDA approval letter, 2024-Q1</div>
+              <div class="prov-source" id="src2">[chunk_7] Payer policy doc, 2024-Q3</div>
+              <div class="prov-source" id="src3">[chunk_12] Vendor whitepaper, 2023</div>
+            </div>
+            <div class="prov-col" id="provRight">
+              <h4>Claims with provenance</h4>
+              <div class="prov-claim sourced" id="cl1"><span>CPT 99213 covered if dx I10</span><span class="badge">[3,7]</span></div>
+              <div class="prov-claim sourced" id="cl2"><span>Prior auth needed if &gt; $5K</span><span class="badge">[7]</span></div>
+              <div class="prov-claim sourced" id="cl3"><span>Off-label use excluded</span><span class="badge">[12]</span></div>
+              <div class="prov-claim sourced" id="cl4"><span>Step therapy required</span><span class="badge">[3,12]</span></div>
+            </div>
+          </div>
+          <div class="animation-controls">
+            <button class="anim-btn" onclick="provRetract()" aria-label="Retract chunk 12 source">&#9658;</button>
+            <button class="anim-btn" onclick="provRestart()" aria-label="Restart">&#8635;</button>
+          </div>
+        </div>
+
+        <div class="callout-why">
+          <span class="box-label">&#9989; What Just Happened?</span>
+          <p>Click "play" to retract chunk_12. Two claims (off-label exclusion, step therapy) immediately surface as needing review &mdash; the schema let you pull the thread from a single source ID. Without provenance, you'd have to re-run the entire synthesis pipeline against the new source set just to find out which claims are now unsupported. Provenance turns "we have a problem somewhere" into "these specific 2 claims need review."</p>
+        </div>
+
+        <div class="callout-cert">
+          <span class="box-label">&#127891; Cert Tip &mdash; Domain 5.6 (Provenance)</span>
+          <p>The exam doesn't test whether your agent gives correct answers &mdash; it tests whether the output schema makes correctness <em>auditable</em>. Trick question pattern: a long scenario describing a "high-accuracy" RAG agent that returns prose answers. The answer is always: regardless of accuracy, prose-with-parenthetical-citations is non-compliant. The output must be structured <code>{claim, source_id, confidence}</code>.</p>
+        </div>
+      </section>
+
+      <!-- ==================== CONCEPT 2: TEMPORAL ==================== -->
+      <section class="section" id="temporal">
+        <h2 id="temporal-heading">Concept 2: Temporal Data &mdash; As-Of Reasoning</h2>
+        <p>Facts have lifespans. "CEO is Alice" was true once and may now be false. Memory layers without temporal metadata cause agents to confidently report stale facts as current &mdash; one of the most-tested Domain 5.6 scenarios.</p>
+
+        <div class="analogy-box">
+          <span class="box-label">&#128161; Everyday Analogy</span>
+          <p><strong>Compare a weather forecast to a weather record.</strong> The forecast for tomorrow expires tonight &mdash; tomorrow's actual weather supersedes it. The record of yesterday's high is permanent &mdash; nothing supersedes it. They have completely different temporal semantics.</p>
+          <p>The pain: a planning agent reads "expected high tomorrow: 78&deg;F" and uses it to recommend a t-shirt. By the time the user reads the recommendation, "tomorrow" has come and gone, and the actual high was 52&deg;F.</p>
+          <p>The mapping: every fact in your knowledge base has a <code>valid_from</code> and a <code>valid_to</code>. Forecasts have a near-future <code>valid_to</code>. Records have a permanent one. CEOs, prices, and policy versions have lifespans that need explicit tracking. Confusing them is the bug.</p>
+        </div>
+
+        <div class="tech-def-box">
+          <span class="box-label">&#128208; Technical Definition</span>
+          <p><strong>Temporal data handling</strong> is the practice of storing every fact with explicit <code>{value, valid_from, valid_to, source}</code> metadata, and querying with explicit temporal predicates. The default fact query is <em>"what's true now?"</em> &mdash; <code>SELECT * WHERE valid_to IS NULL</code>. The "as-of" query is <em>"what was true at time T?"</em> &mdash; <code>SELECT * WHERE valid_from &lt;= T AND (valid_to IS NULL OR valid_to &gt; T)</code>. Most temporal bugs come from omitting the <code>valid_to</code> predicate, which silently returns every historical version.</p>
+        </div>
+
+        <p>Drag the time marker to see how the same query returns different "current CEO" answers over time:</p>
+
+        <div class="animation-container" aria-label="Interactive timeline showing how the current CEO changes based on as-of date">
+          <div class="animation-title">Same Question, Different As-Of Times</div>
+          <div class="temporal-frame">
+            <div class="temporal-row">
+              <span class="temporal-label">CEO</span>
+              <div class="temporal-bar" style="position:relative;">
+                <div class="temporal-segment temporal-seg-stale" style="left:0%;width:30%;">Bob (2022-2024 Q3)</div>
+                <div class="temporal-segment temporal-seg-current" style="left:30%;width:70%;">Alice (2024 Q3+)</div>
+                <div class="temporal-marker" id="tmark" data-label="2024-Q3" style="left:30%;"></div>
+              </div>
+            </div>
+            <div class="temporal-row">
+              <span class="temporal-label">Headquarters</span>
+              <div class="temporal-bar" style="position:relative;">
+                <div class="temporal-segment temporal-seg-current" style="left:0%;width:100%;">Boston (permanent)</div>
+              </div>
+            </div>
+            <div class="temporal-row">
+              <span class="temporal-label">Stock price</span>
+              <div class="temporal-bar" style="position:relative;">
+                <div class="temporal-segment temporal-seg-stale" style="left:0%;width:40%;">$42</div>
+                <div class="temporal-segment temporal-seg-stale" style="left:40%;width:30%;">$58</div>
+                <div class="temporal-segment temporal-seg-current" style="left:70%;width:30%;">$71</div>
+              </div>
+            </div>
+          </div>
+          <div class="temporal-controls">
+            <span style="font-size:0.78rem;color:var(--text-secondary);">Query as of:</span>
+            <button onclick="setTemporal(15,'2023-Q1')">2023-Q1</button>
+            <button class="active" onclick="setTemporal(30,'2024-Q3')">2024-Q3</button>
+            <button onclick="setTemporal(85,'today')">Today</button>
+          </div>
+          <div class="temporal-result" id="tempResult">As-of 2024-Q3: CEO=Alice, HQ=Boston, Stock=$58</div>
+        </div>
+
+        <div class="callout-warning">
+          <span class="box-label">&#9888;&#65039; Common Misconceptions</span>
+          <p><strong>"Episodic memory has timestamps, so I'm covered."</strong> &mdash; Episodic memory captures <em>when the event happened</em>, not when the underlying fact was valid. A note from 2023 saying "Bob is CEO" doesn't tell you when Bob became CEO or stopped being CEO &mdash; only that you wrote that note in 2023.</p>
+          <p><strong>"Most facts don't change, so I can ignore temporal handling."</strong> &mdash; Most facts <em>do</em> change in regulated domains (healthcare coverage, legal status, organizational structure). The cert exam is heavy on these domains because they're where stale facts cause real harm.</p>
+          <p><strong>"I can just sort by latest timestamp."</strong> &mdash; This works for &ldquo;most recent answer&rdquo; but breaks for as-of queries. A user asking "what was the policy in 2023?" needs the row valid <em>then</em>, not the latest row in your table.</p>
+        </div>
+
+        <div class="callout-cert">
+          <span class="box-label">&#127891; Cert Tip &mdash; Domain 5.6 (Temporal)</span>
+          <p>Trap question pattern: an agent confidently reports "Acme's CEO is Bob" but it's been Alice for 6 months. What's the bug class? <strong>Always temporal &mdash; the query omitted the <code>valid_to IS NULL</code> filter and got the historical row.</strong> This is one of the most-tested scenarios on the cert. Memorize: <code>valid_to IS NULL</code> is "current"; explicit timestamp is "as-of."</p>
+        </div>
+      </section>
+
+      <!-- ==================== CONCEPT 3: STRATIFIED ==================== -->
+      <section class="section" id="stratified">
+        <h2 id="stratified-heading">Concept 3: Stratified Sampling + Field-Level Confidence</h2>
+        <p>When you route extractions to human reviewers, sampling matters as much as the extraction itself. Aggregate confidence is too coarse. Top-N-by-confidence over-reviews the easy cases. Uniform sampling under-reviews the hard ones. The cert pattern is <strong>stratified sampling</strong>: N samples from each confidence bucket, so reviewers see the full distribution.</p>
+
+        <div class="analogy-box">
+          <span class="box-label">&#128161; Everyday Analogy</span>
+          <p><strong>Quality control on a factory line.</strong> You don't inspect every widget &mdash; that's uniform sampling, and it's expensive. You don't only inspect the shiniest widgets &mdash; that's top-N sampling, and you'd never find defects.</p>
+          <p>The pain: factories that sample uniformly waste inspector time on obviously-good batches. Factories that sample top-N never see the defective batches at all.</p>
+          <p>The mapping: stratified QC inspects N units from each grade tier &mdash; A-grade, B-grade, C-grade. Defects across grades surface evenly. The same logic applies to LLM extractions: sample from each confidence bucket so reviewers see the high-, medium-, and low-confidence distributions in proportion to where defects actually live (low confidence).</p>
+        </div>
+
+        <p>Field-level confidence is the second half of the trick. Aggregate document confidence hides defects in individual fields. A document with 88% overall confidence might have one field at 30% confidence &mdash; the field that determines whether you approve a $50K healthcare claim. Field-level scores let you escalate <em>just that field</em>, not the whole document.</p>
+
+        <div class="animation-container" aria-label="Comparison of top-N sampling versus stratified sampling">
+          <div class="animation-title">Top-N vs. Stratified Sampling &mdash; Same Reviewer Budget</div>
+          <div class="strat-frame">
+            <div class="strat-col strat-bad">
+              <h4>&#10060; Top-N (sample 6 highest-confidence)</h4>
+              <div class="strat-bucket">
+                <div class="strat-bucket-label"><span>HIGH conf (90%+)</span><span>6 sampled / 6 in bucket</span></div>
+                <div class="strat-bucket-row" id="bad-high"></div>
+              </div>
+              <div class="strat-bucket">
+                <div class="strat-bucket-label"><span>MED conf (70-90%)</span><span>0 sampled / 8 in bucket</span></div>
+                <div class="strat-bucket-row" id="bad-med"></div>
+              </div>
+              <div class="strat-bucket">
+                <div class="strat-bucket-label"><span>LOW conf (&lt;70%)</span><span>0 sampled / 4 in bucket</span></div>
+                <div class="strat-bucket-row" id="bad-low"></div>
+              </div>
+              <div class="strat-summary">Reviewers see: all easy cases. <span style="color:#fda4af">Defects in low-conf bucket: 100% missed.</span></div>
+            </div>
+            <div class="strat-col strat-good">
+              <h4>&#9989; Stratified (sample 2 from each bucket)</h4>
+              <div class="strat-bucket">
+                <div class="strat-bucket-label"><span>HIGH conf (90%+)</span><span>2 sampled / 6 in bucket</span></div>
+                <div class="strat-bucket-row" id="good-high"></div>
+              </div>
+              <div class="strat-bucket">
+                <div class="strat-bucket-label"><span>MED conf (70-90%)</span><span>2 sampled / 8 in bucket</span></div>
+                <div class="strat-bucket-row" id="good-med"></div>
+              </div>
+              <div class="strat-bucket">
+                <div class="strat-bucket-label"><span>LOW conf (&lt;70%)</span><span>2 sampled / 4 in bucket</span></div>
+                <div class="strat-bucket-row" id="good-low"></div>
+              </div>
+              <div class="strat-summary">Reviewers see: full distribution. <span style="color:#6ee7b7">Defects in low-conf: 50% caught.</span></div>
+            </div>
+          </div>
+          <div class="animation-controls">
+            <button class="anim-btn" onclick="stratPlay()" aria-label="Play stratified sampling animation">&#9658;</button>
+            <button class="anim-btn" onclick="stratRestart()" aria-label="Restart">&#8635;</button>
+          </div>
+        </div>
+
+        <div class="callout-cert">
+          <span class="box-label">&#127891; Cert Tip &mdash; Domain 5.6 (Stratified + Field-Level)</span>
+          <p>Two trap patterns to recognize: <strong>(1)</strong> "Send the top-N most-confident extractions to human review" &mdash; always wrong; reviewers see only correct cases and learn nothing. <strong>(2)</strong> "Escalate when overall document confidence drops below X%" &mdash; weak; aggregate hides per-field defects. The cert-correct answer is always stratified sampling + field-level confidence, in combination.</p>
+        </div>
+      </section>
+
+      <!-- ==================== CONCEPT 4: SYNTHESIS ==================== -->
+      <section class="section" id="synthesis">
+        <h2 id="synthesis-heading">Concept 4: Synthesis Output &mdash; Well-Established vs. Contested Claims</h2>
+        <p>When sources agree, the agent should say so confidently. When sources disagree, the agent must surface the disagreement, not silently pick one. This is the cert pattern that fails most often in practice &mdash; agents that &ldquo;helpfully&rdquo; reconcile contradictions by picking one side.</p>
+
+        <div class="analogy-box">
+          <span class="box-label">&#128161; Everyday Analogy</span>
+          <p><strong>A meta-analysis paper.</strong> "Result X is replicated across 7 studies" reads very differently from "Result Y is supported by 3 studies and contradicted by 2." A reader can act on the first; the second requires more digging. Don't collapse them.</p>
+          <p>The pain: a healthcare agent that reads two payer documents disagreeing on coverage for CPT 99213. It picks the more recent one and reports "Covered." The reviewer downstream has no idea there was a contradiction &mdash; the disagreement was lost.</p>
+          <p>The mapping: your output schema must support a <code>claim_status: "established" | "contested" | "single_source"</code> field. When status is <code>contested</code>, the output must include both source pointers, not just one.</p>
+        </div>
+
+        <p>Same two source documents, two different synthesis behaviors:</p>
+
+        <div class="animation-container" aria-label="Synthesis animation comparing agreeing and disagreeing sources">
+          <div class="animation-title">Synthesis &mdash; Same Sources, Two Output Categories</div>
+          <div class="synth-frame">
+            <div class="synth-col" id="synthLeft">
+              <h4>Sources</h4>
+              <div class="synth-source"><strong>[chunk_5]</strong> Aetna policy 2024: "CPT 99213 covered for established patient visits with documented chronic condition."</div>
+              <div class="synth-source"><strong>[chunk_9]</strong> BCBS policy 2024: "CPT 99213 NOT covered without prior authorization for chronic conditions."</div>
+              <div class="synth-source"><strong>[chunk_3]</strong> CMS guidance 2024: "CPT 99213 is a Level 3 established patient E/M service."</div>
+              <div class="synth-source"><strong>[chunk_12]</strong> AMA CPT manual: "CPT 99213 represents 20-29 minutes of medical decision making."</div>
+            </div>
+            <div class="synth-col" id="synthRight">
+              <h4>Synthesis output</h4>
+              <div class="synth-card established" id="sc1"><span class="card-tag">established</span>CPT 99213 = Level 3 established patient E/M, 20-29 min decision making.<br><span style="color:var(--text-muted)">sources: [chunk_3, chunk_12]</span></div>
+              <div class="synth-card contested" id="sc2"><span class="card-tag">contested</span>Coverage for chronic conditions DIFFERS by payer.<br><span style="color:var(--text-muted)">Aetna: covered &mdash; [chunk_5]<br>BCBS: requires prior auth &mdash; [chunk_9]</span></div>
+              <div class="synth-card single" id="sc3"><span class="card-tag">single</span>Aetna requires "documented" chronic condition &mdash; ambiguous criterion.<br><span style="color:var(--text-muted)">source: [chunk_5] &middot; needs_review: true</span></div>
+            </div>
+          </div>
+          <div class="animation-controls">
+            <button class="anim-btn" onclick="synthPlay()" aria-label="Play synthesis animation">&#9658;</button>
+            <button class="anim-btn" onclick="synthRestart()" aria-label="Restart">&#8635;</button>
+          </div>
+        </div>
+
+        <div class="callout-why">
+          <span class="box-label">&#9989; What Just Happened?</span>
+          <p>Four sources, three output categories. Sources 3 and 12 agree on the definition &mdash; that's an <strong>established</strong> claim with two source pointers. Sources 5 and 9 contradict on coverage &mdash; that's a <strong>contested</strong> claim that surfaces both, in opposition. Source 5 makes a separate claim with no corroboration &mdash; that's a <strong>single-source</strong> claim flagged for review. The schema makes the agent's epistemic state legible to whoever reads the output downstream &mdash; whether that's a human reviewer, a downstream agent, or an audit log.</p>
+        </div>
+
+        <div class="callout-cert">
+          <span class="box-label">&#127891; Cert Tip &mdash; Domain 5.6 (Synthesis)</span>
+          <p>The most common Domain 5.6 trap: a scenario describing two sources that disagree on a fact. The agent picks the &ldquo;more recent&rdquo; or &ldquo;more authoritative&rdquo; source and reports it. <strong>This is wrong.</strong> Even if the agent picks correctly, the cert-correct behavior is to surface the disagreement as a contested claim with both source pointers, and let the downstream consumer (often a human) decide. Silent disagreement resolution is non-compliant regardless of which source is &ldquo;right.&rdquo;</p>
+        </div>
+      </section>
+
+      <!-- ==================== CODE WALKTHROUGH ==================== -->
+      <section class="section" id="code-walkthrough">
+        <h2 id="code-walkthrough-heading">Code Walkthrough: The ProvenancedSynthesizer Class</h2>
+        <p>We'll build a class that takes a list of retrieved chunks and a query, and returns a synthesis object with all four sub-categories. Annotated in 4 chunks.</p>
+
+        <h3 id="cw-chunk1">Chunk 1: Per-Chunk Claim Extraction with Confidence</h3>
+        <p><strong>WHAT</strong>: Each chunk is sent to Claude with a structured tool that extracts every distinct claim plus a per-claim confidence. <strong>WHY</strong>: We need claim-level (not document-level) granularity to detect agreement and contradiction. <strong>GOTCHA</strong>: Don't ask for a single &ldquo;summary&rdquo; per chunk &mdash; that collapses claims and you lose the ability to detect disagreement.</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs" role="tablist" aria-label="Code language tabs">
+            <button class="code-tab active" role="tab" aria-selected="true" onclick="switchTab(this,'cw-1')" data-lang="python" id="tab-cw-1-py">Python</button>
+            <button class="code-tab" role="tab" aria-selected="false" onclick="switchTab(this,'cw-1')" data-lang="nodejs" id="tab-cw-1-js">Node.js</button>
+          </div>
+          <div class="code-panel active" id="cw-1-python" role="tabpanel" aria-labelledby="tab-cw-1-py">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy Python code">Copy</button>
+            <pre><code class="language-python">import anthropic
+from dataclasses import dataclass, field
+
+@dataclass
+class Claim:
+    text: str
+    source_id: str
+    confidence: float  # 0.0 - 1.0
+    valid_from: str = ""  # ISO date
+    valid_to: str | None = None
+
+EXTRACT_TOOL = {
+    "name": "extract_claims",
+    "description": "Extract every distinct factual claim from a source chunk.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "claims": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "properties": {
+                        "text": {"type": "string"},
+                        "confidence": {"type": "number"},
+                        "valid_from": {"type": "string"},
+                        "valid_to": {"type": "string"},
+                    },
+                    "required": ["text", "confidence"],
+                },
+            },
+        },
+        "required": ["claims"],
+    },
+}
+
+def extract_claims(chunk_id: str, chunk_text: str) -&gt; list[Claim]:
+    """Send one chunk to Claude; return a list of Claim objects."""
+    client = anthropic.Anthropic()
+    try:
+        result = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=800,
+            tools=[EXTRACT_TOOL],
+            tool_choice={"type": "tool", "name": "extract_claims"},
+            messages=[{"role": "user",
+                       "content": f"Extract every factual claim from this source.\n\n{chunk_text}"}],
+        )
+    except anthropic.APIError as e:
+        print(f"Extraction failed for {chunk_id}: {e.message}")
+        return []
+    # tool_use block contains the structured output
+    raw = next(b.input for b in result.content if b.type == "tool_use")
+    return [Claim(text=c["text"], source_id=chunk_id,
+                  confidence=c["confidence"],
+                  valid_from=c.get("valid_from", ""),
+                  valid_to=c.get("valid_to"))
+            for c in raw["claims"]]</code></pre>
+          </div>
+          <div class="code-panel" id="cw-1-nodejs" role="tabpanel" aria-labelledby="tab-cw-1-js">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy Node.js code">Copy</button>
+            <pre><code class="language-javascript">import Anthropic from '@anthropic-ai/sdk';
+
+const EXTRACT_TOOL = {
+  name: 'extract_claims',
+  description: 'Extract every distinct factual claim from a source chunk.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      claims: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            text: { type: 'string' },
+            confidence: { type: 'number' },
+            valid_from: { type: 'string' },
+            valid_to: { type: 'string' },
+          },
+          required: ['text', 'confidence'],
+        },
+      },
+    },
+    required: ['claims'],
+  },
+};
+
+export async function extractClaims(chunkId, chunkText) {
+  const client = new Anthropic();
+  try {
+    const result = await client.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 800,
+      tools: [EXTRACT_TOOL],
+      tool_choice: { type: 'tool', name: 'extract_claims' },
+      messages: [{ role: 'user',
+                   content: `Extract every factual claim from this source.\n\n${chunkText}` }],
+    });
+    const raw = result.content.find(b =&gt; b.type === 'tool_use').input;
+    return raw.claims.map(c =&gt; ({
+      text: c.text,
+      source_id: chunkId,
+      confidence: c.confidence,
+      valid_from: c.valid_from || '',
+      valid_to: c.valid_to || null,
+    }));
+  } catch (error) {
+    console.error(`Extraction failed for ${chunkId}: ${error.message}`);
+    return [];
+  }
+}</code></pre>
+          </div>
+        </div>
+
+        <h3 id="cw-chunk2">Chunk 2: Agreement Detection &mdash; Cluster Claims by Entailment</h3>
+        <p><strong>WHAT</strong>: Group claims that say the same thing across different chunks. <strong>WHY</strong>: This is what produces the &ldquo;well-established&rdquo; vs. &ldquo;contested&rdquo; vs. &ldquo;single-source&rdquo; categories. <strong>GOTCHA</strong>: Don't use raw string match. Use a small Claude call to classify pairs as <em>agree / contradict / unrelated</em>. Two claims that paraphrase each other should still cluster as agreement.</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs" role="tablist" aria-label="Code language tabs">
+            <button class="code-tab active" role="tab" aria-selected="true" onclick="switchTab(this,'cw-2')" data-lang="python" id="tab-cw-2-py">Python</button>
+            <button class="code-tab" role="tab" aria-selected="false" onclick="switchTab(this,'cw-2')" data-lang="nodejs" id="tab-cw-2-js">Node.js</button>
+          </div>
+          <div class="code-panel active" id="cw-2-python" role="tabpanel" aria-labelledby="tab-cw-2-py">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy Python code">Copy</button>
+            <pre><code class="language-python">CLASSIFY_TOOL = {
+    "name": "classify_pair",
+    "description": "Classify whether two claims agree, contradict, or are unrelated.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "relation": {"type": "string", "enum": ["agree", "contradict", "unrelated"]},
+            "topic": {"type": "string", "description": "If agree or contradict, the shared topic."},
+        },
+        "required": ["relation"],
+    },
+}
+
+def classify_pair(client, c1: Claim, c2: Claim) -&gt; tuple[str, str]:
+    """Return (relation, topic). relation in {agree, contradict, unrelated}."""
+    try:
+        result = client.messages.create(
+            model="claude-haiku-4-5-20251001",
+            max_tokens=200,
+            tools=[CLASSIFY_TOOL],
+            tool_choice={"type": "tool", "name": "classify_pair"},
+            messages=[{"role": "user", "content":
+                f"Claim A (source {c1.source_id}): {c1.text}\n"
+                f"Claim B (source {c2.source_id}): {c2.text}\n\n"
+                "Classify the relation."}],
+        )
+        raw = next(b.input for b in result.content if b.type == "tool_use")
+        return raw["relation"], raw.get("topic", "")
+    except anthropic.APIError as e:
+        return "unrelated", ""  # fail safe: don't cluster on errors
+
+def cluster_claims(client, claims: list[Claim]) -&gt; tuple[list, list, list]:
+    """Return (established, contested, single_source) lists.
+    Pairwise classification is O(n^2); fine for tens of claims, switch to
+    embedding-based clustering for hundreds.
+    """
+    n = len(claims)
+    visited = [False] * n
+    established, contested, single = [], [], []
+
+    for i in range(n):
+        if visited[i]:
+            continue
+        agree_with = [i]
+        contradicts = []
+        for j in range(i + 1, n):
+            if visited[j]:
+                continue
+            relation, topic = classify_pair(client, claims[i], claims[j])
+            if relation == "agree":
+                agree_with.append(j); visited[j] = True
+            elif relation == "contradict":
+                contradicts.append(j)
+
+        visited[i] = True
+        if contradicts:
+            contested.append({
+                "claim_a": claims[i].text,
+                "sources_a": [claims[k].source_id for k in agree_with],
+                "claim_b": claims[contradicts[0]].text,
+                "sources_b": [claims[contradicts[0]].source_id],
+            })
+            for k in contradicts: visited[k] = True
+        elif len(agree_with) &gt;= 2:
+            established.append({
+                "claim": claims[i].text,
+                "sources": [claims[k].source_id for k in agree_with],
+                "confidence": sum(claims[k].confidence for k in agree_with) / len(agree_with),
+            })
+        else:
+            single.append({
+                "claim": claims[i].text,
+                "source": claims[i].source_id,
+                "confidence": claims[i].confidence,
+                "needs_review": claims[i].confidence &lt; 0.85,
+            })
+    return established, contested, single</code></pre>
+          </div>
+          <div class="code-panel" id="cw-2-nodejs" role="tabpanel" aria-labelledby="tab-cw-2-js">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy Node.js code">Copy</button>
+            <pre><code class="language-javascript">const CLASSIFY_TOOL = {
+  name: 'classify_pair',
+  description: 'Classify whether two claims agree, contradict, or are unrelated.',
+  input_schema: {
+    type: 'object',
+    properties: {
+      relation: { type: 'string', enum: ['agree', 'contradict', 'unrelated'] },
+      topic: { type: 'string' },
+    },
+    required: ['relation'],
+  },
+};
+
+async function classifyPair(client, c1, c2) {
+  try {
+    const result = await client.messages.create({
+      model: 'claude-haiku-4-5-20251001',
+      max_tokens: 200,
+      tools: [CLASSIFY_TOOL],
+      tool_choice: { type: 'tool', name: 'classify_pair' },
+      messages: [{
+        role: 'user',
+        content: `Claim A (source ${c1.source_id}): ${c1.text}\n` +
+                 `Claim B (source ${c2.source_id}): ${c2.text}\n\nClassify the relation.`,
+      }],
+    });
+    const raw = result.content.find(b =&gt; b.type === 'tool_use').input;
+    return [raw.relation, raw.topic || ''];
+  } catch {
+    return ['unrelated', '']; // fail safe
+  }
+}
+
+export async function clusterClaims(client, claims) {
+  const n = claims.length;
+  const visited = new Array(n).fill(false);
+  const established = [], contested = [], single = [];
+
+  for (let i = 0; i &lt; n; i++) {
+    if (visited[i]) continue;
+    const agreeWith = [i];
+    const contradicts = [];
+    for (let j = i + 1; j &lt; n; j++) {
+      if (visited[j]) continue;
+      const [relation] = await classifyPair(client, claims[i], claims[j]);
+      if (relation === 'agree') { agreeWith.push(j); visited[j] = true; }
+      else if (relation === 'contradict') contradicts.push(j);
+    }
+    visited[i] = true;
+    if (contradicts.length) {
+      contested.push({
+        claim_a: claims[i].text,
+        sources_a: agreeWith.map(k =&gt; claims[k].source_id),
+        claim_b: claims[contradicts[0]].text,
+        sources_b: [claims[contradicts[0]].source_id],
+      });
+      contradicts.forEach(k =&gt; { visited[k] = true; });
+    } else if (agreeWith.length &gt;= 2) {
+      established.push({
+        claim: claims[i].text,
+        sources: agreeWith.map(k =&gt; claims[k].source_id),
+        confidence: agreeWith.reduce((s, k) =&gt; s + claims[k].confidence, 0) / agreeWith.length,
+      });
+    } else {
+      single.push({
+        claim: claims[i].text,
+        source: claims[i].source_id,
+        confidence: claims[i].confidence,
+        needs_review: claims[i].confidence &lt; 0.85,
+      });
+    }
+  }
+  return { established, contested, single };
+}</code></pre>
+          </div>
+        </div>
+
+        <h3 id="cw-chunk3">Chunk 3: Temporal Flagging</h3>
+        <p><strong>WHAT</strong>: Compare each claim's <code>valid_to</code> against the query time; flag stale facts. <strong>WHY</strong>: Users querying "current" state need stale facts surfaced as warnings, not silently included. <strong>GOTCHA</strong>: A missing <code>valid_to</code> is ambiguous &mdash; could be permanent or could be unknown. Treat &ldquo;unknown&rdquo; differently from &ldquo;permanent&rdquo; in the output.</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs" role="tablist" aria-label="Code language tabs">
+            <button class="code-tab active" role="tab" aria-selected="true" onclick="switchTab(this,'cw-3')" data-lang="python" id="tab-cw-3-py">Python</button>
+            <button class="code-tab" role="tab" aria-selected="false" onclick="switchTab(this,'cw-3')" data-lang="nodejs" id="tab-cw-3-js">Node.js</button>
+          </div>
+          <div class="code-panel active" id="cw-3-python" role="tabpanel" aria-labelledby="tab-cw-3-py">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy Python code">Copy</button>
+            <pre><code class="language-python">from datetime import date
+
+def flag_temporal(claims: list[Claim], as_of: date) -&gt; list[dict]:
+    """Return a list of temporal warnings for stale claims."""
+    warnings = []
+    for c in claims:
+        # valid_to is set AND in the past relative to query time -&gt; stale
+        if c.valid_to:
+            try:
+                vt = date.fromisoformat(c.valid_to)
+                if vt &lt; as_of:
+                    warnings.append({
+                        "claim": c.text,
+                        "as_of": c.valid_to,
+                        "query_as_of": as_of.isoformat(),
+                        "freshness": "stale",
+                        "source": c.source_id,
+                    })
+            except ValueError:
+                pass  # malformed date, skip
+        # valid_to is None means "current" - don't flag
+        # No valid_from at all means "unknown temporal" - that's a single-source review trigger
+    return warnings</code></pre>
+          </div>
+          <div class="code-panel" id="cw-3-nodejs" role="tabpanel" aria-labelledby="tab-cw-3-js">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy Node.js code">Copy</button>
+            <pre><code class="language-javascript">export function flagTemporal(claims, asOf) {
+  const warnings = [];
+  for (const c of claims) {
+    if (c.valid_to) {
+      const vt = new Date(c.valid_to);
+      if (!isNaN(vt) &amp;&amp; vt &lt; asOf) {
+        warnings.push({
+          claim: c.text,
+          as_of: c.valid_to,
+          query_as_of: asOf.toISOString().slice(0, 10),
+          freshness: 'stale',
+          source: c.source_id,
+        });
+      }
+    }
+    // valid_to null = current; missing valid_from = unknown temporal (single-source trigger)
+  }
+  return warnings;
+}</code></pre>
+          </div>
+        </div>
+
+        <h3 id="cw-chunk4">Chunk 4: Stratified Sampler for Human Review</h3>
+        <p><strong>WHAT</strong>: Pick N claims from each output bucket for reviewer queues. <strong>WHY</strong>: The cert-correct sampling pattern. <strong>GOTCHA</strong>: When a bucket has fewer items than N, take all of them &mdash; don't pad with adjacent buckets.</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs" role="tablist" aria-label="Code language tabs">
+            <button class="code-tab active" role="tab" aria-selected="true" onclick="switchTab(this,'cw-4')" data-lang="python" id="tab-cw-4-py">Python</button>
+            <button class="code-tab" role="tab" aria-selected="false" onclick="switchTab(this,'cw-4')" data-lang="nodejs" id="tab-cw-4-js">Node.js</button>
+          </div>
+          <div class="code-panel active" id="cw-4-python" role="tabpanel" aria-labelledby="tab-cw-4-py">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy Python code">Copy</button>
+            <pre><code class="language-python">import random
+
+def stratified_sample(synthesis: dict, per_bucket: int = 1) -&gt; list[dict]:
+    """Pick `per_bucket` items from each output category for human review."""
+    review_queue = []
+    for bucket_name in ("established", "contested", "single", "temporal_warnings"):
+        bucket = synthesis.get(bucket_name, [])
+        n = min(len(bucket), per_bucket)
+        if n == 0:
+            continue
+        chosen = random.sample(bucket, n)
+        for item in chosen:
+            review_queue.append({"bucket": bucket_name, **item})
+    return review_queue</code></pre>
+          </div>
+          <div class="code-panel" id="cw-4-nodejs" role="tabpanel" aria-labelledby="tab-cw-4-js">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy Node.js code">Copy</button>
+            <pre><code class="language-javascript">export function stratifiedSample(synthesis, perBucket = 1) {
+  const reviewQueue = [];
+  for (const bucketName of ['established', 'contested', 'single', 'temporal_warnings']) {
+    const bucket = synthesis[bucketName] || [];
+    const n = Math.min(bucket.length, perBucket);
+    if (n === 0) continue;
+    // simple shuffle-and-take-N
+    const shuffled = [...bucket].sort(() =&gt; Math.random() - 0.5);
+    for (const item of shuffled.slice(0, n)) {
+      reviewQueue.push({ bucket: bucketName, ...item });
+    }
+  }
+  return reviewQueue;
+}</code></pre>
+          </div>
+        </div>
+
+        <div class="callout-why">
+          <span class="box-label">&#9989; What Just Happened?</span>
+          <p>Four chunks, four cert sub-domains. <strong>Chunk 1</strong> gives you provenance (every claim tagged to its source via <code>tool_use</code> output schema). <strong>Chunk 2</strong> gives you the synthesis output buckets via agreement detection. <strong>Chunk 3</strong> handles the temporal layer. <strong>Chunk 4</strong> wires up stratified sampling for human review. The lab below assembles all four against a real Healthcare Pre-Auth fixture.</p>
+        </div>
+      </section>
+
+      <!-- ==================== HANDS-ON LAB ==================== -->
+      <section class="section" id="hands-on">
+        <h2 id="hands-on-heading">Hands-On Lab: Healthcare Pre-Auth Synthesizer</h2>
+
+        <div style="background:var(--bg-card);border-radius:12px;padding:1.25rem 1.5rem;margin-bottom:1.5rem;">
+          <h3 id="lab-overview" style="margin-top:0;">Lab Overview</h3>
+          <p><strong>What you'll build</strong>: A synthesizer that processes 8 retrieved chunks about a single CPT code's coverage policy across multiple payer documents. It produces 4 output buckets (established, contested, single-source, temporal warnings), runs a stratified human-review sampler, and asserts that contested claims always include both source pointers.</p>
+          <p><strong>Time</strong>: 35-45 minutes &middot; <strong>Domain</strong>: A (Healthcare Pre-Authorization)</p>
+          <p><strong>Prerequisites</strong>: Python 3.10+ or Node.js 18+, Anthropic API key. The class from the walkthrough above.</p>
+          <p style="margin-bottom:0;"><strong>Files you'll create</strong>:</p>
+          <ul style="margin-bottom:0;">
+            <li><code>preauth_chunks.json</code> &mdash; the 8-chunk fixture (provided below)</li>
+            <li><code>synthesizer.py</code> (or <code>synthesizer.mjs</code>) &mdash; the class from the walkthrough</li>
+            <li><code>run_lab.py</code> (or <code>run_lab.mjs</code>) &mdash; the lab runner</li>
+          </ul>
+        </div>
+
+        <h3 id="lab-setup">Environment Setup</h3>
+        <div class="code-single">
+          <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy setup commands">Copy</button>
+          <pre><code class="language-bash"># Python
+mkdir m27b-domain56-lab && cd m27b-domain56-lab
+python -m venv venv && source venv/bin/activate    # Windows: venv\Scripts\activate
+pip install anthropic
+export ANTHROPIC_API_KEY=sk-ant-...
+
+# Node.js (alternative)
+mkdir m27b-domain56-lab && cd m27b-domain56-lab
+npm init -y && npm install @anthropic-ai/sdk
+export ANTHROPIC_API_KEY=sk-ant-...</code></pre>
+        </div>
+
+        <!-- ==================== STEP 1 ==================== -->
+        <h3 id="step1">Step 1: Drop In the 8-Chunk Pre-Auth Fixture</h3>
+        <p>Save as <code>preauth_chunks.json</code>. The fixture is hand-crafted: chunks 1-3 agree on CPT definition (will become <em>established</em>), chunks 4-5 contradict on coverage (will become <em>contested</em>), chunk 6 is from 2022 (will become <em>temporal warning</em>), chunks 7-8 are single-source claims about exclusion criteria.</p>
+
+        <div class="code-single">
+          <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy fixture JSON">Copy</button>
+          <pre><code class="language-json">{
+  "query": "Is CPT 99213 covered for chronic condition follow-up?",
+  "as_of": "2025-01-15",
+  "chunks": [
+    {"chunk_id": "chunk_1", "text": "CMS Manual 2024: CPT 99213 is a Level 3 established patient evaluation and management service.", "valid_to": null},
+    {"chunk_id": "chunk_2", "text": "AMA CPT 2024: Code 99213 represents 20-29 minutes of medical decision making for an established patient.", "valid_to": null},
+    {"chunk_id": "chunk_3", "text": "AAPC coding guide 2024: CPT 99213 is the moderate-complexity Level 3 E/M code for established patient visits.", "valid_to": null},
+    {"chunk_id": "chunk_4", "text": "Aetna policy 2024-Q4: CPT 99213 is COVERED for established patient visits with documented chronic conditions.", "valid_to": null},
+    {"chunk_id": "chunk_5", "text": "BCBS policy 2024-Q4: CPT 99213 requires PRIOR AUTHORIZATION for chronic condition management beyond 4 visits per year.", "valid_to": null},
+    {"chunk_id": "chunk_6", "text": "Aetna policy 2022: CPT 99213 was covered without prior auth for any chronic condition.", "valid_to": "2023-12-31"},
+    {"chunk_id": "chunk_7", "text": "Aetna policy 2024-Q4: Off-label use of any E/M code is excluded from coverage.", "valid_to": null},
+    {"chunk_id": "chunk_8", "text": "BCBS policy 2024-Q4: Step therapy required before approving CPT 99213 for chronic condition management.", "valid_to": null}
+  ]
+}</code></pre>
+        </div>
+
+        <div style="background:rgba(16,185,129,0.06);border-left:3px solid var(--success);padding:1rem 1.25rem;margin:1rem 0;border-radius:0 6px 6px 0;">
+          <strong>&#9989; Checkpoint:</strong> File around 2-3 KB. The deliberate structure: 3 agreeing chunks, 2 contradicting chunks, 1 stale chunk (<code>valid_to</code> in 2023), 2 single-source claims.
+        </div>
+
+        <!-- ==================== STEP 2 ==================== -->
+        <h3 id="step2">Step 2: Run Synthesis &mdash; Verify the Four Output Buckets</h3>
+        <p><strong>What &amp; why</strong>: Wire up the four functions from the walkthrough into a single runner. Output should match the fixture's hand-known structure.</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs" role="tablist" aria-label="Code language tabs">
+            <button class="code-tab active" role="tab" aria-selected="true" onclick="switchTab(this,'lab-s2')" data-lang="python" id="tab-lab-s2-py">Python</button>
+            <button class="code-tab" role="tab" aria-selected="false" onclick="switchTab(this,'lab-s2')" data-lang="nodejs" id="tab-lab-s2-js">Node.js</button>
+          </div>
+          <div class="code-panel active" id="lab-s2-python" role="tabpanel" aria-labelledby="tab-lab-s2-py">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy Python code">Copy</button>
+            <pre><code class="language-python">"""run_lab.py - Process the 8-chunk fixture, emit synthesis, verify shape."""
+import json
+import anthropic
+from datetime import date
+from synthesizer import extract_claims, cluster_claims, flag_temporal, stratified_sample
+
+def main():
+    with open("preauth_chunks.json") as f:
+        fixture = json.load(f)
+
+    print(f"Query: {fixture['query']}")
+    print(f"As-of: {fixture['as_of']}\n")
+
+    # Step A: extract claims from each chunk
+    all_claims = []
+    for chunk in fixture["chunks"]:
+        claims = extract_claims(chunk["chunk_id"], chunk["text"])
+        for c in claims:
+            c.valid_to = chunk.get("valid_to")
+        all_claims.extend(claims)
+
+    print(f"Extracted {len(all_claims)} claims across {len(fixture['chunks'])} chunks\n")
+
+    # Step B: cluster into established / contested / single
+    client = anthropic.Anthropic()
+    established, contested, single = cluster_claims(client, all_claims)
+
+    # Step C: temporal flagging
+    as_of = date.fromisoformat(fixture["as_of"])
+    temporal_warnings = flag_temporal(all_claims, as_of)
+
+    synthesis = {
+        "established": established,
+        "contested": contested,
+        "single": single,
+        "temporal_warnings": temporal_warnings,
+    }
+
+    # Step D: print synthesis
+    print("=" * 60)
+    print("SYNTHESIS OUTPUT")
+    print("=" * 60)
+    for bucket in ("established", "contested", "single", "temporal_warnings"):
+        print(f"\n[{bucket}] {len(synthesis[bucket])} item(s):")
+        for item in synthesis[bucket]:
+            print(f"  - {json.dumps(item, indent=2, default=str)[:200]}")
+
+    return synthesis
+
+if __name__ == "__main__":
+    main()</code></pre>
+          </div>
+          <div class="code-panel" id="lab-s2-nodejs" role="tabpanel" aria-labelledby="tab-lab-s2-js">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy Node.js code">Copy</button>
+            <pre><code class="language-javascript">// run_lab.mjs - Process the 8-chunk fixture, emit synthesis, verify shape.
+import { readFileSync } from 'fs';
+import Anthropic from '@anthropic-ai/sdk';
+import { extractClaims, clusterClaims, flagTemporal, stratifiedSample } from './synthesizer.mjs';
+
+async function main() {
+  const fixture = JSON.parse(readFileSync('preauth_chunks.json', 'utf-8'));
+  console.log(`Query: ${fixture.query}`);
+  console.log(`As-of: ${fixture.as_of}\n`);
+
+  const allClaims = [];
+  for (const chunk of fixture.chunks) {
+    const claims = await extractClaims(chunk.chunk_id, chunk.text);
+    claims.forEach(c =&gt; { c.valid_to = chunk.valid_to; });
+    allClaims.push(...claims);
+  }
+  console.log(`Extracted ${allClaims.length} claims across ${fixture.chunks.length} chunks\n`);
+
+  const client = new Anthropic();
+  const { established, contested, single } = await clusterClaims(client, allClaims);
+  const temporalWarnings = flagTemporal(allClaims, new Date(fixture.as_of));
+
+  const synthesis = { established, contested, single, temporal_warnings: temporalWarnings };
+
+  console.log('='.repeat(60));
+  console.log('SYNTHESIS OUTPUT');
+  console.log('='.repeat(60));
+  for (const bucket of ['established', 'contested', 'single', 'temporal_warnings']) {
+    console.log(`\n[${bucket}] ${synthesis[bucket].length} item(s):`);
+    synthesis[bucket].forEach(item =&gt; {
+      console.log(`  - ${JSON.stringify(item).slice(0, 200)}`);
+    });
+  }
+  return synthesis;
+}
+
+main().catch(err =&gt; { console.error(err); process.exit(1); });</code></pre>
+          </div>
+        </div>
+
+        <p><strong>Run it:</strong></p>
+        <div class="code-single">
+          <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy run command">Copy</button>
+          <pre><code class="language-bash">python run_lab.py     # or: node run_lab.mjs</code></pre>
+        </div>
+
+        <div class="output-label">Expected Output (item counts; exact text varies):</div>
+        <div class="output-block">Query: Is CPT 99213 covered for chronic condition follow-up?
+As-of: 2025-01-15
+
+Extracted 11 claims across 8 chunks
+
+============================================================
+SYNTHESIS OUTPUT
+============================================================
+
+[established] 1 item(s):
+  - {"claim": "CPT 99213 is a Level 3 E/M for established patients", "sources": ["chunk_1", "chunk_2", "chunk_3"], ...}
+
+[contested] 1 item(s):
+  - {"claim_a": "CPT 99213 covered for chronic conditions",
+     "sources_a": ["chunk_4"],
+     "claim_b": "CPT 99213 requires prior authorization",
+     "sources_b": ["chunk_5"], ...}
+
+[single] 2 item(s):
+  - {"claim": "Off-label use excluded", "source": "chunk_7", ...}
+  - {"claim": "Step therapy required", "source": "chunk_8", ...}
+
+[temporal_warnings] 1 item(s):
+  - {"claim": "CPT 99213 was covered without prior auth", "as_of": "2023-12-31", "freshness": "stale", "source": "chunk_6"}</div>
+
+        <div style="background:rgba(16,185,129,0.06);border-left:3px solid var(--success);padding:1rem 1.25rem;margin:1rem 0;border-radius:0 6px 6px 0;">
+          <strong>&#9989; Checkpoint &mdash; verify all four:</strong>
+          <ul style="margin:0.5rem 0 0 1.5rem;">
+            <li><strong>Established:</strong> at least 1 cluster with 3+ source pointers (the CPT definition agreement)</li>
+            <li><strong>Contested:</strong> exactly 1 item, with both <code>sources_a</code> AND <code>sources_b</code> populated</li>
+            <li><strong>Single:</strong> 2 items with <code>needs_review</code> flag</li>
+            <li><strong>Temporal warnings:</strong> exactly 1, pointing at chunk_6 with <code>freshness: "stale"</code></li>
+          </ul>
+        </div>
+
+        <!-- ==================== STEP 3 ==================== -->
+        <h3 id="step3">Step 3: Run Stratified Sampling for Reviewer Queue</h3>
+        <p><strong>What &amp; why</strong>: Pick 1 from each bucket for the human-review queue. Verify reviewers see one item from each category &mdash; not the &ldquo;most confident&rdquo; or &ldquo;most recent&rdquo;.</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs" role="tablist" aria-label="Code language tabs">
+            <button class="code-tab active" role="tab" aria-selected="true" onclick="switchTab(this,'lab-s3')" data-lang="python" id="tab-lab-s3-py">Python</button>
+            <button class="code-tab" role="tab" aria-selected="false" onclick="switchTab(this,'lab-s3')" data-lang="nodejs" id="tab-lab-s3-js">Node.js</button>
+          </div>
+          <div class="code-panel active" id="lab-s3-python" role="tabpanel" aria-labelledby="tab-lab-s3-py">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy Python code">Copy</button>
+            <pre><code class="language-python"># Append to run_lab.py or run interactively after main()
+def review_step(synthesis: dict):
+    queue = stratified_sample(synthesis, per_bucket=1)
+    print("\n" + "=" * 60)
+    print("HUMAN REVIEW QUEUE (stratified, 1 per bucket)")
+    print("=" * 60)
+    for item in queue:
+        print(f"\n  [bucket: {item['bucket']}]")
+        print(f"  {json.dumps({k: v for k, v in item.items() if k != 'bucket'}, default=str)[:180]}")
+    print(f"\nTotal queue size: {len(queue)} items")
+
+if __name__ == "__main__":
+    synthesis = main()
+    review_step(synthesis)</code></pre>
+          </div>
+          <div class="code-panel" id="lab-s3-nodejs" role="tabpanel" aria-labelledby="tab-lab-s3-js">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy Node.js code">Copy</button>
+            <pre><code class="language-javascript">// Append to run_lab.mjs after main()
+function reviewStep(synthesis) {
+  const queue = stratifiedSample(synthesis, 1);
+  console.log('\n' + '='.repeat(60));
+  console.log('HUMAN REVIEW QUEUE (stratified, 1 per bucket)');
+  console.log('='.repeat(60));
+  queue.forEach(item =&gt; {
+    const { bucket, ...rest } = item;
+    console.log(`\n  [bucket: ${bucket}]`);
+    console.log(`  ${JSON.stringify(rest).slice(0, 180)}`);
+  });
+  console.log(`\nTotal queue size: ${queue.length} items`);
+}
+
+const synthesis = await main();
+reviewStep(synthesis);</code></pre>
+          </div>
+        </div>
+
+        <div style="background:rgba(16,185,129,0.06);border-left:3px solid var(--success);padding:1rem 1.25rem;margin:1rem 0;border-radius:0 6px 6px 0;">
+          <strong>&#9989; Checkpoint:</strong> Queue size = 4 items, one from each bucket. Compare with naive top-N: it would have selected 4 high-confidence items, all from the established bucket, and reviewers would never see the contested or stale items.
+        </div>
+
+        <!-- ==================== STEP 4 ==================== -->
+        <h3 id="step4">Step 4: Add the Regression Test for Contested Claims</h3>
+        <p><strong>What &amp; why</strong>: The most common Domain 5.6 trap is silently picking one source on disagreement. Add an assertion that catches this regression.</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs" role="tablist" aria-label="Code language tabs">
+            <button class="code-tab active" role="tab" aria-selected="true" onclick="switchTab(this,'lab-s4')" data-lang="python" id="tab-lab-s4-py">Python</button>
+            <button class="code-tab" role="tab" aria-selected="false" onclick="switchTab(this,'lab-s4')" data-lang="nodejs" id="tab-lab-s4-js">Node.js</button>
+          </div>
+          <div class="code-panel active" id="lab-s4-python" role="tabpanel" aria-labelledby="tab-lab-s4-py">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy Python code">Copy</button>
+            <pre><code class="language-python">def assert_contested_have_both_sources(synthesis: dict):
+    """Cert-correct contested claims must include BOTH source pointers."""
+    failures = []
+    for c in synthesis.get("contested", []):
+        if not c.get("sources_a") or not c.get("sources_b"):
+            failures.append(c)
+        if not c.get("claim_a") or not c.get("claim_b"):
+            failures.append(c)
+    if failures:
+        raise AssertionError(
+            f"REGRESSION: {len(failures)} contested item(s) missing both sources/claims. "
+            f"This is the canonical Domain 5.6 trap. Fix the synthesizer.")
+    print(f"\n&#9989; All {len(synthesis.get('contested', []))} contested claim(s) have both source pointers.")
+
+if __name__ == "__main__":
+    synthesis = main()
+    review_step(synthesis)
+    assert_contested_have_both_sources(synthesis)</code></pre>
+          </div>
+          <div class="code-panel" id="lab-s4-nodejs" role="tabpanel" aria-labelledby="tab-lab-s4-js">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy Node.js code">Copy</button>
+            <pre><code class="language-javascript">function assertContestedHaveBothSources(synthesis) {
+  const failures = [];
+  for (const c of synthesis.contested || []) {
+    if (!c.sources_a?.length || !c.sources_b?.length) failures.push(c);
+    if (!c.claim_a || !c.claim_b) failures.push(c);
+  }
+  if (failures.length) {
+    throw new Error(
+      `REGRESSION: ${failures.length} contested item(s) missing both sources/claims. ` +
+      `This is the canonical Domain 5.6 trap. Fix the synthesizer.`);
+  }
+  console.log(`\n&#9989; All ${synthesis.contested?.length || 0} contested claim(s) have both source pointers.`);
+}
+
+const synthesis = await main();
+reviewStep(synthesis);
+assertContestedHaveBothSources(synthesis);</code></pre>
+          </div>
+        </div>
+
+        <div style="background:rgba(16,185,129,0.06);border-left:3px solid var(--success);padding:1rem 1.25rem;margin:1rem 0;border-radius:0 6px 6px 0;">
+          <strong>&#127881; Congratulations!</strong> You've built a Domain 5.6-compliant synthesizer end-to-end. The four cert sub-topics &mdash; provenance, temporal, stratified review, synthesis &mdash; are now wired into one pipeline you can adapt to any RAG-style agent. Reach for this exact pattern when you encounter Domain 5.6 questions on the practice exams.
+        </div>
+
+        <h3 id="lab-stretch">Stretch Goals (Optional)</h3>
+        <ul>
+          <li><strong>Field-level confidence</strong>: Switch from claim-level to field-level extraction for structured outputs like <code>{cpt_code, coverage, copay, exclusions[]}</code> and route just the low-confidence fields to review.</li>
+          <li><strong>Provenance audit</strong>: Add a <code>provenance_audit()</code> method that returns "every claim &rarr; which chunk(s)" for compliance review &mdash; the audit log a regulator would ask for.</li>
+          <li><strong>Temporal diff</strong>: Run synthesis twice at different <code>as_of</code> dates; output the diff: which claims changed, became stale, or got new sources.</li>
+          <li><strong>Confirmation-bias regression</strong>: Run the same synthesis twice in the same session vs. fresh sessions, and assert the outputs match (catches Domain 4.5 violations).</li>
+        </ul>
+      </section>
+
+      <!-- ==================== QUIZ ==================== -->
+      <section class="section" id="quiz">
+        <h2 id="quiz-heading">Knowledge Check &mdash; 8 Cert-Style Questions</h2>
+        <p style="color:var(--text-secondary);margin-bottom:1.5rem;">Cert-density quiz. If you score 7/8 or higher, you're ready for the practice exam's Domain 5.6 sections.</p>
+
+        <!-- Q1 -->
+        <div class="quiz-question" data-correct="b">
+          <h4>Q1: Which output format is exam-compliant for a RAG synthesizer?</h4>
+          <div class="quiz-option" data-value="a" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option A"><span class="quiz-marker">A</span><span>Prose with parenthetical citations: "CPT 99213 is covered (Aetna 2024) but requires authorization (BCBS 2024)."</span></div>
+          <div class="quiz-option" data-value="b" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option B"><span class="quiz-marker">B</span><span>Structured: <code>{claim, source_id, confidence}</code> tuples per claim</span></div>
+          <div class="quiz-option" data-value="c" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option C"><span class="quiz-marker">C</span><span>A markdown summary that mentions sources at the end</span></div>
+          <div class="quiz-option" data-value="d" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option D"><span class="quiz-marker">D</span><span>Whichever format the user prefers</span></div>
+          <div class="quiz-feedback correct-fb">Correct! Provenance must live in the schema, not in the prose. Structured <code>{claim, source_id, confidence}</code> makes provenance enforceable and auditable. Prose with parenthetical citations may look correct but isn't machine-checkable, so the cert treats it as non-compliant.</div>
+          <div class="quiz-feedback incorrect-fb"></div>
+        </div>
+
+        <!-- Q2 -->
+        <div class="quiz-question" data-correct="d">
+          <h4>Q2: A knowledge-base row should include which fields for proper temporal handling?</h4>
+          <div class="quiz-option" data-value="a" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option A"><span class="quiz-marker">A</span><span><code>{value, timestamp}</code></span></div>
+          <div class="quiz-option" data-value="b" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option B"><span class="quiz-marker">B</span><span><code>{value, last_updated}</code></span></div>
+          <div class="quiz-option" data-value="c" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option C"><span class="quiz-marker">C</span><span><code>{value, created_at, source}</code></span></div>
+          <div class="quiz-option" data-value="d" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option D"><span class="quiz-marker">D</span><span><code>{value, valid_from, valid_to, source}</code></span></div>
+          <div class="quiz-feedback correct-fb">Correct! <code>valid_from</code> and <code>valid_to</code> capture when the FACT was valid, not when the row was written. <code>valid_to: NULL</code> means "current." This schema lets you query both "what's true now?" and "what was true as-of T?" Other shapes only support the latest-value query.</div>
+          <div class="quiz-feedback incorrect-fb"></div>
+        </div>
+
+        <!-- Q3 -->
+        <div class="quiz-question" data-correct="c">
+          <h4>Q3: Two payer documents disagree on whether CPT 99213 is covered. Your agent picks the more recent one and reports "Covered." What's wrong?</h4>
+          <div class="quiz-option" data-value="a" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option A"><span class="quiz-marker">A</span><span>Nothing &mdash; the more recent source is more authoritative</span></div>
+          <div class="quiz-option" data-value="b" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option B"><span class="quiz-marker">B</span><span>The agent should refuse to answer when sources conflict</span></div>
+          <div class="quiz-option" data-value="c" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option C"><span class="quiz-marker">C</span><span>The disagreement was lost &mdash; this should be a contested claim with both source pointers, not a silently-resolved one</span></div>
+          <div class="quiz-option" data-value="d" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option D"><span class="quiz-marker">D</span><span>The agent should pick the source with higher confidence score</span></div>
+          <div class="quiz-feedback correct-fb">Correct! This is the canonical Domain 5.6 trap. Even if the agent picks correctly, silent disagreement resolution is non-compliant. The schema must support <code>claim_status: "contested"</code> with both <code>sources_a</code> and <code>sources_b</code> so the downstream consumer (often a human) can decide. The cert tests this directly.</div>
+          <div class="quiz-feedback incorrect-fb"></div>
+        </div>
+
+        <!-- Q4 -->
+        <div class="quiz-question" data-correct="b">
+          <h4>Q4: Which sampling strategy aligns with cert recommendations for a human-review batch?</h4>
+          <div class="quiz-option" data-value="a" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option A"><span class="quiz-marker">A</span><span>Top-N: send the N most-confident extractions to reviewers</span></div>
+          <div class="quiz-option" data-value="b" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option B"><span class="quiz-marker">B</span><span>Stratified: N samples from each confidence bucket (high/med/low)</span></div>
+          <div class="quiz-option" data-value="c" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option C"><span class="quiz-marker">C</span><span>Uniform: random N from the full pool</span></div>
+          <div class="quiz-option" data-value="d" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option D"><span class="quiz-marker">D</span><span>Bottom-N: send only the lowest-confidence extractions</span></div>
+          <div class="quiz-feedback correct-fb">Correct! Stratified ensures reviewers see the full distribution. Top-N over-reviews easy cases (reviewers learn nothing). Uniform under-reviews low-confidence cases (where defects actually live). Bottom-N misses defects that occur even at high confidence (calibration errors).</div>
+          <div class="quiz-feedback incorrect-fb"></div>
+        </div>
+
+        <!-- Q5 -->
+        <div class="quiz-question" data-correct="a">
+          <h4>Q5: Why does field-level confidence beat document-level confidence for high-stakes extraction?</h4>
+          <div class="quiz-option" data-value="a" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option A"><span class="quiz-marker">A</span><span>An aggregate score hides per-field defects &mdash; a doc at 88% overall might have one critical field at 30%</span></div>
+          <div class="quiz-option" data-value="b" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option B"><span class="quiz-marker">B</span><span>Field-level scores are cheaper to compute</span></div>
+          <div class="quiz-option" data-value="c" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option C"><span class="quiz-marker">C</span><span>Document-level scores aren't supported by the Anthropic API</span></div>
+          <div class="quiz-option" data-value="d" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option D"><span class="quiz-marker">D</span><span>It lets you use a smaller model</span></div>
+          <div class="quiz-feedback correct-fb">Correct! The aggregate hides where it matters. In a $50K healthcare claim extraction, the field that determines approval might be at 30% confidence while the document averages 88%. Field-level lets you escalate just that field for human review without reviewing the whole document.</div>
+          <div class="quiz-feedback incorrect-fb"></div>
+        </div>
+
+        <!-- Q6 -->
+        <div class="quiz-question" data-correct="d">
+          <h4>Q6: An agent confidently reports "Acme's CEO is Bob" but Bob hasn't been CEO for 6 months. What's the most likely bug class?</h4>
+          <div class="quiz-option" data-value="a" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option A"><span class="quiz-marker">A</span><span>Hallucination &mdash; the agent fabricated the CEO name</span></div>
+          <div class="quiz-option" data-value="b" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option B"><span class="quiz-marker">B</span><span>Tool error &mdash; the lookup tool returned bad data</span></div>
+          <div class="quiz-option" data-value="c" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option C"><span class="quiz-marker">C</span><span>Prompt injection &mdash; the user altered the system prompt</span></div>
+          <div class="quiz-option" data-value="d" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option D"><span class="quiz-marker">D</span><span>Temporal &mdash; the query omitted <code>valid_to IS NULL</code> and returned the historical row</span></div>
+          <div class="quiz-feedback correct-fb">Correct! This is the most-tested Domain 5.6 scenario. Memory layers without temporal predicates return historical rows as if they were current. Memorize: <code>valid_to IS NULL</code> = "current"; explicit timestamp = "as-of."</div>
+          <div class="quiz-feedback incorrect-fb"></div>
+        </div>
+
+        <!-- Q7 -->
+        <div class="quiz-question" data-correct="c">
+          <h4>Q7: When two retrieved chunks make the same claim using different wording (paraphrase), the synthesizer should:</h4>
+          <div class="quiz-option" data-value="a" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option A"><span class="quiz-marker">A</span><span>Treat them as separate single-source claims</span></div>
+          <div class="quiz-option" data-value="b" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option B"><span class="quiz-marker">B</span><span>Pick whichever wording is shorter</span></div>
+          <div class="quiz-option" data-value="c" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option C"><span class="quiz-marker">C</span><span>Cluster them together as one well-established claim with both source pointers</span></div>
+          <div class="quiz-option" data-value="d" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option D"><span class="quiz-marker">D</span><span>Mark both as contested because the wording differs</span></div>
+          <div class="quiz-feedback correct-fb">Correct! Paraphrase = agreement, not single-source and not contested. Use a small entailment classifier (cheap Haiku call) to detect "these two say the same thing." Raw string match would split them into single-source claims and lose the corroboration.</div>
+          <div class="quiz-feedback incorrect-fb"></div>
+        </div>
+
+        <!-- Q8 -->
+        <div class="quiz-question" data-correct="b">
+          <h4>Q8: When sources agree on a claim, should the synthesizer collapse them into one citation?</h4>
+          <div class="quiz-option" data-value="a" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option A"><span class="quiz-marker">A</span><span>Yes &mdash; one citation per claim keeps output clean</span></div>
+          <div class="quiz-option" data-value="b" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option B"><span class="quiz-marker">B</span><span>No &mdash; preserve all source pointers; agreement count IS itself a quality signal</span></div>
+          <div class="quiz-option" data-value="c" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option C"><span class="quiz-marker">C</span><span>Pick the most authoritative source and discard the rest</span></div>
+          <div class="quiz-option" data-value="d" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option D"><span class="quiz-marker">D</span><span>Yes &mdash; redundant citations are a cost optimization opportunity</span></div>
+          <div class="quiz-feedback correct-fb">Correct! Three-source agreement is meaningfully different from one-source. The schema's <code>claim_status: "established"</code> + a list of source pointers preserves that signal for downstream consumers. Collapsing destroys the corroboration evidence and makes the output indistinguishable from a single-source claim.</div>
+          <div class="quiz-feedback incorrect-fb"></div>
+        </div>
+
+        <div class="quiz-score" id="quiz-score" style="display:none;">
+          <div class="score-num" id="score-display"></div>
+          <p id="score-message" style="color:var(--text-secondary);margin-top:0.5rem;"></p>
+        </div>
+      </section>
+
+      <!-- ==================== SUMMARY ==================== -->
+      <section class="section" id="summary">
+        <h2 id="summary-heading">Module Summary</h2>
+        <div style="background:var(--bg-card);border-radius:12px;padding:1.5rem;margin-bottom:1.5rem;">
+          <h3 id="key-takeaways" style="margin-top:0;color:var(--accent-primary);">Domain 5.6 Cheat Sheet</h3>
+          <ul>
+            <li><strong>Provenance lives in the schema</strong>, not in the prose. Output must be <code>{claim, source_id, confidence}</code>. Prose-with-parenthetical-citations is non-compliant regardless of accuracy.</li>
+            <li><strong>Temporal handling: <code>{value, valid_from, valid_to, source}</code></strong>. <code>valid_to IS NULL</code> = "current." Missing <code>valid_to</code> filter is the most common temporal bug.</li>
+            <li><strong>Synthesis output: 4 categories</strong> &mdash; established, contested, single-source, temporal-warning. Silent disagreement resolution is the canonical exam trap.</li>
+            <li><strong>Stratified sampling</strong> beats top-N and uniform. <strong>Field-level confidence</strong> beats document-level. They compose &mdash; stratify the fields, not the documents.</li>
+            <li><strong>Paraphrase = agreement</strong>, not contradiction. Use entailment classification, not string match.</li>
+            <li><strong>Don't collapse corroborating sources</strong>. Three sources agreeing is a quality signal; preserve all pointers.</li>
+          </ul>
+        </div>
+        <div style="background:var(--bg-card);border-radius:12px;padding:1.5rem;">
+          <h3 id="next-step" style="margin-top:0;color:var(--track-color);">What's Next: The Practice Exam</h3>
+          <p>You've completed the deepest cert-prep module. The next step is a full timed practice exam. M27 (Cert Exam Prep) covers exam strategy, question patterns, and the final review &mdash; pair it with the practice exams from the cert provider. Aim for 80%+ on Domain 5.6 questions specifically.</p>
+        </div>
+      </section>
+
+      <div class="module-nav">
+        <a href="M27-cert-exam-prep.html" aria-label="Previous module: Cert Exam Prep">&larr; M27: Cert Exam Prep</a>
+        <a href="index.html" aria-label="Course Home" title="Course Home" style="font-size:1.2rem;">&#x1F3E0; Home</a>
+        <a href="index.html" aria-label="Course home">Course Home &rarr;</a>
+      </div>
+    </main>
+  </div>
+
+  <button class="sidebar-toggle" onclick="document.getElementById('sidebar').classList.toggle('open')" aria-label="Toggle navigation menu">&#9776;</button>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
+
+  <script>
+    // === CODE TABS ===
+    function switchTab(btn,group){
+      const wrapper=btn.closest('.code-block-wrapper');
+      wrapper.querySelectorAll('.code-tab').forEach(t=>{t.classList.remove('active');t.setAttribute('aria-selected','false')});
+      wrapper.querySelectorAll('.code-panel').forEach(p=>p.classList.remove('active'));
+      btn.classList.add('active');btn.setAttribute('aria-selected','true');
+      const panel=wrapper.querySelector('#'+group+'-'+btn.dataset.lang);if(panel)panel.classList.add('active');
+    }
+    function copyCode(btn){
+      const code=btn.parentElement.querySelector('code')||btn.closest('.code-single').querySelector('code');
+      navigator.clipboard.writeText(code.textContent).then(()=>{btn.textContent='Copied!';setTimeout(()=>btn.textContent='Copy',2000)});
+    }
+
+    // === ANIMATION 1: PROVENANCE RETRACTION ===
+    function provRetract(){
+      document.getElementById('src3').classList.add('retracted');
+      // Claims that depend on chunk_12: cl3 ([12]) and cl4 ([3,12])
+      ['cl3','cl4'].forEach(id=>{
+        const el=document.getElementById(id);
+        el.classList.remove('sourced');
+        el.classList.add('unsourced');
+        el.querySelector('.badge').textContent='REVIEW';
+      });
+    }
+    function provRestart(){
+      document.getElementById('src3').classList.remove('retracted');
+      const restore={'cl1':'[3,7]','cl2':'[7]','cl3':'[12]','cl4':'[3,12]'};
+      Object.entries(restore).forEach(([id,badge])=>{
+        const el=document.getElementById(id);
+        el.classList.add('sourced');
+        el.classList.remove('unsourced');
+        el.querySelector('.badge').textContent=badge;
+      });
+    }
+
+    // === ANIMATION 2: TEMPORAL TIMELINE ===
+    function setTemporal(pct,label){
+      document.getElementById('tmark').style.left=pct+'%';
+      document.getElementById('tmark').setAttribute('data-label',label);
+      document.querySelectorAll('.temporal-controls button').forEach(b=>b.classList.remove('active'));
+      event.target.classList.add('active');
+      // Update result based on pct
+      let result='';
+      if(pct<=15) result='As-of 2023-Q1: CEO=Bob, HQ=Boston, Stock=$42';
+      else if(pct<=30) result='As-of 2024-Q3: CEO=Alice, HQ=Boston, Stock=$58';
+      else result='As-of today: CEO=Alice, HQ=Boston, Stock=$71';
+      document.getElementById('tempResult').textContent=result;
+    }
+
+    // === ANIMATION 3: STRATIFIED SAMPLING ===
+    function buildStrat(){
+      // bad: top-6 high
+      const bh=document.getElementById('bad-high');bh.innerHTML='';
+      for(let i=0;i<6;i++){const d=document.createElement('div');d.className='strat-dot';bh.appendChild(d)}
+      const bm=document.getElementById('bad-med');bm.innerHTML='';
+      for(let i=0;i<8;i++){const d=document.createElement('div');d.className='strat-dot';bm.appendChild(d)}
+      const bl=document.getElementById('bad-low');bl.innerHTML='';
+      for(let i=0;i<4;i++){const d=document.createElement('div');d.className='strat-dot';bl.appendChild(d)}
+      // good
+      const gh=document.getElementById('good-high');gh.innerHTML='';
+      for(let i=0;i<6;i++){const d=document.createElement('div');d.className='strat-dot';gh.appendChild(d)}
+      const gm=document.getElementById('good-med');gm.innerHTML='';
+      for(let i=0;i<8;i++){const d=document.createElement('div');d.className='strat-dot';gm.appendChild(d)}
+      const gl=document.getElementById('good-low');gl.innerHTML='';
+      for(let i=0;i<4;i++){const d=document.createElement('div');d.className='strat-dot';gl.appendChild(d)}
+    }
+    buildStrat();
+    function stratPlay(){
+      // Bad: sample all 6 high (top-N)
+      document.querySelectorAll('#bad-high .strat-dot').forEach((d,i)=>setTimeout(()=>d.classList.add('sampled'),i*100));
+      // Good: sample 2 from each
+      setTimeout(()=>{
+        const high=document.querySelectorAll('#good-high .strat-dot');
+        const med=document.querySelectorAll('#good-med .strat-dot');
+        const low=document.querySelectorAll('#good-low .strat-dot');
+        high[0].classList.add('sampled');high[3].classList.add('sampled');
+        setTimeout(()=>{med[1].classList.add('sampled');med[5].classList.add('sampled')},300);
+        setTimeout(()=>{low[0].classList.add('sampled');low[2].classList.add('sampled')},600);
+      },400);
+    }
+    function stratRestart(){
+      document.querySelectorAll('.strat-dot').forEach(d=>d.classList.remove('sampled'));
+    }
+
+    // === ANIMATION 4: SYNTHESIS ===
+    let synthTimer=null,synthStep=0;
+    const synthCards=['sc1','sc2','sc3'];
+    function synthPlay(){
+      if(synthTimer)return;
+      synthTimer=setInterval(()=>{
+        if(synthStep>=synthCards.length){synthPause();return}
+        document.getElementById(synthCards[synthStep]).classList.add('visible');
+        synthStep++;
+      },800);
+    }
+    function synthPause(){clearInterval(synthTimer);synthTimer=null}
+    function synthRestart(){
+      synthPause();synthStep=0;
+      synthCards.forEach(id=>document.getElementById(id).classList.remove('visible'));
+    }
+
+    // === QUIZ ===
+    let answeredCount=0,correctCount=0;
+    const totalQuestions=document.querySelectorAll('.quiz-question').length;
+    function selectQuiz(optionEl){
+      const q=optionEl.closest('.quiz-question');if(q.classList.contains('answered'))return;
+      q.classList.add('answered');
+      const correct=q.dataset.correct,selected=optionEl.dataset.value,isCorrect=selected===correct;
+      q.querySelectorAll('.quiz-option').forEach(o=>o.classList.add('disabled'));
+      if(isCorrect){optionEl.classList.add('correct');optionEl.querySelector('.quiz-marker').textContent='✓';correctCount++}
+      else{
+        optionEl.classList.add('incorrect');optionEl.querySelector('.quiz-marker').textContent='✗';
+        q.querySelectorAll('.quiz-option').forEach(o=>{if(o.dataset.value===correct){o.classList.add('correct');o.querySelector('.quiz-marker').textContent='✓'}});
+      }
+      const cfb=q.querySelector('.quiz-feedback.correct-fb'),ifb=q.querySelector('.quiz-feedback.incorrect-fb');
+      if(isCorrect){cfb.classList.add('show')}else{ifb.textContent='Not quite. '+cfb.textContent.replace('Correct! ','');ifb.classList.add('show')}
+      answeredCount++;
+      if(answeredCount===totalQuestions){
+        document.getElementById('quiz-score').style.display='block';
+        document.getElementById('score-display').textContent=correctCount+' / '+totalQuestions;
+        const pct=Math.round(correctCount/totalQuestions*100);
+        document.getElementById('score-message').textContent=pct>=88?'Excellent! Domain 5.6 is locked in &mdash; ready for the practice exam.':pct>=63?'Good. Re-review the trap questions you missed before the exam.':'Re-read the four concept sections; the cert tests these scenarios heavily.';
+      }
+    }
+    document.querySelectorAll('.quiz-option').forEach(o=>{o.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();selectQuiz(o)}})});
+
+    // === SIDEBAR SCROLL SPY ===
+    const sections=document.querySelectorAll('section[id],h2[id],h3[id]');
+    const navLinks=document.querySelectorAll('.sidebar-nav a');
+    function updateActiveLink(){
+      let current='';sections.forEach(s=>{if(s.getBoundingClientRect().top<=120)current=s.id});
+      navLinks.forEach(l=>{l.classList.remove('active');if(l.getAttribute('href')==='#'+current)l.classList.add('active')});
+    }
+    window.addEventListener('scroll',updateActiveLink,{passive:true});
+    navLinks.forEach(l=>{l.addEventListener('click',e=>{e.preventDefault();const t=document.querySelector(l.getAttribute('href'));if(t)t.scrollIntoView({behavior:'smooth',block:'start'});document.getElementById('sidebar').classList.remove('open')})});
+
+    // Auto-start synth animation
+    setTimeout(synthPlay,1500);
+  </script>
+</body>
+</html>
