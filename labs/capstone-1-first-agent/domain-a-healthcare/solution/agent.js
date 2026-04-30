@@ -169,7 +169,7 @@ async function runAgent() {
       try {
         // Step 1: Send message to Claude
         let response = await client.messages.create({
-          model: "claude-sonnet-4-20250514",
+          model: "claude-sonnet-4-6",
           max_tokens: 1024,
           system: systemPrompt,
           tools: tools,
@@ -206,7 +206,7 @@ async function runAgent() {
 
             // Get Claude's final response
             response = await client.messages.create({
-              model: "claude-sonnet-4-20250514",
+              model: "claude-sonnet-4-6",
               max_tokens: 1024,
               system: systemPrompt,
               tools: tools,

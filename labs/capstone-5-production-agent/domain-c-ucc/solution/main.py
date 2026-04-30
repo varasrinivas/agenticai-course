@@ -211,7 +211,7 @@ class ProductionAgent:
             elapsed = (time.time() - start_time) * 1000
             self.metrics.record(
                 request_id=request_id, task_type="unknown", model_tier="balanced",
-                model_id="claude-sonnet-4-20250514", input_tokens=0, output_tokens=0,
+                model_id="claude-sonnet-4-6", input_tokens=0, output_tokens=0,
                 cost_usd=0.0, latency_ms=elapsed, status="error",
             )
 

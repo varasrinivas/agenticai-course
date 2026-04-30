@@ -9,7 +9,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import "dotenv/config";
 
 const client = new Anthropic();
-const MODEL = "claude-sonnet-4-20250514";
+const MODEL = "claude-sonnet-4-6";
 
 class ConversationManager {
   /**

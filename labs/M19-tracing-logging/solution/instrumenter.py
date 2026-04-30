@@ -25,7 +25,7 @@ class MockUCCAgent:
     """Simulates a UCC research agent: 2 LLM calls + 1 tool call."""
 
     def __init__(self):
-        self.model = "claude-sonnet-4-20250514"
+        self.model = "claude-sonnet-4-6"
         self.call_log = []
 
     def run(self, query: str) -> dict:

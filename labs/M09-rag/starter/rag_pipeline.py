@@ -111,7 +111,7 @@ def generate(query: str, context_chunks: list[dict]) -> str:
          the question, say so clearly."
 
       3. Send the message to Claude using the Anthropic SDK:
-         - model: "claude-sonnet-4-20250514"
+         - model: "claude-sonnet-4-6"
          - max_tokens: 1024
          - system: your system prompt
          - messages: one user message containing the context + query

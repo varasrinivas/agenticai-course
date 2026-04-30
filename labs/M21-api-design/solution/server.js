@@ -37,7 +37,7 @@ app.get("/health", (req, res) => {
     status: "ok",
     version: VERSION,
     uptime_seconds: Math.round((Date.now() - START_TIME) / 1000 * 100) / 100,
-    model: "claude-sonnet-4-20250514",
+    model: "claude-sonnet-4-6",
   });
 });
 

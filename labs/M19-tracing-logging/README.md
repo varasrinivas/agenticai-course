@@ -96,9 +96,9 @@ You will:
    Trace abc123  |  Total: 150ms  |  3 spans
    ─────────────────────────────────────────
    [150ms] agent_request
-   ├── [80ms] llm_call (claude-sonnet-4-20250514, 1200 tokens)  53.3%
+   ├── [80ms] llm_call (claude-sonnet-4-6, 1200 tokens)  53.3%
    ├── [30ms] tool_execution (search_filings)  20.0%
-   └── [40ms] llm_call (claude-sonnet-4-20250514, 800 tokens)  26.7%
+   └── [40ms] llm_call (claude-sonnet-4-6, 800 tokens)  26.7%
    ```
 2. Color-code spans by type (LLM = blue, tool = green, error = red)
 3. Implement `render_trace_json(trace)` to export OpenTelemetry-compatible JSON

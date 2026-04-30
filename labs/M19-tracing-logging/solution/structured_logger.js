@@ -171,7 +171,7 @@ function selfTest() {
   logger.log("INFO", "Agent started", { traceId: "trace_001" });
 
   logger.logLlmCall({
-    model: "claude-sonnet-4-20250514",
+    model: "claude-sonnet-4-6",
     inputTokens: 350,
     outputTokens: 120,
     durationMs: 823.5,

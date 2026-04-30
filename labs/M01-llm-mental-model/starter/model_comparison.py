@@ -28,7 +28,7 @@ if __name__ == "__main__":
     prompt = "Explain what a UCC filing is in 2-3 sentences."
     models = [
         "claude-haiku-4-5-20251001",
-        "claude-sonnet-4-20250514",
+        "claude-sonnet-4-6",
     ]
 
     print("--- Model Comparison ---\n")

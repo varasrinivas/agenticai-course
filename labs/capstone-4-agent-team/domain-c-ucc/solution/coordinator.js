@@ -10,7 +10,7 @@ import Anthropic from "@anthropic-ai/sdk";
 // ---------------------------------------------------------------------------
 // Configuration
 // ---------------------------------------------------------------------------
-const MODEL = "claude-sonnet-4-20250514";
+const MODEL = "claude-sonnet-4-6";
 const MAX_ITERATIONS = 10;
 const QUALITY_SCORE_THRESHOLD = 80.0;
 

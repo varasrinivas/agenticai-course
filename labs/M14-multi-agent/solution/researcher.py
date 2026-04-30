@@ -23,7 +23,7 @@ import anthropic
 from tools import RESEARCH_TOOLS, execute_tool
 
 client = anthropic.Anthropic()
-MODEL = "claude-sonnet-4-20250514"
+MODEL = "claude-sonnet-4-6"
 
 
 RESEARCHER_SYSTEM_PROMPT = """You are a UCC filing researcher. Your ONLY job is to search for

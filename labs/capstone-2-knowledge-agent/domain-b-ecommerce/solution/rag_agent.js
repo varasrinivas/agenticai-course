@@ -20,7 +20,7 @@ import { createInterface } from "readline";
 // Configuration
 // ---------------------------------------------------------------------------
 const CHROMA_COLLECTION = "ecommerce_catalog";
-const MODEL = "claude-sonnet-4-20250514";
+const MODEL = "claude-sonnet-4-6";
 const TOP_K = 5;
 
 const SYSTEM_PROMPT = `You are a B2B product catalog and contract reference assistant for Meridian

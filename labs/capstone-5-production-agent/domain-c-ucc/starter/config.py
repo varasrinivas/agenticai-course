@@ -34,7 +34,7 @@ class ModelTier:
 MODEL_TIERS = {
     "fast": ModelTier(
         name="fast",
-        model_id="claude-sonnet-4-20250514",  # Using Sonnet as "fast" tier for mock
+        model_id="claude-sonnet-4-6",  # Using Sonnet as "fast" tier for mock
         input_cost_per_1k=0.003,
         output_cost_per_1k=0.015,
         max_tokens=4096,
@@ -42,7 +42,7 @@ MODEL_TIERS = {
     ),
     "balanced": ModelTier(
         name="balanced",
-        model_id="claude-sonnet-4-20250514",
+        model_id="claude-sonnet-4-6",
         input_cost_per_1k=0.003,
         output_cost_per_1k=0.015,
         max_tokens=8192,
@@ -50,7 +50,7 @@ MODEL_TIERS = {
     ),
     "powerful": ModelTier(
         name="powerful",
-        model_id="claude-sonnet-4-20250514",  # Use Sonnet for all tiers in lab (cost safety)
+        model_id="claude-sonnet-4-6",  # Use Sonnet for all tiers in lab (cost safety)
         input_cost_per_1k=0.003,
         output_cost_per_1k=0.015,
         max_tokens=8192,

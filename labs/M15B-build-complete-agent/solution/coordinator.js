@@ -12,7 +12,7 @@ import { config } from "dotenv";
 config();
 
 const client = new Anthropic();
-const MODEL = "claude-sonnet-4-20250514";
+const MODEL = "claude-sonnet-4-6";
 
 // Inline mock data (same 15 filings)
 const MOCK_FILINGS = [

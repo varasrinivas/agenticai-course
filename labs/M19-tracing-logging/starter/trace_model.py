@@ -198,7 +198,7 @@ def self_test():
 
         # Simulate an LLM call (child span)
         with SpanContext(trace, "llm_call", parent=root) as llm_span:
-            llm_span.set_attribute("model", "claude-sonnet-4-20250514")
+            llm_span.set_attribute("model", "claude-sonnet-4-6")
             llm_span.set_attribute("input_tokens", 350)
             llm_span.set_attribute("output_tokens", 120)
             time.sleep(0.05)  # simulate latency
@@ -212,7 +212,7 @@ def self_test():
 
         # Simulate a second LLM call (child span)
         with SpanContext(trace, "llm_call", parent=root) as llm_span2:
-            llm_span2.set_attribute("model", "claude-sonnet-4-20250514")
+            llm_span2.set_attribute("model", "claude-sonnet-4-6")
             llm_span2.set_attribute("input_tokens", 800)
             llm_span2.set_attribute("output_tokens", 200)
             time.sleep(0.03)  # simulate latency

@@ -10,7 +10,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # Model to use for all agents
-MODEL = "claude-sonnet-4-20250514"
+MODEL = "claude-sonnet-4-6"
 
 # Maximum turns for ReAct loops
 MAX_AGENT_TURNS = 10

@@ -21,7 +21,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
 import anthropic
 
 client = anthropic.Anthropic()
-MODEL = "claude-sonnet-4-20250514"
+MODEL = "claude-sonnet-4-6"
 
 
 REVIEWER_SYSTEM_PROMPT = """You are a quality reviewer for UCC filing reports. Your job is to

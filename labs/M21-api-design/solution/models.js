@@ -129,7 +129,7 @@ if (require.main === module) {
       status: "ok",
       version: "1.0.0",
       uptime_seconds: 3661.2,
-      model: "claude-sonnet-4-20250514",
+      model: "claude-sonnet-4-6",
     });
     console.log(`[PASS] HealthResponse: ${JSON.stringify(health)}`);
   } catch (e) {

@@ -16,7 +16,7 @@ from pydantic import BaseModel, Field, field_validator, ValidationError
 load_dotenv()
 
 client = anthropic.Anthropic()
-MODEL = "claude-sonnet-4-20250514"
+MODEL = "claude-sonnet-4-6"
 
 # ─── Sample freetext filing descriptions (same as Steps 1-2) ─────────────────
 

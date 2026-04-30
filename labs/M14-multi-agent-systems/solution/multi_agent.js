@@ -17,7 +17,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const { searchFilings, getFilingByNumber } = await import(join(__dirname, "..", "..", "shared", "mock_ucc_data.js"));
 
 const client = new Anthropic();
-const MODEL = "claude-sonnet-4-20250514";
+const MODEL = "claude-sonnet-4-6";
 
 function observe(label, msg) { console.log(`\n${"=".repeat(60)}\n[${label}] ${msg}\n${"=".repeat(60)}`); }
 function observeAgent(name, action) { console.log(`\n${"─".repeat(60)}\n[AGENT: ${name}] ${action}\n${"─".repeat(60)}`); }

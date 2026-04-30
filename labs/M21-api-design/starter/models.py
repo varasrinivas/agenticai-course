@@ -117,7 +117,7 @@ if __name__ == "__main__":
             status="ok",
             version="1.0.0",
             uptime_seconds=3661.2,
-            model="claude-sonnet-4-20250514"
+            model="claude-sonnet-4-6"
         )
         print(f"[PASS] HealthResponse: {health.model_dump_json()}")
     except Exception as e:

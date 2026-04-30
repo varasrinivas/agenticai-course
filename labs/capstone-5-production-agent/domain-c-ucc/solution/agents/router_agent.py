@@ -145,7 +145,7 @@ class RouterAgent:
     def _llm_classify(self, query: str) -> Tuple[str, float]:
         try:
             response = self.client.messages.create(
-                model="claude-sonnet-4-20250514",
+                model="claude-sonnet-4-6",
                 max_tokens=256,
                 system=self.system_prompt,
                 messages=[{"role": "user", "content": f"Classify this query into one of: filing_lookup, entity_resolution, risk_assessment. Query: {query}\n\nRespond with JSON: {{\"task_type\": \"...\", \"confidence\": 0.0-1.0}}"}],

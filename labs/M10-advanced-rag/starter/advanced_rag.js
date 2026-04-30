@@ -23,7 +23,7 @@ import { ChromaClient } from "chromadb";
 import "dotenv/config";
 
 const client = new Anthropic();
-const MODEL = "claude-sonnet-4-20250514";
+const MODEL = "claude-sonnet-4-6";
 
 // =============================================================================
 // UCC DOCUMENT CORPUS (complete -- do not modify)

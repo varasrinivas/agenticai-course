@@ -18,7 +18,7 @@ import chromadb
 # Configuration
 # ---------------------------------------------------------------------------
 CHROMA_COLLECTION = "ecommerce_catalog"
-MODEL = "claude-sonnet-4-20250514"
+MODEL = "claude-sonnet-4-6"
 TOP_K = 5
 
 

@@ -17,7 +17,7 @@ import anthropic
 from agents import BaseAgent, PipelineState
 from mock_data import ORDERS, SLA_RULES, SLA_VIOLATIONS_LOG
 
-MODEL = "claude-sonnet-4-20250514"
+MODEL = "claude-sonnet-4-6"
 MAX_ITERATIONS = 10
 
 TOOL_SCHEMAS = [

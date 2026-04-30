@@ -20,19 +20,19 @@ class ModelTier:
 
 MODEL_TIERS = {
     "fast": ModelTier(
-        name="fast", model_id="claude-sonnet-4-20250514",
+        name="fast", model_id="claude-sonnet-4-6",
         input_cost_per_1k=0.003, output_cost_per_1k=0.015,
         max_tokens=4096,
         strengths=["classification", "formatting", "simple_lookup", "validation"],
     ),
     "balanced": ModelTier(
-        name="balanced", model_id="claude-sonnet-4-20250514",
+        name="balanced", model_id="claude-sonnet-4-6",
         input_cost_per_1k=0.003, output_cost_per_1k=0.015,
         max_tokens=8192,
         strengths=["entity_resolution", "multi_step_reasoning", "data_transformation", "summarization"],
     ),
     "powerful": ModelTier(
-        name="powerful", model_id="claude-sonnet-4-20250514",
+        name="powerful", model_id="claude-sonnet-4-6",
         input_cost_per_1k=0.003, output_cost_per_1k=0.015,
         max_tokens=8192,
         strengths=["risk_analysis", "complex_reasoning", "ambiguous_cases", "collateral_classification"],

@@ -69,7 +69,7 @@ def mock_claude_response(text: str = "This is a mock response.", stop_reason: st
     class MockResponse:
         def __init__(self, text, stop_reason):
             self.content = [MockBlock(text)]
-            self.model = "claude-sonnet-4-20250514"
+            self.model = "claude-sonnet-4-6"
             self.stop_reason = stop_reason
             self.usage = MockUsage()
 
@@ -93,7 +93,7 @@ def mock_tool_use_response(tool_name: str, tool_input: dict, tool_use_id: str = 
     class MockResponse:
         def __init__(self, tool_block):
             self.content = [tool_block]
-            self.model = "claude-sonnet-4-20250514"
+            self.model = "claude-sonnet-4-6"
             self.stop_reason = "tool_use"
             self.usage = MockUsage()
 

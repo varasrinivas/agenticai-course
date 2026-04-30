@@ -50,7 +50,7 @@ def run_agent():
         # TODO 1: Send the message to Claude
         # ──────────────────────────────────────────────────────
         # Call client.messages.create() with:
-        #   - model="claude-sonnet-4-20250514"
+        #   - model="claude-sonnet-4-6"
         #   - max_tokens=1024
         #   - system=system_prompt
         #   - tools=TOOLS

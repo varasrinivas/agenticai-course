@@ -14,7 +14,7 @@ import "dotenv/config";
 import { searchFilings, getFilingByNumber } from "../../shared/mock_ucc_data.js";
 
 const client = new Anthropic();
-const MODEL = "claude-sonnet-4-20250514";
+const MODEL = "claude-sonnet-4-6";
 
 // =============================================================================
 // TOOL IMPLEMENTATIONS (complete -- do not modify)

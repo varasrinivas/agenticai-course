@@ -140,7 +140,7 @@ async function scoreWithJudge(query, response, expected, mockMode = true) {
       `Score the agent's response. Respond with ONLY a JSON object.`;
 
     const message = await client.messages.create({
-      model: "claude-sonnet-4-20250514",
+      model: "claude-sonnet-4-6",
       max_tokens: 300,
       system: JUDGE_SYSTEM_PROMPT,
       messages: [{ role: "user", content: userPrompt }],

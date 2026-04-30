@@ -14,7 +14,7 @@ async function main() {
   console.log("--- First Claude API Call ---\n");
 
   // TODO: Use client.messages.create() to send a message to Claude
-  // - model: "claude-sonnet-4-20250514"
+  // - model: "claude-sonnet-4-6"
   // - max_tokens: 1024
   // - messages: a single user message asking "What is an AI agent? Explain in 2-3 sentences."
   // Then print the response text.

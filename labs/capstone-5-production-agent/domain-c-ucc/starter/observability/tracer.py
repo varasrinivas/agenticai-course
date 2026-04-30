@@ -149,7 +149,7 @@ class Tracer:
     #   [ok] request.process (1523.4 ms) [internal]
     #     [ok] router_agent.route (45.2 ms) [agent]
     #     [ok] filing_agent.process (1234.5 ms) [agent]
-    #       [ok] llm.call (890.1 ms) [llm] model=claude-sonnet-4-20250514 tokens=1234
+    #       [ok] llm.call (890.1 ms) [llm] model=claude-sonnet-4-6 tokens=1234
     #       [ok] search_filings (123.4 ms) [tool]
     # ------------------------------------------------------------------
     def format_trace(self, trace_id: str) -> str:

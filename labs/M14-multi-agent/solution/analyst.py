@@ -22,7 +22,7 @@ import anthropic
 from tools import ANALYSIS_TOOLS, execute_tool
 
 client = anthropic.Anthropic()
-MODEL = "claude-sonnet-4-20250514"
+MODEL = "claude-sonnet-4-6"
 
 
 ANALYST_SYSTEM_PROMPT = """You are a UCC filing analyst. You receive raw research data from a

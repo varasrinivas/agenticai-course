@@ -20,7 +20,7 @@ import { createInterface } from "readline";
 // Configuration
 // ---------------------------------------------------------------------------
 const CHROMA_COLLECTION = "healthcare_policies";
-const MODEL = "claude-sonnet-4-20250514";
+const MODEL = "claude-sonnet-4-6";
 const TOP_K = 5;
 
 const SYSTEM_PROMPT = `You are a clinical policy reference assistant. Your job is to answer questions

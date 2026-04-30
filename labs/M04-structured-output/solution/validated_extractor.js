@@ -10,7 +10,7 @@ import "dotenv/config";
 import { z } from "zod";
 
 const client = new Anthropic();
-const MODEL = "claude-sonnet-4-20250514";
+const MODEL = "claude-sonnet-4-6";
 
 // ─── Sample freetext filing descriptions (same as Steps 1-2) ─────────────────
 

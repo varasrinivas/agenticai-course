@@ -14,7 +14,7 @@ import anthropic
 from agents import BaseAgent, PipelineState
 from mock_data import QUALITY_RULES
 
-MODEL = "claude-sonnet-4-20250514"
+MODEL = "claude-sonnet-4-6"
 MAX_ITERATIONS = 10
 QUALITY_SCORE_THRESHOLD = 80.0
 LOW_CONFIDENCE_THRESHOLD = 0

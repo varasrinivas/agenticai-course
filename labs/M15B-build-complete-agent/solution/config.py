@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-MODEL = "claude-sonnet-4-20250514"
+MODEL = "claude-sonnet-4-6"
 MAX_AGENT_TURNS = 10
 MAX_SUBAGENT_TURNS = 6
 MAX_HISTORY_TURNS = 5

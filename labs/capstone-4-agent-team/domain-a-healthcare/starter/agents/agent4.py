@@ -27,7 +27,7 @@ from mock_data import LETTER_TEMPLATES, PREAUTH_REQUESTS, PROVIDER_NETWORK, CLIN
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
-MODEL = "claude-sonnet-4-20250514"
+MODEL = "claude-sonnet-4-6"
 MAX_ITERATIONS = 10
 
 # ---------------------------------------------------------------------------

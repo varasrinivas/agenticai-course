@@ -32,7 +32,7 @@ async function main() {
   const prompt = "Explain what a UCC filing is in 2-3 sentences.";
   const models = [
     "claude-haiku-4-5-20251001",
-    "claude-sonnet-4-20250514",
+    "claude-sonnet-4-6",
   ];
 
   console.log("--- Model Comparison ---\n");

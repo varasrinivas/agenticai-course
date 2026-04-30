@@ -25,7 +25,7 @@ from tools import TOOL_DEFINITIONS, execute_tool
 load_dotenv()
 
 client = Anthropic()  # reads ANTHROPIC_API_KEY from environment
-MODEL = "claude-sonnet-4-20250514"
+MODEL = "claude-sonnet-4-6"
 
 SYSTEM_PROMPT = """You are a UCC (Uniform Commercial Code) filing research agent.
 You help users investigate UCC filings, assess debtor risk, and answer questions

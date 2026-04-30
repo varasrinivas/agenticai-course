@@ -171,7 +171,7 @@ async function selfTest() {
 
     // Simulate LLM call
     await withSpan(trace, "llm_call", root, async (llmSpan) => {
-      llmSpan.setAttribute("model", "claude-sonnet-4-20250514");
+      llmSpan.setAttribute("model", "claude-sonnet-4-6");
       llmSpan.setAttribute("input_tokens", 350);
       llmSpan.setAttribute("output_tokens", 120);
       await new Promise((r) => setTimeout(r, 50));
@@ -187,7 +187,7 @@ async function selfTest() {
 
     // Simulate second LLM call
     await withSpan(trace, "llm_call", root, async (llmSpan2) => {
-      llmSpan2.setAttribute("model", "claude-sonnet-4-20250514");
+      llmSpan2.setAttribute("model", "claude-sonnet-4-6");
       llmSpan2.setAttribute("input_tokens", 800);
       llmSpan2.setAttribute("output_tokens", 200);
       await new Promise((r) => setTimeout(r, 30));

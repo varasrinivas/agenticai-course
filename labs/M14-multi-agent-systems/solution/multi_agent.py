@@ -21,7 +21,7 @@ import anthropic
 from shared.mock_ucc_data import search_filings, get_filing_by_number
 
 client = anthropic.Anthropic()
-MODEL = "claude-sonnet-4-20250514"
+MODEL = "claude-sonnet-4-6"
 
 
 # =============================================================================

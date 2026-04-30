@@ -50,7 +50,7 @@ def run_agent():
         try:
             # ── Step 1: Send the message to Claude ──────────────
             response = client.messages.create(
-                model="claude-sonnet-4-20250514",
+                model="claude-sonnet-4-6",
                 max_tokens=1024,
                 system=system_prompt,
                 tools=TOOLS,
@@ -99,7 +99,7 @@ def run_agent():
 
                     # Get Claude's final response with the tool result
                     response = client.messages.create(
-                        model="claude-sonnet-4-20250514",
+                        model="claude-sonnet-4-6",
                         max_tokens=1024,
                         system=system_prompt,
                         tools=TOOLS,

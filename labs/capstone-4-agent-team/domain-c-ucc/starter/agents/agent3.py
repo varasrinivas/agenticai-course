@@ -27,7 +27,7 @@ from mock_data import QUALITY_RULES
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
-MODEL = "claude-sonnet-4-20250514"
+MODEL = "claude-sonnet-4-6"
 MAX_ITERATIONS = 10
 QUALITY_SCORE_THRESHOLD = 80.0  # Trigger HITL when quality_score < this
 LOW_CONFIDENCE_THRESHOLD = 0    # Trigger HITL when low_confidence_resolutions > this

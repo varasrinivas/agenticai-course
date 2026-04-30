@@ -81,7 +81,7 @@ def score_with_judge(
     2. If mock_mode is False:
        a. Check that anthropic is installed and API key is set
        b. Build the judge prompt with the query, response, and expected data
-       c. Call Claude (claude-sonnet-4-20250514) with JUDGE_SYSTEM_PROMPT
+       c. Call Claude (claude-sonnet-4-6) with JUDGE_SYSTEM_PROMPT
        d. Parse the JSON response
        e. Normalize: score = (accuracy + completeness + clarity) / 15.0
        f. Return the structured result

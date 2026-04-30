@@ -19,7 +19,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const { ALL_FILINGS, searchFilings } = await import(join(__dirname, "..", "..", "shared", "mock_ucc_data.js"));
 
 const client = new Anthropic();
-const MODEL = "claude-sonnet-4-20250514";
+const MODEL = "claude-sonnet-4-6";
 
 function observe(label, msg) { console.log(`\n${"=".repeat(60)}\n[${label}] ${msg}\n${"=".repeat(60)}`); }
 function observeCode(code) { console.log(`\n${"─".repeat(60)}\n[CODE] Agent-generated Python:`); code.split("\n").forEach((l,i) => console.log(`  ${String(i+1).padStart(3)} | ${l}`)); console.log("─".repeat(60)); }

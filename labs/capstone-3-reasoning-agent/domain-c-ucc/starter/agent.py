@@ -16,7 +16,7 @@ from tools import TOOL_SCHEMAS, execute_tool
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
-MODEL = "claude-sonnet-4-20250514"
+MODEL = "claude-sonnet-4-6"
 MAX_ITERATIONS = 15
 
 SYSTEM_PROMPT = """You are a UCC Entity Resolution Agent. Your job is to take a business name and

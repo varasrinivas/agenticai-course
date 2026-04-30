@@ -19,7 +19,7 @@ const mockDataPath = join(__dirname, "..", "..", "shared", "mock_ucc_data.js");
 const { searchFilings, getFilingByNumber } = await import(mockDataPath);
 
 const client = new Anthropic();
-const MODEL = "claude-sonnet-4-20250514";
+const MODEL = "claude-sonnet-4-6";
 
 // =============================================================================
 // OBSERVATION HELPERS

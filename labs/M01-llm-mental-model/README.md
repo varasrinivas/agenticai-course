@@ -52,7 +52,7 @@ ANTHROPIC_API_KEY=your-key-here
 
 1. Open `starter/first_call.py`.
 2. Find the `TODO` comment and complete the code:
-   - Call `client.messages.create()` with model `claude-sonnet-4-20250514`.
+   - Call `client.messages.create()` with model `claude-sonnet-4-6`.
    - Set `max_tokens` to `1024`.
    - Send a single user message: *"What is an AI agent? Explain in 2-3 sentences."*
    - Print the response text.
@@ -172,7 +172,7 @@ Time: 1.23s
 Response:
 A UCC filing is a legal document ...
 
-Model: claude-sonnet-4-20250514
+Model: claude-sonnet-4-6
 Time: 2.87s
 Response:
 A Uniform Commercial Code (UCC) filing is a public notice ...

@@ -23,7 +23,7 @@ import { StructuredLogger, scrubPii } from "./structured_logger.js";
 
 class MockUCCAgent {
   constructor() {
-    this.model = "claude-sonnet-4-20250514";
+    this.model = "claude-sonnet-4-6";
     this.callLog = [];
   }
 

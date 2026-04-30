@@ -19,7 +19,7 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const { searchFilings, getFilingByNumber } = await import(join(__dirname, "..", "..", "shared", "mock_ucc_data.js"));
 
 const client = new Anthropic();
-const MODEL = "claude-sonnet-4-20250514";
+const MODEL = "claude-sonnet-4-6";
 
 // =============================================================================
 // OBSERVATION HELPERS (complete — do not modify)

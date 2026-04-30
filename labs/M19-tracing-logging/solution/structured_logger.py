@@ -167,7 +167,7 @@ def self_test():
     logger.log("INFO", "Agent started", trace_id="trace_001")
 
     logger.log_llm_call(
-        model="claude-sonnet-4-20250514",
+        model="claude-sonnet-4-6",
         input_tokens=350,
         output_tokens=120,
         duration_ms=823.5,

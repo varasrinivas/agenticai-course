@@ -188,7 +188,7 @@ python agent.py
 
 ### API Cost Awareness
 
-All labs use `claude-sonnet-4-20250514` by default. Estimated costs per lab:
+All labs use `claude-sonnet-4-6` by default. Estimated costs per lab:
 
 | Track | Estimated Cost per Lab |
 |-------|----------------------|

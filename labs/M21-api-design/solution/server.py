@@ -70,7 +70,7 @@ async def health_check():
         status="ok",
         version=app.version,
         uptime_seconds=round(time.time() - START_TIME, 2),
-        model="claude-sonnet-4-20250514",
+        model="claude-sonnet-4-6",
     )
 
 

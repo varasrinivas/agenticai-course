@@ -26,7 +26,7 @@ import anthropic
 from tools import TOOL_DEFINITIONS, execute_tool
 
 client = anthropic.Anthropic()
-MODEL = "claude-sonnet-4-20250514"
+MODEL = "claude-sonnet-4-6"
 
 
 # =============================================================================

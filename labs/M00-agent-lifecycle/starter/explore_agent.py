@@ -254,7 +254,7 @@ def run_agent(user_query: str) -> str:
         # DECIDE: Ask the LLM what to do next
         try:
             response = client.messages.create(
-                model="claude-sonnet-4-20250514",
+                model="claude-sonnet-4-6",
                 max_tokens=1024,
                 system=SYSTEM_PROMPT,
                 tools=TOOL_DEFINITIONS,

@@ -20,9 +20,9 @@ import * as readline from "readline";
 const client = new Anthropic();
 
 const MODEL_TIERS = {
-  fast: { modelId: "claude-sonnet-4-20250514", inputCostPer1k: 0.003, outputCostPer1k: 0.015 },
-  balanced: { modelId: "claude-sonnet-4-20250514", inputCostPer1k: 0.003, outputCostPer1k: 0.015 },
-  powerful: { modelId: "claude-sonnet-4-20250514", inputCostPer1k: 0.003, outputCostPer1k: 0.015 },
+  fast: { modelId: "claude-sonnet-4-6", inputCostPer1k: 0.003, outputCostPer1k: 0.015 },
+  balanced: { modelId: "claude-sonnet-4-6", inputCostPer1k: 0.003, outputCostPer1k: 0.015 },
+  powerful: { modelId: "claude-sonnet-4-6", inputCostPer1k: 0.003, outputCostPer1k: 0.015 },
 };
 
 const TASK_KEYWORDS = {

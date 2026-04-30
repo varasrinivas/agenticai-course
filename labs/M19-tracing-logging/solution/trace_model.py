@@ -142,7 +142,7 @@ def self_test():
         root.set_attribute("query", "Find filings for Acme Corp")
 
         with SpanContext(trace, "llm_call", parent=root) as llm_span:
-            llm_span.set_attribute("model", "claude-sonnet-4-20250514")
+            llm_span.set_attribute("model", "claude-sonnet-4-6")
             llm_span.set_attribute("input_tokens", 350)
             llm_span.set_attribute("output_tokens", 120)
             time.sleep(0.05)
@@ -154,7 +154,7 @@ def self_test():
             tool_span.set_attribute("output_records", 3)
 
         with SpanContext(trace, "llm_call", parent=root) as llm_span2:
-            llm_span2.set_attribute("model", "claude-sonnet-4-20250514")
+            llm_span2.set_attribute("model", "claude-sonnet-4-6")
             llm_span2.set_attribute("input_tokens", 800)
             llm_span2.set_attribute("output_tokens", 200)
             time.sleep(0.03)

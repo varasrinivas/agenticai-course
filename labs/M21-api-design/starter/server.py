@@ -58,7 +58,7 @@ START_TIME = time.time()
 #   - status: "ok"
 #   - version: app.version (from the FastAPI app metadata)
 #   - uptime_seconds: seconds since START_TIME (use time.time() - START_TIME)
-#   - model: "claude-sonnet-4-20250514"
+#   - model: "claude-sonnet-4-6"
 #
 # Hint: Use @app.get("/health", response_model=HealthResponse)
 # ---------------------------------------------------------------------------

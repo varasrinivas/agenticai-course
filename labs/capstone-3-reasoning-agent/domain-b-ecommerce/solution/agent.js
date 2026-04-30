@@ -6,7 +6,7 @@
 
 import Anthropic from "@anthropic-ai/sdk";
 
-const MODEL = "claude-sonnet-4-20250514";
+const MODEL = "claude-sonnet-4-6";
 const MAX_ITERATIONS = 15;
 
 const SYSTEM_PROMPT = `You are a B2B Ecommerce Order Exception Resolution Agent. Your job is to
