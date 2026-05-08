@@ -1,0 +1,768 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CC12: RAG for Claude Code | Claude Code Mastery</title>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;700;800&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg-primary: #0A1628; --bg-secondary: #111D33; --bg-card: #162033; --bg-surface: #1A2740;
+      --text-primary: #E8ECF1; --text-secondary: #94A3B8; --text-muted: #64748B;
+      --accent-primary: #D4A843; --accent-hover: #E5BC5A; --accent-muted: rgba(212,168,67,0.15);
+      --success: #10B981; --success-bg: rgba(16,185,129,0.1);
+      --warning: #F59E0B; --warning-bg: rgba(245,158,11,0.1);
+      --error: #F43F5E; --error-bg: rgba(244,63,94,0.1);
+      --info: #3B82F6; --info-bg: rgba(59,130,246,0.1);
+      --track-color: #D4A843;
+      --code-bg: #0D1117; --code-border: #21262D; --code-text: #C9D1D9;
+      --transition-fast: 150ms; --transition-normal: 300ms;
+    }
+    body { background: var(--bg-primary); color: var(--text-primary); font-family: 'Source Sans 3', sans-serif; font-size: 1.05rem; line-height: 1.7; min-height: 100vh; }
+    .top-progress { position: fixed; top: 0; left: 0; right: 0; height: 4px; background: var(--bg-surface); z-index: 200; }
+    .top-progress .fill { height: 100%; background: linear-gradient(90deg, var(--track-color), var(--accent-primary)); width: 81.3%; border-radius: 0 2px 2px 0; }
+    .course-header { background: var(--bg-secondary); border-bottom: 1px solid var(--code-border); padding: 1.25rem 2rem; }
+    .course-header-inner { max-width: 1200px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; }
+    .course-title { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.95rem; font-weight: 600; color: var(--text-secondary); }
+    .track-badge { display: inline-flex; align-items: center; gap: 0.5rem; background: var(--accent-muted); border: 1px solid var(--track-color); border-radius: 20px; padding: 0.25rem 0.75rem; font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.8rem; font-weight: 600; color: var(--track-color); }
+    .track-badge .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--track-color); }
+    .header-meta { display: flex; gap: 1.5rem; font-size: 0.85rem; color: var(--text-muted); }
+    .page-container { max-width: 1200px; margin: 0 auto; padding: 2rem; display: grid; grid-template-columns: 240px 1fr; gap: 3rem; }
+    .sidebar-nav { position: sticky; top: 2rem; height: calc(100vh - 4rem); overflow-y: auto; padding-right: 1rem; }
+    .sidebar-nav::-webkit-scrollbar { width: 3px; } .sidebar-nav::-webkit-scrollbar-thumb { background: var(--bg-surface); border-radius: 3px; }
+    .sidebar-title { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); margin-bottom: 1rem; }
+    .sidebar-nav a { display: block; padding: 0.4rem 0.75rem; margin-bottom: 0.15rem; font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.82rem; font-weight: 600; color: var(--text-muted); text-decoration: none; border-left: 2px solid transparent; border-radius: 0 4px 4px 0; transition: all var(--transition-fast); }
+    .sidebar-nav a:hover { color: var(--text-primary); background: var(--bg-surface); }
+    .sidebar-nav a.active { color: var(--accent-primary); border-left-color: var(--accent-primary); background: var(--accent-muted); }
+    .content { max-width: 800px; } .section { margin-bottom: 4rem; }
+    h1 { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 2.25rem; line-height: 1.2; margin-bottom: 0.75rem; }
+    h2 { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 1.5rem; color: var(--text-primary); margin: 2.5rem 0 1rem; padding-top: 1rem; border-top: 1px solid var(--code-border); }
+    h2:first-of-type { border-top: none; }
+    h3 { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 600; font-size: 1.25rem; color: var(--text-primary); margin: 2rem 0 0.75rem; }
+    p { margin-bottom: 1rem; } ul, ol { margin: 0.5rem 0 1rem 1.5rem; } li { margin-bottom: 0.4rem; } strong { font-weight: 600; }
+    a { color: var(--accent-primary); text-decoration: none; } a:hover { text-decoration: underline; }
+    code { font-family: 'JetBrains Mono', monospace; background: var(--bg-surface); padding: 0.1rem 0.35rem; border-radius: 4px; font-size: 0.88em; color: var(--accent-primary); }
+    .analogy-box, .tech-def-box, .callout-why, .callout-warning, .callout-security { border-left: 4px solid; border-radius: 0 8px 8px 0; padding: 1.25rem 1.5rem; margin: 1.5rem 0; }
+    .analogy-box { background: var(--accent-muted); border-left-color: var(--accent-primary); }
+    .tech-def-box { background: var(--info-bg); border-left-color: var(--info); }
+    .callout-why { background: var(--success-bg); border-left-color: var(--success); }
+    .callout-warning { background: var(--warning-bg); border-left-color: var(--warning); }
+    .callout-security { background: var(--error-bg); border-left-color: var(--error); }
+    .box-label { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 0.9rem; display: block; margin-bottom: 0.4rem; }
+    .analogy-box .box-label { color: var(--accent-primary); } .tech-def-box .box-label { color: var(--info); } .callout-why .box-label { color: var(--success); } .callout-warning .box-label { color: var(--warning); } .callout-security .box-label { color: var(--error); }
+    .code-block-wrapper { background: var(--code-bg); border: 1px solid var(--code-border); border-radius: 12px; margin: 1.5rem 0; overflow: hidden; }
+    .code-panel { display: block; position: relative; }
+    .code-panel pre { margin: 0; padding: 1.25rem; overflow-x: auto; font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; line-height: 1.6; }
+    .code-panel pre code { background: none; color: var(--code-text); padding: 0; font-size: inherit; }
+    .copy-btn { position: absolute; top: 0.75rem; right: 0.75rem; background: var(--bg-surface); border: 1px solid var(--code-border); color: var(--text-muted); padding: 0.3rem 0.6rem; border-radius: 6px; font-size: 0.75rem; cursor: pointer; font-family: 'JetBrains Mono', monospace; }
+    .copy-btn:hover { color: var(--accent-primary); border-color: var(--accent-primary); }
+    .animation-container { background: var(--bg-secondary); border: 1px solid var(--code-border); border-radius: 12px; padding: 1.75rem; margin: 1.75rem 0; }
+    .animation-title { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.85rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 1.25rem; }
+    .quiz-question { background: var(--bg-card); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; }
+    .quiz-question h4 { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 600; margin-bottom: 1rem; font-size: 1rem; }
+    .quiz-option { padding: 0.75rem 1rem; margin: 0.5rem 0; border: 1px solid var(--code-border); border-radius: 8px; cursor: pointer; transition: all var(--transition-fast); display: flex; align-items: flex-start; gap: 0.75rem; }
+    .quiz-option:hover { border-color: var(--accent-primary); }
+    .quiz-option.correct { border-color: var(--success); background: var(--success-bg); } .quiz-option.incorrect { border-color: var(--error); background: var(--error-bg); } .quiz-option.disabled { pointer-events: none; }
+    .quiz-marker { width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--code-border); flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 700; margin-top: 2px; }
+    .quiz-option.correct .quiz-marker { border-color: var(--success); color: var(--success); } .quiz-option.incorrect .quiz-marker { border-color: var(--error); color: var(--error); }
+    .quiz-feedback { margin-top: 0.75rem; padding: 0.75rem; border-radius: 8px; font-size: 0.9rem; display: none; }
+    .quiz-feedback.show { display: block; } .quiz-feedback.correct-fb { background: var(--success-bg); color: var(--success); } .quiz-feedback.incorrect-fb { background: var(--error-bg); color: var(--error); }
+    .module-nav { display: flex; justify-content: space-between; align-items: center; padding: 1.5rem 0; margin: 2rem 0; border-top: 1px solid var(--code-border); }
+    .module-nav a { display: flex; align-items: center; gap: 0.5rem; color: var(--accent-primary); text-decoration: none; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 600; font-size: 0.9rem; padding: 0.5rem 1rem; border: 1px solid var(--code-border); border-radius: 8px; transition: all var(--transition-fast); }
+    .module-nav a:hover { border-color: var(--accent-primary); background: var(--accent-muted); }
+    .objectives-list { list-style: none; margin-left: 0; } .objectives-list li { padding: 0.5rem 0 0.5rem 2rem; position: relative; }
+    .objectives-list li::before { content: ''; position: absolute; left: 0; top: 0.85rem; width: 16px; height: 16px; border-radius: 4px; border: 2px solid var(--track-color); background: var(--accent-muted); }
+    .checkpoint { background: var(--bg-card); border: 1px solid var(--track-color); border-radius: 8px; padding: 1rem 1.25rem; margin: 1.5rem 0; }
+    .checkpoint-label { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 0.85rem; color: var(--track-color); margin-bottom: 0.4rem; }
+    .bridge { background: var(--bg-surface); border-radius: 8px; padding: 1rem 1.25rem; margin: 2rem 0; font-style: italic; color: var(--text-secondary); border-left: 3px solid var(--text-muted); }
+    .pipeline-steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.75rem; margin: 1.25rem 0; }
+    .pipeline-step { background: var(--bg-card); border: 1px solid var(--code-border); border-radius: 8px; padding: 0.85rem 1rem; }
+    .pipeline-step .step-num { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; color: var(--accent-primary); font-size: 0.85rem; }
+    .pipeline-step .step-name { font-weight: 600; margin-top: 0.25rem; font-size: 0.95rem; }
+    .pipeline-step .step-desc { font-size: 0.82rem; color: var(--text-secondary); margin-top: 0.3rem; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+    th { background: var(--bg-surface); padding: 0.55rem 0.75rem; text-align: left; font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.78rem; color: var(--text-secondary); border-bottom: 1px solid var(--code-border); }
+    td { padding: 0.45rem 0.75rem; border-bottom: 1px solid var(--code-border); color: var(--text-secondary); vertical-align: top; }
+    tr:last-child td { border-bottom: none; }
+    @media (max-width: 900px) { .page-container { grid-template-columns: 1fr; } .sidebar-nav { position: fixed; bottom: 0; left: 0; right: 0; height: auto; z-index: 100; background: var(--bg-secondary); border-top: 1px solid var(--code-border); padding: 0.75rem 1rem; display: flex; gap: 0.25rem; overflow-x: auto; } .sidebar-title { display: none; } .sidebar-nav a { white-space: nowrap; font-size: 0.75rem; } }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; } }
+  
+/* === PRINT STYLES (auto-injected) === */
+@media print {
+  @page { size: Letter; margin: 0.5in 0.55in; }
+  html, body {
+    background: #fff !important;
+    color: #1a1a1a !important;
+    font-size: 10.5pt !important;
+    line-height: 1.45 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  /* Hide chrome elements */
+  .top-progress, .sidebar-nav, .module-nav, .copy-btn, .lab-copy-btn { display: none !important; }
+  /* Layout: single column, no grid */
+  .page-container { display: block !important; max-width: 100% !important; padding: 0 !important; gap: 0 !important; }
+  .content { max-width: 100% !important; }
+  .course-header { background: #fff !important; border-bottom: 1px solid #999 !important; padding: 0.4rem 0 !important; }
+  .course-header-inner { padding: 0 !important; }
+  .course-title, .header-meta, .header-meta span { color: #333 !important; }
+  .track-badge { background: #fff !important; border: 1px solid #999 !important; color: #1a1a1a !important; }
+  .track-badge .dot { background: #b5891a !important; }
+  /* Headings */
+  h1, h2, h3, h4 { color: #0a1628 !important; page-break-after: avoid !important; break-after: avoid !important; }
+  h1 { font-size: 20pt !important; }
+  h2 { font-size: 14pt !important; border-top: 1px solid #999 !important; padding-top: 0.4rem !important; margin-top: 1rem !important; }
+  h3 { font-size: 12pt !important; }
+  h2:first-of-type { border-top: none !important; }
+  /* Body text */
+  p, li, td, th { color: #1a1a1a !important; }
+  ul, ol { margin-bottom: 0.5rem !important; }
+  /* Code blocks */
+  .code-block-wrapper, .lab-file, .terminal-block, pre {
+    background: #f5f5f5 !important;
+    border: 1px solid #bbb !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+  pre, pre code, code { color: #1a1a1a !important; background: transparent !important; }
+  .code-block-wrapper pre, .lab-file pre { background: #f5f5f5 !important; }
+  /* Inline code */
+  p code, li code, td code { background: #eee !important; color: #b00 !important; padding: 0.05em 0.3em !important; }
+  /* Callouts: keep colored left border, neutral background */
+  .analogy-box, .tech-def-box, .callout-why, .callout-warning, .callout-security,
+  .checkpoint, .bridge, .what-happened, .how-it-works, .handson-box {
+    background: #fafafa !important;
+    color: #1a1a1a !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+  .analogy-box .box-label, .tech-def-box .box-label, .callout-why .box-label,
+  .callout-warning .box-label, .callout-security .box-label,
+  .checkpoint-label, .what-happened-label, .how-it-works-label { color: #0a1628 !important; }
+  /* Tables */
+  table { background: #fff !important; }
+  th { background: #eee !important; color: #1a1a1a !important; }
+  td { color: #1a1a1a !important; }
+  /* Links */
+  a { color: #0058b8 !important; text-decoration: underline !important; }
+  /* Quiz */
+  .quiz-question { background: #fafafa !important; border: 1px solid #bbb !important; page-break-inside: avoid !important; }
+  .quiz-option { background: #fff !important; border: 1px solid #ccc !important; color: #1a1a1a !important; }
+  .quiz-marker { color: #1a1a1a !important; }
+  /* Animation containers: keep as static info boxes */
+  .animation-container { background: #fafafa !important; border: 1px solid #bbb !important; page-break-inside: avoid !important; }
+  .animation-title { color: #444 !important; }
+  /* Hands-on labs */
+  .handson-header { background: #f0e9d6 !important; border-bottom: 1px solid #b5891a !important; }
+  .handson-tag { background: #b5891a !important; color: #fff !important; }
+  .handson-title { color: #1a1a1a !important; }
+  /* Terminal blocks */
+  .terminal-cmd { background: #1a1a1a !important; color: #fff !important; }
+  .terminal-output { background: #f5f5f5 !important; color: #333 !important; }
+  /* Section breaks: keep sections contained */
+  .section { page-break-inside: auto !important; margin-bottom: 1.5rem !important; }
+  /* Figures and images: don't split */
+  figure, .objectives-list { page-break-inside: avoid !important; break-inside: avoid !important; }
+}
+
+  </style>
+</head>
+<body>
+  <div class="top-progress" role="progressbar" aria-valuenow="13" aria-valuemin="1" aria-valuemax="16"><div class="fill"></div></div>
+  <header class="course-header">
+    <div class="course-header-inner">
+      <div>
+        <div class="course-title">Claude Code Mastery &mdash; Direct Track</div>
+        <div style="display:flex;align-items:center;gap:1rem;margin-top:0.5rem;">
+          <span class="track-badge"><span class="dot"></span> CC12 &mdash; Knowledge</span>
+          <span style="color:var(--text-muted);font-size:0.85rem;">Module 13 of 16</span>
+        </div>
+      </div>
+      <div class="header-meta"><span>50 min</span><span>Intermediate</span></div>
+    </div>
+  </header>
+
+  <div class="module-nav" style="max-width:1200px;margin:0 auto;padding:0.75rem 2rem;border-top:none;">
+    <a href="CC11-evaluation.html">&larr; CC11: Evaluation</a>
+    <a href="index.html" title="Course Home" style="font-size:1.2rem;">&#x1F3E0; Home</a>
+    <a href="CC13-workflows-computer-use.html">CC13: Workflows &amp; Computer Use &rarr;</a>
+  </div>
+
+  <div class="page-container">
+    <nav class="sidebar-nav" aria-label="Module sections">
+      <div class="sidebar-title">CC12 Contents</div>
+      <a href="#objectives">Learning Objectives</a>
+      <a href="#why">Why RAG for CLI Devs</a>
+      <a href="#flow">The RAG Flow</a>
+      <a href="#chunking">Chunking Strategies</a>
+      <a href="#embeddings">Embeddings &amp; Vector Search</a>
+      <a href="#bm25">BM25 Lexical Search</a>
+      <a href="#hybrid">Multi-Index (Hybrid) Pipelines</a>
+      <a href="#rag-tool">RAG as a Subagent or MCP Tool</a>
+      <a href="#lab">Hands-On Lab</a>
+      <a href="#quiz">Knowledge Check</a>
+      <a href="#summary">Summary</a>
+    </nav>
+
+    <main class="content">
+      <h1>CC12: RAG for Claude Code</h1>
+      <p style="color:var(--text-secondary);font-size:1.1rem;margin-bottom:2rem;">Retrieval Augmented Generation explained from a CLI-developer's lens: chunking, embeddings, BM25, hybrid retrieval, and how to wrap any of these as a Claude Code subagent or MCP server tool. Concepts first, then a runnable end-to-end pipeline.</p>
+
+      <section class="section" id="objectives">
+        <h2>Learning Objectives</h2>
+        <ul class="objectives-list">
+          <li>Explain what RAG is, when to reach for it, and when NOT to.</li>
+          <li>Pick a chunking strategy for code, docs, and structured data.</li>
+          <li>Use embeddings + a vector store to find semantically similar chunks.</li>
+          <li>Use BM25 for keyword-precise lookups; combine with vectors via hybrid search.</li>
+          <li>Wrap a RAG pipeline as a subagent or MCP server tool that Claude Code can call.</li>
+        </ul>
+        <div class="bridge">CC10 covered citations &mdash; how Claude grounds an answer in supplied documents. CC12 covers the step before that: <em>finding</em> the right documents to supply.</div>
+      </section>
+
+      <section class="section" id="why">
+        <h2>Why RAG &mdash; And Why Not</h2>
+
+        <div class="analogy-box">
+          <span class="box-label">Everyday Analogy</span>
+          <p>A new junior engineer joins your team. Do you (a) make them memorize the codebase before they can write any code, or (b) give them <code>grep</code> + good search and let them look things up? Option (a) is impossible at any real scale; option (b) is how everyone actually works.</p>
+          <p>Claude is like that engineer. Putting your entire codebase in the system prompt is option (a) &mdash; expensive, slow, capped by context length. Letting Claude search and pull only relevant chunks is option (b). That's RAG.</p>
+        </div>
+
+        <div class="tech-def-box">
+          <span class="box-label">Technical Definition</span>
+          <p><strong>Retrieval Augmented Generation (RAG)</strong> is a pattern where, before answering, the system retrieves relevant passages from a knowledge base and includes them in Claude's prompt as context. Two phases: <strong>retrieval</strong> (find relevant passages) and <strong>generation</strong> (Claude reads them and answers). The "augmentation" is the retrieved context injected at runtime.</p>
+        </div>
+
+        <h3 id="when-rag-wins">When RAG wins</h3>
+        <ul>
+          <li>Knowledge base is too large to fit in context (codebase, doc set, ticket history).</li>
+          <li>Knowledge changes &mdash; you don't want to retrain or redeploy when docs update.</li>
+          <li>You need citation: "Claude said X because of doc Y line Z" (CC10).</li>
+          <li>You need access control: retrieve only docs the user is allowed to see.</li>
+        </ul>
+
+        <h3 id="when-rag-loses">When RAG loses</h3>
+        <ul>
+          <li>Small knowledge base (&lt; 100K tokens) &mdash; just put it all in a cached system prompt (CC10).</li>
+          <li>Knowledge is in code structure (call graphs, type hierarchies) &mdash; AST tools beat embeddings.</li>
+          <li>Single-document tasks (summarize this PDF) &mdash; just send the document.</li>
+        </ul>
+
+        <div class="callout-why">
+          <span class="box-label">For Claude Code</span>
+          <p>Claude Code already has Read, Grep, and Glob &mdash; that's RAG with the codebase as the index and grep/glob as the retriever. It works great for code. RAG with embeddings becomes useful when you want to retrieve <strong>over docs, tickets, runbooks, or other corpora</strong> the CLI doesn't index by default &mdash; expose those via a subagent or MCP server.</p>
+        </div>
+      </section>
+
+      <section class="section" id="flow">
+        <h2>The RAG Flow</h2>
+
+        <div class="animation-container">
+          <div class="animation-title">From documents to grounded answer</div>
+          <div class="pipeline-steps">
+            <div class="pipeline-step"><div class="step-num">A. INGEST</div><div class="step-name">Chunk</div><div class="step-desc">Split docs into passages.</div></div>
+            <div class="pipeline-step"><div class="step-num">B. INGEST</div><div class="step-name">Embed</div><div class="step-desc">Vectorize each chunk.</div></div>
+            <div class="pipeline-step"><div class="step-num">C. INGEST</div><div class="step-name">Index</div><div class="step-desc">Store vectors + BM25 index.</div></div>
+            <div class="pipeline-step"><div class="step-num">D. QUERY</div><div class="step-name">Retrieve</div><div class="step-desc">Find top-K similar chunks.</div></div>
+            <div class="pipeline-step"><div class="step-num">E. QUERY</div><div class="step-name">Augment</div><div class="step-desc">Insert chunks into prompt.</div></div>
+            <div class="pipeline-step"><div class="step-num">F. QUERY</div><div class="step-name">Generate</div><div class="step-desc">Claude answers with context.</div></div>
+          </div>
+        </div>
+
+        <p>Steps A&ndash;C run once when documents change (offline ingest). Steps D&ndash;F run per query. Get them right and the rest of the system feels magical; get them wrong and Claude either hallucinates or cites the wrong passage.</p>
+      </section>
+
+      <section class="section" id="chunking">
+        <h2>Chunking Strategies</h2>
+
+        <p>Chunks are the "atoms" of retrieval. Too big &rarr; you lose precision and stuff context with junk. Too small &rarr; you lose surrounding context and miss the answer. Three patterns covering most cases:</p>
+
+        <h3 id="1-fixed-size-with-overlap-start-here">1. Fixed-size with overlap (start here)</h3>
+        <p>Slide a window of N tokens across the doc with M tokens of overlap. Simple, robust, works for prose.</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-panel">
+            <pre><code class="language-python">def chunk_fixed(text: str, size: int = 500, overlap: int = 100) -&gt; list[str]:
+    words = text.split()
+    chunks = []
+    i = 0
+    while i &lt; len(words):
+        chunk = " ".join(words[i:i + size])
+        chunks.append(chunk)
+        i += size - overlap
+    return chunks</code></pre>
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">copy</button>
+          </div>
+        </div>
+
+        <p>Defaults that work: 300&ndash;800 tokens per chunk, 50&ndash;150 token overlap. Smaller for highly structured docs (FAQs); larger for long-form prose.</p>
+
+        <h3 id="2-semantic-chunking-better-for-docs-with-structure">2. Semantic chunking (better for docs with structure)</h3>
+        <p>Split on natural boundaries: headings, paragraphs, code-block fences. Keeps related sentences together.</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-panel">
+            <pre><code class="language-python">import re
+def chunk_by_heading(md: str) -&gt; list[str]:
+    # Split on H1/H2/H3
+    parts = re.split(r"(?=^#{1,3} )", md, flags=re.MULTILINE)
+    return [p.strip() for p in parts if p.strip()]</code></pre>
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">copy</button>
+          </div>
+        </div>
+
+        <h3 id="3-code-aware-chunking">3. Code-aware chunking</h3>
+        <p>Don't split inside a function. Use the language's AST or a tree-sitter parser; chunk per top-level definition (function, class, method).</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-panel">
+            <pre><code class="language-python">import ast
+def chunk_python(src: str) -&gt; list[dict]:
+    tree = ast.parse(src)
+    chunks = []
+    lines = src.splitlines()
+    for node in tree.body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            start = node.lineno - 1
+            end   = node.end_lineno
+            chunks.append({
+                "name": node.name,
+                "kind": type(node).__name__,
+                "code": "\n".join(lines[start:end]),
+            })
+    return chunks</code></pre>
+            <button class="copy-btn" onclick="copyCode(this)">copy</button>
+          </div>
+        </div>
+
+        <div class="callout-warning">
+          <span class="box-label">Always store metadata with each chunk</span>
+          <p>At minimum: source file, byte range, document title. You'll need this for citations (CC10) and for de-duplicating retrieval results. <strong>Add the metadata at ingest time</strong> &mdash; you can't recover it later.</p>
+        </div>
+      </section>
+
+      <section class="section" id="embeddings">
+        <h2>Embeddings &amp; Vector Search</h2>
+
+        <div class="tech-def-box">
+          <span class="box-label">Technical Definition</span>
+          <p>An <strong>embedding</strong> is a vector (typically 384&ndash;3072 floats) that represents the meaning of a piece of text. Texts with similar meaning land near each other in the vector space; cosine similarity ~ 1 means very similar, ~ 0 means unrelated. To find passages relevant to a query, embed the query and find the chunks with the closest cosine similarity.</p>
+        </div>
+
+        <p>Anthropic does not currently ship a first-party embedding model &mdash; you bring your own. Common choices:</p>
+
+        <table>
+          <thead><tr><th>Provider / model</th><th>Dim</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td>Voyage AI <code>voyage-3</code></td><td>1024</td><td>Strong general-purpose, recommended in Anthropic docs.</td></tr>
+            <tr><td>OpenAI <code>text-embedding-3-large</code></td><td>3072</td><td>Solid quality, widely available.</td></tr>
+            <tr><td>Sentence-transformers <code>all-MiniLM-L6-v2</code></td><td>384</td><td>Free, runs locally; lower quality but fine for prototypes.</td></tr>
+            <tr><td>Cohere <code>embed-english-v3</code></td><td>1024</td><td>Good quality, batched-friendly.</td></tr>
+          </tbody>
+        </table>
+
+        <h3 id="minimal-vector-search-end-to-end">Minimal vector search end-to-end</h3>
+
+        <div class="code-block-wrapper">
+          <div class="code-panel">
+            <pre><code class="language-python">import numpy as np
+import voyageai
+
+vo = voyageai.Client()
+
+def embed(texts: list[str]) -&gt; np.ndarray:
+    r = vo.embed(texts, model="voyage-3")
+    return np.array(r.embeddings)
+
+# Ingest
+chunks = chunk_fixed(open("docs.md").read())
+chunk_vecs = embed(chunks)   # shape: (N, 1024)
+
+# Query
+def search(query: str, k: int = 5) -&gt; list[tuple[float, str]]:
+    q = embed([query])[0]
+    sims = chunk_vecs @ q / (np.linalg.norm(chunk_vecs, axis=1) * np.linalg.norm(q))
+    top = np.argsort(-sims)[:k]
+    return [(float(sims[i]), chunks[i]) for i in top]
+
+print(search("how is money represented?"))</code></pre>
+            <button class="copy-btn" onclick="copyCode(this)">copy</button>
+          </div>
+        </div>
+
+        <p>For real corpora, use a vector database (Qdrant, Weaviate, pgvector, Chroma) instead of in-memory NumPy. Same query interface, persistent + scalable.</p>
+
+        <div class="callout-why">
+          <span class="box-label">Strengths and weaknesses</span>
+          <p>Embeddings catch <em>semantic</em> matches: "how do I refund?" matches a chunk titled "returning a charge" even though no word overlaps. Weakness: they often fail on exact identifiers &mdash; class names, error codes, function signatures &mdash; because semantic similarity doesn't help you find the exact string.</p>
+        </div>
+      </section>
+
+      <section class="section" id="bm25">
+        <h2>BM25 &mdash; Lexical Search That Still Wins</h2>
+
+        <p>Embeddings get all the press, but a 25-year-old algorithm called BM25 still beats them on a lot of queries. Don't skip it.</p>
+
+        <div class="tech-def-box">
+          <span class="box-label">Technical Definition</span>
+          <p><strong>BM25</strong> is a ranking function from information retrieval: documents are scored by term frequency (how often query terms appear in the document) tempered by document length and inverse document frequency (terms common across all docs are downweighted). It's a refinement of TF-IDF and is what powers most search engines underneath the hood.</p>
+        </div>
+
+        <h3 id="where-bm25-beats-embeddings">Where BM25 beats embeddings</h3>
+        <ul>
+          <li><strong>Identifiers and codes:</strong> "PO-100023", "ECONNREFUSED", "useState" &mdash; exact matches matter.</li>
+          <li><strong>Acronyms:</strong> "UCC", "HIPAA" &mdash; embeddings cluster them with similar concepts; BM25 finds the literal token.</li>
+          <li><strong>Long documents:</strong> length normalization in BM25 means you don't get drowned out by huge files.</li>
+          <li><strong>Cold-start:</strong> no model, no embeddings to recompute when docs change &mdash; just reindex tokens.</li>
+        </ul>
+
+        <h3 id="bm25-in-15-lines">BM25 in 15 lines</h3>
+
+        <div class="code-block-wrapper">
+          <div class="code-panel">
+            <pre><code class="language-python">from rank_bm25 import BM25Okapi
+import re
+
+def tokenize(s: str) -&gt; list[str]:
+    return re.findall(r"\w+", s.lower())
+
+# Ingest
+chunks = chunk_fixed(open("docs.md").read())
+bm25 = BM25Okapi([tokenize(c) for c in chunks])
+
+# Query
+def bm25_search(query: str, k: int = 5) -&gt; list[tuple[float, str]]:
+    scores = bm25.get_scores(tokenize(query))
+    top = sorted(range(len(chunks)), key=lambda i: -scores[i])[:k]
+    return [(scores[i], chunks[i]) for i in top]
+
+print(bm25_search("PO-100023 status"))</code></pre>
+            <button class="copy-btn" onclick="copyCode(this)">copy</button>
+          </div>
+        </div>
+
+        <div class="callout-warning">
+          <span class="box-label">Tokenization matters more than the formula</span>
+          <p>BM25 with bad tokenization (no lowercasing, splits on weird boundaries) is worse than embeddings. Use a real tokenizer for your corpus &mdash; for code, snake_case and camelCase need to be split. Many implementations have language-specific tokenizers; use them.</p>
+        </div>
+      </section>
+
+      <section class="section" id="hybrid">
+        <h2>Multi-Index (Hybrid) Pipelines</h2>
+
+        <p>The professional pattern: run BM25 and vector search in parallel, merge the two ranked lists, optionally rerank the merged list with a cross-encoder. You get keyword precision <em>and</em> semantic recall.</p>
+
+        <div class="animation-container">
+          <div class="animation-title">Hybrid retrieval &mdash; the production default</div>
+          <table>
+            <thead><tr><th>Stage</th><th>What runs</th><th>Output</th></tr></thead>
+            <tbody>
+              <tr><td>Parallel retrieve</td><td>BM25 (top 50) and vector search (top 50)</td><td>Two ranked lists, possibly overlapping</td></tr>
+              <tr><td>Merge</td><td>Reciprocal Rank Fusion (RRF) or weighted score</td><td>One ranked list of top 50</td></tr>
+              <tr><td>Rerank</td><td>Cross-encoder (e.g. Voyage <code>rerank-2</code>) on top 50 &rarr; top K</td><td>Top K (usually 5&ndash;10) for the prompt</td></tr>
+              <tr><td>Augment + generate</td><td>Pass top K to Claude as document blocks</td><td>Grounded answer with citations</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 id="reciprocal-rank-fusion-in-8-lines">Reciprocal Rank Fusion in 8 lines</h3>
+
+        <div class="code-block-wrapper">
+          <div class="code-panel">
+            <pre><code class="language-python">def rrf(rankings: list[list[int]], k: int = 60) -&gt; list[int]:
+    """Merge multiple ranked lists of chunk indices using RRF."""
+    scores = {}
+    for ranking in rankings:
+        for rank, idx in enumerate(ranking):
+            scores[idx] = scores.get(idx, 0) + 1.0 / (k + rank + 1)
+    return sorted(scores, key=lambda i: -scores[i])
+
+q = "how do I refund an order?"
+bm25_top = sorted(range(len(chunks)), key=lambda i: -bm25.get_scores(tokenize(q))[i])[:50]
+vec_top  = np.argsort(-(chunk_vecs @ embed([q])[0]))[:50].tolist()
+merged   = rrf([bm25_top, vec_top])[:10]
+final_chunks = [chunks[i] for i in merged]</code></pre>
+            <button class="copy-btn" onclick="copyCode(this)">copy</button>
+          </div>
+        </div>
+
+        <h3 id="reranking">Reranking</h3>
+        <p>A cross-encoder takes (query, candidate) pairs and outputs a refined relevance score. Slow per-pair, so only used on the top 50 from earlier stages. Voyage AI's <code>rerank-2</code> is a common choice; Cohere offers similar.</p>
+
+        <div class="callout-why">
+          <span class="box-label">Stop adding stages when accuracy plateaus</span>
+          <p>BM25 + vectors is enough for most projects. Add a reranker only if your eval (CC11!) shows it helps. <strong>Every stage adds latency and a failure surface</strong> &mdash; only spend the complexity when you've measured the win.</p>
+        </div>
+      </section>
+
+      <section class="section" id="rag-tool">
+        <h2>RAG as a Subagent or MCP Tool</h2>
+
+        <p>For Claude Code specifically, you don't ship "a RAG app" &mdash; you ship a <em>tool</em> that Claude calls when it needs to look something up. Two patterns:</p>
+
+        <h3 id="pattern-a-rag-subagent">Pattern A &mdash; RAG subagent</h3>
+        <p>The subagent system prompt embeds the retrieval logic. Claude Code passes the user's question, the subagent does the lookup + answer in one step.</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-panel">
+            <pre><code class="language-markdown">---
+name: docs-qa
+description: Answers questions about internal docs. Use whenever a user asks about company policy, runbooks, or onboarding.
+model: claude-sonnet-4-6
+tools: ["mcp__internal_docs__search_docs"]   # MCP tool from Pattern B
+---
+
+You answer questions strictly from internal documentation.
+
+Process:
+1. Call `search_docs(query)` to retrieve top 8 passages.
+2. If no passage is relevant, say "I don't have that documented" &mdash; do not guess.
+3. Cite each claim with the doc title. Do not invent doc titles.</code></pre>
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">copy</button>
+          </div>
+        </div>
+
+        <h3 id="pattern-b-rag-as-mcp-server-tool">Pattern B &mdash; RAG as MCP server tool</h3>
+        <p>Wrap retrieval as an MCP tool exposed to Claude Code. CC9 covers MCP server building in detail; here's the tool surface:</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-panel">
+            <pre><code class="language-python"># mcp_rag_server.py
+from mcp.server.fastmcp import FastMCP
+
+mcp = FastMCP("internal_docs")
+
+@mcp.tool()
+def search_docs(query: str, k: int = 8) -&gt; list[dict]:
+    """Search internal docs and return top K relevant passages with citations.
+
+    Use whenever a user mentions runbooks, policies, or onboarding.
+    Returns: list of {title, source, snippet, score}.
+    """
+    bm25_top = bm25_rank(query, top=50)
+    vec_top  = vec_rank(query, top=50)
+    merged   = rrf([bm25_top, vec_top])[:k]
+    return [{"title": meta[i].title, "source": meta[i].path,
+             "snippet": chunks[i], "score": float(scores[i])} for i in merged]
+
+if __name__ == "__main__":
+    mcp.run()</code></pre>
+            <button class="copy-btn" onclick="copyCode(this)">copy</button>
+          </div>
+        </div>
+
+        <p>Now any Claude Code session that has this MCP server registered (CC9) gets a <code>search_docs</code> tool. Claude decides when to call it. No prompting required to "remember" to look something up &mdash; Claude does it on its own when the description matches the user's question.</p>
+
+        <div class="checkpoint">
+          <div class="checkpoint-label">What just happened?</div>
+          <p>You saw why RAG, in Claude Code, is just <strong>another tool in the loop</strong> from CC8. The retrieval is your code; the calling is Claude's. The combination &mdash; retrieval + grounded generation + citations (CC10) &mdash; gives you an auditable knowledge agent in &lt; 200 lines.</p>
+        </div>
+      </section>
+
+      <section class="section" id="lab">
+        <h2>Hands-On Lab &mdash; A 100-Line RAG MCP Server</h2>
+
+        <p>You'll build a local MCP server that indexes a directory of markdown files with both BM25 and embeddings, exposes a <code>search_docs</code> tool, and registers with Claude Code so any session can answer "what does our doc X say about Y?"</p>
+
+        <h3 id="step-1-setup">Step 1 &mdash; Setup</h3>
+
+        <div class="code-block-wrapper">
+          <div class="code-panel">
+            <pre><code class="language-bash">$ mkdir docs-rag &amp;&amp; cd docs-rag
+$ python -m venv .venv &amp;&amp; source .venv/bin/activate
+$ pip install "mcp[cli]" rank-bm25 voyageai numpy
+$ export VOYAGE_API_KEY="..."     # any embedding provider</code></pre>
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">copy</button>
+          </div>
+        </div>
+
+        <h3 id="step-2-the-server">Step 2 &mdash; The server</h3>
+
+        <div class="code-block-wrapper">
+          <div class="code-panel">
+            <pre><code class="language-python"># server.py
+import os, re, glob
+import numpy as np
+from rank_bm25 import BM25Okapi
+from mcp.server.fastmcp import FastMCP
+import voyageai
+
+DOCS_DIR = os.environ.get("DOCS_DIR", "./docs")
+
+# --- Ingest at startup ---
+def chunk_md(text, size=500, overlap=100):
+    parts = re.split(r"(?=^#{1,3} )", text, flags=re.MULTILINE) or [text]
+    out = []
+    for p in parts:
+        words = p.split()
+        i = 0
+        while i &lt; len(words):
+            out.append(" ".join(words[i:i+size]))
+            i += size - overlap
+    return out
+
+CHUNKS, META = [], []
+for path in glob.glob(f"{DOCS_DIR}/**/*.md", recursive=True):
+    text = open(path).read()
+    for ch in chunk_md(text):
+        CHUNKS.append(ch)
+        META.append({"source": path, "title": os.path.basename(path)})
+
+bm25 = BM25Okapi([re.findall(r"\w+", c.lower()) for c in CHUNKS])
+vo = voyageai.Client()
+VECS = np.array(vo.embed(CHUNKS, model="voyage-3").embeddings)
+
+def rrf(rankings, k=60):
+    s = {}
+    for r in rankings:
+        for rank, idx in enumerate(r):
+            s[idx] = s.get(idx, 0) + 1 / (k + rank + 1)
+    return sorted(s, key=lambda i: -s[i])
+
+# --- MCP tool ---
+mcp = FastMCP("internal_docs")
+
+@mcp.tool()
+def search_docs(query: str, k: int = 6) -&gt; list[dict]:
+    """Search internal markdown docs by hybrid BM25 + vector retrieval. Returns top-K passages with source.
+
+    Use when answering questions about internal documentation, runbooks, policies, onboarding, FAQs.
+    """
+    bm = sorted(range(len(CHUNKS)),
+                key=lambda i: -bm25.get_scores(re.findall(r"\w+", query.lower()))[i])[:30]
+    qv = np.array(vo.embed([query], model="voyage-3").embeddings[0])
+    vc = np.argsort(-(VECS @ qv) / (np.linalg.norm(VECS, axis=1) * np.linalg.norm(qv)))[:30].tolist()
+    top = rrf([bm, vc])[:k]
+    return [{"title": META[i]["title"], "source": META[i]["source"],
+             "snippet": CHUNKS[i][:600]} for i in top]
+
+if __name__ == "__main__":
+    mcp.run()</code></pre>
+            <button class="copy-btn" onclick="copyCode(this)">copy</button>
+          </div>
+        </div>
+
+        <h3 id="step-3-register-with-claude-code">Step 3 &mdash; Register with Claude Code</h3>
+
+        <div class="code-block-wrapper">
+          <div class="code-panel">
+            <pre><code class="language-bash">$ claude mcp add docs-rag --scope project \
+    --env VOYAGE_API_KEY="$VOYAGE_API_KEY" \
+    --env DOCS_DIR=/path/to/your/docs \
+    -- python "$PWD/server.py"</code></pre>
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">copy</button>
+          </div>
+        </div>
+
+        <h3 id="step-4-use-it">Step 4 &mdash; Use it</h3>
+
+        <div class="code-block-wrapper">
+          <div class="code-panel">
+            <pre><code class="language-text">$ claude
+&gt; What does our refund policy say about refunds older than 30 days?
+
+[Claude calls search_docs("refund policy 30 days")]
+[6 chunks returned, top from policies/refunds-v3.md]
+
+According to policies/refunds-v3.md, refunds are not honored after 30 days
+unless... [grounded answer with cited source]</code></pre>
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">copy</button>
+          </div>
+        </div>
+
+        <h3 id="step-5-add-an-eval">Step 5 &mdash; Add an eval</h3>
+        <p>Take 20 questions you know the answers to. Run them through the search + generate flow. Use CC11's runner to score &mdash; "answer contains expected fact" via code grading, or LLM-as-judge for richer scoring. Set a threshold and gate updates to docs or the search code.</p>
+
+        <div class="checkpoint">
+          <div class="checkpoint-label">Lab complete &mdash; what you should have</div>
+          <p>An MCP RAG server backed by hybrid retrieval, registered with Claude Code, queryable from any session. Plus an eval that ensures changes don't regress retrieval quality. <strong>You can drop this server into any team's Claude Code setup and unlock grounded answers over their docs in an afternoon.</strong></p>
+        </div>
+      </section>
+
+      <section class="section" id="quiz">
+        <h2>Knowledge Check</h2>
+
+        <div class="quiz-question">
+          <h4>1. Your knowledge base is 50K tokens of internal policy. Should you build a RAG pipeline?</h4>
+          <div class="quiz-option" data-correct="false" onclick="quizClick(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" role="button" tabindex="0" aria-label="Quiz answer option"><div class="quiz-marker">A</div><div>Yes &mdash; that's huge.</div></div>
+          <div class="quiz-option" data-correct="true" onclick="quizClick(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" role="button" tabindex="0" aria-label="Quiz answer option"><div class="quiz-marker">B</div><div>No &mdash; 50K fits in context. Put it in a cached system prompt and skip RAG.</div></div>
+          <div class="quiz-option" data-correct="false" onclick="quizClick(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" role="button" tabindex="0" aria-label="Quiz answer option"><div class="quiz-marker">C</div><div>Yes, but only if you reindex weekly.</div></div>
+          <div class="quiz-option" data-correct="false" onclick="quizClick(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" role="button" tabindex="0" aria-label="Quiz answer option"><div class="quiz-marker">D</div><div>Doesn't matter.</div></div>
+          <div class="quiz-feedback correct-fb"><strong>Correct.</strong> 50K tokens fits comfortably; with prompt caching (CC10) you pay almost nothing. RAG adds engineering for no win at this scale &mdash; reach for it past ~200K tokens or when knowledge updates frequently.</div>
+          <div class="quiz-feedback incorrect-fb"><strong>Look again.</strong> RAG's value comes when the corpus exceeds context. 50K tokens fits comfortably; cached system prompts beat RAG for that size.</div>
+        </div>
+
+        <div class="quiz-question">
+          <h4>2. Users search by error codes like "ECONNREFUSED". Embeddings only or BM25 only?</h4>
+          <div class="quiz-option" data-correct="false" onclick="quizClick(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" role="button" tabindex="0" aria-label="Quiz answer option"><div class="quiz-marker">A</div><div>Embeddings only &mdash; modern semantic search wins.</div></div>
+          <div class="quiz-option" data-correct="true" onclick="quizClick(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" role="button" tabindex="0" aria-label="Quiz answer option"><div class="quiz-marker">B</div><div>BM25 (or hybrid) &mdash; exact identifiers favor lexical search.</div></div>
+          <div class="quiz-option" data-correct="false" onclick="quizClick(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" role="button" tabindex="0" aria-label="Quiz answer option"><div class="quiz-marker">C</div><div>Doesn't matter.</div></div>
+          <div class="quiz-option" data-correct="false" onclick="quizClick(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" role="button" tabindex="0" aria-label="Quiz answer option"><div class="quiz-marker">D</div><div>Use full-text search.</div></div>
+          <div class="quiz-feedback correct-fb"><strong>Correct.</strong> Identifiers, error codes, and acronyms favor BM25 because exact-string matters. Embeddings cluster by meaning, which can map "ECONNREFUSED" to "network error" &mdash; useful sometimes, miss the literal sometimes. Hybrid covers both.</div>
+          <div class="quiz-feedback incorrect-fb"><strong>Look again.</strong> Exact identifier matches favor lexical search (BM25). Hybrid (BM25 + vectors) is the production default.</div>
+        </div>
+
+        <div class="quiz-question">
+          <h4>3. Your RAG answers are accurate but the citations don't match the actual source. What's wrong?</h4>
+          <div class="quiz-option" data-correct="false" onclick="quizClick(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" role="button" tabindex="0" aria-label="Quiz answer option"><div class="quiz-marker">A</div><div>The model hallucinated.</div></div>
+          <div class="quiz-option" data-correct="true" onclick="quizClick(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" role="button" tabindex="0" aria-label="Quiz answer option"><div class="quiz-marker">B</div><div>You're not storing source metadata with chunks at ingest, so the prompt has no source to cite from.</div></div>
+          <div class="quiz-option" data-correct="false" onclick="quizClick(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" role="button" tabindex="0" aria-label="Quiz answer option"><div class="quiz-marker">C</div><div>Embeddings are bad.</div></div>
+          <div class="quiz-option" data-correct="false" onclick="quizClick(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" role="button" tabindex="0" aria-label="Quiz answer option"><div class="quiz-marker">D</div><div>Reranker dropped the right chunk.</div></div>
+          <div class="quiz-feedback correct-fb"><strong>Correct.</strong> Metadata (source path, title, byte range) must be attached at ingest. If the prompt doesn't include "this came from refunds-v3.md," Claude has no choice but to invent a citation. Use Claude's built-in citations (CC10) on document blocks for guaranteed accuracy.</div>
+          <div class="quiz-feedback incorrect-fb"><strong>Look again.</strong> Citation accuracy depends on metadata stored alongside chunks. If chunks don't carry their source, the model has nothing to cite.</div>
+        </div>
+
+        <div class="quiz-question">
+          <h4>4. You add a cross-encoder reranker as a third stage. Eval shows zero accuracy improvement and 2&times; latency. What now?</h4>
+          <div class="quiz-option" data-correct="false" onclick="quizClick(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" role="button" tabindex="0" aria-label="Quiz answer option"><div class="quiz-marker">A</div><div>Keep it &mdash; rerankers are best practice.</div></div>
+          <div class="quiz-option" data-correct="true" onclick="quizClick(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" role="button" tabindex="0" aria-label="Quiz answer option"><div class="quiz-marker">B</div><div>Remove it &mdash; complexity without measured benefit isn't worth shipping.</div></div>
+          <div class="quiz-option" data-correct="false" onclick="quizClick(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" role="button" tabindex="0" aria-label="Quiz answer option"><div class="quiz-marker">C</div><div>Switch to a different reranker.</div></div>
+          <div class="quiz-option" data-correct="false" onclick="quizClick(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" role="button" tabindex="0" aria-label="Quiz answer option"><div class="quiz-marker">D</div><div>Ignore the eval.</div></div>
+          <div class="quiz-feedback correct-fb"><strong>Correct.</strong> Every stage is a failure surface. Keep stages whose value is measured by your eval (CC11). "Best practice" without your-corpus evidence is just cargo cult.</div>
+          <div class="quiz-feedback incorrect-fb"><strong>Look again.</strong> The point of evals is to keep what helps, drop what doesn't. A reranker that costs latency without accuracy gain shouldn't ship.</div>
+        </div>
+
+        <div class="quiz-question">
+          <h4>5. You're exposing RAG to Claude Code. Subagent or MCP tool?</h4>
+          <div class="quiz-option" data-correct="false" onclick="quizClick(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" role="button" tabindex="0" aria-label="Quiz answer option"><div class="quiz-marker">A</div><div>Always subagent &mdash; it's simpler.</div></div>
+          <div class="quiz-option" data-correct="false" onclick="quizClick(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" role="button" tabindex="0" aria-label="Quiz answer option"><div class="quiz-marker">B</div><div>Always MCP &mdash; more flexible.</div></div>
+          <div class="quiz-option" data-correct="true" onclick="quizClick(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" role="button" tabindex="0" aria-label="Quiz answer option"><div class="quiz-marker">C</div><div>MCP tool if multiple subagents/skills need retrieval; subagent if it's a single self-contained Q&amp;A use case.</div></div>
+          <div class="quiz-option" data-correct="false" onclick="quizClick(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" role="button" tabindex="0" aria-label="Quiz answer option"><div class="quiz-marker">D</div><div>Both at the same time.</div></div>
+          <div class="quiz-feedback correct-fb"><strong>Correct.</strong> MCP exposes the tool to <em>any</em> Claude Code agent or skill. A subagent bundles retrieval with a specific Q&amp;A workflow. Pick by reuse: many consumers &rarr; MCP; one consumer &rarr; subagent.</div>
+          <div class="quiz-feedback incorrect-fb"><strong>Look again.</strong> The right answer depends on reuse. Single use case &rarr; subagent (simpler). Multiple consumers &rarr; MCP (one tool, many callers).</div>
+        </div>
+      </section>
+
+      <section class="section" id="summary">
+        <h2>Module Summary</h2>
+        <ul>
+          <li>RAG = retrieve relevant passages, then generate. Two phases, three ingest steps, three query steps.</li>
+          <li>Use RAG when corpus exceeds context, knowledge changes, or you need access control. Skip if &lt; 100K tokens.</li>
+          <li>Chunking: fixed-size + overlap (start here), semantic (heading-aware), code-aware (AST-based). Always store metadata.</li>
+          <li>Embeddings = semantic similarity. Strong on paraphrase, weak on identifiers. Use any provider; switch is easy.</li>
+          <li>BM25 = lexical similarity. Strong on identifiers, codes, acronyms. Tokenization matters more than the formula.</li>
+          <li><strong>Hybrid (BM25 + vectors via RRF)</strong> is the production default. Add a reranker only if eval shows it helps.</li>
+          <li>For Claude Code: ship RAG as a subagent (single use case) or MCP tool (multiple consumers). Either way it slots into the CC8 tool-use loop.</li>
+        </ul>
+      </section>
+
+      <div class="module-nav">
+        <a href="CC11-evaluation.html">&larr; CC11: Evaluation</a>
+        <a href="CC13-workflows-computer-use.html">CC13: Workflows &amp; Computer Use &rarr;</a>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    const sections = document.querySelectorAll('.section[id]');
+    const navLinks = document.querySelectorAll('.sidebar-nav a');
+    function setActive() { let c=''; sections.forEach(s=>{if(window.scrollY>=s.offsetTop-120) c=s.id;}); navLinks.forEach(a=>a.classList.toggle('active', a.getAttribute('href')==='#'+c)); }
+    window.addEventListener('scroll', setActive); setActive();
+    function copyCode(btn) { const code=btn.parentElement.querySelector('pre code').innerText; navigator.clipboard.writeText(code); const o=btn.innerText; btn.innerText='copied'; setTimeout(()=>btn.innerText=o,1200); }
+    function quizClick(opt) { const q=opt.closest('.quiz-question'); const correct=opt.dataset.correct==='true'; q.querySelectorAll('.quiz-option').forEach(o=>o.classList.add('disabled')); opt.classList.add(correct?'correct':'incorrect'); const fb=q.querySelector(correct?'.correct-fb':'.incorrect-fb'); if(fb) fb.classList.add('show'); if(!correct){const r=q.querySelector('[data-correct="true"]'); if(r) r.classList.add('correct');} }
+  </script>
+</body>
+</html>

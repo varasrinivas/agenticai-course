@@ -1,0 +1,774 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CC10: Claude Features &mdash; Thinking, Caching, Citations, Files | Claude Code Mastery</title>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;700;800&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg-primary: #0A1628; --bg-secondary: #111D33; --bg-card: #162033; --bg-surface: #1A2740;
+      --text-primary: #E8ECF1; --text-secondary: #94A3B8; --text-muted: #64748B;
+      --accent-primary: #D4A843; --accent-hover: #E5BC5A; --accent-muted: rgba(212,168,67,0.15);
+      --success: #10B981; --success-bg: rgba(16,185,129,0.1);
+      --warning: #F59E0B; --warning-bg: rgba(245,158,11,0.1);
+      --error: #F43F5E; --error-bg: rgba(244,63,94,0.1);
+      --info: #3B82F6; --info-bg: rgba(59,130,246,0.1);
+      --track-color: #D4A843;
+      --code-bg: #0D1117; --code-border: #21262D; --code-text: #C9D1D9;
+      --transition-fast: 150ms; --transition-normal: 300ms;
+    }
+    body { background: var(--bg-primary); color: var(--text-primary); font-family: 'Source Sans 3', sans-serif; font-size: 1.05rem; line-height: 1.7; min-height: 100vh; }
+    .top-progress { position: fixed; top: 0; left: 0; right: 0; height: 4px; background: var(--bg-surface); z-index: 200; }
+    .top-progress .fill { height: 100%; background: linear-gradient(90deg, var(--track-color), var(--accent-primary)); width: 68.8%; border-radius: 0 2px 2px 0; }
+    .course-header { background: var(--bg-secondary); border-bottom: 1px solid var(--code-border); padding: 1.25rem 2rem; }
+    .course-header-inner { max-width: 1200px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; }
+    .course-title { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.95rem; font-weight: 600; color: var(--text-secondary); }
+    .track-badge { display: inline-flex; align-items: center; gap: 0.5rem; background: var(--accent-muted); border: 1px solid var(--track-color); border-radius: 20px; padding: 0.25rem 0.75rem; font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.8rem; font-weight: 600; color: var(--track-color); }
+    .track-badge .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--track-color); }
+    .header-meta { display: flex; gap: 1.5rem; font-size: 0.85rem; color: var(--text-muted); }
+    .page-container { max-width: 1200px; margin: 0 auto; padding: 2rem; display: grid; grid-template-columns: 240px 1fr; gap: 3rem; }
+    .sidebar-nav { position: sticky; top: 2rem; height: calc(100vh - 4rem); overflow-y: auto; padding-right: 1rem; }
+    .sidebar-nav::-webkit-scrollbar { width: 3px; } .sidebar-nav::-webkit-scrollbar-thumb { background: var(--bg-surface); border-radius: 3px; }
+    .sidebar-title { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); margin-bottom: 1rem; }
+    .sidebar-nav a { display: block; padding: 0.4rem 0.75rem; margin-bottom: 0.15rem; font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.82rem; font-weight: 600; color: var(--text-muted); text-decoration: none; border-left: 2px solid transparent; border-radius: 0 4px 4px 0; transition: all var(--transition-fast); }
+    .sidebar-nav a:hover { color: var(--text-primary); background: var(--bg-surface); }
+    .sidebar-nav a.active { color: var(--accent-primary); border-left-color: var(--accent-primary); background: var(--accent-muted); }
+    .content { max-width: 800px; } .section { margin-bottom: 4rem; }
+    h1 { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 2.25rem; line-height: 1.2; margin-bottom: 0.75rem; }
+    h2 { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 1.5rem; color: var(--text-primary); margin: 2.5rem 0 1rem; padding-top: 1rem; border-top: 1px solid var(--code-border); }
+    h2:first-of-type { border-top: none; }
+    h3 { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 600; font-size: 1.25rem; color: var(--text-primary); margin: 2rem 0 0.75rem; }
+    p { margin-bottom: 1rem; } ul, ol { margin: 0.5rem 0 1rem 1.5rem; } li { margin-bottom: 0.4rem; } strong { font-weight: 600; }
+    a { color: var(--accent-primary); text-decoration: none; } a:hover { text-decoration: underline; }
+    code { font-family: 'JetBrains Mono', monospace; background: var(--bg-surface); padding: 0.1rem 0.35rem; border-radius: 4px; font-size: 0.88em; color: var(--accent-primary); }
+    .analogy-box, .tech-def-box, .callout-why, .callout-warning, .callout-security, .callout-cost { border-left: 4px solid; border-radius: 0 8px 8px 0; padding: 1.25rem 1.5rem; margin: 1.5rem 0; }
+    .analogy-box { background: var(--accent-muted); border-left-color: var(--accent-primary); }
+    .tech-def-box { background: var(--info-bg); border-left-color: var(--info); }
+    .callout-why { background: var(--success-bg); border-left-color: var(--success); }
+    .callout-warning { background: var(--warning-bg); border-left-color: var(--warning); }
+    .callout-security { background: var(--error-bg); border-left-color: var(--error); }
+    .callout-cost { background: rgba(245,158,11,0.08); border-left-color: var(--warning); }
+    .box-label { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 0.9rem; display: block; margin-bottom: 0.4rem; }
+    .analogy-box .box-label { color: var(--accent-primary); } .tech-def-box .box-label { color: var(--info); } .callout-why .box-label { color: var(--success); } .callout-warning .box-label { color: var(--warning); } .callout-security .box-label { color: var(--error); } .callout-cost .box-label { color: var(--warning); }
+    .code-block-wrapper { background: var(--code-bg); border: 1px solid var(--code-border); border-radius: 12px; margin: 1.5rem 0; overflow: hidden; }
+    .code-panel { display: block; position: relative; }
+    .code-panel pre { margin: 0; padding: 1.25rem; overflow-x: auto; font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; line-height: 1.6; }
+    .code-panel pre code { background: none; color: var(--code-text); padding: 0; font-size: inherit; }
+    .copy-btn { position: absolute; top: 0.75rem; right: 0.75rem; background: var(--bg-surface); border: 1px solid var(--code-border); color: var(--text-muted); padding: 0.3rem 0.6rem; border-radius: 6px; font-size: 0.75rem; cursor: pointer; font-family: 'JetBrains Mono', monospace; }
+    .copy-btn:hover { color: var(--accent-primary); border-color: var(--accent-primary); }
+    .animation-container { background: var(--bg-secondary); border: 1px solid var(--code-border); border-radius: 12px; padding: 1.75rem; margin: 1.75rem 0; }
+    .animation-title { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.85rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 1.25rem; }
+    .quiz-question { background: var(--bg-card); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; }
+    .quiz-question h4 { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 600; margin-bottom: 1rem; font-size: 1rem; }
+    .quiz-option { padding: 0.75rem 1rem; margin: 0.5rem 0; border: 1px solid var(--code-border); border-radius: 8px; cursor: pointer; transition: all var(--transition-fast); display: flex; align-items: flex-start; gap: 0.75rem; }
+    .quiz-option:hover { border-color: var(--accent-primary); }
+    .quiz-option.correct { border-color: var(--success); background: var(--success-bg); } .quiz-option.incorrect { border-color: var(--error); background: var(--error-bg); } .quiz-option.disabled { pointer-events: none; }
+    .quiz-marker { width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--code-border); flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 700; margin-top: 2px; }
+    .quiz-option.correct .quiz-marker { border-color: var(--success); color: var(--success); } .quiz-option.incorrect .quiz-marker { border-color: var(--error); color: var(--error); }
+    .quiz-feedback { margin-top: 0.75rem; padding: 0.75rem; border-radius: 8px; font-size: 0.9rem; display: none; }
+    .quiz-feedback.show { display: block; } .quiz-feedback.correct-fb { background: var(--success-bg); color: var(--success); } .quiz-feedback.incorrect-fb { background: var(--error-bg); color: var(--error); }
+    .module-nav { display: flex; justify-content: space-between; align-items: center; padding: 1.5rem 0; margin: 2rem 0; border-top: 1px solid var(--code-border); }
+    .module-nav a { display: flex; align-items: center; gap: 0.5rem; color: var(--accent-primary); text-decoration: none; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 600; font-size: 0.9rem; padding: 0.5rem 1rem; border: 1px solid var(--code-border); border-radius: 8px; transition: all var(--transition-fast); }
+    .module-nav a:hover { border-color: var(--accent-primary); background: var(--accent-muted); }
+    .objectives-list { list-style: none; margin-left: 0; } .objectives-list li { padding: 0.5rem 0 0.5rem 2rem; position: relative; }
+    .objectives-list li::before { content: ''; position: absolute; left: 0; top: 0.85rem; width: 16px; height: 16px; border-radius: 4px; border: 2px solid var(--track-color); background: var(--accent-muted); }
+    .checkpoint { background: var(--bg-card); border: 1px solid var(--track-color); border-radius: 8px; padding: 1rem 1.25rem; margin: 1.5rem 0; }
+    .checkpoint-label { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 0.85rem; color: var(--track-color); margin-bottom: 0.4rem; }
+    .bridge { background: var(--bg-surface); border-radius: 8px; padding: 1rem 1.25rem; margin: 2rem 0; font-style: italic; color: var(--text-secondary); border-left: 3px solid var(--text-muted); }
+    .cache-vis { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1.25rem 0; }
+    .cache-card { background: var(--bg-card); border-radius: 8px; padding: 1rem 1.25rem; border-top: 3px solid; font-size: 0.9rem; }
+    .cache-card.miss { border-color: var(--error); }
+    .cache-card.hit { border-color: var(--success); }
+    .cache-card h5 { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 0.78rem; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem; }
+    .cache-card.miss h5 { color: var(--error); } .cache-card.hit h5 { color: var(--success); }
+    .cache-card .cost { font-weight: 700; font-size: 1.05rem; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+    th { background: var(--bg-surface); padding: 0.55rem 0.75rem; text-align: left; font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.78rem; color: var(--text-secondary); border-bottom: 1px solid var(--code-border); }
+    td { padding: 0.45rem 0.75rem; border-bottom: 1px solid var(--code-border); color: var(--text-secondary); vertical-align: top; }
+    tr:last-child td { border-bottom: none; }
+    @media (max-width: 900px) { .page-container { grid-template-columns: 1fr; } .sidebar-nav { position: fixed; bottom: 0; left: 0; right: 0; height: auto; z-index: 100; background: var(--bg-secondary); border-top: 1px solid var(--code-border); padding: 0.75rem 1rem; display: flex; gap: 0.25rem; overflow-x: auto; } .sidebar-title { display: none; } .sidebar-nav a { white-space: nowrap; font-size: 0.75rem; } .cache-vis { grid-template-columns: 1fr; } }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; } }
+  
+/* === PRINT STYLES (auto-injected) === */
+@media print {
+  @page { size: Letter; margin: 0.5in 0.55in; }
+  html, body {
+    background: #fff !important;
+    color: #1a1a1a !important;
+    font-size: 10.5pt !important;
+    line-height: 1.45 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  /* Hide chrome elements */
+  .top-progress, .sidebar-nav, .module-nav, .copy-btn, .lab-copy-btn { display: none !important; }
+  /* Layout: single column, no grid */
+  .page-container { display: block !important; max-width: 100% !important; padding: 0 !important; gap: 0 !important; }
+  .content { max-width: 100% !important; }
+  .course-header { background: #fff !important; border-bottom: 1px solid #999 !important; padding: 0.4rem 0 !important; }
+  .course-header-inner { padding: 0 !important; }
+  .course-title, .header-meta, .header-meta span { color: #333 !important; }
+  .track-badge { background: #fff !important; border: 1px solid #999 !important; color: #1a1a1a !important; }
+  .track-badge .dot { background: #b5891a !important; }
+  /* Headings */
+  h1, h2, h3, h4 { color: #0a1628 !important; page-break-after: avoid !important; break-after: avoid !important; }
+  h1 { font-size: 20pt !important; }
+  h2 { font-size: 14pt !important; border-top: 1px solid #999 !important; padding-top: 0.4rem !important; margin-top: 1rem !important; }
+  h3 { font-size: 12pt !important; }
+  h2:first-of-type { border-top: none !important; }
+  /* Body text */
+  p, li, td, th { color: #1a1a1a !important; }
+  ul, ol { margin-bottom: 0.5rem !important; }
+  /* Code blocks */
+  .code-block-wrapper, .lab-file, .terminal-block, pre {
+    background: #f5f5f5 !important;
+    border: 1px solid #bbb !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+  pre, pre code, code { color: #1a1a1a !important; background: transparent !important; }
+  .code-block-wrapper pre, .lab-file pre { background: #f5f5f5 !important; }
+  /* Inline code */
+  p code, li code, td code { background: #eee !important; color: #b00 !important; padding: 0.05em 0.3em !important; }
+  /* Callouts: keep colored left border, neutral background */
+  .analogy-box, .tech-def-box, .callout-why, .callout-warning, .callout-security,
+  .checkpoint, .bridge, .what-happened, .how-it-works, .handson-box {
+    background: #fafafa !important;
+    color: #1a1a1a !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+  .analogy-box .box-label, .tech-def-box .box-label, .callout-why .box-label,
+  .callout-warning .box-label, .callout-security .box-label,
+  .checkpoint-label, .what-happened-label, .how-it-works-label { color: #0a1628 !important; }
+  /* Tables */
+  table { background: #fff !important; }
+  th { background: #eee !important; color: #1a1a1a !important; }
+  td { color: #1a1a1a !important; }
+  /* Links */
+  a { color: #0058b8 !important; text-decoration: underline !important; }
+  /* Quiz */
+  .quiz-question { background: #fafafa !important; border: 1px solid #bbb !important; page-break-inside: avoid !important; }
+  .quiz-option { background: #fff !important; border: 1px solid #ccc !important; color: #1a1a1a !important; }
+  .quiz-marker { color: #1a1a1a !important; }
+  /* Animation containers: keep as static info boxes */
+  .animation-container { background: #fafafa !important; border: 1px solid #bbb !important; page-break-inside: avoid !important; }
+  .animation-title { color: #444 !important; }
+  /* Hands-on labs */
+  .handson-header { background: #f0e9d6 !important; border-bottom: 1px solid #b5891a !important; }
+  .handson-tag { background: #b5891a !important; color: #fff !important; }
+  .handson-title { color: #1a1a1a !important; }
+  /* Terminal blocks */
+  .terminal-cmd { background: #1a1a1a !important; color: #fff !important; }
+  .terminal-output { background: #f5f5f5 !important; color: #333 !important; }
+  /* Section breaks: keep sections contained */
+  .section { page-break-inside: auto !important; margin-bottom: 1.5rem !important; }
+  /* Figures and images: don't split */
+  figure, .objectives-list { page-break-inside: avoid !important; break-inside: avoid !important; }
+}
+
+  </style>
+</head>
+<body>
+  <div class="top-progress" role="progressbar" aria-valuenow="11" aria-valuemin="1" aria-valuemax="16"><div class="fill"></div></div>
+  <header class="course-header">
+    <div class="course-header-inner">
+      <div>
+        <div class="course-title">Claude Code Mastery &mdash; Direct Track</div>
+        <div style="display:flex;align-items:center;gap:1rem;margin-top:0.5rem;">
+          <span class="track-badge"><span class="dot"></span> CC10 &mdash; Claude Features</span>
+          <span style="color:var(--text-muted);font-size:0.85rem;">Module 11 of 16</span>
+        </div>
+      </div>
+      <div class="header-meta"><span>50 min</span><span>Intermediate</span></div>
+    </div>
+  </header>
+
+  <div class="module-nav" style="max-width:1200px;margin:0 auto;padding:0.75rem 2rem;border-top:none;">
+    <a href="CC9-mcp.html">&larr; CC9: MCP</a>
+    <a href="index.html" title="Course Home" style="font-size:1.2rem;">&#x1F3E0; Home</a>
+    <a href="CC11-evaluation.html">CC11: Evaluation &rarr;</a>
+  </div>
+
+  <div class="page-container">
+    <nav class="sidebar-nav" aria-label="Module sections">
+      <div class="sidebar-title">CC10 Contents</div>
+      <a href="#objectives">Learning Objectives</a>
+      <a href="#thinking">Extended Thinking</a>
+      <a href="#caching">Prompt Caching</a>
+      <a href="#cache-rules">Caching Rules</a>
+      <a href="#vision">Image &amp; PDF Input</a>
+      <a href="#citations">Citations</a>
+      <a href="#code-exec">Code Execution &amp; Files</a>
+      <a href="#cli-features">In Claude Code</a>
+      <a href="#lab">Hands-On Lab</a>
+      <a href="#quiz">Knowledge Check</a>
+      <a href="#summary">Summary</a>
+    </nav>
+
+    <main class="content">
+      <h1>CC10: Claude Features &mdash; Thinking, Caching, Citations, Files</h1>
+      <p style="color:var(--text-secondary);font-size:1.1rem;margin-bottom:2rem;">The features that make production Claude apps fast, cheap, and trustworthy: extended thinking for hard reasoning, prompt caching for cost (90%+ savings on stable prefixes), image/PDF input, citations for grounded answers, and the code-execution + Files API for running Python sandboxed.</p>
+
+      <section class="section" id="objectives">
+        <h2>Learning Objectives</h2>
+        <ul class="objectives-list">
+          <li>Enable extended thinking and pick a sensible budget per task type.</li>
+          <li>Add prompt caching to a long system prompt for 90%+ cost reduction on cache hits.</li>
+          <li>Recognize the four caching rules and the cache-control breakpoint limit.</li>
+          <li>Send images and PDFs as message content; understand size and page limits.</li>
+          <li>Get citations on RAG answers without writing the citation logic yourself.</li>
+          <li>Run sandboxed Python via the code-execution tool and persist files via the Files API.</li>
+        </ul>
+        <div class="bridge">CC8 was Claude reaching out to <em>your</em> tools. CC10 is Claude reaching for capabilities Anthropic ships in the box: hidden reasoning, document inputs, server-side Python, citations.</div>
+      </section>
+
+      <section class="section" id="thinking">
+        <h2>Extended Thinking</h2>
+
+        <div class="analogy-box">
+          <span class="box-label">Everyday Analogy</span>
+          <p>Asking a senior engineer a hard architecture question and getting an immediate yes/no answer is suspicious. Ask the same question and watch them go quiet, draw on a whiteboard for two minutes, then come back with a confident answer &mdash; that's better. The thinking didn't happen in the answer; it happened before the answer.</p>
+          <p>Extended thinking is exactly that. Claude produces a hidden reasoning trace before its visible answer. The trace costs tokens, but on hard tasks (architecture, multi-file refactors, ambiguous spec questions) it raises accuracy materially.</p>
+        </div>
+
+        <div class="tech-def-box">
+          <span class="box-label">Technical Definition</span>
+          <p><strong>Extended Thinking</strong> is a Claude 4.x feature you enable per request via the <code>thinking</code> parameter. The model emits one or more hidden <code>thinking</code> blocks (which you echo back in multi-turn but never display to users) before its <code>text</code> answer. You set a <code>budget_tokens</code> for the thinking; output tokens are capped separately by <code>max_tokens</code>.</p>
+        </div>
+
+        <div class="code-block-wrapper">
+          <div class="code-panel">
+            <pre><code class="language-python">resp = client.messages.create(
+    model="claude-opus-4-7",
+    max_tokens=4096,
+    thinking={"type": "enabled", "budget_tokens": 8000},
+    messages=[{"role": "user", "content":
+        "We have 200 microservices, 80% Java. Should we migrate auth from JWT "
+        "to mTLS service-to-service? Walk through the trade-offs."
+    }],
+)
+
+for block in resp.content:
+    if block.type == "thinking":
+        # Don't show users; do log for debugging
+        print("[thinking]", block.thinking[:200], "...")
+    elif block.type == "text":
+        print("[answer]", block.text)</code></pre>
+            <button class="copy-btn" onclick="copyCode(this)">copy</button>
+          </div>
+        </div>
+
+        <h3 id="picking-a-budget">Picking a budget</h3>
+        <table>
+          <thead><tr><th>Task type</th><th>budget_tokens</th></tr></thead>
+          <tbody>
+            <tr><td>Trivial (lookup, classification)</td><td>Don't enable</td></tr>
+            <tr><td>Code review of one PR</td><td>2,000&ndash;4,000</td></tr>
+            <tr><td>Multi-file refactor planning</td><td>8,000&ndash;16,000</td></tr>
+            <tr><td>Architecture / hard debugging</td><td>16,000&ndash;32,000</td></tr>
+          </tbody>
+        </table>
+
+        <div class="callout-cost">
+          <span class="box-label">Thinking tokens are billed</span>
+          <p>Thinking tokens count as <em>output</em> tokens at the same rate. A 16K-token thinking budget is real money &mdash; only spend it where you'd spend an Opus call anyway. <strong>Never enable thinking on Haiku</strong> &mdash; if the task is hard enough to need thinking, it's worth Sonnet or Opus.</p>
+        </div>
+
+        <div class="callout-why">
+          <span class="box-label">In Claude Code</span>
+          <p>The CLI maps "think", "think hard", "think deeply", "ultrathink" to budgets ~4K / 8K / 16K / 32K respectively. Subagents you write can set a default budget in their frontmatter (CC6). For hooks that need to make a fast decision, do <em>not</em> enable thinking &mdash; the latency hit is too high.</p>
+        </div>
+      </section>
+
+      <section class="section" id="caching">
+        <h2>Prompt Caching &mdash; The Single Biggest Cost Lever</h2>
+
+        <div class="analogy-box">
+          <span class="box-label">Everyday Analogy</span>
+          <p>Imagine a tax accountant who re-reads your entire 200-page corporate filing every time you ask "what's box 14b?" Slow, and you're billed for every re-read. Now imagine they keep the filing on their desk for 5 minutes after each question &mdash; same answer, no re-read fee.</p>
+          <p>That's prompt caching. The first time you send a long stable prefix (a CLAUDE.md, a system prompt, a document), Claude caches it. Subsequent requests within ~5 minutes referencing the same prefix are billed at <strong>~10% of the input cost</strong>. The cached prefix doesn't count against your TTFT either; cache hits are noticeably faster.</p>
+        </div>
+
+        <div class="tech-def-box">
+          <span class="box-label">Technical Definition</span>
+          <p><strong>Prompt caching</strong> is a feature where Anthropic stores a prefix of your prompt for a short window (5 minutes default, 1 hour available). On subsequent requests that share that prefix exactly, the cached portion is billed at a fraction of normal input cost. You opt in by marking <strong>cache breakpoints</strong> in your prompt with <code>cache_control: {"type": "ephemeral"}</code>.</p>
+        </div>
+
+        <h3 id="caching-a-long-system-prompt">Caching a long system prompt</h3>
+
+        <div class="code-block-wrapper">
+          <div class="code-panel">
+            <pre><code class="language-python">long_claude_md = open("CLAUDE.md").read()  # imagine 5K tokens
+schema_docs = open("schema.md").read()      # imagine 3K tokens
+
+resp = client.messages.create(
+    model="claude-sonnet-4-6", max_tokens=1024,
+    system=[
+        {
+            "type": "text",
+            "text": long_claude_md + "\n\n" + schema_docs,
+            "cache_control": {"type": "ephemeral"},   # &leftarrow; cache this prefix
+        },
+    ],
+    messages=[{"role": "user", "content": "How should I model a refund?"}],
+)
+print(resp.usage)
+# usage shows: cache_creation_input_tokens (first call), cache_read_input_tokens (later calls)</code></pre>
+            <button class="copy-btn" onclick="copyCode(this)">copy</button>
+          </div>
+        </div>
+
+        <h3 id="what-you-save">What you save</h3>
+
+        <div class="cache-vis">
+          <div class="cache-card miss">
+            <h5>Cache miss (first request)</h5>
+            <p>8,000 input tokens billed at full rate.</p>
+            <p class="cost">~$0.024</p>
+            <p>+ writing the cache adds ~25% one-time premium.</p>
+          </div>
+          <div class="cache-card hit">
+            <h5>Cache hit (subsequent)</h5>
+            <p>8,000 input tokens billed at ~10% rate.</p>
+            <p class="cost">~$0.0024</p>
+            <p>10&times; cheaper, faster TTFT.</p>
+          </div>
+        </div>
+
+        <p>Numbers are illustrative; check current pricing. The point: <strong>for any long-stable prefix served &gt;5 times in a 5-minute window, caching pays for itself many times over.</strong></p>
+
+        <div class="callout-cost">
+          <span class="box-label">When NOT to cache</span>
+          <ul>
+            <li>One-shot calls (no second request &rarr; you pay the write premium for nothing).</li>
+            <li>Prefixes shorter than the minimum cacheable size (Sonnet/Opus: 1024 tokens, Haiku: 2048).</li>
+            <li>Prefixes that change between calls &mdash; even one differing token busts the cache.</li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="section" id="cache-rules">
+        <h2>Caching Rules &mdash; The Four That Bite</h2>
+
+        <p>Cache breakpoints look simple. The gotchas are in the matching rules.</p>
+
+        <h3 id="rule-1-maximum-4-cache-breakpoints-per-request">Rule 1: Maximum 4 cache breakpoints per request</h3>
+        <p>You can place up to four <code>cache_control</code> markers. Use them strategically:</p>
+
+        <div class="animation-container">
+          <div class="animation-title">Typical 4-breakpoint layout</div>
+          <table>
+            <thead><tr><th>Position</th><th>Content</th><th>Why cache it</th></tr></thead>
+            <tbody>
+              <tr><td>1</td><td>Tool definitions</td><td>Stable across all turns of a session.</td></tr>
+              <tr><td>2</td><td>System prompt (CLAUDE.md, role)</td><td>Stable across the project.</td></tr>
+              <tr><td>3</td><td>Few-shot examples or large document</td><td>Stable across many requests.</td></tr>
+              <tr><td>4</td><td>Conversation history up to last user turn</td><td>Reused next turn.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h3 id="rule-2-caches-match-prefix-exactly">Rule 2: Caches match prefix-exactly</h3>
+        <p>Prepend a single space, change one character, even add a newline &mdash; the cache misses entirely. <strong>Same input, byte-for-byte, every time</strong> for a hit.</p>
+
+        <h3 id="rule-3-ttl-is-5-minutes-by-default-1-hour-optional">Rule 3: TTL is 5 minutes by default; 1 hour optional</h3>
+
+        <div class="code-block-wrapper">
+          <div class="code-panel">
+            <pre><code class="language-python">{
+  "type": "text",
+  "text": "...",
+  "cache_control": {"type": "ephemeral", "ttl": "1h"}   # 1-hour TTL
+}</code></pre>
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">copy</button>
+          </div>
+        </div>
+
+        <p>1-hour caching costs more on the write (~2&times; ephemeral). Use it for content reused across hours, like a customer onboarding doc.</p>
+
+        <h3 id="rule-4-caching-only-kicks-in-past-a-minimum-size">Rule 4: Caching only kicks in past a minimum size</h3>
+        <p>Sonnet/Opus: ~1024 tokens. Haiku: ~2048 tokens. Below that, the marker is ignored. <strong>Don't try to cache a 100-token system prompt</strong> &mdash; it won't.</p>
+
+        <div class="callout-warning">
+          <span class="box-label">Order matters</span>
+          <p>Caching is prefix-based. If you put a frequently-changing token <em>before</em> a stable one, you've broken the cache for everything after. Always: <strong>most stable content first, most variable content last.</strong> System prompt &gt; tools &gt; documents &gt; few-shot &gt; history &gt; current user turn.</p>
+        </div>
+      </section>
+
+      <section class="section" id="vision">
+        <h2>Image &amp; PDF Input</h2>
+
+        <p>Claude 4.x can read images and PDFs as part of any user message. They go in <code>content</code> as image blocks alongside text.</p>
+
+        <h3 id="image-input">Image input</h3>
+
+        <div class="code-block-wrapper">
+          <div class="code-panel">
+            <pre><code class="language-python">import base64
+with open("ui-mockup.png", "rb") as f:
+    img_b64 = base64.standard_b64encode(f.read()).decode()
+
+resp = client.messages.create(
+    model="claude-sonnet-4-6", max_tokens=1024,
+    messages=[{"role": "user", "content": [
+        {"type": "image", "source": {
+            "type": "base64", "media_type": "image/png", "data": img_b64,
+        }},
+        {"type": "text", "text": "What React component structure would you propose for this UI?"},
+    ]}],
+)</code></pre>
+            <button class="copy-btn" onclick="copyCode(this)">copy</button>
+          </div>
+        </div>
+
+        <ul>
+          <li>Supported types: <code>image/png</code>, <code>image/jpeg</code>, <code>image/gif</code>, <code>image/webp</code>.</li>
+          <li>Max 5 MB per image, max 100 images per request.</li>
+          <li>Alternative source: <code>{"type": "url", "url": "https://..."}</code> if your image is publicly fetchable.</li>
+        </ul>
+
+        <h3 id="pdf-input">PDF input</h3>
+
+        <div class="code-block-wrapper">
+          <div class="code-panel">
+            <pre><code class="language-python">with open("design-doc.pdf", "rb") as f:
+    pdf_b64 = base64.standard_b64encode(f.read()).decode()
+
+resp = client.messages.create(
+    model="claude-sonnet-4-6", max_tokens=2048,
+    messages=[{"role": "user", "content": [
+        {"type": "document", "source": {
+            "type": "base64", "media_type": "application/pdf", "data": pdf_b64,
+        }},
+        {"type": "text", "text": "Summarize the proposed migration plan in 5 bullets."},
+    ]}],
+)</code></pre>
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">copy</button>
+          </div>
+        </div>
+
+        <ul>
+          <li>Up to 32 MB / 100 pages per PDF.</li>
+          <li>Claude reads both the text and embedded images of the PDF.</li>
+          <li><strong>For long PDFs, page-range</strong> via <code>cache_control</code> on the document so a follow-up question doesn't re-bill the PDF.</li>
+        </ul>
+
+        <div class="callout-why">
+          <span class="box-label">In Claude Code</span>
+          <p>You can drag-drop an image into the CLI prompt &mdash; it's encoded and sent as an image block automatically. Useful for "what's wrong with this UI?" or "convert this whiteboard sketch to component code." PDFs work the same way.</p>
+        </div>
+      </section>
+
+      <section class="section" id="citations">
+        <h2>Citations &mdash; Grounded Answers</h2>
+
+        <p>If you ship a RAG-style feature ("answer based on these docs"), users want to know <em>which doc</em> a sentence came from. Citations is a built-in feature where Claude annotates each generated sentence with the source span it came from &mdash; without you writing the citation logic.</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-panel">
+            <pre><code class="language-python">resp = client.messages.create(
+    model="claude-sonnet-4-6", max_tokens=1024,
+    messages=[{"role": "user", "content": [
+        {
+            "type": "document",
+            "source": {"type": "text", "data": open("policy.md").read()},
+            "title": "Refund Policy v3",
+            "context": "Internal policy doc, last updated 2025-08-12",
+            "citations": {"enabled": True},   # &leftarrow; opt in
+        },
+        {"type": "text", "text": "Can a customer get a refund 35 days after purchase?"},
+    ]}],
+)
+
+# resp.content has text blocks; each text block can have a `citations` array
+# pointing to the document and character ranges that grounded the sentence.
+for block in resp.content:
+    if block.type == "text":
+        print(block.text)
+        for cite in (block.citations or []):
+            print(f"  &rarr; {cite.cited_text!r} (chars {cite.start_char_index}-{cite.end_char_index})")</code></pre>
+            <button class="copy-btn" onclick="copyCode(this)">copy</button>
+          </div>
+        </div>
+
+        <h3 id="what-citations-get-you">What citations get you</h3>
+        <ul>
+          <li>Per-sentence source spans, automatically (no parsing of "[1]" footnotes).</li>
+          <li>Reduced hallucination &mdash; Claude cannot cite text that isn't in the documents.</li>
+          <li>UX surface: highlight the cited span in the original doc on hover.</li>
+        </ul>
+
+        <div class="callout-warning">
+          <span class="box-label">Citations only over <code>document</code> blocks</span>
+          <p>You must use the <code>document</code> content type with <code>citations.enabled: true</code>. Plain text passed in a user message won't get citations. <strong>For Claude Code use cases:</strong> wrap your project's docs as document blocks when you want Claude's answers to cite specific lines.</p>
+        </div>
+      </section>
+
+      <section class="section" id="code-exec">
+        <h2>Code Execution &amp; the Files API</h2>
+
+        <p>The code-execution tool lets Claude run sandboxed Python. The Files API lets you upload files Claude can read or write into. Together they're how you give Claude "do data analysis on this CSV" or "render this chart" capabilities without you writing the executor.</p>
+
+        <h3 id="code-execution-tool">Code execution tool</h3>
+
+        <div class="code-block-wrapper">
+          <div class="code-panel">
+            <pre><code class="language-python">tools = [{"type": "code_execution_20250522", "name": "code_execution"}]
+
+resp = client.messages.create(
+    model="claude-sonnet-4-6", max_tokens=4096,
+    tools=tools,
+    extra_headers={"anthropic-beta": "code-execution-2025-05-22"},
+    messages=[{"role": "user", "content":
+        "Generate a histogram of these numbers: 1,1,2,3,3,3,4,4,5,5,5,5,7."
+    }],
+)
+# Claude writes Python that uses matplotlib, the sandbox runs it,
+# returns the figure as a tool_result, Claude embeds it in the answer.</code></pre>
+            <button class="copy-btn" onclick="copyCode(this)">copy</button>
+          </div>
+        </div>
+
+        <h3 id="files-api-persisting-inputs-outputs">Files API &mdash; persisting inputs/outputs</h3>
+
+        <div class="code-block-wrapper">
+          <div class="code-panel">
+            <pre><code class="language-python">file = client.beta.files.upload(
+    file=open("sales.csv", "rb"),
+)   # one upload, reusable
+print(file.id)   # "file_abc123"
+
+resp = client.messages.create(
+    model="claude-sonnet-4-6", max_tokens=4096,
+    tools=[{"type": "code_execution_20250522", "name": "code_execution"}],
+    extra_headers={"anthropic-beta": "code-execution-2025-05-22,files-api-2025-04-14"},
+    messages=[{"role": "user", "content": [
+        {"type": "container_upload", "file_id": file.id},   # mount file into sandbox
+        {"type": "text", "text": "Compute total sales by region. Write the result to result.csv."},
+    ]}],
+)
+# Claude's code_execution writes /mnt/result.csv; you can fetch it via the Files API.</code></pre>
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">copy</button>
+          </div>
+        </div>
+
+        <h3 id="sandbox-guarantees">Sandbox guarantees</h3>
+        <ul>
+          <li>Ephemeral container, <strong>no internet access</strong> from inside the sandbox.</li>
+          <li>Standard data-science Python (numpy, pandas, matplotlib, scipy) preinstalled.</li>
+          <li>~1 GB RAM, 5-min wallclock per call.</li>
+          <li>Files persist across tool calls in the same conversation; ephemeral after.</li>
+        </ul>
+
+        <div class="callout-security">
+          <span class="box-label">Security model</span>
+          <p>The sandbox is isolated from your machine and from Anthropic's network. You can safely have Claude execute untrusted code (e.g. user-submitted snippets) as long as you understand: <strong>output is what Claude says it is &mdash; trust only what you can verify.</strong> If you upload sensitive data via Files, treat the file ID as a secret &mdash; anyone with it can call Claude with that file.</p>
+        </div>
+      </section>
+
+      <section class="section" id="cli-features">
+        <h2>How Claude Code Uses These Features</h2>
+
+        <table>
+          <thead><tr><th>Feature</th><th>Claude Code use</th></tr></thead>
+          <tbody>
+            <tr><td>Extended thinking</td><td>Triggered by "think" / "ultrathink" keywords; budgets configurable per subagent.</td></tr>
+            <tr><td>Prompt caching</td><td>CLAUDE.md + tool definitions are cached automatically; you don't add <code>cache_control</code> yourself.</td></tr>
+            <tr><td>Image input</td><td>Drag-drop or paste image into the prompt &rarr; sent as image block.</td></tr>
+            <tr><td>PDF input</td><td>Same drag-drop. Useful for design docs, RFCs.</td></tr>
+            <tr><td>Citations</td><td>Not exposed in the CLI directly; available if you build a skill that calls the API with documents.</td></tr>
+            <tr><td>Code execution</td><td>Used internally by some skills; you can invoke via a custom skill or MCP server (CC9).</td></tr>
+          </tbody>
+        </table>
+
+        <div class="callout-why">
+          <span class="box-label">Where you'll add these manually</span>
+          <p>Skills you write that call the API directly (CC5) and HTTP hooks that call out to Claude (CC7) are where you'll add caching, citations, and thinking budgets explicitly. The CLI handles the basics; for power features, drop down to API.</p>
+        </div>
+      </section>
+
+      <section class="section" id="lab">
+        <h2>Hands-On Lab &mdash; Cache a Long System Prompt</h2>
+
+        <p>You'll measure the actual cost difference of prompt caching with a real CLAUDE.md-sized system prompt. Three runs: cold, warm, and broken.</p>
+
+        <h3 id="step-1-build-a-4k-token-system-prompt">Step 1 &mdash; Build a 4K-token system prompt</h3>
+
+        <div class="code-block-wrapper">
+          <div class="code-panel">
+            <pre><code class="language-python">import json
+from anthropic import Anthropic
+
+# Pad with realistic CLAUDE.md content. Aim for &gt;1024 tokens (Sonnet minimum).
+SYSTEM = ("# Project: PublicRecords\n\n" +
+          ("- All amounts in cents.\n- Use Drizzle ORM.\n- Tests must pass.\n" * 200))
+
+client = Anthropic()
+
+def call(question: str):
+    return client.messages.create(
+        model="claude-sonnet-4-6", max_tokens=128,
+        system=[{
+            "type": "text", "text": SYSTEM,
+            "cache_control": {"type": "ephemeral"},
+        }],
+        messages=[{"role": "user", "content": question}],
+    )</code></pre>
+            <button class="copy-btn" onclick="copyCode(this)">copy</button>
+          </div>
+        </div>
+
+        <h3 id="step-2-cold-run-creates-the-cache">Step 2 &mdash; Cold run (creates the cache)</h3>
+
+        <div class="code-block-wrapper">
+          <div class="code-panel">
+            <pre><code class="language-python">r1 = call("How should money be represented?")
+print(json.dumps(r1.usage.model_dump(), indent=2))
+# Expect: cache_creation_input_tokens &gt; 0, cache_read_input_tokens == 0</code></pre>
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">copy</button>
+          </div>
+        </div>
+
+        <h3 id="step-3-warm-runs-cache-hits">Step 3 &mdash; Warm runs (cache hits)</h3>
+
+        <div class="code-block-wrapper">
+          <div class="code-panel">
+            <pre><code class="language-python">for q in ["Which ORM?", "Do tests need to pass before commit?",
+          "What's the unit for amounts?"]:
+    r = call(q)
+    print(q, "&rarr;", r.usage.model_dump())
+    # Expect: cache_creation_input_tokens == 0, cache_read_input_tokens &gt; 0</code></pre>
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">copy</button>
+          </div>
+        </div>
+
+        <h3 id="step-4-bust-the-cache-rookie-mistake">Step 4 &mdash; Bust the cache (rookie mistake)</h3>
+
+        <div class="code-block-wrapper">
+          <div class="code-panel">
+            <pre><code class="language-python"># Add even ONE extra space at the start of SYSTEM
+SYSTEM_BROKEN = " " + SYSTEM
+r = client.messages.create(
+    model="claude-sonnet-4-6", max_tokens=128,
+    system=[{"type": "text", "text": SYSTEM_BROKEN,
+             "cache_control": {"type": "ephemeral"}}],
+    messages=[{"role": "user", "content": "Which ORM?"}],
+)
+print(r.usage.model_dump())
+# Cache miss again; cache_creation_input_tokens &gt; 0</code></pre>
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">copy</button>
+          </div>
+        </div>
+
+        <h3 id="step-5-compute-the-savings">Step 5 &mdash; Compute the savings</h3>
+
+        <div class="code-block-wrapper">
+          <div class="code-panel">
+            <pre><code class="language-python">from anthropic.types import Usage
+def cost(u: Usage, in_per_m=3.0, cache_in_per_m=3.75, cache_read_per_m=0.30,
+         out_per_m=15.0):
+    return (u.input_tokens * in_per_m
+            + (u.cache_creation_input_tokens or 0) * cache_in_per_m
+            + (u.cache_read_input_tokens     or 0) * cache_read_per_m
+            + u.output_tokens * out_per_m) / 1_000_000
+
+# Compare cold first call vs a warm one. Expect ~10x savings on input portion.</code></pre>
+            <button class="copy-btn" onclick="copyCode(this)">copy</button>
+          </div>
+        </div>
+
+        <div class="checkpoint">
+          <div class="checkpoint-label">Lab complete &mdash; what you should have</div>
+          <p>Three sets of usage numbers proving: (1) cold call writes the cache at a 25% premium, (2) warm calls are ~10&times; cheaper on the cached portion, (3) one extra space busts the cache entirely. <strong>For any skill or hook that reuses a prompt prefix more than 5 times in 5 minutes, caching is free money</strong> &mdash; you just have to enable it.</p>
+        </div>
+      </section>
+
+      <section class="section" id="quiz">
+        <h2>Knowledge Check</h2>
+
+        <div class="quiz-question">
+          <h4>1. You have a hook that runs on every file save and needs to make a fast block/allow decision. Should you enable extended thinking?</h4>
+          <div class="quiz-option" data-correct="false" onclick="quizClick(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" role="button" tabindex="0" aria-label="Quiz answer option"><div class="quiz-marker">A</div><div>Yes &mdash; better decisions are always worth it.</div></div>
+          <div class="quiz-option" data-correct="true" onclick="quizClick(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" role="button" tabindex="0" aria-label="Quiz answer option"><div class="quiz-marker">B</div><div>No &mdash; thinking adds latency and tokens; quick verdicts don't need it.</div></div>
+          <div class="quiz-option" data-correct="false" onclick="quizClick(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" role="button" tabindex="0" aria-label="Quiz answer option"><div class="quiz-marker">C</div><div>Only on Haiku.</div></div>
+          <div class="quiz-option" data-correct="false" onclick="quizClick(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" role="button" tabindex="0" aria-label="Quiz answer option"><div class="quiz-marker">D</div><div>Always at max budget for safety.</div></div>
+          <div class="quiz-feedback correct-fb"><strong>Correct.</strong> Hooks should be fast. Extended thinking adds seconds of latency and significant token cost. Save it for hard reasoning, not snap verdicts.</div>
+          <div class="quiz-feedback incorrect-fb"><strong>Look again.</strong> Thinking is for hard tasks where accuracy matters more than latency. Hooks need quick decisions; thinking is the wrong tool here.</div>
+        </div>
+
+        <div class="quiz-question">
+          <h4>2. Your one-shot CLI tool runs Claude once per invocation, no follow-up. Should you cache the system prompt?</h4>
+          <div class="quiz-option" data-correct="false" onclick="quizClick(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" role="button" tabindex="0" aria-label="Quiz answer option"><div class="quiz-marker">A</div><div>Yes &mdash; caching is always cheaper.</div></div>
+          <div class="quiz-option" data-correct="true" onclick="quizClick(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" role="button" tabindex="0" aria-label="Quiz answer option"><div class="quiz-marker">B</div><div>No &mdash; you pay the write premium with no follow-up to amortize it.</div></div>
+          <div class="quiz-option" data-correct="false" onclick="quizClick(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" role="button" tabindex="0" aria-label="Quiz answer option"><div class="quiz-marker">C</div><div>Yes, with 1h TTL.</div></div>
+          <div class="quiz-option" data-correct="false" onclick="quizClick(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" role="button" tabindex="0" aria-label="Quiz answer option"><div class="quiz-marker">D</div><div>Yes, but only on Opus.</div></div>
+          <div class="quiz-feedback correct-fb"><strong>Correct.</strong> Caching has a write premium (~25% over normal input). One call without a follow-up means you pay the premium for nothing. Only cache when you'll get a hit within 5 minutes.</div>
+          <div class="quiz-feedback incorrect-fb"><strong>Look again.</strong> Cache writes cost <em>more</em> than uncached. They pay off only when you get cache hits later. One-shots get no benefit.</div>
+        </div>
+
+        <div class="quiz-question">
+          <h4>3. Your cached prefix sometimes gets cache hits and sometimes doesn't. Most likely cause?</h4>
+          <div class="quiz-option" data-correct="false" onclick="quizClick(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" role="button" tabindex="0" aria-label="Quiz answer option"><div class="quiz-marker">A</div><div>API outage.</div></div>
+          <div class="quiz-option" data-correct="true" onclick="quizClick(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" role="button" tabindex="0" aria-label="Quiz answer option"><div class="quiz-marker">B</div><div>You're concatenating today's date or a request ID into the prefix.</div></div>
+          <div class="quiz-option" data-correct="false" onclick="quizClick(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" role="button" tabindex="0" aria-label="Quiz answer option"><div class="quiz-marker">C</div><div>You changed the model.</div></div>
+          <div class="quiz-option" data-correct="false" onclick="quizClick(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" role="button" tabindex="0" aria-label="Quiz answer option"><div class="quiz-marker">D</div><div>Caching is non-deterministic.</div></div>
+          <div class="quiz-feedback correct-fb"><strong>Correct.</strong> Caches match prefix-exactly. Any varying token in the cached region (timestamps, IDs) busts it. Move dynamic content <em>after</em> the cache breakpoint.</div>
+          <div class="quiz-feedback incorrect-fb"><strong>Look again.</strong> Caching is byte-exact. Inconsistent hits almost always mean a varying token slipped into the cached prefix.</div>
+        </div>
+
+        <div class="quiz-question">
+          <h4>4. You're building a "summarize this PDF" feature and want users to see source spans. Best approach?</h4>
+          <div class="quiz-option" data-correct="false" onclick="quizClick(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" role="button" tabindex="0" aria-label="Quiz answer option"><div class="quiz-marker">A</div><div>Ask Claude to add "(see page X)" footnotes manually.</div></div>
+          <div class="quiz-option" data-correct="true" onclick="quizClick(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" role="button" tabindex="0" aria-label="Quiz answer option"><div class="quiz-marker">B</div><div>Pass the PDF as a <code>document</code> block with <code>citations.enabled: true</code> and read each text block's <code>citations</code> array.</div></div>
+          <div class="quiz-option" data-correct="false" onclick="quizClick(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" role="button" tabindex="0" aria-label="Quiz answer option"><div class="quiz-marker">C</div><div>Run a regex post-process on Claude's output.</div></div>
+          <div class="quiz-option" data-correct="false" onclick="quizClick(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" role="button" tabindex="0" aria-label="Quiz answer option"><div class="quiz-marker">D</div><div>Don't bother &mdash; users trust the model.</div></div>
+          <div class="quiz-feedback correct-fb"><strong>Correct.</strong> Built-in citations give you per-sentence source spans, schema-validated, no parsing. It's the only approach that's hallucination-resistant.</div>
+          <div class="quiz-feedback incorrect-fb"><strong>Look again.</strong> Citations is a built-in feature exactly for this case. Asking for footnotes leaves room for hallucination; the citations API guarantees the cited text exists in the source.</div>
+        </div>
+
+        <div class="quiz-question">
+          <h4>5. Your code-execution sandbox call returns "no module named requests." Why?</h4>
+          <div class="quiz-option" data-correct="false" onclick="quizClick(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" role="button" tabindex="0" aria-label="Quiz answer option"><div class="quiz-marker">A</div><div>You forgot to install requests with pip.</div></div>
+          <div class="quiz-option" data-correct="true" onclick="quizClick(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" role="button" tabindex="0" aria-label="Quiz answer option"><div class="quiz-marker">B</div><div>The sandbox has no internet access; <code>requests</code> is in the bundle but you can't reach external URLs anyway. The error suggests the sandbox version doesn't include it &mdash; use stdlib <code>urllib</code> alternatives, but you still can't reach the internet.</div></div>
+          <div class="quiz-option" data-correct="false" onclick="quizClick(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" role="button" tabindex="0" aria-label="Quiz answer option"><div class="quiz-marker">C</div><div>Anthropic disabled it.</div></div>
+          <div class="quiz-option" data-correct="false" onclick="quizClick(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" role="button" tabindex="0" aria-label="Quiz answer option"><div class="quiz-marker">D</div><div>Claude is hallucinating.</div></div>
+          <div class="quiz-feedback correct-fb"><strong>Correct.</strong> The sandbox is offline. Even when packages are present, you can't make HTTP calls. For network-dependent tasks, use a custom tool you implement yourself, not code-execution.</div>
+          <div class="quiz-feedback incorrect-fb"><strong>Look again.</strong> The key constraint is the sandbox has <em>no internet access</em>. Anything that needs HTTP must run in your own tool, not in the code-execution sandbox.</div>
+        </div>
+      </section>
+
+      <section class="section" id="summary">
+        <h2>Module Summary</h2>
+        <ul>
+          <li><strong>Extended thinking:</strong> hidden reasoning trace before the answer. Budgets 2K&ndash;32K. Worth it on hard reasoning, not on hooks or quick lookups.</li>
+          <li><strong>Prompt caching:</strong> mark stable prefixes with <code>cache_control: {"type": "ephemeral"}</code>. ~10&times; cheaper on hits, ~25% more expensive on first write.</li>
+          <li><strong>Caching rules:</strong> max 4 breakpoints; prefix-exact matching; 5-min default TTL (1h available); minimum 1024 tokens (Sonnet/Opus) or 2048 (Haiku).</li>
+          <li><strong>Order:</strong> stable content first (system &gt; tools &gt; docs &gt; few-shot), variable content last.</li>
+          <li><strong>Image &amp; PDF:</strong> base64 in <code>image</code>/<code>document</code> blocks. PDFs up to 32 MB / 100 pages.</li>
+          <li><strong>Citations:</strong> opt in with <code>citations.enabled: true</code> on document blocks. Per-sentence source spans, no parsing.</li>
+          <li><strong>Code execution:</strong> sandboxed Python, offline, with the Files API for inputs/outputs. Use beta header.</li>
+          <li>In Claude Code: caching and basic image/PDF are auto. Thinking via "think hard" keywords. Citations + code-exec require dropping to the API.</li>
+        </ul>
+      </section>
+
+      <div class="module-nav">
+        <a href="CC9-mcp.html">&larr; CC9: MCP</a>
+        <a href="CC11-evaluation.html">CC11: Evaluation &rarr;</a>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    const sections = document.querySelectorAll('.section[id]');
+    const navLinks = document.querySelectorAll('.sidebar-nav a');
+    function setActive() { let c=''; sections.forEach(s=>{if(window.scrollY>=s.offsetTop-120) c=s.id;}); navLinks.forEach(a=>a.classList.toggle('active', a.getAttribute('href')==='#'+c)); }
+    window.addEventListener('scroll', setActive); setActive();
+    function copyCode(btn) { const code=btn.parentElement.querySelector('pre code').innerText; navigator.clipboard.writeText(code); const o=btn.innerText; btn.innerText='copied'; setTimeout(()=>btn.innerText=o,1200); }
+    function quizClick(opt) { const q=opt.closest('.quiz-question'); const correct=opt.dataset.correct==='true'; q.querySelectorAll('.quiz-option').forEach(o=>o.classList.add('disabled')); opt.classList.add(correct?'correct':'incorrect'); const fb=q.querySelector(correct?'.correct-fb':'.incorrect-fb'); if(fb) fb.classList.add('show'); if(!correct){const r=q.querySelector('[data-correct="true"]'); if(r) r.classList.add('correct');} }
+  </script>
+</body>
+</html>

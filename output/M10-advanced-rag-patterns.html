@@ -1699,14 +1699,22 @@ def rerank_with_claude(query: str, chunks: list[dict], top_n: int = 5) -> list[d
         f"Query: {query}\n\nDocuments:\n{docs_text}\n\n"
         f"Score each document 1-10 for relevance to the query. "
         f"1 = completely irrelevant, 10 = directly answers the question.\n"
-        f"Respond as JSON: [{{\"doc\": 1, \"score\": 8.5}}, ...]"
+        f"Output ONLY the raw JSON array, no markdown fences, no commentary.\n"
+        f"Format: [{{\"doc\": 1, \"score\": 8.5}}, ...]"
     )
     try:
         response = client.messages.create(
             model="claude-sonnet-4-6", max_tokens=512,
             messages=[{"role": "user", "content": prompt}],
         )
-        scores = json.loads(response.content[0].text)
+        raw = response.content[0].text.strip()
+        # Strip common markdown code fences if Claude wraps the JSON
+        if raw.startswith("```"):
+            raw = raw.split("```")[1]
+            if raw.startswith("json"):
+                raw = raw[4:]
+            raw = raw.strip()
+        scores = json.loads(raw)
         scored = []
         for s in scores:
             idx = s["doc"] - 1

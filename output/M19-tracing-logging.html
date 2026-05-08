@@ -1527,6 +1527,7 @@ export ANTHROPIC_API_KEY=your-key-here
             <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
             <pre><code class="language-python">import os
 import re
+import sys
 import time
 import json
 import hashlib
@@ -1534,12 +1535,15 @@ import anthropic
 import structlog
 
 # --- Structured logger ---
+# Send JSON logs to stderr so stdout stays clean for the agent's user-facing
+# response. This lets us pipe stderr to a log file with `2&gt;agent_logs.jsonl`.
 structlog.configure(
     processors=[
         structlog.processors.TimeStamper(fmt="iso"),
         structlog.processors.add_log_level,
         structlog.processors.JSONRenderer(),
-    ]
+    ],
+    logger_factory=structlog.PrintLoggerFactory(file=sys.stderr),
 )
 logger = structlog.get_logger()
 
@@ -1904,7 +1908,7 @@ if __name__ == "__main__":
 
         <p><strong>Troubleshooting:</strong></p>
         <ul>
-          <li>If the log file is empty &rarr; make sure you used <code>2></code> (stderr redirect) because structlog outputs to stderr by default</li>
+          <li>If the log file is empty &rarr; make sure you used <code>2></code> (stderr redirect). Step 1's <code>traced_agent.py</code> configures structlog with <code>PrintLoggerFactory(file=sys.stderr)</code>, so logs go to stderr while the agent response goes to stdout. By default (without that factory) structlog writes to stdout, which would mix logs with the response &mdash; double-check the <code>logger_factory=</code> line is present.</li>
           <li>If you see <code>json.JSONDecodeError</code> &rarr; some non-JSON output mixed in. The analyzer skips bad lines, but check that your traced_agent.py is printing the agent response to stdout (not stderr)</li>
         </ul>
 

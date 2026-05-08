@@ -1,0 +1,54 @@
+$ pytest -v
+============================= test session starts ==============================
+platform linux -- Python 3.11.7, pytest-7.4.4, pytest-asyncio-0.23.5
+asyncio: mode=auto
+collected 5 items
+
+test_safety_gate.py::test_production_channel_blocked PASSED              [ 20%]
+test_safety_gate.py::test_test_channel_allowed PASSED                    [ 40%]
+test_safety_gate.py::test_input_mutation_via_gate PASSED                 [ 60%]
+test_tool_order.py::test_hipaa_check_runs_before_send PASSED             [ 80%]
+test_tool_order.py::test_draft_runs_before_hipaa_check PASSED            [100%]
+
+============================== 5 passed in 28.41s ==============================
+
+
+# What each test asserts
+# ---------------------------------------------------------------------------
+# test_production_channel_blocked
+#   The can_use_tool gate denies send_notification when channel="portal".
+#   denied = [{"tool": "mcp__comms__send_notification",
+#              "input": {"letter_id": "LTR-...", "channel": "portal"}}]
+#
+# test_test_channel_allowed
+#   Gate allows send_notification when channel="portal_test".
+#   denied = []  (no denials recorded)
+#
+# test_input_mutation_via_gate
+#   Gate rewrites tool_input["channel"] from "portal" to "portal_test"
+#   transparently. The agent thinks it sent to portal; the tool only
+#   ever sees portal_test.
+#   rewrites = ["portal"]
+#
+# test_hipaa_check_runs_before_send
+#   PreToolUse hook records every tool call. For an APPROVE letter:
+#   calls = [
+#     "mcp__comms__draft_determination_letter",
+#     "mcp__comms__check_hipaa_compliance",
+#     "mcp__comms__send_notification"
+#   ]
+#   index(check_hipaa_compliance) < index(send_notification)
+#
+# test_draft_runs_before_hipaa_check
+#   For a DENY letter (which contains the word 'appeal' to satisfy the
+#   denial-keyword check):
+#   calls = [
+#     "mcp__comms__draft_determination_letter",
+#     "mcp__comms__check_hipaa_compliance",
+#     "mcp__comms__send_notification"
+#   ]
+#   index(draft) < index(check_hipaa_compliance)
+
+
+# Cost summary (Haiku 4.5, ~6k tokens per test):
+#   5 tests x ~$0.0015 = ~$0.0075 per full run

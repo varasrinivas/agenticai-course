@@ -1,0 +1,873 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>CC8: Tool Use Deep Dive | Claude Code Mastery</title>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;700;800&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg-primary: #0A1628; --bg-secondary: #111D33; --bg-card: #162033; --bg-surface: #1A2740;
+      --text-primary: #E8ECF1; --text-secondary: #94A3B8; --text-muted: #64748B;
+      --accent-primary: #D4A843; --accent-hover: #E5BC5A; --accent-muted: rgba(212,168,67,0.15);
+      --success: #10B981; --success-bg: rgba(16,185,129,0.1);
+      --warning: #F59E0B; --warning-bg: rgba(245,158,11,0.1);
+      --error: #F43F5E; --error-bg: rgba(244,63,94,0.1);
+      --info: #3B82F6; --info-bg: rgba(59,130,246,0.1);
+      --track-color: #D4A843;
+      --code-bg: #0D1117; --code-border: #21262D; --code-text: #C9D1D9;
+      --transition-fast: 150ms; --transition-normal: 300ms;
+    }
+    body { background: var(--bg-primary); color: var(--text-primary); font-family: 'Source Sans 3', sans-serif; font-size: 1.05rem; line-height: 1.7; min-height: 100vh; }
+    .top-progress { position: fixed; top: 0; left: 0; right: 0; height: 4px; background: var(--bg-surface); z-index: 200; }
+    .top-progress .fill { height: 100%; background: linear-gradient(90deg, var(--track-color), var(--accent-primary)); width: 56.3%; border-radius: 0 2px 2px 0; }
+    .course-header { background: var(--bg-secondary); border-bottom: 1px solid var(--code-border); padding: 1.25rem 2rem; }
+    .course-header-inner { max-width: 1200px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; }
+    .course-title { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.95rem; font-weight: 600; color: var(--text-secondary); }
+    .track-badge { display: inline-flex; align-items: center; gap: 0.5rem; background: var(--accent-muted); border: 1px solid var(--track-color); border-radius: 20px; padding: 0.25rem 0.75rem; font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.8rem; font-weight: 600; color: var(--track-color); }
+    .track-badge .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--track-color); }
+    .header-meta { display: flex; gap: 1.5rem; font-size: 0.85rem; color: var(--text-muted); }
+    .page-container { max-width: 1200px; margin: 0 auto; padding: 2rem; display: grid; grid-template-columns: 240px 1fr; gap: 3rem; }
+    .sidebar-nav { position: sticky; top: 2rem; height: calc(100vh - 4rem); overflow-y: auto; padding-right: 1rem; }
+    .sidebar-nav::-webkit-scrollbar { width: 3px; } .sidebar-nav::-webkit-scrollbar-thumb { background: var(--bg-surface); border-radius: 3px; }
+    .sidebar-title { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); margin-bottom: 1rem; }
+    .sidebar-nav a { display: block; padding: 0.4rem 0.75rem; margin-bottom: 0.15rem; font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.82rem; font-weight: 600; color: var(--text-muted); text-decoration: none; border-left: 2px solid transparent; border-radius: 0 4px 4px 0; transition: all var(--transition-fast); }
+    .sidebar-nav a:hover { color: var(--text-primary); background: var(--bg-surface); }
+    .sidebar-nav a.active { color: var(--accent-primary); border-left-color: var(--accent-primary); background: var(--accent-muted); }
+    .content { max-width: 800px; } .section { margin-bottom: 4rem; }
+    h1 { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 2.25rem; line-height: 1.2; margin-bottom: 0.75rem; }
+    h2 { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 1.5rem; color: var(--text-primary); margin: 2.5rem 0 1rem; padding-top: 1rem; border-top: 1px solid var(--code-border); }
+    h2:first-of-type { border-top: none; }
+    h3 { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 600; font-size: 1.25rem; color: var(--text-primary); margin: 2rem 0 0.75rem; }
+    p { margin-bottom: 1rem; } ul, ol { margin: 0.5rem 0 1rem 1.5rem; } li { margin-bottom: 0.4rem; } strong { font-weight: 600; }
+    a { color: var(--accent-primary); text-decoration: none; } a:hover { text-decoration: underline; }
+    code { font-family: 'JetBrains Mono', monospace; background: var(--bg-surface); padding: 0.1rem 0.35rem; border-radius: 4px; font-size: 0.88em; color: var(--accent-primary); }
+    .analogy-box, .tech-def-box, .callout-why, .callout-warning, .callout-security { border-left: 4px solid; border-radius: 0 8px 8px 0; padding: 1.25rem 1.5rem; margin: 1.5rem 0; }
+    .analogy-box { background: var(--accent-muted); border-left-color: var(--accent-primary); }
+    .tech-def-box { background: var(--info-bg); border-left-color: var(--info); }
+    .callout-why { background: var(--success-bg); border-left-color: var(--success); }
+    .callout-warning { background: var(--warning-bg); border-left-color: var(--warning); }
+    .callout-security { background: var(--error-bg); border-left-color: var(--error); }
+    .box-label { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 0.9rem; display: block; margin-bottom: 0.4rem; }
+    .analogy-box .box-label { color: var(--accent-primary); } .tech-def-box .box-label { color: var(--info); } .callout-why .box-label { color: var(--success); } .callout-warning .box-label { color: var(--warning); } .callout-security .box-label { color: var(--error); }
+    .code-block-wrapper { background: var(--code-bg); border: 1px solid var(--code-border); border-radius: 12px; margin: 1.5rem 0; overflow: hidden; }
+    .code-tabs { display: flex; background: var(--bg-surface); border-bottom: 1px solid var(--code-border); }
+    .code-tab { padding: 0.6rem 1rem; font-family: 'JetBrains Mono', monospace; font-size: 0.78rem; color: var(--text-muted); cursor: pointer; border: none; background: none; border-right: 1px solid var(--code-border); }
+    .code-tab.active { color: var(--accent-primary); background: var(--code-bg); }
+    .code-panel { display: none; position: relative; }
+    .code-panel.active { display: block; }
+    .code-panel pre { margin: 0; padding: 1.25rem; overflow-x: auto; font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; line-height: 1.6; }
+    .code-panel pre code { background: none; color: var(--code-text); padding: 0; font-size: inherit; }
+    .copy-btn { position: absolute; top: 0.75rem; right: 0.75rem; background: var(--bg-surface); border: 1px solid var(--code-border); color: var(--text-muted); padding: 0.3rem 0.6rem; border-radius: 6px; font-size: 0.75rem; cursor: pointer; font-family: 'JetBrains Mono', monospace; }
+    .copy-btn:hover { color: var(--accent-primary); border-color: var(--accent-primary); }
+    .animation-container { background: var(--bg-secondary); border: 1px solid var(--code-border); border-radius: 12px; padding: 1.75rem; margin: 1.75rem 0; }
+    .animation-title { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.85rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 1.25rem; }
+    .quiz-question { background: var(--bg-card); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; }
+    .quiz-question h4 { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 600; margin-bottom: 1rem; font-size: 1rem; }
+    .quiz-option { padding: 0.75rem 1rem; margin: 0.5rem 0; border: 1px solid var(--code-border); border-radius: 8px; cursor: pointer; transition: all var(--transition-fast); display: flex; align-items: flex-start; gap: 0.75rem; }
+    .quiz-option:hover { border-color: var(--accent-primary); }
+    .quiz-option.correct { border-color: var(--success); background: var(--success-bg); } .quiz-option.incorrect { border-color: var(--error); background: var(--error-bg); } .quiz-option.disabled { pointer-events: none; }
+    .quiz-marker { width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--code-border); flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 700; margin-top: 2px; }
+    .quiz-option.correct .quiz-marker { border-color: var(--success); color: var(--success); } .quiz-option.incorrect .quiz-marker { border-color: var(--error); color: var(--error); }
+    .quiz-feedback { margin-top: 0.75rem; padding: 0.75rem; border-radius: 8px; font-size: 0.9rem; display: none; }
+    .quiz-feedback.show { display: block; } .quiz-feedback.correct-fb { background: var(--success-bg); color: var(--success); } .quiz-feedback.incorrect-fb { background: var(--error-bg); color: var(--error); }
+    .module-nav { display: flex; justify-content: space-between; align-items: center; padding: 1.5rem 0; margin: 2rem 0; border-top: 1px solid var(--code-border); }
+    .module-nav a { display: flex; align-items: center; gap: 0.5rem; color: var(--accent-primary); text-decoration: none; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 600; font-size: 0.9rem; padding: 0.5rem 1rem; border: 1px solid var(--code-border); border-radius: 8px; transition: all var(--transition-fast); }
+    .module-nav a:hover { border-color: var(--accent-primary); background: var(--accent-muted); }
+    .objectives-list { list-style: none; margin-left: 0; } .objectives-list li { padding: 0.5rem 0 0.5rem 2rem; position: relative; }
+    .objectives-list li::before { content: ''; position: absolute; left: 0; top: 0.85rem; width: 16px; height: 16px; border-radius: 4px; border: 2px solid var(--track-color); background: var(--accent-muted); }
+    .checkpoint { background: var(--bg-card); border: 1px solid var(--track-color); border-radius: 8px; padding: 1rem 1.25rem; margin: 1.5rem 0; }
+    .checkpoint-label { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 0.85rem; color: var(--track-color); margin-bottom: 0.4rem; }
+    .bridge { background: var(--bg-surface); border-radius: 8px; padding: 1rem 1.25rem; margin: 2rem 0; font-style: italic; color: var(--text-secondary); border-left: 3px solid var(--text-muted); }
+    .loop-diagram { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.75rem; margin: 1.25rem 0; }
+    .loop-step { background: var(--bg-card); border: 1px solid var(--code-border); border-radius: 8px; padding: 0.85rem 1rem; }
+    .loop-step .step-num { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; color: var(--accent-primary); font-size: 0.85rem; }
+    .loop-step .step-name { font-weight: 600; margin-top: 0.25rem; font-size: 0.95rem; }
+    .loop-step .step-desc { font-size: 0.82rem; color: var(--text-secondary); margin-top: 0.3rem; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.88rem; }
+    th { background: var(--bg-surface); padding: 0.55rem 0.75rem; text-align: left; font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.78rem; color: var(--text-secondary); border-bottom: 1px solid var(--code-border); }
+    td { padding: 0.45rem 0.75rem; border-bottom: 1px solid var(--code-border); color: var(--text-secondary); vertical-align: top; }
+    tr:last-child td { border-bottom: none; }
+    @media (max-width: 900px) { .page-container { grid-template-columns: 1fr; } .sidebar-nav { position: fixed; bottom: 0; left: 0; right: 0; height: auto; z-index: 100; background: var(--bg-secondary); border-top: 1px solid var(--code-border); padding: 0.75rem 1rem; display: flex; gap: 0.25rem; overflow-x: auto; } .sidebar-title { display: none; } .sidebar-nav a { white-space: nowrap; font-size: 0.75rem; } }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; } }
+  
+/* === PRINT STYLES (auto-injected) === */
+@media print {
+  @page { size: Letter; margin: 0.5in 0.55in; }
+  html, body {
+    background: #fff !important;
+    color: #1a1a1a !important;
+    font-size: 10.5pt !important;
+    line-height: 1.45 !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+  /* Hide chrome elements */
+  .top-progress, .sidebar-nav, .module-nav, .copy-btn, .lab-copy-btn { display: none !important; }
+  /* Layout: single column, no grid */
+  .page-container { display: block !important; max-width: 100% !important; padding: 0 !important; gap: 0 !important; }
+  .content { max-width: 100% !important; }
+  .course-header { background: #fff !important; border-bottom: 1px solid #999 !important; padding: 0.4rem 0 !important; }
+  .course-header-inner { padding: 0 !important; }
+  .course-title, .header-meta, .header-meta span { color: #333 !important; }
+  .track-badge { background: #fff !important; border: 1px solid #999 !important; color: #1a1a1a !important; }
+  .track-badge .dot { background: #b5891a !important; }
+  /* Headings */
+  h1, h2, h3, h4 { color: #0a1628 !important; page-break-after: avoid !important; break-after: avoid !important; }
+  h1 { font-size: 20pt !important; }
+  h2 { font-size: 14pt !important; border-top: 1px solid #999 !important; padding-top: 0.4rem !important; margin-top: 1rem !important; }
+  h3 { font-size: 12pt !important; }
+  h2:first-of-type { border-top: none !important; }
+  /* Body text */
+  p, li, td, th { color: #1a1a1a !important; }
+  ul, ol { margin-bottom: 0.5rem !important; }
+  /* Code blocks */
+  .code-block-wrapper, .lab-file, .terminal-block, pre {
+    background: #f5f5f5 !important;
+    border: 1px solid #bbb !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+  pre, pre code, code { color: #1a1a1a !important; background: transparent !important; }
+  .code-block-wrapper pre, .lab-file pre { background: #f5f5f5 !important; }
+  /* Inline code */
+  p code, li code, td code { background: #eee !important; color: #b00 !important; padding: 0.05em 0.3em !important; }
+  /* Callouts: keep colored left border, neutral background */
+  .analogy-box, .tech-def-box, .callout-why, .callout-warning, .callout-security,
+  .checkpoint, .bridge, .what-happened, .how-it-works, .handson-box {
+    background: #fafafa !important;
+    color: #1a1a1a !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+  .analogy-box .box-label, .tech-def-box .box-label, .callout-why .box-label,
+  .callout-warning .box-label, .callout-security .box-label,
+  .checkpoint-label, .what-happened-label, .how-it-works-label { color: #0a1628 !important; }
+  /* Tables */
+  table { background: #fff !important; }
+  th { background: #eee !important; color: #1a1a1a !important; }
+  td { color: #1a1a1a !important; }
+  /* Links */
+  a { color: #0058b8 !important; text-decoration: underline !important; }
+  /* Quiz */
+  .quiz-question { background: #fafafa !important; border: 1px solid #bbb !important; page-break-inside: avoid !important; }
+  .quiz-option { background: #fff !important; border: 1px solid #ccc !important; color: #1a1a1a !important; }
+  .quiz-marker { color: #1a1a1a !important; }
+  /* Animation containers: keep as static info boxes */
+  .animation-container { background: #fafafa !important; border: 1px solid #bbb !important; page-break-inside: avoid !important; }
+  .animation-title { color: #444 !important; }
+  /* Hands-on labs */
+  .handson-header { background: #f0e9d6 !important; border-bottom: 1px solid #b5891a !important; }
+  .handson-tag { background: #b5891a !important; color: #fff !important; }
+  .handson-title { color: #1a1a1a !important; }
+  /* Terminal blocks */
+  .terminal-cmd { background: #1a1a1a !important; color: #fff !important; }
+  .terminal-output { background: #f5f5f5 !important; color: #333 !important; }
+  /* Section breaks: keep sections contained */
+  .section { page-break-inside: auto !important; margin-bottom: 1.5rem !important; }
+  /* Figures and images: don't split */
+  figure, .objectives-list { page-break-inside: avoid !important; break-inside: avoid !important; }
+}
+
+  </style>
+</head>
+<body>
+  <div class="top-progress" role="progressbar" aria-valuenow="9" aria-valuemin="1" aria-valuemax="16"><div class="fill"></div></div>
+  <header class="course-header">
+    <div class="course-header-inner">
+      <div>
+        <div class="course-title">Claude Code Mastery &mdash; Direct Track</div>
+        <div style="display:flex;align-items:center;gap:1rem;margin-top:0.5rem;">
+          <span class="track-badge"><span class="dot"></span> CC8 &mdash; Tools &amp; Integration</span>
+          <span style="color:var(--text-muted);font-size:0.85rem;">Module 9 of 16</span>
+        </div>
+      </div>
+      <div class="header-meta"><span>55 min</span><span>Intermediate</span></div>
+    </div>
+  </header>
+
+  <div class="module-nav" style="max-width:1200px;margin:0 auto;padding:0.75rem 2rem;border-top:none;">
+    <a href="CC7-hooks.html">&larr; CC7: Hooks</a>
+    <a href="index.html" title="Course Home" style="font-size:1.2rem;">&#x1F3E0; Home</a>
+    <a href="CC9-mcp.html">CC9: MCP &rarr;</a>
+  </div>
+
+  <div class="page-container">
+    <nav class="sidebar-nav" aria-label="Module sections">
+      <div class="sidebar-title">CC8 Contents</div>
+      <a href="#objectives">Learning Objectives</a>
+      <a href="#why">Why Tool Use</a>
+      <a href="#loop">The Tool-Use Loop</a>
+      <a href="#schema">Tool Schemas</a>
+      <a href="#blocks">Message Block Types</a>
+      <a href="#multi">Multiple Tools &amp; Multi-Turn</a>
+      <a href="#choice">Tool Choice &amp; Fine-Grained Control</a>
+      <a href="#builtin">Built-in Tools (Edit, Web Search)</a>
+      <a href="#cli-context">How Claude Code Uses Tools</a>
+      <a href="#lab">Hands-On Lab</a>
+      <a href="#quiz">Knowledge Check</a>
+      <a href="#summary">Summary</a>
+    </nav>
+
+    <main class="content">
+      <h1>CC8: Tool Use Deep Dive</h1>
+      <p style="color:var(--text-secondary);font-size:1.1rem;margin-bottom:2rem;">How Claude calls tools at the API level &mdash; the request/response loop, tool schemas, the four message-block types, multi-tool orchestration, fine-grained streaming, the built-in text-edit and web-search tools &mdash; and how all of this maps to the Claude Code tools you've been using since CC0.</p>
+
+      <section class="section" id="objectives">
+        <h2>Learning Objectives</h2>
+        <ul class="objectives-list">
+          <li>Trace the four-step tool-use loop: request &rarr; tool_use &rarr; tool_result &rarr; final answer.</li>
+          <li>Write a JSON Schema for a tool that Claude can call reliably.</li>
+          <li>Identify the four content-block types (<code>text</code>, <code>tool_use</code>, <code>tool_result</code>, <code>thinking</code>).</li>
+          <li>Orchestrate multiple tools in one conversation, handling parallel tool calls.</li>
+          <li>Use <code>tool_choice</code> and <code>disable_parallel_tool_use</code> to control Claude's tool-selection behavior.</li>
+          <li>Use the built-in text-edit and web-search server tools (no client-side code).</li>
+          <li>Explain how Claude Code's Bash, Edit, Read tools are tool-use under the hood.</li>
+        </ul>
+        <div class="bridge">CC1 showed you a single API call. Tool use is what turns one call into an agent. The tool loop is the most important pattern in this entire course.</div>
+      </section>
+
+      <section class="section" id="why">
+        <h2>Why Tool Use</h2>
+
+        <div class="analogy-box">
+          <span class="box-label">Everyday Analogy</span>
+          <p>Imagine a doctor diagnosing without ever ordering a test. They guess based on symptoms alone. Sometimes right, often wrong, no way to verify. Now imagine the same doctor with a lab next door: order a CBC, get results back, decide. Slower per question, dramatically more accurate.</p>
+          <p>Tool use is the lab. Claude alone is the doctor without one &mdash; it can only emit text from training. With tools, Claude can <em>look things up, run code, edit files, query databases</em>. Each tool call is an order to the lab; the result comes back, Claude integrates it, and answers.</p>
+        </div>
+
+        <div class="tech-def-box">
+          <span class="box-label">Technical Definition</span>
+          <p><strong>Tool use</strong> is the API mechanism by which Claude can request that the application run a function and return the result. The application defines tools (name, description, input schema), Claude decides when to call them, the application executes them and returns results, Claude integrates the results into its final answer. The loop can repeat for multi-step tasks.</p>
+        </div>
+
+        <div class="callout-why">
+          <span class="box-label">In Claude Code</span>
+          <p>Every Claude Code action you've seen &mdash; reading a file, editing it, running Bash, searching with Grep &mdash; is a tool call. The CLI defines those tools, Claude decides which to call, the CLI runs them, and the loop continues until Claude says "done." Understanding tool use is understanding how Claude Code actually works.</p>
+        </div>
+      </section>
+
+      <section class="section" id="loop">
+        <h2>The Tool-Use Loop</h2>
+
+        <p>One end-to-end tool call is a four-step round trip:</p>
+
+        <div class="animation-container">
+          <div class="animation-title">The four-step loop</div>
+          <div class="loop-diagram">
+            <div class="loop-step"><div class="step-num">STEP 1</div><div class="step-name">Request</div><div class="step-desc">App sends user message + tool definitions.</div></div>
+            <div class="loop-step"><div class="step-num">STEP 2</div><div class="step-name">tool_use</div><div class="step-desc">Claude responds with a <code>tool_use</code> block: name + input. <code>stop_reason: "tool_use"</code>.</div></div>
+            <div class="loop-step"><div class="step-num">STEP 3</div><div class="step-name">App runs tool</div><div class="step-desc">App executes the function and prepares a <code>tool_result</code> block with the output (or error).</div></div>
+            <div class="loop-step"><div class="step-num">STEP 4</div><div class="step-name">Final answer</div><div class="step-desc">App re-sends history (now ending in <code>tool_result</code>). Claude integrates and returns text.</div></div>
+          </div>
+        </div>
+
+        <h3 id="steps-1-2-defining-the-tool-getting-a-call">Steps 1 &amp; 2 &mdash; defining the tool, getting a call</h3>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs">
+            <button class="code-tab active" onclick="switchTab(this, 'py-loop1')">Python</button>
+            <button class="code-tab" onclick="switchTab(this, 'ts-loop1')">TypeScript</button>
+          </div>
+          <div class="code-panel active" data-lang="py-loop1">
+            <pre><code class="language-python">tools = [{
+    "name": "get_weather",
+    "description": "Get current temperature for a city.",
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "city": {"type": "string", "description": "City name"},
+            "units": {"type": "string", "enum": ["c", "f"], "default": "c"},
+        },
+        "required": ["city"],
+    },
+}]
+
+resp = client.messages.create(
+    model="claude-sonnet-4-6", max_tokens=1024,
+    tools=tools,
+    messages=[{"role": "user", "content": "What's the weather in Tokyo?"}],
+)
+
+print(resp.stop_reason)  # "tool_use"
+print(resp.content)
+# [TextBlock(type="text", text="I'll check the weather."),
+#  ToolUseBlock(type="tool_use", id="toolu_01ABC", name="get_weather",
+#               input={"city": "Tokyo", "units": "c"})]</code></pre>
+            <button class="copy-btn" onclick="copyCode(this)">copy</button>
+          </div>
+          <div class="code-panel" data-lang="ts-loop1">
+            <pre><code class="language-typescript">const tools: Anthropic.Tool[] = [{
+  name: "get_weather",
+  description: "Get current temperature for a city.",
+  input_schema: {
+    type: "object",
+    properties: {
+      city: { type: "string", description: "City name" },
+      units: { type: "string", enum: ["c", "f"], default: "c" },
+    },
+    required: ["city"],
+  },
+}];
+
+const resp = await client.messages.create({
+  model: "claude-sonnet-4-6", max_tokens: 1024,
+  tools,
+  messages: [{ role: "user", content: "What's the weather in Tokyo?" }],
+});
+
+console.log(resp.stop_reason); // "tool_use"</code></pre>
+            <button class="copy-btn" onclick="copyCode(this)">copy</button>
+          </div>
+        </div>
+
+        <h3 id="steps-3-4-running-the-tool-sending-the-result-back">Steps 3 &amp; 4 &mdash; running the tool, sending the result back</h3>
+
+        <div class="code-block-wrapper">
+          <div class="code-panel active">
+            <pre><code class="language-python">def get_weather(city: str, units: str = "c") -&gt; dict:
+    # Real impl would call a weather API; we fake it here.
+    return {"city": city, "temp": 14, "units": units, "condition": "rain"}
+
+# Find the tool_use block
+tool_use = next(b for b in resp.content if b.type == "tool_use")
+result = get_weather(**tool_use.input)
+
+# Build the next request: append the assistant's prior turn AND a user turn
+# whose content is a tool_result block referring to the tool_use_id.
+follow_up = client.messages.create(
+    model="claude-sonnet-4-6", max_tokens=1024,
+    tools=tools,
+    messages=[
+        {"role": "user", "content": "What's the weather in Tokyo?"},
+        {"role": "assistant", "content": resp.content},   # full prior content
+        {"role": "user", "content": [
+            {
+              "type": "tool_result",
+              "tool_use_id": tool_use.id,
+              "content": str(result),
+            }
+        ]},
+    ],
+)
+print(follow_up.content[0].text)
+# It's currently 14&deg;C and raining in Tokyo.</code></pre>
+            <button class="copy-btn" onclick="copyCode(this)">copy</button>
+          </div>
+        </div>
+
+        <div class="callout-warning">
+          <span class="box-label">Three things that bite people</span>
+          <ul>
+            <li><strong>You must echo back the assistant's full prior content</strong> &mdash; the <code>tool_use</code> block has to be in history for Claude to match the <code>tool_use_id</code>.</li>
+            <li><strong>The tool_result goes inside a user-role message,</strong> not its own role. Wrap it in <code>{"role": "user", "content": [{"type": "tool_result", ...}]}</code>.</li>
+            <li><strong>Tool results don't have to be JSON.</strong> A string is fine; Claude reads it. But for structured returns, JSON.stringify them so Claude can reason about fields.</li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="section" id="schema">
+        <h2>Tool Schemas &mdash; What Makes a Good One</h2>
+
+        <p>The tool definition Claude sees has three parts: <code>name</code>, <code>description</code>, <code>input_schema</code>. All three matter.</p>
+
+        <h3 id="name-verb-noun-snake-case">Name &mdash; verb_noun, snake_case</h3>
+        <p>Claude picks tools largely on name. <code>get_weather</code> is better than <code>weather</code> &mdash; verbs make the action explicit. Snake case is convention; mixed case works but stay consistent.</p>
+
+        <h3 id="description-the-most-important-field">Description &mdash; the most important field</h3>
+        <p>This is what convinces Claude to <em>not</em> hallucinate the answer and call the tool instead. Three things every description should have:</p>
+        <ul>
+          <li><strong>What it does</strong> in one sentence.</li>
+          <li><strong>When to use it</strong> &mdash; scenarios where this tool beats Claude's own knowledge.</li>
+          <li><strong>What it returns</strong> &mdash; shape and meaning of the output.</li>
+        </ul>
+
+        <div class="code-block-wrapper">
+          <div class="code-panel active">
+            <pre><code class="language-python">"description": (
+    "Look up an order by its purchase order (PO) number. "
+    "Use this whenever a user mentions a PO# or asks about order status. "
+    "Returns: {po_number, status, eta, line_items}. "
+    "Status is one of: open, shipped, delivered, cancelled."
+)</code></pre>
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">copy</button>
+          </div>
+        </div>
+
+        <h3 id="input-schema-json-schema-with-descriptions-per-field">Input schema &mdash; JSON Schema, with descriptions per field</h3>
+        <p>Per-field <code>description</code> is what teaches Claude how to fill the field correctly. <code>enum</code> closes off invalid values. <code>required</code> marks must-haves.</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-panel active">
+            <pre><code class="language-json">{
+  "type": "object",
+  "properties": {
+    "po_number": {
+      "type": "string",
+      "pattern": "^PO-[0-9]{6}$",
+      "description": "Purchase order number, format: PO-123456"
+    },
+    "include_line_items": {
+      "type": "boolean",
+      "default": false,
+      "description": "Whether to include the array of items in the order"
+    }
+  },
+  "required": ["po_number"]
+}</code></pre>
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">copy</button>
+          </div>
+        </div>
+
+        <div class="callout-why">
+          <span class="box-label">Tool description = system prompt for the tool</span>
+          <p>If Claude calls the wrong tool, calls the right tool with wrong inputs, or doesn't call any tool when it should &mdash; nine times out of ten the fix is in the description, not the schema. Treat each description as a 3-sentence prompt-engineering exercise.</p>
+        </div>
+      </section>
+
+      <section class="section" id="blocks">
+        <h2>The Four Content-Block Types</h2>
+
+        <p>Claude's <code>content</code> array can contain four kinds of blocks. You'll see all four once you start using thinking + tools together.</p>
+
+        <table>
+          <thead><tr><th>Block type</th><th>Where</th><th>Carries</th></tr></thead>
+          <tbody>
+            <tr><td><code>text</code></td><td>Assistant or user</td><td>Plain text the model wrote (or the user typed).</td></tr>
+            <tr><td><code>tool_use</code></td><td>Assistant only</td><td><code>id</code>, tool <code>name</code>, <code>input</code> (matching schema).</td></tr>
+            <tr><td><code>tool_result</code></td><td>User only (echoing back)</td><td><code>tool_use_id</code> (matches the <code>id</code>), <code>content</code> (string or array).</td></tr>
+            <tr><td><code>thinking</code></td><td>Assistant, when extended thinking enabled</td><td>Hidden reasoning trace; you echo it back unmodified.</td></tr>
+          </tbody>
+        </table>
+
+        <h3 id="handling-mixed-blocks">Handling mixed blocks</h3>
+        <p>Don't assume <code>content[0]</code> is what you want. Iterate:</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-panel active">
+            <pre><code class="language-python">for block in resp.content:
+    if block.type == "text":
+        print("TEXT:", block.text)
+    elif block.type == "tool_use":
+        print(f"CALLING {block.name}({block.input})")
+        run_tool(block)
+    elif block.type == "thinking":
+        # Echo back unchanged; you can log it for debugging
+        pass</code></pre>
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">copy</button>
+          </div>
+        </div>
+
+        <div class="callout-warning">
+          <span class="box-label">Errors in tool results</span>
+          <p>If your tool fails, return a <code>tool_result</code> with <code>is_error: true</code> and a string explaining what broke. Claude will adapt &mdash; e.g. retry with a different argument, or apologize to the user. Don't throw an exception client-side; that aborts the loop.</p>
+        </div>
+      </section>
+
+      <section class="section" id="multi">
+        <h2>Multiple Tools &amp; Multi-Turn</h2>
+
+        <p>You can pass an array of tools and Claude picks per turn. The model can also issue <strong>multiple tool calls in parallel</strong> &mdash; one assistant message containing several <code>tool_use</code> blocks.</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-panel active">
+            <pre><code class="language-python">tools = [
+    {"name": "get_weather", "description": "...", "input_schema": {...}},
+    {"name": "get_time", "description": "Current time in a city.", "input_schema": {...}},
+]
+
+resp = client.messages.create(
+    model="claude-sonnet-4-6", max_tokens=1024,
+    tools=tools,
+    messages=[{"role": "user", "content":
+        "I'm flying from NYC to Tokyo. What's the weather and local time at both ends?"}],
+)
+# resp.content may contain 4 tool_use blocks: weather(NYC), weather(Tokyo),
+# time(NYC), time(Tokyo). Run them all (ideally in parallel), then send all 4
+# tool_result blocks in one user-role follow-up.</code></pre>
+            <button class="copy-btn" onclick="copyCode(this)">copy</button>
+          </div>
+        </div>
+
+        <h3 id="the-full-loop-until-end-turn">The full loop until <code>end_turn</code></h3>
+
+        <div class="code-block-wrapper">
+          <div class="code-panel active">
+            <pre><code class="language-python">def agent_loop(user_msg: str, tools: list, max_iters: int = 10):
+    history = [{"role": "user", "content": user_msg}]
+    for _ in range(max_iters):
+        resp = client.messages.create(
+            model="claude-sonnet-4-6", max_tokens=2048,
+            tools=tools, messages=history,
+        )
+        history.append({"role": "assistant", "content": resp.content})
+        if resp.stop_reason != "tool_use":
+            return resp  # final answer; bail
+
+        # Run every tool_use block, collect tool_result blocks
+        results = []
+        for block in resp.content:
+            if block.type == "tool_use":
+                output = dispatch(block.name, block.input)   # your dispatcher
+                results.append({
+                    "type": "tool_result",
+                    "tool_use_id": block.id,
+                    "content": str(output),
+                })
+        history.append({"role": "user", "content": results})
+    raise RuntimeError("Agent loop exceeded max iterations")</code></pre>
+            <button class="copy-btn" onclick="copyCode(this)">copy</button>
+          </div>
+        </div>
+
+        <div class="checkpoint">
+          <div class="checkpoint-label">What just happened?</div>
+          <p>You wrote a tiny agent. The pattern: <strong>loop while <code>stop_reason == "tool_use"</code>, run every tool_use block, send all tool_results back together</strong>. Always cap iterations &mdash; a buggy tool can put you in an infinite loop. CC13 covers this loop pattern in depth.</p>
+        </div>
+      </section>
+
+      <section class="section" id="choice">
+        <h2>Tool Choice &amp; Fine-Grained Control</h2>
+
+        <p>By default, Claude decides whether and which tool to call. The <code>tool_choice</code> parameter lets you override:</p>
+
+        <table>
+          <thead><tr><th><code>tool_choice</code></th><th>Behavior</th><th>Use when</th></tr></thead>
+          <tbody>
+            <tr><td><code>{"type": "auto"}</code> (default)</td><td>Claude picks: zero, one, or many tools.</td><td>Normal agent operation.</td></tr>
+            <tr><td><code>{"type": "any"}</code></td><td>Claude must call <em>some</em> tool, but picks which.</td><td>You know a tool is needed; routing tasks.</td></tr>
+            <tr><td><code>{"type": "tool", "name": "X"}</code></td><td>Claude must call exactly tool <code>X</code>.</td><td>Forced structured output (CC1).</td></tr>
+            <tr><td><code>{"type": "none"}</code></td><td>No tools allowed; text only.</td><td>Final summarization step.</td></tr>
+          </tbody>
+        </table>
+
+        <h3 id="disabling-parallel-tool-calls">Disabling parallel tool calls</h3>
+        <p>By default, Claude can issue several <code>tool_use</code> blocks in one assistant message. If your tools have side effects that must run serially (e.g., a state-mutating API), pass:</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-panel active">
+            <pre><code class="language-python">resp = client.messages.create(
+    model="claude-sonnet-4-6", max_tokens=1024,
+    tools=tools,
+    tool_choice={"type": "auto", "disable_parallel_tool_use": True},
+    messages=[...]
+)</code></pre>
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">copy</button>
+          </div>
+        </div>
+
+        <h3 id="fine-grained-tool-streaming">Fine-grained tool streaming</h3>
+        <p>By default, when streaming with tool use, the SDK buffers the JSON input until complete. <strong>Fine-grained streaming</strong> emits the input incrementally &mdash; useful for very large inputs (file edits, long writes) where you want to start downstream work before the input is done.</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-panel active">
+            <pre><code class="language-python">with client.messages.stream(
+    model="claude-sonnet-4-6", max_tokens=4096,
+    tools=tools,
+    extra_headers={"anthropic-beta": "fine-grained-tool-streaming-2025-05-14"},
+    messages=[...],
+) as stream:
+    for event in stream:
+        if event.type == "input_json_delta":
+            partial_json += event.partial_json
+            # You can begin parsing/echoing partial JSON here</code></pre>
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">copy</button>
+          </div>
+        </div>
+
+        <div class="callout-why">
+          <span class="box-label">When fine-grained matters</span>
+          <p>Mostly for large file edits. The default streaming is fine for 95% of cases. Don't enable fine-grained unless you're seeing user-visible latency from buffering.</p>
+        </div>
+      </section>
+
+      <section class="section" id="builtin">
+        <h2>Built-In Tools &mdash; Text Edit &amp; Web Search</h2>
+
+        <p>Anthropic ships <strong>server tools</strong> &mdash; tools whose execution happens inside Anthropic's infrastructure, not your client. You enable them by referencing them in <code>tools</code>; you do <em>not</em> implement them yourself.</p>
+
+        <h3 id="the-text-edit-tool">The text-edit tool</h3>
+        <p>The text-edit tool gives Claude four operations on a text file: <code>view</code>, <code>create</code>, <code>str_replace</code>, <code>insert</code>. The model emits a tool_use call with the operation; <em>your</em> code applies it to a real file and returns the result. (Server tool naming is misleading here &mdash; the tool's <em>schema</em> is built-in, but execution is still on your side.)</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-panel active">
+            <pre><code class="language-python">tools = [{"type": "text_editor_20250728", "name": "str_replace_based_edit_tool"}]
+
+resp = client.messages.create(
+    model="claude-sonnet-4-6", max_tokens=2048,
+    tools=tools,
+    messages=[{"role": "user", "content":
+        "Open ./auth.py, find the function login(), and rename it to authenticate()."
+    }],
+)
+# resp.content has a tool_use with operations like:
+#   {"command": "view", "path": "./auth.py"}
+#   {"command": "str_replace", "path": "./auth.py",
+#    "old_str": "def login():", "new_str": "def authenticate():"}
+# Note: tool type/name versioning is model-family specific.
+# Sonnet/Opus 4.x: text_editor_20250728 + str_replace_based_edit_tool.
+# Older Sonnet 3.5: text_editor_20241022 + str_replace_editor.</code></pre>
+            <button class="copy-btn" onclick="copyCode(this)">copy</button>
+          </div>
+        </div>
+
+        <h3 id="the-web-search-tool">The web-search tool</h3>
+        <p>Web search <em>does</em> run server-side &mdash; you don't get to see or implement the search; the result comes back as part of Claude's response, with citations.</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-panel active">
+            <pre><code class="language-python">tools = [{"type": "web_search_20250305", "name": "web_search", "max_uses": 3}]
+
+resp = client.messages.create(
+    model="claude-sonnet-4-6", max_tokens=2048,
+    tools=tools,
+    messages=[{"role": "user", "content":
+        "What did Anthropic ship at their last devday?"}],
+)
+# resp.content includes a tool_use, server-side search runs, then tool_result
+# with results, then text with citations. All in one round trip.</code></pre>
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">copy</button>
+          </div>
+        </div>
+
+        <div class="callout-warning">
+          <span class="box-label">Server tools cost extra</span>
+          <p>Server-tool invocations are billed (web search has a per-use fee). Cap with <code>max_uses</code> to avoid surprise costs from over-eager Claude. <strong>Always set max_uses for web_search</strong> in production code.</p>
+        </div>
+      </section>
+
+      <section class="section" id="cli-context">
+        <h2>How Claude Code Uses Tools</h2>
+
+        <p>Now the payoff: every Claude Code action you've performed is exactly the loop above. The CLI defines a fixed set of tools and runs the loop on your behalf.</p>
+
+        <div class="animation-container">
+          <div class="animation-title">Claude Code's built-in tools = your tool definitions</div>
+          <table>
+            <thead><tr><th>CLI tool</th><th>Schema</th><th>Executor</th></tr></thead>
+            <tbody>
+              <tr><td><code>Bash</code></td><td><code>{command, description, timeout}</code></td><td>Spawns shell, returns stdout/stderr/exit.</td></tr>
+              <tr><td><code>Read</code></td><td><code>{file_path, offset?, limit?}</code></td><td>Reads file with optional pagination.</td></tr>
+              <tr><td><code>Edit</code></td><td><code>{file_path, old_string, new_string, replace_all?}</code></td><td>Performs string replace; errors if not unique.</td></tr>
+              <tr><td><code>Grep</code></td><td><code>{pattern, path?, type?, ...}</code></td><td>Wraps ripgrep, returns matches.</td></tr>
+              <tr><td><code>Glob</code></td><td><code>{pattern, path?}</code></td><td>Filename matching.</td></tr>
+              <tr><td><code>WebFetch</code></td><td><code>{url, prompt}</code></td><td>Fetches + lets Claude extract.</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <p>When you use <code>--debug</code> or watch transcripts, you'll see the exact tool_use / tool_result blocks. <strong>Skills, subagents, and MCP servers all add tools to the same loop</strong> &mdash; nothing magical, just more entries in the <code>tools</code> array Claude sees.</p>
+
+        <div class="callout-why">
+          <span class="box-label">For CC9 (MCP)</span>
+          <p>An MCP server registers its tools with Claude Code at startup. Once registered, those tools are indistinguishable to Claude from built-in ones &mdash; same schema format, same loop. CC9 covers writing your own MCP server with this in mind.</p>
+        </div>
+      </section>
+
+      <section class="section" id="lab">
+        <h2>Hands-On Lab &mdash; Build a 2-Tool Agent</h2>
+
+        <p>You'll build a 60-line Python agent that has two tools (<code>get_lien_count</code> and <code>get_filing_dates</code>) and answers questions about UCC filings. This is the same loop Claude Code runs &mdash; written by you, in 60 lines.</p>
+
+        <h3 id="step-1-mock-data">Step 1 &mdash; Mock data</h3>
+
+        <div class="code-block-wrapper">
+          <div class="code-panel active">
+            <pre><code class="language-python">FILINGS = {
+    "PO-100001": {"debtor": "Acme LLC", "filed": "2024-03-12", "lien_count": 2},
+    "PO-100002": {"debtor": "Beta Inc",  "filed": "2024-09-01", "lien_count": 0},
+    "PO-100003": {"debtor": "Acme LLC", "filed": "2025-01-04", "lien_count": 5},
+}
+
+def get_lien_count(debtor: str) -&gt; dict:
+    total = sum(f["lien_count"] for f in FILINGS.values() if f["debtor"] == debtor)
+    return {"debtor": debtor, "total_liens": total}
+
+def get_filing_dates(debtor: str) -&gt; dict:
+    dates = [f["filed"] for f in FILINGS.values() if f["debtor"] == debtor]
+    return {"debtor": debtor, "filing_dates": sorted(dates)}</code></pre>
+            <button class="copy-btn" onclick="copyCode(this)">copy</button>
+          </div>
+        </div>
+
+        <h3 id="step-2-tool-definitions-dispatcher">Step 2 &mdash; Tool definitions + dispatcher</h3>
+
+        <div class="code-block-wrapper">
+          <div class="code-panel active">
+            <pre><code class="language-python">TOOLS = [
+    {
+        "name": "get_lien_count",
+        "description": "Total active liens for a debtor across all UCC filings. "
+                       "Use when a user asks 'how many liens does X have?'. "
+                       "Returns {debtor, total_liens}.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"debtor": {"type": "string"}},
+            "required": ["debtor"],
+        },
+    },
+    {
+        "name": "get_filing_dates",
+        "description": "All filing dates for a debtor, ascending. "
+                       "Returns {debtor, filing_dates: ISO date strings}.",
+        "input_schema": {
+            "type": "object",
+            "properties": {"debtor": {"type": "string"}},
+            "required": ["debtor"],
+        },
+    },
+]
+
+def dispatch(name: str, args: dict) -&gt; dict:
+    if name == "get_lien_count":   return get_lien_count(**args)
+    if name == "get_filing_dates": return get_filing_dates(**args)
+    return {"error": f"unknown tool {name}"}</code></pre>
+            <button class="copy-btn" onclick="copyCode(this)">copy</button>
+          </div>
+        </div>
+
+        <h3 id="step-3-the-loop">Step 3 &mdash; The loop</h3>
+
+        <div class="code-block-wrapper">
+          <div class="code-panel active">
+            <pre><code class="language-python">import json, sys
+from anthropic import Anthropic
+
+def agent(user_q: str, max_iters: int = 6) -&gt; str:
+    client = Anthropic()
+    history = [{"role": "user", "content": user_q}]
+    for _ in range(max_iters):
+        r = client.messages.create(
+            model="claude-sonnet-4-6", max_tokens=1024,
+            tools=TOOLS, messages=history,
+        )
+        history.append({"role": "assistant", "content": r.content})
+        if r.stop_reason != "tool_use":
+            return next(b.text for b in r.content if b.type == "text")
+        results = []
+        for b in r.content:
+            if b.type == "tool_use":
+                out = dispatch(b.name, b.input)
+                results.append({
+                    "type": "tool_result",
+                    "tool_use_id": b.id,
+                    "content": json.dumps(out),
+                })
+        history.append({"role": "user", "content": results})
+    return "[max iterations reached]"
+
+if __name__ == "__main__":
+    print(agent(" ".join(sys.argv[1:]) or "How many liens does Acme LLC have, and when did they file?"))</code></pre>
+            <button class="copy-btn" onclick="copyCode(this)">copy</button>
+          </div>
+        </div>
+
+        <h3 id="step-4-run-it">Step 4 &mdash; Run it</h3>
+
+        <div class="code-block-wrapper">
+          <div class="code-panel active">
+            <pre><code class="language-bash">$ python agent.py "How many liens does Acme LLC have, and when did they file?"
+Acme LLC has 7 total active liens, filed on 2024-03-12 and 2025-01-04.</code></pre>
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">copy</button>
+          </div>
+        </div>
+
+        <p>Watch what happens: Claude calls both tools in <em>one</em> assistant turn (parallel tool use), your dispatcher runs both, sends two tool_results back, Claude composes the answer.</p>
+
+        <h3 id="step-5-inspect-the-loop">Step 5 &mdash; Inspect the loop</h3>
+        <p>Add a print statement after each <code>r.stop_reason</code> check. You'll see exactly two iterations &mdash; one with <code>stop_reason: "tool_use"</code>, one with <code>stop_reason: "end_turn"</code>. Two API calls, four tool block exchanges, one final answer.</p>
+
+        <div class="checkpoint">
+          <div class="checkpoint-label">Lab complete &mdash; what you should have</div>
+          <p>A 60-line Python agent that runs the same loop Claude Code runs internally. You've now seen tool use end-to-end. <strong>Skills, subagents, and MCP servers are different ways of contributing entries to this loop's tools array.</strong> When CC9 (MCP server-building) lands, it'll feel like adding to a loop you already understand.</p>
+        </div>
+      </section>
+
+      <section class="section" id="quiz">
+        <h2>Knowledge Check</h2>
+
+        <div class="quiz-question">
+          <h4>1. Claude responded with <code>stop_reason: "tool_use"</code>. What's the next step?</h4>
+          <div class="quiz-option" data-correct="false" onclick="quizClick(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" role="button" tabindex="0" aria-label="Quiz answer option"><div class="quiz-marker">A</div><div>Show the user the tool name and ask if they want to proceed.</div></div>
+          <div class="quiz-option" data-correct="false" onclick="quizClick(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" role="button" tabindex="0" aria-label="Quiz answer option"><div class="quiz-marker">B</div><div>Re-send the request with <code>tool_choice: "none"</code>.</div></div>
+          <div class="quiz-option" data-correct="true" onclick="quizClick(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" role="button" tabindex="0" aria-label="Quiz answer option"><div class="quiz-marker">C</div><div>Run the tool, append the assistant's full prior content + a user-role <code>tool_result</code> block, re-send.</div></div>
+          <div class="quiz-option" data-correct="false" onclick="quizClick(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" role="button" tabindex="0" aria-label="Quiz answer option"><div class="quiz-marker">D</div><div>Strip the tool_use block and send only the text portion as the answer.</div></div>
+          <div class="quiz-feedback correct-fb"><strong>Correct.</strong> The four-step loop: request &rarr; tool_use &rarr; run + tool_result (in user role) &rarr; final answer. Both prior assistant content and the new tool_result must be in history.</div>
+          <div class="quiz-feedback incorrect-fb"><strong>Look again.</strong> The loop continues by running the tool and sending the result back inside a user-role message containing a <code>tool_result</code> block.</div>
+        </div>
+
+        <div class="quiz-question">
+          <h4>2. You're getting wrong tool selections. Most likely cause?</h4>
+          <div class="quiz-option" data-correct="false" onclick="quizClick(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" role="button" tabindex="0" aria-label="Quiz answer option"><div class="quiz-marker">A</div><div>Schema is too strict.</div></div>
+          <div class="quiz-option" data-correct="true" onclick="quizClick(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" role="button" tabindex="0" aria-label="Quiz answer option"><div class="quiz-marker">B</div><div>Tool description is vague &mdash; doesn't say "when to use it" or "what it returns."</div></div>
+          <div class="quiz-option" data-correct="false" onclick="quizClick(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" role="button" tabindex="0" aria-label="Quiz answer option"><div class="quiz-marker">C</div><div>Wrong model.</div></div>
+          <div class="quiz-option" data-correct="false" onclick="quizClick(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" role="button" tabindex="0" aria-label="Quiz answer option"><div class="quiz-marker">D</div><div>Temperature too low.</div></div>
+          <div class="quiz-feedback correct-fb"><strong>Correct.</strong> Tool descriptions are how Claude decides which tool fits. A description that just says "Gets data" doesn't help Claude pick. Be explicit about the trigger and the return shape.</div>
+          <div class="quiz-feedback incorrect-fb"><strong>Look again.</strong> Tool selection is dominated by the description quality &mdash; not the schema, model, or temperature.</div>
+        </div>
+
+        <div class="quiz-question">
+          <h4>3. Claude responded with TWO <code>tool_use</code> blocks in one assistant message. How do you reply?</h4>
+          <div class="quiz-option" data-correct="false" onclick="quizClick(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" role="button" tabindex="0" aria-label="Quiz answer option"><div class="quiz-marker">A</div><div>Send them in two separate follow-up requests, one tool_result each.</div></div>
+          <div class="quiz-option" data-correct="true" onclick="quizClick(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" role="button" tabindex="0" aria-label="Quiz answer option"><div class="quiz-marker">B</div><div>Run both, send a single user-role message with both tool_result blocks in its <code>content</code> array.</div></div>
+          <div class="quiz-option" data-correct="false" onclick="quizClick(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" role="button" tabindex="0" aria-label="Quiz answer option"><div class="quiz-marker">C</div><div>Pick one, ignore the other.</div></div>
+          <div class="quiz-option" data-correct="false" onclick="quizClick(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" role="button" tabindex="0" aria-label="Quiz answer option"><div class="quiz-marker">D</div><div>Concatenate the two outputs into a single tool_result.</div></div>
+          <div class="quiz-feedback correct-fb"><strong>Correct.</strong> Parallel tool calls: one user-role message with multiple tool_result blocks, each with the matching tool_use_id. Claude consumes them as one turn.</div>
+          <div class="quiz-feedback incorrect-fb"><strong>Look again.</strong> Multiple parallel tool calls get answered together: one user message with multiple <code>tool_result</code> blocks in its content array.</div>
+        </div>
+
+        <div class="quiz-question">
+          <h4>4. You want Claude to <em>always</em> call your <code>record_signoff</code> tool. Best param?</h4>
+          <div class="quiz-option" data-correct="false" onclick="quizClick(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" role="button" tabindex="0" aria-label="Quiz answer option"><div class="quiz-marker">A</div><div><code>tool_choice: {"type": "auto"}</code></div></div>
+          <div class="quiz-option" data-correct="false" onclick="quizClick(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" role="button" tabindex="0" aria-label="Quiz answer option"><div class="quiz-marker">B</div><div><code>tool_choice: {"type": "any"}</code></div></div>
+          <div class="quiz-option" data-correct="true" onclick="quizClick(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" role="button" tabindex="0" aria-label="Quiz answer option"><div class="quiz-marker">C</div><div><code>tool_choice: {"type": "tool", "name": "record_signoff"}</code></div></div>
+          <div class="quiz-option" data-correct="false" onclick="quizClick(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" role="button" tabindex="0" aria-label="Quiz answer option"><div class="quiz-marker">D</div><div><code>tool_choice: {"type": "none"}</code></div></div>
+          <div class="quiz-feedback correct-fb"><strong>Correct.</strong> <code>{"type": "tool", "name": ...}</code> forces a specific tool. <code>"any"</code> means "some tool"; <code>"none"</code> means no tools.</div>
+          <div class="quiz-feedback incorrect-fb"><strong>Look again.</strong> Forcing one named tool requires <code>{"type": "tool", "name": "record_signoff"}</code>.</div>
+        </div>
+
+        <div class="quiz-question">
+          <h4>5. Your tool occasionally fails. What goes back to Claude?</h4>
+          <div class="quiz-option" data-correct="false" onclick="quizClick(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" role="button" tabindex="0" aria-label="Quiz answer option"><div class="quiz-marker">A</div><div>Throw an exception &mdash; Claude figures it out.</div></div>
+          <div class="quiz-option" data-correct="true" onclick="quizClick(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" role="button" tabindex="0" aria-label="Quiz answer option"><div class="quiz-marker">B</div><div>A <code>tool_result</code> block with <code>is_error: true</code> and a string explaining the failure.</div></div>
+          <div class="quiz-option" data-correct="false" onclick="quizClick(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" role="button" tabindex="0" aria-label="Quiz answer option"><div class="quiz-marker">C</div><div>Skip the tool_result entirely; let Claude time out.</div></div>
+          <div class="quiz-option" data-correct="false" onclick="quizClick(this)" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();this.click();}" role="button" tabindex="0" aria-label="Quiz answer option"><div class="quiz-marker">D</div><div>An empty tool_result with a sentinel value.</div></div>
+          <div class="quiz-feedback correct-fb"><strong>Correct.</strong> Errors stay <em>inside</em> the loop &mdash; <code>is_error: true</code> with a human-readable message. Claude can adapt (retry, reword, give up gracefully). Throwing breaks the loop.</div>
+          <div class="quiz-feedback incorrect-fb"><strong>Look again.</strong> Errors should be reported as <code>tool_result</code> blocks with <code>is_error: true</code> so Claude can adapt within the loop.</div>
+        </div>
+      </section>
+
+      <section class="section" id="summary">
+        <h2>Module Summary</h2>
+        <ul>
+          <li><strong>Tool-use loop:</strong> request &rarr; <code>stop_reason: "tool_use"</code> &rarr; run tool &rarr; send back <code>tool_result</code> in user role &rarr; final answer. Loop until <code>end_turn</code>.</li>
+          <li><strong>Tool schema:</strong> <code>name</code> (verb_noun), <code>description</code> (what + when + returns), <code>input_schema</code> (JSON Schema with per-field descriptions).</li>
+          <li><strong>Four block types:</strong> <code>text</code>, <code>tool_use</code>, <code>tool_result</code>, <code>thinking</code>. Iterate; don't assume <code>content[0]</code>.</li>
+          <li><strong>Multiple tools:</strong> Claude can call several in parallel within one assistant message. Reply with all results in one user message.</li>
+          <li><strong><code>tool_choice</code>:</strong> <code>auto</code> (default), <code>any</code> (must call something), <code>{"type": "tool", "name": ...}</code> (force one), <code>none</code> (text only).</li>
+          <li><strong>Built-in server tools:</strong> text editor (<code>str_replace_editor</code>), web search. Cap web_search with <code>max_uses</code>.</li>
+          <li><strong>Errors stay inside the loop:</strong> <code>tool_result</code> + <code>is_error: true</code> + message. Don't throw.</li>
+          <li>Claude Code's Bash/Read/Edit/Grep tools are exactly this protocol &mdash; CC9's MCP servers add to the same array.</li>
+        </ul>
+      </section>
+
+      <div class="module-nav">
+        <a href="CC7-hooks.html">&larr; CC7: Hooks</a>
+        <a href="CC9-mcp.html">CC9: MCP &rarr;</a>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    const sections = document.querySelectorAll('.section[id]');
+    const navLinks = document.querySelectorAll('.sidebar-nav a');
+    function setActive() { let c=''; sections.forEach(s=>{if(window.scrollY>=s.offsetTop-120) c=s.id;}); navLinks.forEach(a=>a.classList.toggle('active', a.getAttribute('href')==='#'+c)); }
+    window.addEventListener('scroll', setActive); setActive();
+    function copyCode(btn) { const code=btn.parentElement.querySelector('pre code').innerText; navigator.clipboard.writeText(code); const o=btn.innerText; btn.innerText='copied'; setTimeout(()=>btn.innerText=o,1200); }
+    function switchTab(tab, lang) { const w=tab.closest('.code-block-wrapper'); w.querySelectorAll('.code-tab').forEach(t=>t.classList.remove('active')); w.querySelectorAll('.code-panel').forEach(p=>p.classList.remove('active')); tab.classList.add('active'); const p=w.querySelector(`[data-lang="${lang}"]`); if(p) p.classList.add('active'); }
+    function quizClick(opt) { const q=opt.closest('.quiz-question'); const correct=opt.dataset.correct==='true'; q.querySelectorAll('.quiz-option').forEach(o=>o.classList.add('disabled')); opt.classList.add(correct?'correct':'incorrect'); const fb=q.querySelector(correct?'.correct-fb':'.incorrect-fb'); if(fb) fb.classList.add('show'); if(!correct){const r=q.querySelector('[data-correct="true"]'); if(r) r.classList.add('correct');} }
+  </script>
+</body>
+</html>

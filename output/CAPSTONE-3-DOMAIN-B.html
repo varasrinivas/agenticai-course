@@ -172,9 +172,13 @@
       <a href="#mock-data">Mock Data</a>
       <a href="#phases">Build Guide</a>
       <a href="#step-1">Step 1: Setup</a>
-      <a href="#step-2">Step 2: Mock Tools</a>
-      <a href="#step-3">Step 3: Agent</a>
-      <a href="#step-4">Step 4: Test It</a>
+      <a href="#step-2">Step 2: Mock Data</a>
+      <a href="#step-3">Step 3: Mock Tools</a>
+      <a href="#step-4">Step 4: Verify Tools</a>
+      <a href="#step-5">Step 5: Build Agent</a>
+      <a href="#step-6">Step 6: Run Agent</a>
+      <a href="#step-7">Step 7: Test Variants</a>
+      <a href="#step-8">Step 8: Error Recovery</a>
       <a href="#verify">Verify Everything</a>
       <a href="#testing">Testing Guide</a>
       <a href="#troubleshooting">Troubleshooting</a>
@@ -190,7 +194,7 @@
 
       <div class="callout-warning" style="margin-bottom:2rem;">
         <span class="box-label">Prerequisites</span>
-        <p>Complete <strong>M03 (Prompt Engineering)</strong>, <strong>M04 (Structured Output)</strong>, <strong>M05 (Function Calling)</strong>, <strong>M06 (Multi-Tool Orchestration)</strong>, and <strong>M12 (ReAct Agent Loop)</strong> before starting this capstone. You should be comfortable defining tool schemas, handling <code>tool_use</code> / <code>tool_result</code> message flows, orchestrating multiple tools, and building agentic loops that check <code>stop_reason</code>.</p>
+        <p>Complete <strong>M03 (Prompt Engineering)</strong>, <strong>M04 (Structured Output)</strong>, <strong>M05 (Function Calling)</strong>, <strong>M06 (Multi-Tool Orchestration)</strong>, <strong>M12 (ReAct Agent Loop)</strong>, and <strong>M13 (Planning &amp; Task Decomposition)</strong> before starting this capstone. You should be comfortable defining tool schemas, handling <code>tool_use</code> / <code>tool_result</code> message flows, orchestrating multiple tools, and building agentic loops that check <code>stop_reason</code>.</p>
         <p style="margin-top:0.75rem;"><strong>Difficulty:</strong> &#9733;&#9733;&#9733;&#9734;&#9734; &mdash; <strong>Time estimate:</strong> 90 minutes &ndash; 2 hours &mdash; <strong>Steps:</strong> 8&ndash;12 numbered steps with code/run/output/checkpoint</p>
       </div>
 
@@ -217,7 +221,7 @@
             <li>Drafts a customer notification (<code>draft_customer_notification</code>)</li>
           </ul>
           <p><strong>Skills practiced:</strong> ReAct loop (M12), multi-tool orchestration (M06), planning (M13), branching logic, error recovery, structured output.</p>
-          <p><strong>Stretch goal:</strong> Add a <code>calculate_cost_impact</code> tool that estimates the financial impact of the resolution (e.g., expedited shipping cost, discount credit).</p>
+          <p><strong>Optional stretch goal:</strong> Add a <code>calculate_cost_impact</code> tool that estimates the financial impact of the resolution (e.g., expedited shipping cost, discount credit). See the <a href="#extensions">Going Further</a> section for the scaffolded version.</p>
         </div>
       </section>
 
@@ -399,10 +403,17 @@ export ANTHROPIC_API_KEY=your-key-here</code></pre>
           </div>
           <div class="code-panel" id="setup-win">
             <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
-            <pre><code>mkdir exception-resolver &amp;&amp; cd exception-resolver
-python -m venv venv &amp;&amp; venv\Scripts\activate
+            <pre><code># Run each line on its own — works in cmd.exe and PowerShell 5.1+
+mkdir exception-resolver
+cd exception-resolver
+python -m venv venv
+# PowerShell: venv\Scripts\Activate.ps1
+# cmd.exe:    venv\Scripts\activate.bat
+venv\Scripts\Activate.ps1
 pip install "anthropic&gt;=0.30.0"
-set ANTHROPIC_API_KEY=your-key-here</code></pre>
+# PowerShell: $env:ANTHROPIC_API_KEY = "your-key-here"
+# cmd.exe:    set ANTHROPIC_API_KEY=your-key-here
+$env:ANTHROPIC_API_KEY = "your-key-here"</code></pre>
           </div>
         </div>
         <h4 style="margin-top:1.5rem;font-family:'Bricolage Grotesque',sans-serif;font-size:1.05rem;color:var(--text-primary);">Node.js / TypeScript Setup (optional)</h4>
@@ -422,7 +433,7 @@ export ANTHROPIC_API_KEY=your-key-here</code></pre>
 
         <p class="output-label">Run command (Python):</p>
         <div class="output-block">python -c "import anthropic; print('SDK version:', anthropic.__version__)"</div>
-        <p class="output-label">Expected output:</p>
+        <p class="output-label">Expected output (any 0.30+ version is fine):</p>
         <div class="output-block">SDK version: 0.39.0</div>
         <div class="checkpoint">
           <div class="checkpoint-label">&#9989; Checkpoint</div>
@@ -515,7 +526,7 @@ export ANTHROPIC_API_KEY=your-key-here</code></pre>
 from mock_tools import *
 import json
 # Test each tool
-print('Order:', json.dumps(get_order_details('PO-2024-11234'), indent=2)[:80], '...')
+print('Order:', json.dumps(get_order_details('PO-2024-11234'))[:80], '...')
 print('Track:', json.dumps(track_shipment('1Z999AA10123456784', 'UPS'))[:80], '...')
 print('Inventory:', json.dumps(query_warehouse_inventory('SKU-4892'))[:80], '...')
 print('Pricing:', json.dumps(get_contract_pricing('Acme Manufacturing', 'SKU-4892'))[:80], '...')
@@ -555,33 +566,40 @@ Not Found: {"error": "NOT_FOUND", "message": "No order for 'PO-FAKE-999'."}</div
         <!-- STEP 7: Test Multiple Exception Types -->
         <h3 id="step-7">Step 7: Test Additional Exception Types</h3>
         <p><strong>What &amp; Why:</strong> A ReAct agent must handle different investigation paths for different exception types. We test a pricing discrepancy (which should start with contract verification) and a quality hold (which should start with the QA system). This verifies the agent&rsquo;s branching logic, not just one happy path.</p>
-        <p>Run <code>python agent.py</code> and paste each exception as JSON input:</p>
+        <p>Run <code>python agent.py</code> and paste each exception as JSON input (one at a time):</p>
         <div class="code-block-wrapper">
-          <div class="code-tabs"><button class="code-tab active" onclick="switchTab(this,'step7-pricing')">Pricing Discrepancy</button></div>
+          <div class="code-tabs">
+            <button class="code-tab active" onclick="switchTab(this,'step7-pricing')">Pricing Discrepancy</button>
+            <button class="code-tab" onclick="switchTab(this,'step7-quality')">Quality Hold</button>
+          </div>
           <div class="code-panel active" id="step7-pricing">
             <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
             <pre><code>{"exception_id":"EXC-2024-0501","po_number":"PO-2024-11234","exception_type":"pricing_discrepancy","description":"Invoice shows $520/unit but contract says $495/unit for SKU-4892."}</code></pre>
           </div>
+          <div class="code-panel" id="step7-quality">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code>{"exception_id":"EXC-2024-0523","po_number":"PO-2024-11890","exception_type":"quality_hold","description":"SKU-7721 on quality hold, cannot ship order PO-2024-11890."}</code></pre>
+          </div>
         </div>
-        <p>The agent should: (1) pull order details, (2) check contract pricing, (3) identify the $25/unit mismatch, (4) draft a pricing correction notification.</p>
+        <p>For pricing, the agent should: (1) pull order details, (2) check contract pricing, (3) identify the $25/unit mismatch, (4) draft a pricing correction notification. For quality hold, the agent should: (1) check quality hold status for SKU-7721, (2) read order details, (3) report the expected resolution date, (4) draft a customer notification.</p>
         <div class="checkpoint">
           <div class="checkpoint-label">&#9989; Checkpoint</div>
           <p>The agent should produce different tool call sequences for different exception types. A shipment delay triggers <code>track_shipment</code>; a pricing discrepancy triggers <code>get_contract_pricing</code>. If the agent always calls tools in the same order regardless of exception type, review your system prompt &mdash; the investigation strategies may need to be more explicit.</p>
         </div>
 
         <!-- STEP 8: Add Error Recovery -->
-        <h3 id="step-8">Step 8: Add Error Recovery and Iteration Cap</h3>
-        <p><strong>What &amp; Why:</strong> In production, carrier APIs go down, ERP systems timeout, and data can be missing. The agent must handle tool failures gracefully &mdash; note the failure, continue investigating with other tools, and flag the gap in its resolution. We also add an iteration cap to prevent infinite loops.</p>
-        <p><strong>Create/Edit:</strong> Open <code>agent.py</code> and add an iteration counter to the <code>investigate_exception</code> function. Replace the <code>while True</code> with <code>while iterations &lt; 15</code> and add a fallback message if the cap is reached.</p>
+        <h3 id="step-8">Step 8: Verify Error Recovery and Iteration Cap</h3>
+        <p><strong>What &amp; Why:</strong> In production, carrier APIs go down, ERP systems timeout, and data can be missing. The agent must handle tool failures gracefully &mdash; note the failure, continue investigating with other tools, and flag the gap in its resolution. The <code>agent.py</code> you copied in Step 5 already includes an iteration cap (<code>MAX_ITERATIONS = 15</code>) to prevent infinite loops &mdash; in this step you confirm it works.</p>
+        <p><strong>Inspect:</strong> Open <code>agent.py</code> and locate the <code>investigate_exception</code> function. Confirm you see the iteration counter and the bounded <code>while iteration &lt; MAX_ITERATIONS</code> loop shown below.</p>
         <div class="code-block-wrapper">
-          <div class="code-tabs"><button class="code-tab active" onclick="switchTab(this,'step8-cap')">Iteration Cap (add to agent.py)</button></div>
+          <div class="code-tabs"><button class="code-tab active" onclick="switchTab(this,'step8-cap')">Iteration Cap (already in agent.py)</button></div>
           <div class="code-panel active" id="step8-cap">
             <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
-            <pre><code># Replace "while True:" in investigate_exception with:
+            <pre><code># Inside investigate_exception (already present in agent.py):
 MAX_ITERATIONS = 15
-iterations = 0
-while iterations &lt; MAX_ITERATIONS:
-    iterations += 1
+iteration = 0
+while iteration &lt; MAX_ITERATIONS:
+    iteration += 1
     response = client.messages.create(
         model=MODEL, max_tokens=2000,
         system=SYSTEM_PROMPT, tools=TOOLS,
@@ -594,7 +612,7 @@ while iterations &lt; MAX_ITERATIONS:
     history.append({"role": "assistant", "content": response.content})
     return "\n".join(b.text for b in response.content if hasattr(b, "text"))
 
-# If we reach here, the agent hit the iteration cap
+# If we exit the loop, the agent hit the iteration cap
 return "[WARN] Agent reached maximum iterations without resolving. Manual review required."</code></pre>
           </div>
         </div>
@@ -647,12 +665,31 @@ ORDER_DB = {
 }
 
 TRACKING_DB = {
+    # UPS — 18-char "1Z" prefix
     "1Z999AA10123456784": {
         "tracking_number": "1Z999AA10123456784", "carrier": "UPS",
         "status": "exception",
         "exception_detail": "Weather delay — Memphis hub",
         "original_eta": "2024-03-08", "revised_eta": "2024-03-13",
         "last_scan": "2024-03-09T18:45:00Z", "last_location": "Memphis, TN",
+    },
+    # FedEx — 12-digit numeric
+    "794611205847": {
+        "tracking_number": "794611205847", "carrier": "FedEx",
+        "status": "in_transit",
+        "exception_detail": None,
+        "original_eta": "2024-03-11", "revised_eta": "2024-03-11",
+        "last_scan": "2024-03-10T09:12:00Z",
+        "last_location": "Indianapolis, IN",
+    },
+    # DHL — 10-digit numeric
+    "1234567890": {
+        "tracking_number": "1234567890", "carrier": "DHL",
+        "status": "exception",
+        "exception_detail": "Customs hold — missing commercial invoice",
+        "original_eta": "2024-03-09", "revised_eta": "2024-03-15",
+        "last_scan": "2024-03-09T22:08:00Z",
+        "last_location": "Cincinnati, OH (CVG hub)",
     },
 }
 
@@ -769,11 +806,27 @@ const ORDER_DB: Record&lt;string, any&gt; = {
 };
 
 const TRACKING_DB: Record&lt;string, any&gt; = {
+  // UPS — 18-char "1Z" prefix
   "1Z999AA10123456784": {
     tracking_number: "1Z999AA10123456784", carrier: "UPS",
     status: "exception", exception_detail: "Weather delay — Memphis hub",
     original_eta: "2024-03-08", revised_eta: "2024-03-13",
     last_location: "Memphis, TN",
+  },
+  // FedEx — 12-digit numeric
+  "794611205847": {
+    tracking_number: "794611205847", carrier: "FedEx",
+    status: "in_transit", exception_detail: null,
+    original_eta: "2024-03-11", revised_eta: "2024-03-11",
+    last_location: "Indianapolis, IN",
+  },
+  // DHL — 10-digit numeric
+  "1234567890": {
+    tracking_number: "1234567890", carrier: "DHL",
+    status: "exception",
+    exception_detail: "Customs hold — missing commercial invoice",
+    original_eta: "2024-03-09", revised_eta: "2024-03-15",
+    last_location: "Cincinnati, OH (CVG hub)",
   },
 };
 

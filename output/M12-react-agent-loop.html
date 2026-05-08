@@ -2763,6 +2763,18 @@ console.log(formatTrace(result.trace));</code></pre>
           <div class="checkpoint-label">What Just Happened?</div>
           <p>You built a trace formatter that turns the raw trace array into a readable timeline. Each iteration shows the Reason-Act-Observe triple clearly labeled. If an agent ever produces a wrong answer, this trace is the first thing you read — it tells you exactly which step went wrong and why.</p>
         </div>
+
+        <div class="callout-cert" style="margin-top:1.5rem;">
+          <span class="box-label">The Evolution of This Loop</span>
+          <p>In M05 you made a single tool call. Now you have wrapped it in a <code>while</code> loop that checks <code>stop_reason</code> and lets Claude decide what to do next. This is the RAW ReAct loop &mdash; you see every line.</p>
+          <p style="margin-top:0.75rem;"><strong>What comes next:</strong></p>
+          <ul style="margin-top:0.5rem;">
+            <li><strong>M15B</strong> &mdash; You will add a coordinator that delegates to subagent functions. Each subagent runs its own loop with its own tools. Same pattern, but orchestrated.</li>
+            <li><strong>M26</strong> &mdash; The Agent SDK replaces this entire <code>while</code> loop. You define tools with <code>agent.tool</code> decorators and the SDK runs the loop for you. Hooks let you intercept each tool call for logging and guardrails without touching the loop code.</li>
+            <li><strong>M25</strong> &mdash; You write a spec document describing the agent and Claude Code generates the loop, tools, hooks, and tests from the spec.</li>
+          </ul>
+          <p style="margin-top:0.75rem;">You are learning the engine before using the car. Understanding this raw loop is what lets you debug the SDK when something goes wrong.</p>
+        </div>
       </section>
 
       <div class="bridge">You've built a complete ReAct agent with tools, a loop, stop conditions, and thought trace logging. But production agents don't live in a perfect world &mdash; APIs time out, rate limits hit, and services go down. Next we'll cover how to make your ReAct loop resilient, then explore how Extended Thinking can boost complex reasoning.</div>
@@ -2790,7 +2802,7 @@ console.log(formatTrace(result.trace));</code></pre>
             result = CALL tool_call.tool(tool_call.input)
             BREAK  # success — exit retry loop
         CATCH error:
-            WAIT (2 ^ attempt) seconds   # exponential backoff: 2s, 4s, 8s
+            WAIT (2 ^ (attempt - 1)) seconds   # exponential backoff: 1s, 2s, 4s
             LOG warning: "Tool {tool_call.tool} failed (attempt {attempt}): {error}"
 
     IF result is None AND fallback_tool EXISTS:
@@ -2880,7 +2892,7 @@ for block in response.content:
             <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
             <pre><code class="language-python">mkdir react-lab && cd react-lab
 python -m venv venv && source venv/bin/activate   # Windows: venv\Scripts\activate
-pip install anthropic>=0.30.0
+pip install "anthropic>=0.40.0"
 export ANTHROPIC_API_KEY=your-key-here             # Windows: set ANTHROPIC_API_KEY=your-key-here</code></pre>
           </div>
         </div>
@@ -3091,9 +3103,13 @@ if __name__ == "__main__":
     print(f"  Answer: {r2['answer'][:150]}")
     print(f"  Stats: {r2['iterations']} iterations, {r2['tokens']:,} tokens, stop={r2['stop']}")
 
-    # Test 3: Max iterations stop condition
+    # Test 3: Max iterations stop condition — force tool use, cap loop early
     print("\n▶ TEST 3: Max iterations trigger")
-    r3 = react_agent("Explain quantum computing in detail with examples.", max_iterations=2)
+    r3 = react_agent(
+        "Use the calculator tool for each step: compute 12*7, then 5+3, "
+        "then 100/4, then 2**8. Use a separate calculator call for each.",
+        max_iterations=2,
+    )
     print(f"  Stop reason: {r3['stop']}")
 
     # Test 4: Print full thought trace

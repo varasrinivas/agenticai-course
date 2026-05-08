@@ -305,7 +305,7 @@
       <div class="callout-warning">
         <span class="box-label">Common Misconceptions</span>
         <p><strong>"Testing data pipelines is just SELECT COUNT(*)"</strong> &mdash; Count matching is check #2 of 12. Counts can match perfectly while dates are wrong, names are unnormalized, duplicates exist, and required fields are null. You need structural, content, and referential integrity checks.</p>
-        <p><strong>"50 agents means 50x the API cost"</strong> &mdash; Each state tester makes 2&ndash;3 Claude API calls (plan checks, evaluate results, generate report). At ~$0.003 per call with Haiku, 50 states costs ~$0.45 total. The parallelism saves time, not money &mdash; but the time savings (20 seconds vs 2 days manual) is enormous.</p>
+        <p><strong>"50 agents means 50x the API cost"</strong> &mdash; The base capstone runs zero API calls per state (all 12 checks are deterministic Python), so 50 states costs $0. The optional Claude-driven failure-analysis stretch goal would add ~2&ndash;3 Haiku calls per failed state (~$0.003 each); even at 100% failure rate that's under $0.50 for the entire 50-state run. The parallelism saves time (20 seconds vs 2 days manual) at near-zero cost.</p>
         <p><strong>"I should test the Canonical Loader itself"</strong> &mdash; No. Your agent tests the OUTPUT of the loader &mdash; the Bronze table &mdash; not the loader code. This is black-box testing: you compare source files to what ended up in the table, regardless of how the loader works internally.</p>
       </div>
     </section>
@@ -448,10 +448,10 @@ filing_number,type,filing_date,status,debtor_name,debtor_addr,org_type,sp_name,s
         <div class="format-panel" id="fmt-fixed">
           <div class="format-code"><span style="color:var(--text-muted);"># Fixed-width: TX/FL format (ruler shows column positions)</span>
 <span style="color:var(--text-muted);">|---15---|--5-|---10----|1|----30---------...---|---20---...|</span>
-<span class="field-hl hl-fn">NY-2024-0847   </span>UCC1 <span class="field-hl hl-dt">03152024  </span><span class="field-hl hl-st">A</span><span class="field-hl hl-dn">ACME CORPORATION              </span><span class="field-hl hl-sp">FIRST NATIONAL BANK </span>
+<span class="field-hl hl-fn">NY-2024-0847   </span>UCC1 <span class="field-hl hl-dt">20240315  </span><span class="field-hl hl-st">A</span><span class="field-hl hl-dn">ACME CORPORATION              </span><span class="field-hl hl-sp">FIRST NATIONAL BANK </span>
 
 <span style="color:var(--text-muted);"># Note: No delimiters. Fields are at exact character positions.
-# Date is MMDDYYYY (no separators). Padded with spaces.</span></div>
+# Date is YYYYMMDD (no separators). Padded with spaces.</span></div>
         </div>
         <div class="format-panel" id="fmt-json">
           <div class="format-code">{
@@ -524,9 +524,9 @@ filing_number,type,filing_date,status,debtor_name,debtor_addr,org_type,sp_name,s
         </div>
         <div class="error-panel active" id="err-trunc">
           <div class="error-detail">
-            <div class="error-file"><div class="error-label">TX_BAD_truncated.dat</div><div class="error-code">TX-2024-0001  UCC1 03152024A...
-TX-2024-0002  UCC1 04202024A...
-TX-2024-0003  UCC1 05<span style="color:var(--error);font-weight:700;">EOF</span>
+            <div class="error-file"><div class="error-label">TX_BAD_truncated.dat</div><div class="error-code">TX-2024-0001  UCC1 20240315A...
+TX-2024-0002  UCC1 20240420A...
+TX-2024-0003  UCC1 20<span style="color:var(--error);font-weight:700;">EOF</span>
 <span style="color:var(--error);">^ File ends mid-record</span></div></div>
             <div class="error-response"><div class="error-label">Agent Response</div><div class="error-code">Check: <span style="color:var(--error);font-weight:700;">SRC-01 FAIL</span>
 State: TX
@@ -624,7 +624,7 @@ records. Empty state is valid
 │   ├── <span class="tool">validation_checks.py</span> <span style="color:var(--text-muted);"># All 12 check implementations</span>
 │   └── <span class="tool">report_generator.py</span> <span style="color:var(--text-muted);"># Dashboard + report output</span>
 ├── <span class="dir">mock_data/</span>
-│   ├── <span class="dir">source_files/</span>       <span style="color:var(--text-muted);"># 15 files (5 formats + error cases)</span>
+│   ├── <span class="dir">source_files/</span>       <span style="color:var(--text-muted);"># 9 files (5 formats + GA + 3 error cases)</span>
 │   │   ├── <span class="mock">NY_2024_Q4.xml</span>
 │   │   ├── <span class="mock">CA_2024_Q4.csv</span>   <span style="color:var(--text-muted);"># pipe-delimited</span>
 │   │   ├── <span class="mock">DE_2024_Q4.csv</span>   <span style="color:var(--text-muted);"># comma with header</span>
@@ -634,7 +634,7 @@ records. Empty state is valid
 │   │   ├── <span class="mock">TX_BAD_truncated.dat</span>
 │   │   ├── <span class="mock">FL_BAD_encoding.json</span>
 │   │   └── <span class="mock">EMPTY_STATE.csv</span>
-│   ├── <span class="mock">bronze_table.json</span>    <span style="color:var(--text-muted);"># ~8,500 mock Bronze records</span>
+│   ├── <span class="mock">bronze_table.json</span>    <span style="color:var(--text-muted);"># ~2,475 mock Bronze records</span>
 │   ├── <span class="mock">state_format_registry.json</span>
 │   └── <span class="mock">load_manifest.json</span>
 ├── <span class="config">config.py</span>               <span style="color:var(--text-muted);"># 50-state registry with format types</span>
@@ -723,13 +723,13 @@ records. Empty state is valid
           <div class="code-panel active" id="s1-bash"><button class="copy-btn" onclick="copyCode(this)">Copy</button><pre><code>mkdir -p capstone-6-bronze-testing/{tools,mock_data/source_files}
 cd capstone-6-bronze-testing
 python -m venv venv && source venv/bin/activate
-pip install anthropic pydantic rich
+pip install anthropic pydantic rich duckdb fastapi uvicorn httpx
 export ANTHROPIC_API_KEY=your-key-here</code></pre></div>
           <div class="code-panel" id="s1-win"><button class="copy-btn" onclick="copyCode(this)">Copy</button><pre><code>mkdir capstone-6-bronze-testing\tools
 mkdir capstone-6-bronze-testing\mock_data\source_files
 cd capstone-6-bronze-testing
 python -m venv venv && venv\Scripts\activate
-pip install anthropic pydantic rich
+pip install anthropic pydantic rich duckdb fastapi uvicorn httpx
 set ANTHROPIC_API_KEY=your-key-here</code></pre></div>
         </div>
         <p><strong>Run:</strong> <code>python -c "import anthropic; print('OK')"</code></p>
@@ -828,7 +828,7 @@ for s in STATES.values():
         </div>
         <p><strong>Run:</strong> <code>python -c "from config import STATES, TOTAL_EXPECTED_RECORDS; print(f'{len(STATES)} states, {TOTAL_EXPECTED_RECORDS} expected records')"</code></p>
         <p><strong>Expected output:</strong></p>
-        <div class="code-block-wrapper"><div class="code-panel active"><pre><code>50 states, 18472 expected records</code></pre></div></div>
+        <div class="code-block-wrapper"><div class="code-panel active"><pre><code>50 states, 18403 expected records</code></pre></div></div>
         <div class="checkpoint"><div class="checkpoint-label">Checkpoint</div>You should see exactly 50 states. If the count is wrong, check that you didn't accidentally duplicate or omit a state entry.</div>
       </div>
 
@@ -836,7 +836,7 @@ for s in STATES.values():
       <div class="step" id="step3">
         <div class="step-header">Step 3: Create Mock Source Files</div>
         <div class="step-meta"><span>20 min</span><span>mock_data/source_files/</span></div>
-        <p><strong>What &amp; Why:</strong> We need realistic source files in all 5 formats so the parser and validators have something to test against. We'll generate 15 files: one per format type (5 clean files), plus error cases (truncated, bad encoding, empty, duplicates, bad dates). This step creates a Python script that generates the mock data &mdash; run it once and you have all your test files.</p>
+        <p><strong>What &amp; Why:</strong> We need realistic source files in all 5 formats so the parser and validators have something to test against. We'll generate 9 source files: one per format type (5 clean representative files: NY/CA/DE/TX/NV), GA with bad-date Bronze records, plus 3 error files (truncated, bad encoding, empty). This step creates a Python script that generates the mock data &mdash; run it once and you have all your test files.</p>
         <p>This step depends on Step 2 (the state registry). If you skipped Step 2, go back and create <code>config.py</code> first.</p>
         <p><strong>Create a new file called <code>generate_mock_data.py</code>:</strong></p>
         <div class="code-block-wrapper">
@@ -1014,17 +1014,25 @@ def generate():
             r["filing_date"] = f"{parts[2]}/{parts[1]}/{parts[0]}"  # DD/MM/YYYY
 
     # NY: inject 2 records with lapse before filing
+    # Use 2020-01-01 — guaranteed before any 2024 filing_date the
+    # generator could ever produce. "2024-01-01" risked colliding
+    # with a randomly-generated filing_date of the same day.
     ny_recs = [r for r in all_bronze if r["source_state"] == "NY"]
     if len(ny_recs) >= 2:
-        ny_recs[0]["lapse_date"] = "2024-01-01"  # Before any 2024 filing
-        ny_recs[1]["lapse_date"] = "2024-01-01"
+        ny_recs[0]["lapse_date"] = "2020-01-01"
+        ny_recs[1]["lapse_date"] = "2020-01-01"
 
-    # NV: inject 3 duplicates
+    # NV: inject 3 duplicates into BOTH Bronze and the source file
+    # so CNT-01 stays PASS (counts match) and DUP-01 becomes WARN
+    # (the duplicates are a Bronze-level data quality issue, not a count mismatch).
     nv_recs = [r for r in all_bronze if r["source_state"] == "NV"]
     if len(nv_recs) >= 3:
         for i in range(3):
             dup = dict(nv_recs[i])
             all_bronze.append(dup)
+        # Re-write NV source file with the duplicated records included
+        nv_full = [r for r in all_bronze if r["source_state"] == "NV"]
+        write_json_format("NV", nv_full, f"{OUT}/source_files/NV_2024_Q4.json")
 
     # Write Bronze table
     with open(f"{OUT}/bronze_table.json", "w") as f:
@@ -1032,8 +1040,8 @@ def generate():
 
     # Write error source files
     with open(f"{OUT}/source_files/TX_BAD_truncated.dat", "w") as f:
-        f.write("TX-2024-0001  UCC1 03152024A" + "X"*40 + "\n")
-        f.write("TX-2024-0002  UCC1 04202024A" + "X"*40 + "\n")
+        f.write("TX-2024-0001  UCC1 20240315A" + "X"*40 + "\n")
+        f.write("TX-2024-0002  UCC1 20240420A" + "X"*40 + "\n")
         f.write("TX-2024-0003  UCC1 05")  # Truncated
 
     with open(f"{OUT}/source_files/FL_BAD_encoding.json", "wb") as f:
@@ -1066,9 +1074,9 @@ if __name__ == "__main__":
         </div>
         <p><strong>Run:</strong> <code>python generate_mock_data.py</code></p>
         <p><strong>Expected output:</strong></p>
-        <div class="code-block-wrapper"><div class="code-panel active"><pre><code>Generated ~2503 Bronze records across 50 states
-Source files: 8</code></pre></div></div>
-        <div class="checkpoint"><div class="checkpoint-label">Checkpoint</div>You should see Bronze records generated and 8 source files (5 clean + 3 error files). Check that <code>mock_data/bronze_table.json</code> exists and <code>mock_data/source_files/</code> contains files.</div>
+        <div class="code-block-wrapper"><div class="code-panel active"><pre><code>Generated 2475 Bronze records across 50 states
+Source files: 9</code></pre></div></div>
+        <div class="checkpoint"><div class="checkpoint-label">Checkpoint</div>You should see 2475 Bronze records (50 states &times; up to 50 records each, plus 3 injected NV duplicates) and 9 source files (5 representative format files + GA + 3 error files). Check that <code>mock_data/bronze_table.json</code> exists and <code>mock_data/source_files/</code> contains files.</div>
       </div>
 
       <!-- STEP 3B: __init__.py -->
@@ -1216,7 +1224,7 @@ def _parse_fixed_width(state: str, path: str) -> list[dict]:
                 raise ValueError(f"Line {line_num}: record truncated ({len(line.rstrip())} chars)")
             status_map = {"A": "ACTIVE", "T": "TERMINATED", "L": "LAPSED"}
             raw_date = line[35:45].strip()
-            # Convert MMDDYYYY or YYYYMMDD to YYYY-MM-DD
+            # Convert YYYYMMDD to YYYY-MM-DD
             if len(raw_date) == 8 and raw_date.isdigit():
                 filing_date = f"{raw_date[:4]}-{raw_date[4:6]}-{raw_date[6:]}"
             else:
@@ -1251,7 +1259,7 @@ def _parse_json(state: str, path: str) -> list[dict]:
         </div>
         <p><strong>Run:</strong> <code>python -c "from tools.file_parser import parse; r = parse('NV', 'mock_data/source_files/NV_2024_Q4.json', 'json'); print(f'{len(r)} records, first: {r[0][\"filing_number\"]}')"</code></p>
         <p><strong>Expected output:</strong></p>
-        <div class="code-block-wrapper"><div class="code-panel active"><pre><code>50 records, first: NV-2024-0001</code></pre></div></div>
+        <div class="code-block-wrapper"><div class="code-panel active"><pre><code>53 records, first: NV-2024-0001</code></pre></div></div>
         <div class="checkpoint"><div class="checkpoint-label">Checkpoint</div>The parser successfully reads a JSON source file and returns structured records. Test with the XML file too: <code>parse('NY', 'mock_data/source_files/NY_2024_Q4.xml', 'xml')</code>.</div>
       </div>
 
@@ -1299,7 +1307,7 @@ def get_total_count(load_id: str = "LOAD-2024Q4-SEED") -> int:
         </div>
         <p><strong>Run:</strong> <code>python -c "from tools.bronze_query import get_record_count, get_total_count; print(f'NY: {get_record_count(\"NY\")} records, Total: {get_total_count()}')"</code></p>
         <p><strong>Expected output:</strong></p>
-        <div class="code-block-wrapper"><div class="code-panel active"><pre><code>NY: 50 records, Total: ~2503</code></pre></div></div>
+        <div class="code-block-wrapper"><div class="code-panel active"><pre><code>NY: 50 records, Total: 2475</code></pre></div></div>
         <div class="checkpoint"><div class="checkpoint-label">Checkpoint</div>Bronze query returns records filtered by state. The NY count should match what <code>generate_mock_data.py</code> created (capped at 50 per state for mock data).</div>
       </div>
 
@@ -1551,7 +1559,7 @@ ALL_CHECKS = [
       <div class="step" id="step7">
         <div class="step-header">Step 7: Build the State Tester Agent</div>
         <div class="step-meta"><span>30 min</span><span>state_tester.py</span></div>
-        <p><strong>What &amp; Why:</strong> This is the subagent &mdash; one instance runs per state. It uses Claude to orchestrate the validation: read the source file, query Bronze, run all 12 checks, and produce a structured report. The agent uses tools (parser, query, checks) rather than doing everything in Python, which means Claude can reason about the results and provide intelligent error messages.</p>
+        <p><strong>What &amp; Why:</strong> This is the subagent &mdash; one instance runs per state. It runs the deterministic validation pipeline: parse the source file, query Bronze, execute all 12 checks, and emit a structured report. The "agent" label here is the parallel-coordinator pattern from M14B/M15B, not a Claude-loop agent &mdash; everything inside <code>test_state()</code> is pure Python so the harness is fast (~20s for 50 states) and free to run on every commit. A Claude-driven failure-analysis step is offered as a stretch goal in the "Going Further" section.</p>
         <p><strong>Create a new file called <code>state_tester.py</code>:</strong></p>
         <div class="code-block-wrapper">
           <div class="code-tabs"><button class="code-tab active" onclick="switchTab(this,'s7-py')">Python</button></div>
@@ -1674,14 +1682,16 @@ from config import STATES, TOTAL_EXPECTED_RECORDS
 from state_tester import test_state
 
 def run_coordinator(load_id: str, mode: str = "full_seed",
-                    baseline: str | None = None, max_workers: int = 10) -> dict:
+                    baseline: str | None = None, max_workers: int = 50) -> dict:
     """Run Bronze validation across all 50 states in parallel.
 
     Args:
         load_id: The load batch ID to validate
         mode: full_seed | incremental | change_detection
         baseline: Previous load_id for incremental comparison
-        max_workers: Thread pool size (10 = 10 states tested concurrently)
+        max_workers: Thread pool size (50 = all 50 states concurrent;
+            drop to 10 if your runtime has memory pressure or
+            quota-limited downstream APIs)
 
     Returns:
         Aggregated results dict with summary and per-state details
@@ -1784,7 +1794,7 @@ if __name__ == "__main__":
     parser.add_argument("--mode", default="full_seed",
                         choices=["full_seed", "incremental", "change_detection"])
     parser.add_argument("--baseline", default=None)
-    parser.add_argument("--workers", type=int, default=10)
+    parser.add_argument("--workers", type=int, default=50)
     args = parser.parse_args()
 
     result = run_coordinator(args.load_id, args.mode, args.baseline, args.workers)
@@ -1842,6 +1852,9 @@ if __name__ == "__main__":
     <section class="section" id="tier1">
       <h2 id="tier1-heading">Tier 1: Local Production Deployment</h2>
       <p>No cloud account needed. Uses Docker + DuckDB + local filesystem. This is a real production setup &mdash; containerized, with a database, API server, file watcher, and dashboard &mdash; just running on your laptop.</p>
+      <div class="callout-info" style="margin: 0.5rem 0 1rem;">
+        <strong>About Tier 2 (GCP) and Tier 3 (AWS):</strong> The capstone ships only Tier 1 as runnable code. The cloud tiers swap DuckDB &rarr; BigQuery, local files &rarr; GCS/S3, and the file watcher &rarr; Pub/Sub or EventBridge &mdash; but the coordinator and state-tester code remain byte-for-byte identical. See "Going Further" for the swap recipe and Q3 for the architectural takeaway.</p>
+      </div>
 
       <!-- STEP 9: DuckDB -->
       <div class="step" id="step9">
@@ -1912,7 +1925,7 @@ if __name__ == "__main__":
         </div>
         <p><strong>Run:</strong> <code>python -m tools.bronze_query_local</code></p>
         <p><strong>Expected output:</strong></p>
-        <div class="code-block-wrapper"><div class="code-panel active"><pre><code>Loaded ~2503 records into DuckDB at data/bronze.duckdb</code></pre></div></div>
+        <div class="code-block-wrapper"><div class="code-panel active"><pre><code>Loaded 2475 records into DuckDB at data/bronze.duckdb</code></pre></div></div>
         <p><strong>Verify:</strong> <code>python -c "from tools.bronze_query_local import get_record_count; print(get_record_count('NY'))"</code></p>
         <div class="checkpoint"><div class="checkpoint-label">Checkpoint</div>DuckDB returns the same record count as the JSON version. You now have a real SQL database backing your Bronze table.</div>
       </div>

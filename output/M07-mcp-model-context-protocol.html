@@ -590,7 +590,7 @@
         <div class="tech-def-box">
           <span class="box-label">Technical Definition</span>
           <p>An <strong>MCP server</strong> is a small program whose entire job is to say: "Here are the things I can do &mdash; ask me anytime." You write regular functions &mdash; read a file, query a database, call an API &mdash; and then you <em>register</em> them with the MCP SDK. Once registered, any connected AI client can discover and call them automatically.</p>
-          <p>How you register depends on your language. In Python, you install the <code>mcp</code> package and use the <code>@server.tool()</code> <span class="term-tooltip" tabindex="0" aria-describedby="tt-decorator">decorator<span class="tooltip-content" role="tooltip" id="tt-decorator">A Python feature that wraps a function with additional behavior &mdash; here, it tells the MCP framework to expose this function as a callable tool.</span></span> to mark each function as a tool. In Node.js, you install <code>@modelcontextprotocol/sdk</code> and call <code>server.setRequestHandler()</code> instead.</p>
+          <p>How you register depends on your language. In Python, you install the <code>mcp</code> package, instantiate <code>FastMCP("name")</code>, and use the <code>@mcp.tool()</code> <span class="term-tooltip" tabindex="0" aria-describedby="tt-decorator">decorator<span class="tooltip-content" role="tooltip" id="tt-decorator">A Python feature that wraps a function with additional behavior &mdash; here, it tells the MCP framework to expose this function as a callable tool.</span></span> to mark each function as a tool. In Node.js, you install <code>@modelcontextprotocol/sdk</code> and call <code>server.setRequestHandler()</code> instead.</p>
           <p>The server also defines <strong>input schemas</strong> &mdash; descriptions of what parameters each tool expects. These schemas tell the AI model exactly what data to send when calling a tool. Finally, you pick a <strong>transport</strong>. Use <code>stdio</code> for local servers &mdash; the client launches your server as a subprocess and talks through stdin/stdout pipes. Use <code>HTTP+SSE</code> for remote servers &mdash; communication happens over the network instead.</p>
         </div>
 
@@ -600,14 +600,13 @@
           <p class="reduced-motion-msg">Animation disabled. Steps: (1) Import and create server, (2) Register a tool with decorator, (3) Implement the handler, (4) Start the server. Each step lights up a capability on the server.</p>
           <div class="build-scene" id="buildScene">
             <div class="build-editor" id="buildEditor">
-              <div class="line" data-step="1"><span class="kw">from</span> mcp.server <span class="kw">import</span> Server</div>
-              <div class="line" data-step="1"><span class="kw">from</span> mcp.types <span class="kw">import</span> Tool, Resource</div>
+              <div class="line" data-step="1"><span class="kw">from</span> mcp.server.fastmcp <span class="kw">import</span> FastMCP</div>
               <div class="line" data-step="1">&nbsp;</div>
-              <div class="line" data-step="1">server = <span class="fn">Server</span>(<span class="str">"my-server"</span>)</div>
+              <div class="line" data-step="1">mcp = <span class="fn">FastMCP</span>(<span class="str">"my-server"</span>)</div>
               <div class="line" data-step="2">&nbsp;</div>
               <div class="line" data-step="2"><span class="cm"># Register a tool</span></div>
-              <div class="line" data-step="2"><span class="kw">@</span>server.<span class="fn">tool</span>()</div>
-              <div class="line" data-step="2"><span class="kw">async def</span> <span class="fn">read_file</span>(path: <span class="fn">str</span>):</div>
+              <div class="line" data-step="2"><span class="kw">@</span>mcp.<span class="fn">tool</span>()</div>
+              <div class="line" data-step="2"><span class="kw">def</span> <span class="fn">read_file</span>(path: <span class="fn">str</span>):</div>
               <div class="line" data-step="3">    <span class="str">"""Read a file's contents"""</span></div>
               <div class="line" data-step="3">    <span class="kw">try</span>:</div>
               <div class="line" data-step="3">        <span class="kw">with</span> <span class="fn">open</span>(path) <span class="kw">as</span> f:</div>
@@ -616,7 +615,7 @@
               <div class="line" data-step="3">        <span class="kw">return</span> <span class="str">f"Error: {path} not found"</span></div>
               <div class="line" data-step="4">&nbsp;</div>
               <div class="line" data-step="4"><span class="cm"># Start server (stdio transport)</span></div>
-              <div class="line" data-step="4">server.<span class="fn">run</span>()</div>
+              <div class="line" data-step="4">mcp.<span class="fn">run</span>()</div>
             </div>
             <div class="build-server">
               <div style="font-family:'Bricolage Grotesque',sans-serif;font-size:0.75rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;">Server Status</div>
@@ -983,9 +982,9 @@
         <p>This server has four logical chunks. Here's what each one does and why:</p>
         <div class="code-annotation" style="background: rgba(56,189,248,0.06); border-left: 3px solid var(--info); padding: 0.75rem 1rem; margin: 1rem 0; border-radius: 0 6px 6px 0; font-size: 0.9rem;">
           <p><strong>Chunk 1 &mdash; Imports &amp; path security (lines 1-12):</strong> Let's start with the most important design decision in this server: path restriction. The <code>ALLOWED_ROOT</code> variable and <code>is_allowed()</code> function work together to ensure the AI model can only touch files inside a specific directory. Without this, an AI model could read <em>any file on your machine</em> &mdash; including <code>/etc/passwd</code> or <code>~/.ssh/id_rsa</code>. Here's the subtle part: the function uses <code>Path.resolve()</code> to follow symlinks before checking the path. Without this, a crafty path like <code>../../etc/passwd</code> would bypass a naive string check entirely.</p>
-          <p><strong>Chunk 2 &mdash; Tool definitions (lines 14-45):</strong> Now we define three tools &mdash; read, write, and list &mdash; each decorated with <code>@server.tool()</code>. The decorator is the key line here. It tells MCP: "expose this Python function as a callable tool that AI models can discover and invoke." Without it, the function exists in your code but is completely invisible to Claude. The interesting part is that the decorator also auto-generates the tool's JSON Schema from your type hints. So when you write <code>path: str</code>, MCP automatically tells the client "this parameter expects a string" &mdash; no manual schema writing needed.</p>
+          <p><strong>Chunk 2 &mdash; Tool definitions (lines 14-45):</strong> Now we define three tools &mdash; read, write, and list &mdash; each decorated with <code>@mcp.tool()</code>. The decorator is the key line here. It tells MCP: "expose this Python function as a callable tool that AI models can discover and invoke." Without it, the function exists in your code but is completely invisible to Claude. The interesting part is that the decorator also auto-generates the tool's JSON Schema from your type hints. So when you write <code>path: str</code>, MCP automatically tells the client "this parameter expects a string" &mdash; no manual schema writing needed.</p>
           <p><strong>Chunk 3 &mdash; Resource &amp; prompt (lines 47-67):</strong> Here's where the choice of primitive really matters. The file tree is registered as a Resource (not a Tool) because browsing a directory has no side effects &mdash; the client can read it freely without asking the user for confirmation. If we had made this a Tool instead, the user would get a confirmation prompt every time Claude wanted to look at the file tree, which would be annoying for something completely harmless. The prompt template serves a different purpose: it standardizes how Claude analyzes files, so you get consistent, structured output every time instead of freeform responses.</p>
-          <p><strong>Chunk 4 &mdash; Server startup (lines 69-76):</strong> The last piece is wiring everything up to a transport. The <code>stdio_server()</code> context manager handles all the low-level pipe communication for you &mdash; reading JSON-RPC messages from stdin and writing responses to stdout. When Claude Desktop launches this script as a subprocess, this is the code that keeps the conversation going between client and server.</p>
+          <p><strong>Chunk 4 &mdash; Server startup (lines 69-71):</strong> The last piece is wiring everything up to a transport. Calling <code>mcp.run()</code> hands off to the FastMCP runtime, which spins up a stdio loop &mdash; reading JSON-RPC messages from stdin and writing responses to stdout. When Claude Desktop launches this script as a subprocess, this is the code that keeps the conversation going between client and server.</p>
         </div>
 
         <div class="code-block-wrapper">
@@ -996,14 +995,13 @@
           <div class="code-panel active" id="fs-py">
             <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
             <pre><code class="language-python"># filesystem_server.py
-# pip install mcp>=1.0.0
+# pip install "mcp[cli]>=1.0.0"
 import os
 import json
 from pathlib import Path
-from mcp.server import Server
-from mcp.server.stdio import stdio_server
+from mcp.server.fastmcp import FastMCP
 
-server = Server("filesystem-server")
+mcp = FastMCP("filesystem-server")
 
 # Restrict to allowed paths for security
 ALLOWED_ROOT = os.environ.get("ALLOWED_PATHS", os.getcwd())
@@ -1014,8 +1012,8 @@ def is_allowed(path: str) -> bool:
     return str(resolved).startswith(str(Path(ALLOWED_ROOT).resolve()))
 
 # --- TOOL: Read a file ---
-@server.tool()
-async def read_file(path: str) -> str:
+@mcp.tool()
+def read_file(path: str) -> str:
     """Read the contents of a file at the given path."""
     try:
         if not is_allowed(path):
@@ -1031,8 +1029,8 @@ async def read_file(path: str) -> str:
         return json.dumps({"error": f"Unexpected error: {str(e)}"})
 
 # --- TOOL: Write a file ---
-@server.tool()
-async def write_file(path: str, content: str) -> str:
+@mcp.tool()
+def write_file(path: str, content: str) -> str:
     """Write content to a file at the given path."""
     try:
         if not is_allowed(path):
@@ -1047,8 +1045,8 @@ async def write_file(path: str, content: str) -> str:
         return json.dumps({"error": f"Unexpected error: {str(e)}"})
 
 # --- TOOL: List directory ---
-@server.tool()
-async def list_directory(path: str) -> str:
+@mcp.tool()
+def list_directory(path: str) -> str:
     """List files and subdirectories at the given path."""
     try:
         if not is_allowed(path):
@@ -1067,8 +1065,8 @@ async def list_directory(path: str) -> str:
         return json.dumps({"error": f"Unexpected error: {str(e)}"})
 
 # --- RESOURCE: File tree of working directory ---
-@server.resource("file-tree://cwd")
-async def get_file_tree() -> str:
+@mcp.resource("file-tree://cwd")
+def get_file_tree() -> str:
     """Browse the current working directory file tree."""
     tree = []
     for root, dirs, files in os.walk(ALLOWED_ROOT):
@@ -1082,31 +1080,21 @@ async def get_file_tree() -> str:
     return "\n".join(tree)
 
 # --- PROMPT: File summary ---
-@server.prompt()
-async def file_summary(path: str) -> list:
+@mcp.prompt()
+def file_summary(path: str) -> str:
     """Generate a structured file analysis prompt."""
-    return [
-        {
-            "role": "user",
-            "content": (
-                f"Analyze the file at '{path}'. Provide:\n"
-                "1. A one-line summary of what the file does\n"
-                "2. Key functions/classes and their purposes\n"
-                "3. Dependencies and imports\n"
-                "4. Potential issues or improvements\n"
-                "5. A complexity rating (Low/Medium/High)"
-            )
-        }
-    ]
+    return (
+        f"Analyze the file at '{path}'. Provide:\n"
+        "1. A one-line summary of what the file does\n"
+        "2. Key functions/classes and their purposes\n"
+        "3. Dependencies and imports\n"
+        "4. Potential issues or improvements\n"
+        "5. A complexity rating (Low/Medium/High)"
+    )
 
-# --- Start server ---
-async def main():
-    async with stdio_server() as (read_stream, write_stream):
-        await server.run(read_stream, write_stream)
-
+# --- Start server (stdio transport) ---
 if __name__ == "__main__":
-    import asyncio
-    asyncio.run(main())</code></pre>
+    mcp.run()</code></pre>
           </div>
           <div class="code-panel" id="fs-js">
             <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
@@ -1262,14 +1250,13 @@ Discovered 1 prompt: file_summary</div>
           <div class="code-panel active" id="db-py">
             <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
             <pre><code class="language-python"># database_server.py
-# pip install mcp>=1.0.0
+# pip install "mcp[cli]>=1.0.0"
 import os
 import json
 import sqlite3
-from mcp.server import Server
-from mcp.server.stdio import stdio_server
+from mcp.server.fastmcp import FastMCP
 
-server = Server("database-server")
+mcp = FastMCP("database-server")
 DB_PATH = os.environ.get("DB_PATH", "./data/app.db")
 
 def get_conn():
@@ -1280,8 +1267,8 @@ def get_conn():
     return conn
 
 # --- TOOL: Run a SQL query ---
-@server.tool()
-async def query(sql: str) -> str:
+@mcp.tool()
+def query(sql: str) -> str:
     """Execute a read-only SQL query and return results."""
     try:
         conn = get_conn()
@@ -1296,8 +1283,8 @@ async def query(sql: str) -> str:
         return json.dumps({"error": f"Unexpected error: {str(e)}"})
 
 # --- TOOL: List tables ---
-@server.tool()
-async def list_tables() -> str:
+@mcp.tool()
+def list_tables() -> str:
     """List all tables in the database."""
     try:
         conn = get_conn()
@@ -1311,8 +1298,8 @@ async def list_tables() -> str:
         return json.dumps({"error": str(e)})
 
 # --- TOOL: Describe table schema ---
-@server.tool()
-async def describe_table(table_name: str) -> str:
+@mcp.tool()
+def describe_table(table_name: str) -> str:
     """Get the schema of a specific table."""
     try:
         conn = get_conn()
@@ -1329,8 +1316,8 @@ async def describe_table(table_name: str) -> str:
         return json.dumps({"error": str(e)})
 
 # --- RESOURCE: Database schema overview ---
-@server.resource("db://schema")
-async def get_schema() -> str:
+@mcp.resource("db://schema")
+def get_schema() -> str:
     """Browse the full database schema."""
     try:
         conn = get_conn()
@@ -1343,30 +1330,21 @@ async def get_schema() -> str:
         return f"Error: {str(e)}"
 
 # --- PROMPT: Data exploration ---
-@server.prompt()
-async def explore_data(table_name: str) -> list:
+@mcp.prompt()
+def explore_data(table_name: str) -> str:
     """Prompt template for exploring a database table."""
-    return [
-        {
-            "role": "user",
-            "content": (
-                f"Explore the '{table_name}' table. Provide:\n"
-                "1. Row count and column summary\n"
-                "2. Sample of 5 representative rows\n"
-                "3. Distribution of key columns\n"
-                "4. Any data quality issues (nulls, duplicates)\n"
-                "5. Suggested queries for deeper analysis"
-            )
-        }
-    ]
+    return (
+        f"Explore the '{table_name}' table. Provide:\n"
+        "1. Row count and column summary\n"
+        "2. Sample of 5 representative rows\n"
+        "3. Distribution of key columns\n"
+        "4. Any data quality issues (nulls, duplicates)\n"
+        "5. Suggested queries for deeper analysis"
+    )
 
-async def main():
-    async with stdio_server() as (read_stream, write_stream):
-        await server.run(read_stream, write_stream)
-
+# --- Start server (stdio transport) ---
 if __name__ == "__main__":
-    import asyncio
-    asyncio.run(main())</code></pre>
+    mcp.run()</code></pre>
           </div>
           <div class="code-panel" id="db-js">
             <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
@@ -1515,10 +1493,9 @@ npm install @modelcontextprotocol/sdk@^1.0.0</code></pre>
 import os
 import json
 from pathlib import Path
-from mcp.server import Server
-from mcp.server.stdio import stdio_server
+from mcp.server.fastmcp import FastMCP
 
-server = Server("filesystem-server")
+mcp = FastMCP("filesystem-server")
 
 # Restrict to allowed paths for security
 ALLOWED_ROOT = os.environ.get("ALLOWED_PATHS", os.getcwd())
@@ -1529,8 +1506,8 @@ def is_allowed(path: str) -> bool:
     return str(resolved).startswith(str(Path(ALLOWED_ROOT).resolve()))
 
 # ── TOOL: Read a file ────────────────────────────────────────
-@server.tool()
-async def read_file(path: str) -> str:
+@mcp.tool()
+def read_file(path: str) -> str:
     """Read the contents of a file at the given path."""
     try:
         if not is_allowed(path):
@@ -1546,8 +1523,8 @@ async def read_file(path: str) -> str:
         return json.dumps({"error": f"Unexpected error: {str(e)}"})
 
 # ── TOOL: Write a file ───────────────────────────────────────
-@server.tool()
-async def write_file(path: str, content: str) -> str:
+@mcp.tool()
+def write_file(path: str, content: str) -> str:
     """Write content to a file at the given path."""
     try:
         if not is_allowed(path):
@@ -1562,8 +1539,8 @@ async def write_file(path: str, content: str) -> str:
         return json.dumps({"error": f"Unexpected error: {str(e)}"})
 
 # ── TOOL: List directory ─────────────────────────────────────
-@server.tool()
-async def list_directory(path: str) -> str:
+@mcp.tool()
+def list_directory(path: str) -> str:
     """List files and subdirectories at the given path."""
     try:
         if not is_allowed(path):
@@ -1582,8 +1559,8 @@ async def list_directory(path: str) -> str:
         return json.dumps({"error": f"Unexpected error: {str(e)}"})
 
 # ── RESOURCE: File tree of working directory ──────────────────
-@server.resource("file-tree://cwd")
-async def get_file_tree() -> str:
+@mcp.resource("file-tree://cwd")
+def get_file_tree() -> str:
     """Browse the current working directory file tree."""
     tree = []
     for root, dirs, files in os.walk(ALLOWED_ROOT):
@@ -1597,36 +1574,26 @@ async def get_file_tree() -> str:
     return "\n".join(tree)
 
 # ── PROMPT: File analysis template ────────────────────────────
-@server.prompt()
-async def file_summary(path: str) -> list:
+@mcp.prompt()
+def file_summary(path: str) -> str:
     """Generate a structured file analysis prompt."""
-    return [
-        {
-            "role": "user",
-            "content": (
-                f"Analyze the file at '{path}'. Provide:\n"
-                "1. A one-line summary of what the file does\n"
-                "2. Key functions/classes and their purposes\n"
-                "3. Dependencies and imports\n"
-                "4. Potential issues or improvements\n"
-                "5. A complexity rating (Low/Medium/High)"
-            )
-        }
-    ]
+    return (
+        f"Analyze the file at '{path}'. Provide:\n"
+        "1. A one-line summary of what the file does\n"
+        "2. Key functions/classes and their purposes\n"
+        "3. Dependencies and imports\n"
+        "4. Potential issues or improvements\n"
+        "5. A complexity rating (Low/Medium/High)"
+    )
 
-# ── Start server ─────────────────────────────────────────────
-async def main():
-    async with stdio_server() as (read_stream, write_stream):
-        await server.run(read_stream, write_stream)
-
+# ── Start server (stdio transport) ───────────────────────────
 if __name__ == "__main__":
-    import asyncio
-    asyncio.run(main())</code></pre>
+    mcp.run()</code></pre>
           </div>
         </div>
         <p><strong>Run Command &mdash;</strong> test that the server starts without errors:</p>
         <div class="output-label">Run these commands in your terminal</div>
-        <div class="output-block">python -c "from mcp.server import Server; print('MCP SDK installed')"
+        <div class="output-block">python -c "from mcp.server.fastmcp import FastMCP; print('MCP SDK installed')"
 python -c "import filesystem_server; print('Server module loads without errors')"</div>
         <div class="output-label">Expected Output</div>
         <div class="output-block">MCP SDK installed
@@ -1640,7 +1607,7 @@ Server module loads without errors</div>
           <ul style="margin-bottom:0;">
             <li><strong><code>ModuleNotFoundError: No module named 'mcp'</code></strong> &rarr; Run <code>pip install "mcp[cli]>=1.0.0"</code>. Make sure your virtual environment is activated.</li>
             <li><strong><code>SyntaxError</code> on <code>async def</code></strong> &rarr; You need Python 3.10 or later. Check with <code>python --version</code>.</li>
-            <li><strong><code>ImportError: cannot import name 'stdio_server'</code></strong> &rarr; You may have an older MCP SDK version. Run <code>pip install --upgrade mcp</code>.</li>
+            <li><strong><code>ImportError: cannot import name 'FastMCP'</code></strong> &rarr; You may have an older MCP SDK version. Run <code>pip install --upgrade "mcp[cli]"</code>.</li>
           </ul>
         </div>
 

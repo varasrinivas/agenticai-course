@@ -1,0 +1,53 @@
+# HIPAA guardrail blocking an SSN-leaking letter
+# Reproducible by running:
+#   pytest -v test_hipaa_guardrail_blocks_ssn_leak
+# OR by directly calling check_hipaa_compliance in the REPL.
+
+>>> from mock_tools import check_hipaa_compliance
+>>> leaky = (
+...   "Dear Provider,\n\n"
+...   "Authorization for member SSN 123-45-6789 has been approved.\n\n"
+...   "Sincerely,\nClinical Authorization Team"
+... )
+>>> result = check_hipaa_compliance(leaky, "approve")
+>>> result["compliant"]
+False
+>>> result["issues"]
+['PII_LEAK: SSN pattern detected in letter body']
+>>> "[redacted-ssn]" in result["redacted_text"]
+True
+>>> "123-45-6789" in result["redacted_text"]
+False
+>>> print(result["redacted_text"])
+Dear Provider,
+
+Authorization for member SSN [redacted-ssn] has been approved.
+
+Sincerely,
+Clinical Authorization Team
+
+# Clean letters pass:
+>>> clean = (
+...   "Dear Provider,\n\n"
+...   "Authorization has been approved for the procedure.\n\n"
+...   "Sincerely,\nClinical Authorization Team"
+... )
+>>> check_hipaa_compliance(clean, "approve")["compliant"]
+True
+
+# Denials missing the word 'appeal' get flagged:
+>>> bad_denial = "Dear Provider,\n\nAuthorization is denied.\n\nSincerely,\nTeam"
+>>> r = check_hipaa_compliance(bad_denial, "deny")
+>>> r["compliant"]
+False
+>>> r["issues"]
+["MISSING_KEYWORD: denial letter must include appeal instructions"]
+
+# When the orchestrator sees compliant=False from Agent 4, it sets:
+#   state.communication_output = {
+#     "letter_id": "LTR-DET-AR-...",
+#     "hipaa_issues": [...],
+#     "blocked": True
+#   }
+#   state.stage = "error"
+# ...and the send is suppressed.

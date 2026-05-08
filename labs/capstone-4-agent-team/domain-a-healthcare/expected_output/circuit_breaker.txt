@@ -1,0 +1,34 @@
+# Circuit-breaker trip example
+# Reproducible by running pytest with: pytest -v test_circuit_breaker_trips
+# This is a synthetic trace of `record_failure` being called 3 times in a row
+# (which is what happens if the Anthropic API throws 3x consecutively).
+
+>>> state = PipelineState(request_id="AR-DEMO-CB")
+>>> check_circuit_breaker(state)
+False
+>>> state.circuit_breaker
+{'consecutive_failures': 0, 'threshold': 3, 'status': 'healthy'}
+
+>>> record_failure(state)   # failure #1
+>>> record_failure(state)   # failure #2
+>>> state.circuit_breaker
+{'consecutive_failures': 2, 'threshold': 3, 'status': 'healthy'}
+
+>>> record_failure(state)   # failure #3 — TRIPS
+[CIRCUIT BREAKER] TRIPPED after 3 failures!
+>>> state.circuit_breaker
+{'consecutive_failures': 3, 'threshold': 3, 'status': 'tripped'}
+>>> check_circuit_breaker(state)
+True
+
+# Once tripped, every subsequent run_agent call short-circuits:
+>>> result = run_agent("INTAKE", "...", [], {}, "test", state)
+>>> result
+{'error': 'CIRCUIT_BREAKER_TRIPPED', 'message': 'Pipeline halted.'}
+
+# A successful run on a fresh state resets the counter:
+>>> state2 = PipelineState(request_id="AR-DEMO-CB2")
+>>> record_failure(state2)
+>>> record_success(state2)
+>>> state2.circuit_breaker['consecutive_failures']
+0

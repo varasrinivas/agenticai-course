@@ -1,0 +1,70 @@
+<section class="module-condensed" id="CC12">
+  <header class="cm-header">
+    <span class="cm-track">CC12 — Knowledge</span>
+    <h2 class="cm-title">RAG for Claude Code</h2>
+    <p class="cm-tagline">Retrieval, embeddings, BM25, hybrid pipelines—and how to wrap RAG as a tool.</p>
+  </header>
+
+  <h3>The Big Idea</h3>
+  <p>RAG (Retrieval Augmented Generation) solves the "too much knowledge" problem: instead of fitting your entire codebase or doc library into Claude's context (expensive, slow, bounded), you retrieve only the relevant chunks at query time and pass them to Claude. RAG has two phases: retrieval (find matching passages) and generation (Claude reads them and answers). Use RAG when your knowledge base exceeds context length, changes frequently, or requires citations. Skip it if you have under 100K tokens—a cached system prompt wins.</p>
+
+  <h3>Analogy</h3>
+  <p>A new engineer joins your team. Do you make them memorize the entire codebase, or give them grep and let them search? Option one is impossible; option two is how everyone works. Claude is that engineer. RAG is the grep.</p>
+
+  <h3>How It Works</h3>
+  <ol>
+    <li><strong>Chunk:</strong> Split your documents into passages (fixed-size with overlap, semantic chunks, or code-aware via AST).</li>
+    <li><strong>Embed:</strong> Vectorize each chunk using an embedding model (Voyage, OpenAI, Sentence-Transformers, Cohere).</li>
+    <li><strong>Index:</strong> Store vectors in a vector database and build a BM25 index for keyword search.</li>
+    <li><strong>Retrieve:</strong> At query time, run BM25 and vector search in parallel, merge results via Reciprocal Rank Fusion, optionally rerank with a cross-encoder.</li>
+    <li><strong>Augment &amp; Generate:</strong> Insert top-K passages into the prompt; Claude answers with grounding and citations (CC10).</li>
+  </ol>
+
+  <h3>Pseudocode</h3>
+  <pre><code>INGEST PHASE (offline)
+  for each document:
+    split into chunks with overlap
+    embed each chunk → vector
+    store vector + metadata (source, title)
+  build BM25 index on tokenized chunks
+
+QUERY PHASE (per request)
+  tokenize user query
+  bm25_results = BM25 search for top 50 chunks
+  vector_results = vector similarity search for top 50
+  merged_results = combine via reciprocal rank fusion
+  top_k = rerank merged_results if using cross-encoder
+  prompt = insert top_k chunks as context blocks
+  answer = Claude reads chunks and responds with citations</code></pre>
+
+  <h3>Common Misconceptions</h3>
+  <ul>
+    <li><strong>Myth:</strong> Embeddings alone are enough. <strong>Reality:</strong> Embeddings excel at semantic similarity but fail on exact identifiers (error codes, class names, acronyms). Hybrid retrieval (BM25 + vectors) is the production standard.</li>
+    <li><strong>Myth:</strong> More retrieval stages = better accuracy. <strong>Reality:</strong> Each stage adds latency and failure points. Only add complexity (reranking, multi-stage filtering) if your eval (CC11) shows measured improvement.</li>
+    <li><strong>Myth:</strong> Store chunks without metadata. <strong>Reality:</strong> Metadata (source path, title, byte range) must be attached at ingest time. Without it, Claude cannot generate correct citations.</li>
+  </ul>
+
+  <h3>Key Takeaway</h3>
+  <div class="cm-takeaway">RAG is just another tool in Claude Code's loop (CC8)—instead of making Claude memorize, let it search. For CLI devs, wrap your retrieval as an MCP tool or subagent, and Claude automatically decides when to call it based on the task. Hybrid BM25 + vector retrieval covers both exact matches and semantic meaning; add reranking only if your eval proves it helps.</div>
+
+  <h3>Quick Quiz</h3>
+
+  <div class="cm-quiz">
+    <p><strong>Q1. Your knowledge base is 50K tokens. Build a RAG pipeline?</strong></p>
+    <p>A) Yes, that's huge.<br>B) No—50K fits in a cached system prompt; skip RAG.<br>C) Yes, but only if you reindex weekly.<br>D) Doesn't matter.</p>
+    <p class="cm-answer"><strong>Answer: B</strong> — 50K tokens fits comfortably in context with prompt caching (CC10). RAG's value appears when the corpus exceeds context length or changes frequently. At 50K tokens with cached context, RAG adds engineering for no win.</p>
+  </div>
+
+  <div class="cm-quiz">
+    <p><strong>Q2. Users search by error codes like "ECONNREFUSED". Use embeddings only, BM25 only, or hybrid?</strong></p>
+    <p>A) Embeddings only—semantic search is modern.<br>B) Hybrid (BM25 + vectors)—exact identifiers need lexical precision.<br>C) BM25 only is enough.<br>D) Doesn't matter.</p>
+    <p class="cm-answer"><strong>Answer: B</strong> — Error codes, class names, and acronyms favor exact-match retrieval. BM25 finds the literal token; embeddings cluster by meaning, which sometimes misses. Hybrid retrieval gets both precision and recall.</p>
+  </div>
+
+  <div class="cm-quiz">
+    <p><strong>Q3. Your RAG answers are accurate but the citations don't match the actual sources. What's wrong?</strong></p>
+    <p>A) The model hallucinated.<br>B) You didn't store source metadata with chunks at ingest.<br>C) Embeddings are low quality.<br>D) The reranker dropped the right chunk.</p>
+    <p class="cm-answer"><strong>Answer: B</strong> — Metadata (source path, title, byte range) must be attached at ingest time. If the prompt doesn't include "this chunk came from refunds-v3.md," Claude has no choice but to invent a citation. Always store metadata; use document blocks in the prompt for guaranteed accurate citations (CC10).</p>
+  </div>
+
+</section>

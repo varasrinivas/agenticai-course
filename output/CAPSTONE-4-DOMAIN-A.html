@@ -280,7 +280,7 @@ set ANTHROPIC_API_KEY=your-key-here</code></pre>
             <pre><code>capstone-4-preauth-pipeline/
 ├── mock_tools.py            # All agent tools (intake, clinical, decision, communication)
 ├── pipeline.py              # Orchestrator: PipelineState, circuit breaker, HITL, all 4 agents
-└── test_pipeline.py         # 5 pytest test cases (happy path, denial, HITL, circuit breaker, invalid input)</code></pre>
+└── test_pipeline.py         # 6 pytest test cases (happy path, denial, HITL, circuit breaker, invalid input, HIPAA guardrail)</code></pre>
           </div>
         </div>
       </section>
@@ -312,9 +312,9 @@ set ANTHROPIC_API_KEY=your-key-here</code></pre>
             <div class="pipe-conn" id="pc1">&#8594;</div>
             <div class="agent-box" id="ag2"><div class="agent-icon">&#128203;</div><div class="agent-name">Clinical Criteria Agent</div><div class="agent-tools">fetch policy, evaluate criteria</div></div>
             <div class="pipe-conn" id="pc2">&#8594;</div>
-            <div class="agent-box" id="ag3"><div class="agent-icon">&#9878;&#65039;</div><div class="agent-name">Decision Agent</div><div class="agent-tools">confidence, HITL, finalize</div></div>
+            <div class="agent-box" id="ag3"><div class="agent-icon">&#9878;&#65039;</div><div class="agent-name">Decision Agent</div><div class="agent-tools">compute_confidence, finalize (LLM-driven)</div></div>
             <div class="pipe-conn" id="pc3">&#8594;</div>
-            <div class="agent-box" id="ag4"><div class="agent-icon">&#9993;&#65039;</div><div class="agent-name">Communication Agent</div><div class="agent-tools">draft letter, send notification</div></div>
+            <div class="agent-box" id="ag4"><div class="agent-icon">&#9993;&#65039;</div><div class="agent-name">Communication Agent</div><div class="agent-tools">draft &rarr; check_hipaa &rarr; send</div></div>
           </div>
           <div class="animation-controls">
             <button class="anim-btn" onclick="anim1Play()" aria-label="Play pipeline animation">&#9654;</button>
@@ -409,7 +409,10 @@ set ANTHROPIC_API_KEY=your-key-here</code></pre>
     "letter_id": "LTR-2024-09821",
     "letter_type": "approval",
     "sent_via": "portal",
-    "sent_at": "2024-03-10T09:08:00Z"
+    "sent_at": "2024-03-10T09:08:00Z",
+    "hipaa_compliant": true,    // Set by check_hipaa_compliance output guardrail
+    "hipaa_issues": [],         // Populated only if guardrail blocked the send
+    "blocked": false             // true means the send was halted by the guardrail
   },
 
   "circuit_breaker": {
@@ -444,11 +447,12 @@ set ANTHROPIC_API_KEY=your-key-here</code></pre>
             <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
             <pre><code>"""mock_tools.py — All agent tools for Capstone 4-A pipeline.
 
-Four agents × 2-3 tools each = 10 tools total.
+Four agents × 2-3 tools each = 11 tools total.
 Each agent has a focused tool set — no cross-agent tool access.
 """
 
 import json
+import re
 from datetime import datetime, timedelta
 
 # ═══════════════════════════════════════════════════════════════
@@ -611,7 +615,56 @@ def send_notification(letter_id: str, channel: str, recipient: str) -> dict:
     return {"notification_id": f"NOT-{letter_id}",
             "sent_at": datetime.now().isoformat(),
             "delivery_status": "delivered",
-            "channel": channel}</code></pre>
+            "channel": channel}
+
+# Output guardrail used by Agent 4 (Communication) to verify the
+# drafted determination letter before it is sent.
+SSN_PATTERN = re.compile(r"\b\d{3}-\d{2}-\d{4}\b")
+DOB_PATTERN = re.compile(r"\b(0?[1-9]|1[0-2])[/-](0?[1-9]|[12]\d|3[01])[/-]((19|20)\d{2})\b")
+
+def check_hipaa_compliance(letter_text: str, determination_type: str) -> dict:
+    """Output guardrail: verify a drafted letter is HIPAA-compliant.
+
+    Checks performed:
+      * PII leakage  — no raw SSN patterns, no full birthdates beyond [redacted]
+      * Determination keywords — approvals say 'approved', denials include
+        'appeal' instructions, request_info letters list missing items
+      * Salutation/sign-off — must start with 'Dear' and end with a sign-off
+    Returns: {"compliant": bool, "issues": [str], "redacted_text": str}
+    """
+    issues = []
+    redacted = letter_text or ""
+
+    # 1) PII leakage — redact and flag
+    if SSN_PATTERN.search(redacted):
+        issues.append("PII_LEAK: SSN pattern detected in letter body")
+        redacted = SSN_PATTERN.sub("[redacted-ssn]", redacted)
+    if DOB_PATTERN.search(redacted):
+        issues.append("PII_LEAK: full date-of-birth detected (use [redacted])")
+        redacted = DOB_PATTERN.sub("[redacted-dob]", redacted)
+
+    # 2) Required keywords by determination type
+    body_lower = redacted.lower()
+    dtype = (determination_type or "").lower()
+    if dtype in ("approve", "approval", "approved"):
+        if "approved" not in body_lower:
+            issues.append("MISSING_KEYWORD: approval letter must say 'approved'")
+    elif dtype in ("deny", "denial", "denied"):
+        if "appeal" not in body_lower:
+            issues.append("MISSING_KEYWORD: denial letter must include appeal instructions")
+    elif dtype in ("request_info", "info_request"):
+        if not any(k in body_lower for k in ("additional information", "missing", "submit")):
+            issues.append("MISSING_KEYWORD: info-request letter must list missing items")
+
+    # 3) Salutation and sign-off
+    stripped = redacted.strip()
+    if not stripped.lower().startswith("dear"):
+        issues.append("FORMAT: missing salutation ('Dear ...')")
+    if "sincerely" not in body_lower and "regards" not in body_lower:
+        issues.append("FORMAT: missing sign-off ('Sincerely' or 'Regards')")
+
+    return {"compliant": len(issues) == 0, "issues": issues,
+            "redacted_text": redacted}</code></pre>
           </div>
           <div class="code-panel" id="tools-ts">
             <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
@@ -669,6 +722,44 @@ export function draftDeterminationLetter(detId: string, determination: string = 
 export function sendNotification(letterId: string, channel: string, recipient: string): any {
   return { notification_id: `NOT-${letterId}`, sent_at: new Date().toISOString(),
     delivery_status: "delivered", channel };
+}
+
+// Output guardrail used by Agent 4 (Communication) before sending.
+const SSN_RE = /\b\d{3}-\d{2}-\d{4}\b/;
+const DOB_RE = /\b(0?[1-9]|1[0-2])[\/-](0?[1-9]|[12]\d|3[01])[\/-]((19|20)\d{2})\b/;
+
+export function checkHipaaCompliance(letterText: string, determinationType: string): any {
+  const issues: string[] = [];
+  let redacted = letterText || "";
+
+  if (SSN_RE.test(redacted)) {
+    issues.push("PII_LEAK: SSN pattern detected in letter body");
+    redacted = redacted.replace(new RegExp(SSN_RE, "g"), "[redacted-ssn]");
+  }
+  if (DOB_RE.test(redacted)) {
+    issues.push("PII_LEAK: full date-of-birth detected (use [redacted])");
+    redacted = redacted.replace(new RegExp(DOB_RE, "g"), "[redacted-dob]");
+  }
+
+  const body = redacted.toLowerCase();
+  const dtype = (determinationType || "").toLowerCase();
+  if (["approve","approval","approved"].includes(dtype) &amp;&amp; !body.includes("approved")) {
+    issues.push("MISSING_KEYWORD: approval letter must say 'approved'");
+  } else if (["deny","denial","denied"].includes(dtype) &amp;&amp; !body.includes("appeal")) {
+    issues.push("MISSING_KEYWORD: denial letter must include appeal instructions");
+  } else if (["request_info","info_request"].includes(dtype) &amp;&amp;
+             !["additional information","missing","submit"].some(k =&gt; body.includes(k))) {
+    issues.push("MISSING_KEYWORD: info-request letter must list missing items");
+  }
+
+  if (!redacted.trim().toLowerCase().startsWith("dear")) {
+    issues.push("FORMAT: missing salutation ('Dear ...')");
+  }
+  if (!body.includes("sincerely") &amp;&amp; !body.includes("regards")) {
+    issues.push("FORMAT: missing sign-off ('Sincerely' or 'Regards')");
+  }
+
+  return { compliant: issues.length === 0, issues, redacted_text: redacted };
 }</code></pre>
           </div>
         </div>
@@ -684,7 +775,8 @@ export function sendNotification(letterId: string, channel: string, recipient: s
           <li><strong>PipelineState dataclass:</strong> The typed contract between agents. Each agent reads its predecessor&rsquo;s output and writes its own. The <code>stage</code> field tracks pipeline progress. Defined as a Python <code>@dataclass</code> with optional fields for each agent&rsquo;s output.</li>
           <li><strong>Circuit Breaker:</strong> Three functions &mdash; <code>check_circuit_breaker(state)</code>, <code>record_failure(state)</code>, and <code>record_success(state)</code> &mdash; track consecutive failures. If 3 failures occur in sequence, the breaker trips, halting the pipeline. A success resets the counter to zero.</li>
           <li><strong>HITL Reviewer:</strong> When the Decision Agent&rsquo;s confidence falls between 70&ndash;90%, the pipeline pauses and presents a CLI review interface. The reviewer sees criteria evaluations, confidence scores, and selects approve/deny/request-info/escalate. The pipeline resumes with the reviewer&rsquo;s override.</li>
-          <li><strong>Agent Runner pattern:</strong> Each agent has its own system prompt, focused tool set, and output schema. The <code>run_agent</code> function sends messages to Claude with the agent&rsquo;s tools, handles tool calls in a loop until the agent responds with text, and records success/failure on the circuit breaker.</li>
+          <li><strong>Agent Runner pattern:</strong> Each of the four agents has its own system prompt, focused tool set, and output schema. <strong>All four</strong> &mdash; Intake, Clinical, Decision, and Communication &mdash; are dispatched through the same <code>run_agent</code> function, which sends messages to Claude with the agent&rsquo;s tools, handles tool calls in a loop until the agent responds with text, and records success/failure on the circuit breaker. Because every agent transition goes through <code>run_agent</code>, the circuit breaker is enforced at every step (Agents 1&rarr;2&rarr;3&rarr;4), not just the early ones.</li>
+          <li><strong>Agent 4 output guardrail:</strong> The Communication Agent&rsquo;s tool set includes <code>check_hipaa_compliance</code>. The system prompt instructs the LLM to draft &rarr; check &rarr; send; the orchestrator verifies the guardrail&rsquo;s <code>compliant</code> result one more time before sending. If the guardrail fails, the send is blocked and the pipeline records the issues in <code>communication_output</code>.</li>
         </ul>
         <p>All four concepts live inside <code>pipeline.py</code> to keep the project simple. In production, you would split them into separate modules for independent testing and deployment.</p>
 
@@ -879,32 +971,190 @@ def run_pipeline(raw_request: dict) -> PipelineState:
     state.criteria_output = {"policy_id": policy.get("policy_id"), "criteria_evaluation": criteria_eval}
     state.stage = "decision"
 
-    # ── Agent 3: Decision ──────────────────────────────────────
+    # ── Agent 3: Decision (LLM-driven) ─────────────────────────
     from mock_tools import compute_decision_confidence, finalize_determination
-    decision_result = compute_decision_confidence(
-        criteria_eval, "in-network", {"plan": "Gold PPO", "copay": 20})
-    state.decision_output = decision_result
+    # Track the last confidence result the LLM computed so we can
+    # consult it after run_agent returns (HITL routing, finalization).
+    decision_scratchpad: dict = {}
 
-    # HITL checkpoint
-    if decision_result.get("human_review_required"):
+    def _confidence_handler(args: dict) -> dict:
+        out = compute_decision_confidence(
+            args.get("criteria_results", []),
+            args.get("network_status", "in-network"),
+            args.get("benefit_summary", {}))
+        decision_scratchpad.update(out)
+        return out
+
+    def _finalize_handler(args: dict) -> dict:
+        return finalize_determination(
+            args["request_id"], args["determination"],
+            args.get("rationale", ""), args.get("reviewer_override"))
+
+    decision_tools = [
+        {"name": "compute_decision_confidence",
+         "description": "Compute overall confidence and a preliminary recommendation from the per-criterion results.",
+         "input_schema": {"type": "object", "properties": {
+             "criteria_results": {"type": "array", "items": {"type": "object"}},
+             "network_status": {"type": "string"},
+             "benefit_summary": {"type": "object"}},
+             "required": ["criteria_results", "network_status"]}},
+        {"name": "finalize_determination",
+         "description": "Finalize the determination once routing is decided. Issues a determination_id and appeal deadline.",
+         "input_schema": {"type": "object", "properties": {
+             "request_id": {"type": "string"},
+             "determination": {"type": "string", "enum": ["approve", "deny", "request_info"]},
+             "rationale": {"type": "string"},
+             "reviewer_override": {"type": ["object", "null"]}},
+             "required": ["request_id", "determination", "rationale"]}},
+    ]
+    decision_handlers = {
+        "compute_decision_confidence": _confidence_handler,
+        "finalize_determination": _finalize_handler,
+    }
+    decision_system = (
+        "You are the Decision Agent in a pre-authorization pipeline. "
+        "Call compute_decision_confidence with the criteria results, then "
+        "route as follows: confidence > 0.90 AND all required criteria met => "
+        "auto-approve; 0.70 <= confidence <= 0.90 => human_review_required=true; "
+        "confidence < 0.70 OR required criteria unmet => deny. "
+        "Do NOT call finalize_determination yet — the orchestrator handles HITL "
+        "and finalization. Reply with a JSON object: "
+        "{\"determination\": str, \"overall_confidence\": float, "
+        "\"human_review_required\": bool, \"rationale\": str}."
+    )
+    decision_user = (
+        "Determine routing for this request.\n"
+        f"request_id: {state.request_id}\n"
+        f"criteria_evaluation: {json.dumps(criteria_eval)}\n"
+        "network_status: in-network\n"
+        "benefit_summary: {\"plan\": \"Gold PPO\", \"copay\": 20}"
+    )
+    result = run_agent("DECISION", decision_system, decision_tools,
+                       decision_handlers, decision_user, state)
+    if "error" in result:
+        state.stage = "error"
+        return state
+
+    # The LLM either returns structured JSON in text or we fall back to the
+    # scratchpad populated by the confidence tool. Both paths are safe.
+    decision_output = dict(decision_scratchpad)
+    try:
+        parsed = json.loads(result.get("text", "").strip().split("```json")[-1].split("```")[0].strip()
+                            if "```" in result.get("text", "") else result.get("text", ""))
+        if isinstance(parsed, dict):
+            decision_output.update(parsed)
+    except Exception:
+        pass
+    decision_output.setdefault("determination",
+                                decision_output.get("recommendation", "request_info"))
+    state.decision_output = decision_output
+
+    # HITL checkpoint — runs OUTSIDE run_agent (offline human step).
+    if decision_output.get("human_review_required"):
         override = human_review(state)
         state.decision_output["reviewer_override"] = override
         state.decision_output["determination"] = override["decision"]
     state.stage = "communication"
 
-    # Finalize
+    # Finalize the determination after HITL resolution.
     det = finalize_determination(
         state.request_id,
-        state.decision_output.get("determination", state.decision_output.get("recommendation")),
-        state.decision_output.get("rationale", ""))
+        state.decision_output.get("determination"),
+        state.decision_output.get("rationale", ""),
+        state.decision_output.get("reviewer_override"))
 
-    # ── Agent 4: Communication ─────────────────────────────────
-    from mock_tools import draft_determination_letter, send_notification
-    letter = draft_determination_letter(det["determination_id"], det["determination"])
-    notification = send_notification(letter["letter_id"], "portal", "provider@clinic.example")
+    # ── Agent 4: Communication (LLM-driven, with HIPAA guardrail) ─
+    from mock_tools import (draft_determination_letter, send_notification,
+                            check_hipaa_compliance)
+    comm_scratchpad: dict = {}
+
+    def _draft_handler(args: dict) -> dict:
+        out = draft_determination_letter(
+            args["determination_id"],
+            args.get("determination", "approve"),
+            args.get("recipient_type", "provider"),
+            args.get("language", "en"))
+        comm_scratchpad["letter"] = out
+        return out
+
+    def _hipaa_handler(args: dict) -> dict:
+        out = check_hipaa_compliance(args["letter_text"],
+                                      args.get("determination_type", "approve"))
+        comm_scratchpad["hipaa"] = out
+        return out
+
+    def _send_handler(args: dict) -> dict:
+        return send_notification(args["letter_id"],
+                                  args.get("channel", "portal"),
+                                  args.get("recipient", "provider@clinic.example"))
+
+    comm_tools = [
+        {"name": "draft_determination_letter",
+         "description": "Draft a determination letter (approval/denial/info-request) from the determination record.",
+         "input_schema": {"type": "object", "properties": {
+             "determination_id": {"type": "string"},
+             "determination": {"type": "string", "enum": ["approve", "deny", "request_info"]},
+             "recipient_type": {"type": "string"},
+             "language": {"type": "string"}},
+             "required": ["determination_id", "determination"]}},
+        {"name": "check_hipaa_compliance",
+         "description": "Output guardrail: verify the drafted letter has no PII leakage, includes the right keywords, and has proper salutation/sign-off. Call this BEFORE send_notification.",
+         "input_schema": {"type": "object", "properties": {
+             "letter_text": {"type": "string"},
+             "determination_type": {"type": "string"}},
+             "required": ["letter_text", "determination_type"]}},
+        {"name": "send_notification",
+         "description": "Send the notification only after the HIPAA guardrail returns compliant=true.",
+         "input_schema": {"type": "object", "properties": {
+             "letter_id": {"type": "string"},
+             "channel": {"type": "string"},
+             "recipient": {"type": "string"}},
+             "required": ["letter_id", "channel"]}},
+    ]
+    comm_handlers = {
+        "draft_determination_letter": _draft_handler,
+        "check_hipaa_compliance": _hipaa_handler,
+        "send_notification": _send_handler,
+    }
+    comm_system = (
+        "You are the Communication Agent. Your job: (1) draft the determination "
+        "letter with draft_determination_letter, (2) call check_hipaa_compliance "
+        "on the draft text BEFORE sending — this is a mandatory output guardrail, "
+        "(3) only call send_notification if compliant=true. If the guardrail "
+        "reports issues, redraft using the redacted_text and re-check. "
+        "Use channel='portal' unless told otherwise."
+    )
+    comm_user = (
+        f"Send the determination notice for request {state.request_id}.\n"
+        f"determination_id: {det['determination_id']}\n"
+        f"determination: {det['determination'].lower()}\n"
+        f"rationale: {det.get('rationale', '')}"
+    )
+    result = run_agent("COMMUNICATION", comm_system, comm_tools,
+                       comm_handlers, comm_user, state)
+    if "error" in result:
+        state.stage = "error"
+        return state
+
+    letter = comm_scratchpad.get("letter") or draft_determination_letter(
+        det["determination_id"], det["determination"])
+    hipaa = comm_scratchpad.get("hipaa") or check_hipaa_compliance(
+        letter.get("draft_text", ""), det["determination"])
+    if not hipaa.get("compliant", False):
+        # Guardrail failed — block the send. The orchestrator records this
+        # in state and sets stage to 'error' so downstream alerting fires.
+        state.communication_output = {"letter_id": letter.get("letter_id"),
+                                       "hipaa_issues": hipaa.get("issues", []),
+                                       "blocked": True}
+        state.stage = "error"
+        return state
+
+    notification = send_notification(letter["letter_id"], "portal",
+                                      "provider@clinic.example")
     state.communication_output = {
         "letter_id": letter["letter_id"], "letter_type": det["determination"],
-        "sent_via": "portal", "sent_at": notification["sent_at"]}
+        "sent_via": "portal", "sent_at": notification["sent_at"],
+        "hipaa_compliant": True}
     state.stage = "complete"
 
     print(f"\n[PIPELINE] Complete! Determination: {det['determination']}")
@@ -923,11 +1173,15 @@ def main():
         "provider_npi": "1234567890",
         "procedure_code": "27447",
         "diagnosis_codes": ["M17.11"],
-        "clinical_notes": "Severe right knee OA. KL Grade IV on weight-bearing films. 8 months PT. Failed NSAIDs, 2 corticosteroid injections. WOMAC score 68. BMI 31.",
+        "clinical_notes": "Severe right knee osteoarthritis (M17.11). KL Grade IV on weight-bearing films. 8 months physical therapy (PT). Failed conservative NSAIDs, 2 corticosteroid injections. WOMAC score 68. BMI 31.",
     }
 
     while True:
-        cmd = input("\nCommand: ").strip()
+        try:
+            cmd = input("\nCommand: ").strip()
+        except EOFError:
+            # Allow non-interactive runs (e.g. `python pipeline.py <<< demo`).
+            break
         if cmd.lower() in ("quit", "exit", "q"):
             break
         if cmd.lower() == "demo":
@@ -947,7 +1201,7 @@ import * as readline from "readline";
 import {
   validateAuthRequest, verifyMemberEligibility,
   computeDecisionConfidence, finalizeDetermination,
-  draftDeterminationLetter, sendNotification,
+  draftDeterminationLetter, sendNotification, checkHipaaCompliance,
 } from "./mock_tools";
 
 const client = new Anthropic();
@@ -963,22 +1217,61 @@ interface PipelineState {
   circuit_breaker: { consecutive_failures: number; threshold: number; status: string };
 }
 
-function createState(requestId: string): PipelineState {
+export function createState(requestId: string): PipelineState {
   return {
     request_id: requestId, stage: "intake",
     circuit_breaker: { consecutive_failures: 0, threshold: 3, status: "healthy" },
   };
 }
 
-function checkCircuitBreaker(state: PipelineState): boolean {
+export function checkCircuitBreaker(state: PipelineState): boolean {
   return state.circuit_breaker.status === "tripped";
 }
 
-function recordFailure(state: PipelineState) {
+export function recordFailure(state: PipelineState) {
   state.circuit_breaker.consecutive_failures++;
   if (state.circuit_breaker.consecutive_failures &gt;= state.circuit_breaker.threshold) {
     state.circuit_breaker.status = "tripped";
     console.log("[CIRCUIT BREAKER] TRIPPED!");
+  }
+}
+
+export function recordSuccess(state: PipelineState) {
+  state.circuit_breaker.consecutive_failures = 0;
+}
+
+// Generic agent runner — sends a tool-use loop to Claude and records success/
+// failure on the circuit breaker. All 4 agents go through this.
+async function runAgent(name: string, system: string, tools: any[],
+                         handlers: Record&lt;string, (a: any) =&gt; any&gt;,
+                         userMessage: string,
+                         state: PipelineState): Promise&lt;any&gt; {
+  if (checkCircuitBreaker(state)) return { error: "CIRCUIT_BREAKER_TRIPPED" };
+  console.log(`\n[${name}] Starting...`);
+  const history: any[] = [{ role: "user", content: userMessage }];
+  try {
+    while (true) {
+      const resp = await client.messages.create({
+        model: MODEL, max_tokens: 1500, system, tools,
+        messages: history,
+      } as any);
+      if (resp.stop_reason === "tool_use") {
+        history.push({ role: "assistant", content: resp.content });
+        const results = (resp.content as any[]).filter(b =&gt; b.type === "tool_use")
+          .map(b =&gt; ({ type: "tool_result", tool_use_id: b.id,
+            content: JSON.stringify(handlers[b.name] ? handlers[b.name](b.input) : { error: "UNKNOWN_TOOL" }) }));
+        history.push({ role: "user", content: results });
+        continue;
+      }
+      const text = (resp.content as any[]).filter(b =&gt; b.type === "text").map(b =&gt; b.text).join("\n");
+      console.log(`[${name}] Complete.`);
+      recordSuccess(state);
+      return { text };
+    }
+  } catch (e: any) {
+    console.log(`[${name}] FAILED: ${e.message}`);
+    recordFailure(state);
+    return { error: e.message };
   }
 }
 
@@ -1018,10 +1311,35 @@ async function runPipeline(rawRequest: any): Promise&lt;PipelineState&gt; {
   state.stage = "decision";
   console.log("[CLINICAL] Complete.");
 
-  // Agent 3: Decision
-  console.log("[DECISION] Computing confidence...");
-  const decision = computeDecisionConfidence(
-    state.criteria_output.criteria_evaluation, "in-network");
+  // Agent 3: Decision (LLM-driven via runAgent)
+  const decisionScratch: any = {};
+  const decisionTools = [
+    { name: "compute_decision_confidence",
+      description: "Compute overall confidence and a preliminary recommendation.",
+      input_schema: { type: "object", properties: {
+        criteria_results: { type: "array", items: { type: "object" } },
+        network_status: { type: "string" },
+        benefit_summary: { type: "object" } },
+        required: ["criteria_results", "network_status"] } },
+  ];
+  const decisionHandlers = {
+    compute_decision_confidence: (a: any) =&gt; {
+      const out = computeDecisionConfidence(a.criteria_results || [], a.network_status || "in-network");
+      Object.assign(decisionScratch, out);
+      return out;
+    },
+  };
+  const decisionSystem = "You are the Decision Agent. Call compute_decision_confidence, " +
+    "then route: >0.90 auto-approve; 0.70-0.90 human_review_required=true; <0.70 deny. " +
+    "Reply with JSON: {determination, overall_confidence, human_review_required, rationale}.";
+  const decisionUser = `request_id: ${state.request_id}\n` +
+    `criteria_evaluation: ${JSON.stringify(state.criteria_output.criteria_evaluation)}\n` +
+    `network_status: in-network`;
+  const decRes = await runAgent("DECISION", decisionSystem, decisionTools, decisionHandlers, decisionUser, state);
+  if (decRes.error) { state.stage = "error"; return state; }
+  const decision: any = { ...decisionScratch };
+  try { Object.assign(decision, JSON.parse(decRes.text || "{}")); } catch {}
+  decision.determination = decision.determination || decision.recommendation || "request_info";
   state.decision_output = decision;
 
   if (decision.human_review_required) {
@@ -1029,14 +1347,58 @@ async function runPipeline(rawRequest: any): Promise&lt;PipelineState&gt; {
     // In production: await human input
   }
   state.stage = "communication";
-  console.log(`[DECISION] Complete: ${decision.recommendation?.toUpperCase()}`);
 
-  // Agent 4: Communication
-  console.log("[COMMUNICATION] Drafting letter...");
-  const det = finalizeDetermination(state.request_id, decision.recommendation, decision.rationale || "");
-  const letter = draftDeterminationLetter(det.determination_id, det.determination);
+  const det = finalizeDetermination(state.request_id, decision.determination, decision.rationale || "");
+
+  // Agent 4: Communication (LLM-driven, with HIPAA output guardrail)
+  const commScratch: any = {};
+  const commTools = [
+    { name: "draft_determination_letter",
+      description: "Draft a determination letter.",
+      input_schema: { type: "object", properties: {
+        determination_id: { type: "string" },
+        determination: { type: "string", enum: ["approve","deny","request_info"] } },
+        required: ["determination_id","determination"] } },
+    { name: "check_hipaa_compliance",
+      description: "Output guardrail: verify the draft before sending. Call BEFORE send_notification.",
+      input_schema: { type: "object", properties: {
+        letter_text: { type: "string" }, determination_type: { type: "string" } },
+        required: ["letter_text","determination_type"] } },
+    { name: "send_notification",
+      description: "Send notification only after the HIPAA guardrail returns compliant=true.",
+      input_schema: { type: "object", properties: {
+        letter_id: { type: "string" }, channel: { type: "string" }, recipient: { type: "string" } },
+        required: ["letter_id","channel"] } },
+  ];
+  const commHandlers = {
+    draft_determination_letter: (a: any) =&gt; {
+      const out = draftDeterminationLetter(a.determination_id, a.determination);
+      commScratch.letter = out; return out;
+    },
+    check_hipaa_compliance: (a: any) =&gt; {
+      const out = checkHipaaCompliance(a.letter_text, a.determination_type);
+      commScratch.hipaa = out; return out;
+    },
+    send_notification: (a: any) =&gt; sendNotification(a.letter_id, a.channel || "portal", a.recipient || "provider@clinic.example"),
+  };
+  const commSystem = "You are the Communication Agent. (1) Draft the letter, " +
+    "(2) call check_hipaa_compliance on the draft text BEFORE sending — mandatory output guardrail, " +
+    "(3) only call send_notification if compliant=true.";
+  const commUser = `Send the determination notice for ${state.request_id}. ` +
+    `determination_id: ${det.determination_id}. determination: ${det.determination.toLowerCase()}.`;
+  const commRes = await runAgent("COMMUNICATION", commSystem, commTools, commHandlers, commUser, state);
+  if (commRes.error) { state.stage = "error"; return state; }
+
+  const letter = commScratch.letter || draftDeterminationLetter(det.determination_id, det.determination);
+  const hipaa = commScratch.hipaa || checkHipaaCompliance(letter.draft_text || "", det.determination);
+  if (!hipaa.compliant) {
+    state.communication_output = { letter_id: letter.letter_id, hipaa_issues: hipaa.issues, blocked: true };
+    state.stage = "error";
+    return state;
+  }
   const notif = sendNotification(letter.letter_id, "portal", "provider@clinic.example");
-  state.communication_output = { letter_id: letter.letter_id, sent_via: "portal", sent_at: notif.sent_at };
+  state.communication_output = { letter_id: letter.letter_id, sent_via: "portal",
+    sent_at: notif.sent_at, hipaa_compliant: true };
   state.stage = "complete";
   console.log(`[PIPELINE] Complete! Determination: ${det.determination}`);
 
@@ -1073,24 +1435,23 @@ main();</code></pre>
         <div class="output-block">[INTAKE] Starting...
 [INTAKE] Complete.
 
-[CLINICAL] Evaluating criteria...
+[CLINICAL] Starting...
 [CLINICAL] Complete.
 
-[DECISION] Computing confidence...
-[DECISION] Confidence: 93% — auto-approve (above 90% threshold)
-[DECISION] Complete: APPROVE
+[DECISION] Starting...
+[DECISION] Complete.
 
-[COMMUNICATION] Drafting approval letter...
-[COMMUNICATION] Sent via portal.
+[COMMUNICATION] Starting...
+[COMMUNICATION] Complete.
 
-[PIPELINE] Complete! Determination: APPROVE
+[PIPELINE] Complete! Determination: approve
 
-Final state:
-  request_id: AR-2024-09821
-  stage: complete
-  decision_output.overall_confidence: 0.93
-  decision_output.determination: approve
-  circuit_breaker.status: healthy</div>
+Final state (truncated):
+  "request_id": "AR-2024-09821",
+  "stage": "complete",
+  "decision_output": { "overall_confidence": 0.93, "determination": "approve", ... },
+  "communication_output": { "letter_id": "LTR-DET-AR-2024-09821", "hipaa_compliant": true, ... },
+  "circuit_breaker": { "consecutive_failures": 0, "threshold": 3, "status": "healthy" }</div>
 
         <div class="checkpoint">
           <div class="checkpoint-label">&#127919; What Just Happened?</div>
@@ -1101,16 +1462,22 @@ Final state:
         <p>Run <code>python pipeline.py</code> and type <code>demo</code> to process the sample TKA pre-authorization request. Verify you see all four agents execute in sequence and an APPROVE determination.</p>
 
         <h3 id="step-5">Step 5: Add Guardrails</h3>
-        <p>Input guardrails go on the Intake Agent: schema validation (are all required fields present?) and PII detection (is there unredacted PHI in fields that shouldn't have it?). Output guardrails go on the Communication Agent: HIPAA compliance check on letter content (are appeal rights included for denials? are required disclosures present?).</p>
-        <p>The <code>validate_auth_request</code> function in <code>mock_tools.py</code> already implements the input guardrail (missing field check). For the output guardrail, add a <code>check_hipaa_compliance(letter_text, determination_type)</code> function that verifies denial letters include appeal rights and all letters include required disclosures.</p>
+        <p>Input guardrails go on the Intake Agent: schema validation (are all required fields present?) and PII detection (is there unredacted PHI in fields that shouldn&rsquo;t have it?). Output guardrails go on the Communication Agent: HIPAA compliance check on letter content before send.</p>
+        <p>The <code>validate_auth_request</code> function in <code>mock_tools.py</code> already implements the input guardrail (missing-field check). The output guardrail is the <code>check_hipaa_compliance(letter_text, determination_type)</code> function you added in Step 1. It runs <strong>three</strong> categories of checks before any letter is sent:</p>
+        <ul>
+          <li><strong>PII leakage</strong> &mdash; regex match for SSN patterns (<code>\d{3}-\d{2}-\d{4}</code>) and full birthdates (<code>MM/DD/YYYY</code> or <code>MM-DD-YYYY</code>). Any match flags <code>PII_LEAK</code> and the offending text is replaced with <code>[redacted-ssn]</code> or <code>[redacted-dob]</code> in the returned <code>redacted_text</code>.</li>
+          <li><strong>Required determination keywords</strong> &mdash; approval letters must contain &ldquo;approved&rdquo;; denial letters must contain &ldquo;appeal&rdquo; instructions; info-request letters must list the items needing submission. A missing keyword flags <code>MISSING_KEYWORD</code>.</li>
+          <li><strong>Salutation/sign-off</strong> &mdash; the body must start with <code>Dear</code> and end with a <code>Sincerely</code> or <code>Regards</code> sign-off. Missing either flags <code>FORMAT</code>.</li>
+        </ul>
+        <p>The Communication Agent&rsquo;s system prompt instructs Claude to <code>draft_determination_letter</code> &rarr; <code>check_hipaa_compliance</code> &rarr; (only on compliant=true) <code>send_notification</code>. The orchestrator double-checks: if <code>compliant</code> is false at the end of the agent loop, it sets <code>state.stage = "error"</code>, populates <code>state.communication_output["hipaa_issues"]</code>, and refuses to send. This belt-and-suspenders pattern ensures a non-compliant draft cannot escape even if the LLM ignores the guardrail.</p>
 
         <div class="checkpoint">
           <div class="checkpoint-label">Checkpoint &mdash; Step 5</div>
-          <p>Test the guardrail: submit a request with <code>member_id</code> missing. The Intake Agent should reject it with <code>validated: False</code> and <code>missing_fields: ["member_id"]</code>. The pipeline should halt at the intake stage.</p>
+          <p>Two tests to run: (1) Submit a request with <code>member_id</code> missing &mdash; the Intake Agent rejects it with <code>validated: False</code> and <code>missing_fields: ["member_id"]</code>; the pipeline halts at intake. (2) Call <code>check_hipaa_compliance("Dear Provider, your SSN 123-45-6789 was approved. Sincerely.", "approve")</code> directly &mdash; you should see <code>compliant=False</code>, <code>"PII_LEAK: SSN pattern detected"</code> in <code>issues</code>, and <code>[redacted-ssn]</code> in <code>redacted_text</code>.</p>
         </div>
 
         <h3 id="step-6">Step 6: Create the Test Suite (test_pipeline.py)</h3>
-        <p>Create <code>test_pipeline.py</code> with 5 pytest test cases covering the critical paths: happy-path approval, denial, HITL escalation, circuit breaker trip, and invalid input handling.</p>
+        <p>Create <code>test_pipeline.py</code> with 6 pytest test cases covering the critical paths: happy-path approval, denial, HITL escalation, circuit breaker trip, invalid input handling, and the HIPAA output guardrail.</p>
 
         <div class="code-block-wrapper">
           <div class="code-tabs">
@@ -1119,7 +1486,7 @@ Final state:
           </div>
           <div class="code-panel active" id="test-py">
             <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
-            <pre><code>"""test_pipeline.py — 5 pytest test cases for Capstone 4-A pipeline.
+            <pre><code>"""test_pipeline.py — 6 pytest test cases for Capstone 4-A pipeline.
 
 Run:
   pytest test_pipeline.py -v
@@ -1140,6 +1507,7 @@ from mock_tools import (
     finalize_determination,
     draft_determination_letter,
     send_notification,
+    check_hipaa_compliance,
 )
 
 # ── Shared fixtures ───────────────────────────────────────────
@@ -1151,9 +1519,10 @@ VALID_REQUEST = {
     "procedure_code": "27447",
     "diagnosis_codes": ["M17.11"],
     "clinical_notes": (
-        "Severe right knee OA. KL Grade IV on weight-bearing films. "
-        "8 months PT. Failed NSAIDs, 2 corticosteroid injections. "
-        "WOMAC score 68. BMI 31."
+        "Severe right knee osteoarthritis (M17.11). "
+        "KL Grade IV on weight-bearing films. "
+        "8 months physical therapy (PT). Failed conservative NSAIDs, "
+        "2 corticosteroid injections. WOMAC score 68. BMI 31."
     ),
 }
 
@@ -1295,7 +1664,42 @@ def test_invalid_input_handling():
     # Unknown member
     member = verify_member_eligibility("MBR-UNKNOWN", "2024-03-10")
     assert "error" in member
-    assert member["error"] == "MEMBER_NOT_FOUND"</code></pre>
+    assert member["error"] == "MEMBER_NOT_FOUND"
+
+
+# ── Test 6: HIPAA output guardrail flags SSN-leaking letter ────
+
+def test_hipaa_guardrail_blocks_ssn_leak():
+    """check_hipaa_compliance must flag SSN patterns and produce redacted_text."""
+    leaky = (
+        "Dear Provider,\n\n"
+        "Authorization for member SSN 123-45-6789 has been approved.\n\n"
+        "Sincerely,\nClinical Authorization Team"
+    )
+    result = check_hipaa_compliance(leaky, "approve")
+
+    # Must mark non-compliant and report the PII leak
+    assert result["compliant"] is False
+    assert any("PII_LEAK" in i and "SSN" in i for i in result["issues"]), (
+        f"Expected PII_LEAK SSN issue, got {result['issues']}"
+    )
+    # Redacted text replaces the SSN; raw pattern must NOT survive
+    assert "123-45-6789" not in result["redacted_text"]
+    assert "[redacted-ssn]" in result["redacted_text"]
+
+    # A clean approval letter should pass
+    clean = (
+        "Dear Provider,\n\nAuthorization has been approved for the procedure.\n\n"
+        "Sincerely,\nClinical Authorization Team"
+    )
+    ok = check_hipaa_compliance(clean, "approve")
+    assert ok["compliant"] is True, f"Expected compliant=True, got issues={ok['issues']}"
+
+    # A denial letter missing the word 'appeal' must be flagged
+    bad_denial = "Dear Provider,\n\nAuthorization is denied.\n\nSincerely,\nTeam"
+    bd = check_hipaa_compliance(bad_denial, "deny")
+    assert bd["compliant"] is False
+    assert any("MISSING_KEYWORD" in i for i in bd["issues"])</code></pre>
           </div>
           <div class="code-panel" id="test-ts">
             <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
@@ -1359,12 +1763,13 @@ test_pipeline.py::test_denial_missing_conservative_treatment PASSED
 test_pipeline.py::test_hitl_escalation_borderline_confidence PASSED
 test_pipeline.py::test_circuit_breaker_trips PASSED
 test_pipeline.py::test_invalid_input_handling PASSED
+test_pipeline.py::test_hipaa_guardrail_blocks_ssn_leak PASSED
 
-========================= 5 passed in 0.12s =========================</div>
+========================= 6 passed in 0.13s =========================</div>
 
         <div class="checkpoint">
           <div class="checkpoint-label">Checkpoint &mdash; Step 6</div>
-          <p>Run <code>pytest test_pipeline.py -v</code>. You should see all 5 tests pass. If any fail, check the troubleshooting section below.</p>
+          <p>Run <code>pytest test_pipeline.py -v</code>. You should see all 6 tests pass. If any fail, check the troubleshooting section below.</p>
         </div>
       </section>
 
@@ -1382,6 +1787,7 @@ test_pipeline.py::test_invalid_input_handling PASSED
             <tr><td><span class="tag tag-edge">EDGE</span></td><td>Intake finds missing required fields</td><td>Pipeline stops at intake stage, returns validation errors</td></tr>
             <tr><td><span class="tag tag-edge">EDGE</span></td><td>One criterion has no evidence available</td><td>Confidence drops, triggers HITL for that criterion</td></tr>
             <tr><td><span class="tag tag-edge">EDGE</span></td><td>Communication agent fax delivery fails</td><td>Agent retries via email channel, logs delivery failure</td></tr>
+            <tr><td><span class="tag tag-adv">ADVERSARIAL</span></td><td>Drafted letter contains SSN pattern</td><td>HIPAA guardrail flags <code>PII_LEAK</code>, send is blocked, <code>state.stage = error</code></td></tr>
             <tr><td><span class="tag tag-adv">ADVERSARIAL</span></td><td>3 consecutive pipeline failures</td><td>Circuit breaker trips, pipeline halted, operations alerted</td></tr>
             <tr><td><span class="tag tag-adv">ADVERSARIAL</span></td><td>Reviewer takes no action for 24+ hours</td><td>System escalates to supervisor review queue</td></tr>
           </tbody>
@@ -1408,26 +1814,27 @@ test_pipeline.py::test_invalid_input_handling PASSED
           </div>
         </div>
 
-        <p><strong>Expected final output:</strong> The pipeline processes the sample pre-auth request (CPT 27447, knee replacement), all 4 criteria are met with high confidence (93%), and the request is auto-approved. The pytest suite then runs all 5 tests and reports 5 passed.</p>
+        <p><strong>Expected final output:</strong> The pipeline processes the sample pre-auth request (CPT 27447, knee replacement), all 4 criteria are met with high confidence (93%), and the request is auto-approved. The pytest suite then runs all 6 tests (including the HIPAA SSN-leak guardrail test) and reports 6 passed.</p>
 
         <div class="output-label">Expected Output</div>
         <div class="output-block">============================================================
   Pre-Auth Processing Pipeline — Capstone 4-A
+  Type 'demo' for sample request, or 'quit' to exit.
 ============================================================
 
 [INTAKE] Starting...
 [INTAKE] Complete.
 
-[CLINICAL] Evaluating criteria...
+[CLINICAL] Starting...
 [CLINICAL] Complete.
 
-[DECISION] Confidence: 93% — auto-approve
-[DECISION] Complete: APPROVE
+[DECISION] Starting...
+[DECISION] Complete.
 
-[COMMUNICATION] Drafting approval letter...
-[COMMUNICATION] Sent via portal.
+[COMMUNICATION] Starting...
+[COMMUNICATION] Complete.
 
-[PIPELINE] Complete! Determination: APPROVE
+[PIPELINE] Complete! Determination: approve
 
 --- pytest test_pipeline.py -v ---
 test_pipeline.py::test_high_confidence_auto_approve PASSED
@@ -1435,8 +1842,9 @@ test_pipeline.py::test_denial_missing_conservative_treatment PASSED
 test_pipeline.py::test_hitl_escalation_borderline_confidence PASSED
 test_pipeline.py::test_circuit_breaker_trips PASSED
 test_pipeline.py::test_invalid_input_handling PASSED
+test_pipeline.py::test_hipaa_guardrail_blocks_ssn_leak PASSED
 
-========================= 5 passed in 0.12s =========================</div>
+========================= 6 passed in 0.13s =========================</div>
 
         <div class="callout-why">
           <span class="box-label">Congratulations!</span>

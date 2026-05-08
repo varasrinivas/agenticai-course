@@ -229,6 +229,7 @@
           <li><strong>M14 &mdash; Multi-Agent Systems:</strong> The 4-agent pipeline architecture, structured state passing between agents, and agent handoff patterns come directly from M14.</li>
           <li><strong>M16 &mdash; Input Guardrails:</strong> Agent 1 uses input validation (PO schema checks, duplicate detection) and Agent 4 applies output guardrails (SLA compliance, tone matching). M16 teaches these patterns.</li>
           <li><strong>M17 &mdash; Human-in-the-Loop &amp; Guardrails:</strong> The HITL approval flow for split shipments and credit resolutions, plus the circuit breaker pattern, are covered in M17.</li>
+          <li><strong>M18 &mdash; Evaluation:</strong> The pytest-based test suite at the end of the capstone uses M18&rsquo;s scoring + harness patterns to validate end-to-end accuracy.</li>
         </ul>
         <p>You should also be comfortable with Python classes, JSON data structures, and running scripts from the command line.</p>
       </section>
@@ -823,7 +824,7 @@ export function sendCustomerUpdate(
       <!-- SOLUTION -->
       <section class="section" id="solution">
         <h2 id="solution-heading">Complete Solution</h2>
-        <div class="bridge">The orchestrator runs agents sequentially, checking the circuit breaker and HITL conditions at each transition. The time-windowed circuit breaker is the key architectural difference from Capstone 4-A&rsquo;s simple counter.</div>
+        <div class="bridge">The orchestrator runs agents sequentially, checking the circuit breaker and HITL conditions at each transition. The time-windowed circuit breaker is the key architectural difference from Capstone 3-B&rsquo;s simple counter.</div>
 
         <div class="code-block-wrapper">
           <div class="code-tabs">
@@ -983,14 +984,13 @@ def run_order_pipeline(raw_po: dict) -&gt; OrderPipelineState:
             break
 
     # Check if validation/credit actually passed (from tool results)
-    validation = validate_purchase_order({"po_number": raw_po["po_number"],
-        "customer": raw_po["customer"], "line_items": raw_po["line_items"]})
+    validation = validate_purchase_order(raw_po)
     if not validation.get("validated"):
         print(f"[INTAKE] FAILED: {validation.get('errors')}")
         state.stage = "error"
         return state
-    order_total = sum(li.get("qty", 0) * li.get("unit_price", 0) for li in raw_po["line_items"])
-    credit = verify_customer_credit(raw_po["customer"], order_total)
+    order_total = sum(li.get("qty", 0) * li.get("unit_price", 0) for li in raw_po.get("line_items", []))
+    credit = verify_customer_credit(raw_po.get("customer", ""), order_total)
     if not credit.get("credit_approved"):
         print(f"[INTAKE] Credit check failed. Available: ${credit.get('available_credit', 0):,.2f}")
         state.stage = "error"
@@ -1719,7 +1719,7 @@ test_pipeline.py::test_invalid_input_missing_fields PASSED
           <h4>Q2: What triggers the circuit breaker in this pipeline?</h4>
           <div class="quiz-option"><input type="radio" name="q2" id="q2a" value="a"><label for="q2a">Any single carrier API timeout.</label></div>
           <div class="quiz-option"><input type="radio" name="q2" id="q2b" value="b"><label for="q2b">5 carrier API failures in a 60-minute window.</label></div>
-          <div class="quiz-option"><input type="radio" name="q2" id="q2c" value="c"><label for="q2c">Carrier API failing more than 5 times in a 10-minute window.</label></div>
+          <div class="quiz-option"><input type="radio" name="q2" id="q2c" value="c"><label for="q2c">Carrier API failing 5 or more times in a 10-minute window.</label></div>
           <div class="quiz-option"><input type="radio" name="q2" id="q2d" value="d"><label for="q2d">The operations manager manually trips it from the dashboard.</label></div>
           <button class="quiz-check-btn" onclick="checkQuiz(this, 'q2', 'c')">Check Answer</button>
           <div class="quiz-feedback" id="q2-feedback"></div>

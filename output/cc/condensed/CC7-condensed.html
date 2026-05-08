@@ -1,0 +1,102 @@
+<section class="module-condensed" id="CC7">
+  <header class="cm-header">
+    <span class="cm-track">CC7 — Automation</span>
+    <h2 class="cm-title">CC7: Hooks</h2>
+    <p class="cm-tagline">Programmatic control over tool calls. Auto-format, block, route policy, inject context.</p>
+  </header>
+
+  <h3>The Big Idea</h3>
+  <p>Hooks are thin layers that intercept Claude's tool calls before and after they run. Instead of Claude executing a Bash command directly, your hook runs first, checks policy, logs the call, formats output, or blocks it entirely. Think of them as middleware for agent behavior: same Claude, same tools, but with guardrails and automation you control. The 9 hook events (SessionStart, SessionEnd, UserPromptSubmit, PreToolUse, PostToolUse, Stop, SubagentStop, PreCompact, Notification) let you enforce policy across the entire lifecycle. Configuration lives in <code>.claude/settings.json</code>.</p>
+
+  <h3>Analogy</h3>
+  <p>Every hotel room has card readers instead of traditional locks. Why? Because the front desk revokes access without fishing for keys, logs every entry centrally, and updates rights when guests extend their stay—all without changing the door itself. Hooks in Claude Code are exactly this: a thin layer around tool calls that runs <em>your</em> code first. Claude doesn't know it's there; you control whether the call proceeds, what gets logged, or whether the output is reformatted.</p>
+
+  <h3>How It Works</h3>
+  <ol>
+    <li><strong>Event fires:</strong> Claude is about to use Bash (<code>PreToolUse</code>) or just finished an Edit (<code>PostToolUse</code>).</li>
+    <li><strong>Hook runs:</strong> Your command, HTTP endpoint, or LLM prompt executes with the tool call JSON on stdin.</li>
+    <li><strong>Decision returned:</strong> Hook exits 0 (allow), 2 (block), or returns JSON with <code>permissionDecision: "allow" | "deny" | "ask" | "defer"</code>.</li>
+    <li><strong>Claude acts:</strong> If blocked, Claude sees the rejection and tries something else. If allowed, the tool runs. If deferred, the session parks until a slow decision lands.</li>
+    <li><strong>Output handled:</strong> After tool completion, PostToolUse hooks can lint, format, or inject system reminders back to Claude.</li>
+  </ol>
+
+  <h3>Pseudocode</h3>
+  <pre><code>Configuration in .claude/settings.json {
+  hooks: {
+    PreToolUse: [          // event: before tool runs
+      {
+        matcher: "Bash",   // only Bash tool calls
+        hooks: [
+          {
+            type: "command",           // run shell script
+            command: "check-dangerous-flags.sh"
+          }
+        ]
+      }
+    ],
+    PostToolUse: [         // event: after tool runs
+      {
+        matcher: "Edit|Write",
+        hooks: [
+          {
+            type: "http",              // POST to policy server
+            url: "https://policy.internal/lint",
+            async: true                // fire and forget
+          }
+        ]
+      }
+    ]
+  }
+}
+
+Hook script (check-dangerous-flags.sh) reads stdin:
+  tool_name = "Bash"
+  tool_input.command = "rm -rf /"
+  hook_event_name = "PreToolUse"
+
+  If tool_input.command contains "rm -rf":
+    exit 2                          // block signal
+    print to stderr: "Dangerous"
+  Else:
+    exit 0                          // allow
+    optionally return JSON with changes to tool_input</code></pre>
+
+  <h3>Common Misconceptions</h3>
+  <ul>
+    <li><strong>Myth:</strong> "Hooks run <em>instead of</em> the tool." <strong>Reality:</strong> <code>PreToolUse</code> runs <em>before</em> the tool; <code>PostToolUse</code> runs <em>after</em>. Only PreToolUse can block. PostToolUse's exit 2 is feedback to Claude, not a block.</li>
+    <li><strong>Myth:</strong> "I need a different hook script for each developer." <strong>Reality:</strong> Use <code>type: "http"</code> to centralize policy at one endpoint. One server, one audit log, one source of truth. Update policy once; it applies to everyone.</li>
+    <li><strong>Myth:</strong> "Hooks are for permissions only." <strong>Reality:</strong> Hooks automate formatting (prettier post-Edit), run tests (post-Write), inject context (prompt classification), and manage approval workflows (<code>permissionDecision: "defer"</code> for Slack approvals).</li>
+  </ul>
+
+  <h3>Key Takeaway</h3>
+  <div class="cm-takeaway">Hooks let you automate and govern Claude's tool calls without touching the tools themselves. Start with a simple PostToolUse hook to auto-format files, then graduate to HTTP-based centralized policy for orgs. Five handler types (command, http, mcp_tool, prompt, agent) give you options from cheap-and-fast to deep-and-semantic. Remember: exit 2 to block on PreToolUse; exit 0 or JSON to communicate on PostToolUse.</div>
+
+  <h3>Quick Quiz</h3>
+
+  <div class="cm-quiz">
+    <p><strong>Q1. You want to auto-format every file Claude edits. Which hook event?</strong></p>
+    <p>A) PreToolUse with matcher: Edit|Write<br>
+    B) PostToolUse with matcher: Edit|Write<br>
+    C) SessionEnd<br>
+    D) UserPromptSubmit</p>
+    <p class="cm-answer"><strong>Answer: B</strong> — PostToolUse fires <em>after</em> the edit completes, perfect for formatting. PreToolUse fires before the file exists in its new state.</p>
+  </div>
+
+  <div class="cm-quiz">
+    <p><strong>Q2. You want to block any Bash call containing rm -rf. What exit code?</strong></p>
+    <p>A) exit 1 — standard error<br>
+    B) exit 2 — with stderr explaining why<br>
+    C) exit 0 with empty output<br>
+    D) exit 127 — command not found</p>
+    <p class="cm-answer"><strong>Answer: B</strong> — Exit 2 is the special blocking signal. On blockable events (like PreToolUse), Claude Code respects it and feeds stderr back to the model so it knows why and can retry.</p>
+  </div>
+
+  <div class="cm-quiz">
+    <p><strong>Q3. Your team needs one audit log, one policy server, shared enforcement. Which handler type?</strong></p>
+    <p>A) command — shell script per dev<br>
+    B) http — POST to a central policy endpoint<br>
+    C) prompt — ask Haiku each time<br>
+    D) agent — subagent for each call</p>
+    <p class="cm-answer"><strong>Answer: B</strong> — HTTP hooks centralize policy in one server with one audit trail. Command means N copies on N machines. Don't forget <code>allowedHttpHookUrls</code> and <code>httpHookAllowedEnvVars</code> in settings.</p>
+  </div>
+</section>

@@ -156,7 +156,7 @@
           <span class="diff-badge" aria-label="Difficulty: 3 of 5 stars"><span class="diff-star">&#9733;</span><span class="diff-star">&#9733;</span><span class="diff-star">&#9733;</span><span class="diff-star empty">&#9734;</span><span class="diff-star empty">&#9734;</span></span>
         </div>
       </div>
-      <div class="header-meta"><span>Capstone 3 of 5</span><span>90 min &ndash; 2 hours</span><span>Domain C &mdash; Public Records / UCC</span></div>
+      <div class="header-meta"><span>Capstone 3 of 5</span><span>3&ndash;4 hours</span><span>Domain C &mdash; Public Records / UCC</span></div>
     </div>
   </header>
 
@@ -227,8 +227,11 @@
           <div class="code-panel active" id="setup-bash">
             <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
             <pre><code>mkdir capstone-3-entity-resolution &amp;&amp; cd capstone-3-entity-resolution
-python -m venv venv &amp;&amp; source venv/bin/activate   # Windows: venv\Scripts\activate
-pip install anthropic
+python -m venv venv &amp;&amp; source venv/bin/activate   # Windows: venv\Scripts\Activate.ps1
+
+# Pin dependencies for reproducibility
+echo "anthropic&gt;=0.40.0" &gt; requirements.txt
+pip install -r requirements.txt
 export ANTHROPIC_API_KEY=your-key-here             # Windows: set ANTHROPIC_API_KEY=your-key-here</code></pre>
           </div>
         </div>
@@ -342,12 +345,13 @@ export ANTHROPIC_API_KEY=your-key-here             # Windows: set ANTHROPIC_API_
   "scores": {
     "exact": 0.45,
     "normalized": 0.95,
-    "levenshtein": 0.88,
-    "jaro_winkler": 0.92,
     "token_sort_ratio": 0.98
   },
   "recommendation": "likely_match"
-}</code></pre>
+}
+// Note: levenshtein and jaro_winkler are stretch metrics — install
+// `rapidfuzz` (`pip install rapidfuzz`) and add them to the scores
+// dict to enable. The base capstone uses three deterministic scores.</code></pre>
           </div>
         </div>
       </section>
@@ -415,12 +419,20 @@ def search_filings_by_name(business_name: str, state: str | None = None, match_t
 
 
 # --- Tool 2: Fuzzy match score ---
+# NOTE: punctuation is replaced with spaces BEFORE this regex runs, so
+# "L.L.C." becomes "l l c" — match that form (with spaces), not "l.l.c."
+_SUFFIX_RE = re.compile(
+    r'\b(llc|l l c|inc|incorporated|corp|corporation|company|co|ltd)\b'
+)
+
 def _normalize(name: str) -> str:
     name = name.lower().strip()
     name = re.sub(r'[,.\-]', ' ', name)
     name = re.sub(r'\s+', ' ', name)
-    for suffix in ['llc', 'l l c', 'inc', 'incorporated', 'corp', 'corporation', 'company', 'co', 'ltd']:
-        name = name.replace(suffix, '').strip()
+    # Strip ONLY whole-word suffixes (not substrings — "Coca" must
+    # not lose "co", "Incorporated" must outrank "corp")
+    name = _SUFFIX_RE.sub('', name)
+    name = re.sub(r'\s+', ' ', name).strip()
     return name
 
 def fuzzy_match_score(entity_a: str, entity_b: str) -> dict:

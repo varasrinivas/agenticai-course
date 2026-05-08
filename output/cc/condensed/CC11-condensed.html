@@ -1,0 +1,86 @@
+<section class="module-condensed" id="CC11">
+  <header class="cm-header">
+    <span class="cm-track">CC11 — Quality</span>
+    <h2 class="cm-title">CC11: Evaluating Skills, Subagents & Prompts</h2>
+    <p class="cm-tagline">Treat your skills and prompts like code: test them, measure regressions, gate merges.</p>
+  </header>
+
+  <h3>The Big Idea</h3>
+  <p>Prompt engineering lives on a spectrum from "vibes" to "science." Without automated evals, changes that feel smarter often aren't—they just overfit. An eval is a test suite for prompts: run your prompt against 20–100 real cases with known-good outputs, measure pass rate, and wire the score into CI to block regressions. Four stages: (1) build a dataset, (2) run the prompt on each case, (3) grade the output (code-based for classification, model-based for subjective), (4) aggregate and gate. The output is a number—"84/100 correct"—that makes prompt changes auditable.</p>
+
+  <h3>Analogy</h3>
+  <p>Refactoring 10K lines of code with no tests means every change is a gamble. A flaky bug surfaces weeks later, you don't know which commit caused it, and you're afraid to touch anything. Evals are the test suite for prompts. A skill that classifies commits well today might silently regress when you "improve" it tomorrow—evals catch that before it ships.</p>
+
+  <h3>How It Works</h3>
+  <ol>
+    <li><strong>Build a 20–100 case dataset.</strong> Include typical cases (60%), ambiguous cases (20%), and adversarial cases (20%). Store as JSONL: <code>{"id":"t01","input":"...","expected":"...","tag":"typical"}</code>.</li>
+    <li><strong>Run the prompt on each input.</strong> Loop through the dataset, call the model with the prompt and input, collect the output.</li>
+    <li><strong>Grade each output.</strong> If the answer is deterministic (classification, JSON shape), use code-based grading. If subjective (quality, thoroughness), use a Claude call as judge with temperature=0 and a strict rubric.</li>
+    <li><strong>Aggregate the scores.</strong> Compute overall pass rate and per-tag rates. Wire the threshold into a pre-commit hook or GitHub Actions: fail if score drops below X or if any tag drops too far.</li>
+  </ol>
+
+  <h3>Pseudocode</h3>
+  <pre><code>dataset = load JSONL with input/expected pairs
+results = []
+
+for each case in dataset:
+    actual_output = call_model(prompt, case.input)
+
+    if classification (fixed label set):
+        score = (actual == expected) ? 1.0 : 0.0
+    else if subjective:
+        score = llm_judge(actual, expected, rubric) returns 0..1
+
+    record {case_id, tag, score}
+    results.append(record)
+
+overall = mean of all scores
+by_tag = group by tag, compute mean for each
+
+if overall >= 0.85 and all tags >= 0.6:
+    print PASS
+    exit 0
+else:
+    print FAIL with breakdown
+    exit 1
+</code></pre>
+
+  <h3>Common Misconceptions</h3>
+  <ul>
+    <li><strong>Myth:</strong> "Evals are only for research; too slow for iteration."<br><strong>Reality:</strong> 50 cases on Sonnet costs ~$0.04. CI runs are cheap. Sample per-PR, run full on main.</li>
+    <li><strong>Myth:</strong> "I can use Claude to generate test cases AND Claude to grade them."<br><strong>Reality:</strong> You're measuring "Claude agrees with itself"—useless. Either hand-label the dataset or use code-based grading.</li>
+    <li><strong>Myth:</strong> "If overall score passes, I'm safe."<br><strong>Reality:</strong> Aggregate scores hide regressions in edge cases. Add per-tag floors: "no tag may drop below 0.6."</li>
+  </ul>
+
+  <h3>Key Takeaway</h3>
+  <div class="cm-takeaway">Evals turn prompt engineering from folklore into testable science. A 50-line eval runner + 20 test cases, wired into CI, costs almost nothing and catches regressions before they ship. Code-based grading (exact match, regex, JSON shape) is free and sufficient for classification; model-based grading (LLM-as-judge with temperature=0) handles subjective outputs. Always validate the judge against human scores before trusting it.</div>
+
+  <h3>Quick Quiz</h3>
+
+  <div class="cm-quiz">
+    <p><strong>Q1.</strong> You're grading a "feat/fix/chore/docs/refactor?" classifier. Best grader?</p>
+    <p>A) Code-based exact-match—answer is one of 5 fixed strings.<br>
+    B) LLM-as-judge with a rubric.<br>
+    C) Human review only.<br>
+    D) Doesn't matter.</p>
+    <p class="cm-answer"><strong>Answer: A</strong> — Classification with a small fixed label set is the canonical case for code-based grading. It's free, deterministic, and fast. Save LLM-as-judge for subjective outputs.</p>
+  </div>
+
+  <div class="cm-quiz">
+    <p><strong>Q2.</strong> Your model-based judge gives score 4.5 one run, 3.0 the next, on the same input. Why?</p>
+    <p>A) The candidate output changed.<br>
+    B) You forgot <code>temperature=0</code> on the judge call.<br>
+    C) Anthropic released a new model.<br>
+    D) Cache miss.</p>
+    <p class="cm-answer"><strong>Answer: B</strong> — Judges must be deterministic. Always set temperature=0, force the score via tool use, and use a stable model ID. Score variance run-to-run signals a non-zero temperature.</p>
+  </div>
+
+  <div class="cm-quiz">
+    <p><strong>Q3.</strong> Your eval passes overall (0.88) but "adversarial" drops from 0.7 to 0.4. Ship?</p>
+    <p>A) Yes—overall passed.<br>
+    B) No—adversarial drop signals overfit; add per-tag floor to gate.<br>
+    C) Yes—adversarial cases don't matter.<br>
+    D) Re-run; might be noise.</p>
+    <p class="cm-answer"><strong>Answer: B</strong> — Aggregate scores hide regressions in important slices. A 30-point drop on one tag is a strong overfit signal. Always include a per-tag floor (e.g., "no tag below 0.6") and treat sharp drops as red flags.</p>
+  </div>
+</section>
