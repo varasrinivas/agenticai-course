@@ -72,8 +72,9 @@ IF Claude returns tool_use:
 
 ### Section Length
 - Desktop section: 500-1000 words
-- Mobile section: 150-300 words (same concept, 70% shorter)
-- Rule: if you can't explain it in 300 words, you're including implementation detail that belongs on desktop
+- Mobile concept cluster: 400-600 words per concept (each major desktop concept gets its own cluster — see "Module Structure" below)
+- Rule: if you can't explain ONE concept in 600 mobile words, you're including implementation detail that belongs on desktop
+- Total mobile module length scales with desktop concept count: 1-concept module ≈ 600 words, 6-concept module ≈ 3600 words. Mobile should still come in ~50% shorter than the equivalent desktop module — never collapse multiple desktop concepts into a single mobile cluster.
 
 ## Visual Design (Mobile-Specific)
 
@@ -169,17 +170,47 @@ IF Claude returns tool_use:
 
 ## Module Structure (Mobile Version)
 
-Each mobile module has these sections (as swipeable cards):
+A mobile module is composed of swipeable cards in this order:
 
-1. **Title Card** — Module name, track, position (e.g., "5 of 30"), time estimate ("10 min read")
-2. **The Big Idea** — ONE paragraph explaining the core concept. If a student reads nothing else, they get the point from this.
-3. **The Analogy** — The best analogy from the desktop version, with a simple visual
-4. **How It Works** — 3-5 step explanation with a static or simple animated diagram
-5. **The Pseudocode** — Language-agnostic pseudocode showing the key pattern (10-15 lines max)
-6. **Common Misconceptions** — 2-3 wrong mental models with corrections (from desktop Rule 12)
-7. **Key Takeaway** — 2-3 sentence summary box
-8. **Quick Quiz** — 3 tap-to-reveal questions
-9. **Desktop Link** — "Ready to build? Open the full module on desktop →"
+1. **Title Card** (1, always) — Module name, track, position ("5 of 30"), time estimate
+2. **Concept Index Card** (1, always) — Tap-to-jump list of every concept cluster in this module
+3. **Concept Clusters** (1 per major desktop concept — see "How to identify concepts" below)
+4. **Quick Quiz Card** (1, shared) — 3-5 tap-to-reveal questions covering the strongest insight from each concept
+5. **Desktop Link Card** (1, always) — "Ready to build? Open the full module on desktop →"
+
+### How to identify "major concepts" in a desktop module
+
+A "concept" is a top-level `<h2>` in the desktop HTML, EXCLUDING administrative/scaffolding sections:
+- Learning Objectives
+- Hands-On Exercise / Lab
+- Knowledge Check / Quiz
+- Module Summary
+- References & Resources
+- Code Walkthrough sections that are step-by-step implementations of an already-introduced concept (fold their key idea into the parent concept's pseudocode card; do NOT make them their own cluster)
+
+Every other `<h2>` becomes ONE concept cluster on mobile. **You must produce one cluster per concept — never collapse multiple desktop concepts into a single mobile cluster.** A learner who only reads mobile must encounter every major concept the desktop teaches, even if at lower depth.
+
+Example concept inventories:
+- **M02 Tokens** (1 concept): Tokens. → 1 cluster.
+- **M09 RAG** (6 concepts): RAG basics, Embeddings, Chunking, Vector DBs, Citations, Multimodal. → 6 clusters.
+- **M12 ReAct** (7 concepts): Pattern landscape, ReAct loop, Implementation, Thought Traces, Stop Conditions, Error Handling, Extended Thinking. → 7 clusters.
+- **M16 Input Guardrails** (5 concepts): Why guardrails, PII Detection, Prompt Injection, Schema Validation, Rate Limiting. → 5 clusters.
+- **M19 Tracing** (7 concepts): Why observability, Traces, Spans, Structured Logging, Tools landscape, Compliance, Prompt Versioning. → 7 clusters.
+- **M26 Agent SDK** (7 concepts): Why SDK, Build agent, Hooks, Sessions, Subagents, Production stack, When to leave SDK. → 7 clusters.
+
+### Concept Cluster — 5 cards per concept
+
+For each major concept, generate this 5-card cluster (in order):
+
+1. **Big Idea** — H2 = the concept's name. One paragraph (2-4 sentences) explaining ONLY this concept's core idea. If the learner reads nothing else from this cluster, they get the point.
+2. **Analogy** — The best analogy from the desktop content for THIS concept (BEFORE → PAIN → MAPPING per Rule 11). Add a small visual if it helps.
+3. **How It Works** — 3-5 numbered steps + a static or simple 2-3 frame diagram. Specific to THIS concept.
+4. **Pseudocode OR Decision Framework** — 10-15 lines. For algorithmic concepts, language-agnostic pseudocode. For non-algorithmic concepts ("Why X matters", "When to use Y"), substitute a decision framework, anti-pattern list, or comparison table.
+5. **Misconceptions + Takeaway** — 1-2 misconceptions specific to THIS concept (❌ wrong → ✅ right) followed by a 💡 Key Takeaway box (2-3 sentences).
+
+### Card numbering and progress bar
+
+The bottom progress bar shows `current / total` where total = `2 + (5 × concept_count) + 2`. Each card scroll-snaps to viewport. Concept clusters carry a small `Concept N of M` chip in the top corner so the learner knows where they are inside the module.
 
 ## File Naming
 - Desktop: `output/M09-rag.html`
@@ -192,57 +223,79 @@ Each mobile module has these sections (as swipeable cards):
 
 ## Example: M09 RAG (Mobile Version)
 
+M09 has 6 major desktop concepts → 6 clusters → 34 cards total (1 title + 1 index + 6×5 + 1 quiz + 1 desktop link).
+
 ### Card 1: Title
 ```
 MODULE 9 of 30
 RAG — Retrieval-Augmented Generation
 Track 3: Memory & Context
-⏱ 10 min read
+⏱ 25 min read · 6 concepts
 ```
 
-### Card 2: The Big Idea
-"Claude's training data has a cutoff — it doesn't know YOUR documents. RAG solves this by SEARCHING your documents and pasting the relevant parts into Claude's prompt before it answers. Think of it as giving Claude a cheat sheet customized for each question."
-
-### Card 3: The Analogy
-"Imagine an open-book exam. The student (Claude) doesn't memorize the textbook — instead, before answering each question, they flip to the most relevant pages and read those. RAG is the page-flipping step."
-
-[Simple diagram: Question → Search → Find pages → Paste into prompt → Claude answers]
-
-### Card 4: How It Works
-1. **PREPARE** (once): Split your documents into small pieces. Convert each piece into a number-array (embedding). Store in a searchable database.
-2. **SEARCH** (every question): Convert the user's question into the same kind of number-array. Find the 3 closest document pieces.
-3. **GENERATE**: Paste those 3 pieces into Claude's prompt alongside the question. Claude answers using the provided context.
-
-### Card 5: Pseudocode
+### Card 2: Concept Index
 ```
-// SETUP (run once)
+What you'll learn (tap to jump):
+  1. RAG basics — search + generate
+  2. Embeddings — turning text into searchable numbers
+  3. Chunking — slicing documents the right way
+  4. Vector databases — where embeddings live
+  5. Citations — Claude's native provenance
+  6. Multimodal inputs — PDFs, images, Files API
+```
+
+### Cluster 1 — Concept: RAG basics (Cards 3-7)
+
+**Card 3 — Big Idea:** "Claude's training data has a cutoff — it doesn't know YOUR documents. RAG solves this by SEARCHING your documents and pasting the relevant parts into Claude's prompt before it answers."
+
+**Card 4 — Analogy:** "Open-book exam. The student (Claude) doesn't memorize the textbook — they flip to the most relevant pages before answering each question."
+[Diagram: Question → Search → Find pages → Paste into prompt → Claude answers]
+
+**Card 5 — How It Works:** 1. PREPARE (once): split docs, embed, store. 2. SEARCH (per question): embed query, find nearest chunks. 3. GENERATE: paste chunks into prompt.
+
+**Card 6 — Pseudocode:**
+```
 FOR each document:
-  chunks = SPLIT document into 500-word pieces
-  FOR each chunk:
-    embedding = EMBED(chunk)  // numbers representing meaning
-    STORE(embedding, chunk) in vector database
+  chunks = SPLIT into 500-word pieces
+  FOR each chunk: STORE(EMBED(chunk), chunk)
 
-// QUERY (run per question)
-query_embedding = EMBED(user_question)
-top_3_chunks = SEARCH vector database for nearest to query_embedding
-prompt = "Answer using ONLY this context: " + top_3_chunks + user_question
-response = ASK Claude with prompt
+query_emb = EMBED(user_question)
+top_3 = SEARCH vector_db nearest to query_emb
+ASK Claude("Use this context: " + top_3 + user_question)
 ```
 
-### Card 6: Misconceptions
-❌ "RAG = fine-tuning" → No. Fine-tuning changes the model ($$$, weeks). RAG just adds text to the prompt.
-❌ "Bigger chunks = better" → Usually opposite. A 2000-word chunk dilutes the relevant sentence.
-❌ "RAG eliminates hallucinations" → Reduces them, doesn't eliminate. Claude can still misinterpret context.
+**Card 7 — Misconceptions + Takeaway:** ❌ "RAG = fine-tuning" → No, RAG just adds text to the prompt. ❌ "RAG eliminates hallucinations" → Reduces, not eliminates. 💡 RAG = search + generate, no model changes needed.
 
-### Card 7: Takeaway
-💡 RAG is search + generate. You search your documents for relevant pieces, paste them into the prompt, and let Claude answer from that context. No model changes needed.
+### Cluster 2 — Concept: Embeddings (Cards 8-12)
 
-### Card 8: Quiz
-Q: Does RAG change Claude's model weights?
-[tap] No — it only changes what's in the prompt.
+**Card 8 — Big Idea:** "An embedding is a list of ~1500 numbers that represents the *meaning* of a piece of text. Similar meanings → similar numbers → close in vector space."
 
-Q: Why split documents into chunks?
-[tap] Embedding models have token limits, and smaller chunks give more precise search results.
+**Card 9 — Analogy:** "Map coordinates for ideas. The word 'dog' and 'puppy' end up at nearby coordinates; 'dog' and 'spreadsheet' end up far apart. Search = find the nearest coordinates to your question."
 
-Q: What's the main risk of RAG?
-[tap] Claude can still hallucinate even with context — RAG reduces but doesn't eliminate this.
+**Card 10 — How It Works:** Embedding model reads text → outputs fixed-size vector → cosine similarity measures distance → smaller distance = more relevant.
+
+**Card 11 — Pseudocode:** [embedding flow with cosine similarity]
+
+**Card 12 — Misconceptions + Takeaway:** ❌ "Bigger embedding = better" → Diminishing returns past ~1500 dims. 💡 Embeddings are how machines turn meaning into math.
+
+### Cluster 3 — Concept: Chunking (Cards 13-17)
+[Same 5-card structure for chunk size strategies, overlap, semantic vs fixed]
+
+### Cluster 4 — Concept: Vector Databases (Cards 18-22)
+[Same 5-card structure for ChromaDB / Pinecone / pgvector, indexing, hybrid search]
+
+### Cluster 5 — Concept: Citations (Cards 23-27)
+[Same 5-card structure for Claude's native citations API, when to use vs RAG]
+
+### Cluster 6 — Concept: Multimodal Inputs (Cards 28-32)
+[Same 5-card structure for PDFs, vision, Files API, decision matrix]
+
+### Card 33 — Quick Quiz (one question per concept)
+Q: Does RAG change Claude's model weights? → No, only the prompt.
+Q: Why are embeddings ~1500 numbers, not 5? → Need enough dimensions to separate meanings.
+Q: What's the risk of 2000-word chunks? → Dilution: relevant sentence gets lost.
+Q: When pick Citations over RAG? → When you must prove which source supported each sentence.
+Q: Files API vs base64 PDFs? → Files API for repeated reuse; base64 for one-off.
+
+### Card 34 — Desktop Link
+"Ready to build a real RAG pipeline? Open the full module on desktop →"
