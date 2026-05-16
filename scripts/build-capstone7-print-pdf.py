@@ -732,6 +732,18 @@ _PY_KW_RULES = [
     (re.compile(r"^\s*raise\s+", re.M), lambda m: m.group(0).replace("raise", "RAISE")),
     (re.compile(r"^\s*break\s*$", re.M), lambda m: m.group(0).replace("break", "BREAK")),
     (re.compile(r"^\s*continue\s*$", re.M), lambda m: m.group(0).replace("continue", "CONTINUE")),
+    # JS/TS variable declarations — anchored to line start so `const` inside a
+    # string mid-line doesn't get rewritten. `export const` is handled by stripping
+    # the export keyword first via the broader line-start anchor.
+    (re.compile(r"^\s*export\s+const\s+", re.M), lambda m: m.group(0).replace("const", "CONST")),
+    (re.compile(r"^\s*export\s+let\s+", re.M), lambda m: m.group(0).replace("let", "LET")),
+    (re.compile(r"^\s*const\s+", re.M), lambda m: m.group(0).replace("const", "CONST")),
+    (re.compile(r"^\s*let\s+", re.M), lambda m: m.group(0).replace("let", "LET")),
+    # TS interface / type alias
+    (re.compile(r"^\s*export\s+interface\s+", re.M), lambda m: m.group(0).replace("interface", "INTERFACE")),
+    (re.compile(r"^\s*interface\s+(\w+)", re.M), r"INTERFACE \1"),
+    (re.compile(r"^\s*export\s+type\s+(\w+)", re.M), r"TYPE \1"),
+    (re.compile(r"^\s*type\s+(\w+)\s*=", re.M), r"TYPE \1 ="),
     # JS/TS only — never rewrite a generic word `new`; require `new SomeIdentifier(`
     (re.compile(r"\bnew\s+([A-Z]\w*\()"), r"NEW \1"),
     # Strip async / await markers
@@ -742,7 +754,7 @@ _PY_KW_RULES = [
 # Words we recognize as the uppercased keywords; we wrap these for CSS color.
 _KW_HIGHLIGHT_RE = re.compile(
     r"\b(FUNCTION|CLASS|IF|ELIF|ELSE|FOR|WHILE|IN|RETURN|YIELD|TRY|CATCH|FINALLY|"
-    r"WITH|IMPORT|FROM|RAISE|BREAK|CONTINUE|NEW)\b"
+    r"WITH|IMPORT|FROM|RAISE|BREAK|CONTINUE|NEW|CONST|LET|INTERFACE|TYPE)\b"
 )
 
 # Strip Python type hints: `x: SomeType = ...` -> `x = ...`,
