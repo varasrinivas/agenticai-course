@@ -40,11 +40,12 @@ _spec = importlib.util.spec_from_file_location("_c7", _C7_SCRIPT)
 _c7 = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_c7)
 
-find_browser         = _c7.find_browser
-_label_code_panels   = _c7._label_code_panels
-_pseudocodify_all    = _c7._pseudocodify_all
+find_browser           = _c7.find_browser
+_label_code_panels     = _c7._label_code_panels
+_drop_ts_panels        = _c7._drop_ts_panels
+_pseudocodify_all      = _c7._pseudocodify_all
 _wrap_comments_in_code = _c7._wrap_comments_in_code
-PRINT_FINALIZE_JS    = _c7.PRINT_FINALIZE_JS
+PRINT_FINALIZE_JS      = _c7.PRINT_FINALIZE_JS
 
 
 # ---------------------------------------------------------------------------
@@ -352,6 +353,7 @@ def build_study_html(src_html: str, extra_strip: list[str]) -> str:
     strip_ids = _COMMON_STRIP + tuple(extra_strip)
     html = _strip_sections(src_html, strip_ids)
     html = _label_code_panels(html)
+    html = _drop_ts_panels(html)        # remove TypeScript/Node.js panels, keep Python only
     html = _pseudocodify_all(html)
     html = _wrap_comments_in_code(html)
     if "</body>" not in html:

@@ -930,6 +930,92 @@ def _label_code_panels(html: str) -> str:
 
 
 # ---------------------------------------------------------------------------
+# Drop TypeScript / JavaScript panels — keep Python only
+# ---------------------------------------------------------------------------
+
+# Tab labels (lowercased) that identify TypeScript/JavaScript panels.
+_TS_LANG_LABELS = {
+    "typescript", "ts", "node.js", "node.js / typescript",
+    "javascript", "js", "jsx", "tsx", "node",
+}
+
+
+def _is_ts_panel(panel) -> bool:
+    """Return True if the code panel contains TypeScript/JavaScript code."""
+    lang = (panel.get("data-lang") or "").lower()
+    if any(lbl in lang for lbl in _TS_LANG_LABELS):
+        return True
+    # Fallback: inspect the first non-blank line of the code itself.
+    code_el = panel.find("code")
+    if not code_el:
+        return False
+    text = code_el.get_text()
+    first = next((l.strip() for l in text.splitlines() if l.strip()), "")
+    # TypeScript/JS file headers: `// filename.ts` or `// filename.tsx` etc.
+    if re.match(r"//\s*\S+\.(?:ts|tsx|js|jsx|mjs|cjs)\b", first):
+        return True
+    # TypeScript-specific shell invocations
+    if re.match(r"npx\s+(ts-node|tsc)\b", first):
+        return True
+    return False
+
+
+def _drop_ts_panels(html: str) -> str:
+    """Remove every TypeScript/Node.js code panel (and its tab button) from
+    each .code-block-wrapper, leaving only Python (and language-agnostic)
+    panels. Cleans up empty tab rows and marks remaining panels active."""
+    try:
+        from bs4 import BeautifulSoup
+    except ImportError:
+        return html
+
+    soup = BeautifulSoup(html, "html.parser")
+
+    for wrapper in soup.select(".code-block-wrapper"):
+        tabs_div = wrapper.find(class_="code-tabs")
+        tab_btns = tabs_div.select(".code-tab") if tabs_div else []
+        panels = wrapper.select(".code-panel")
+
+        # Pair each panel with its tab button (may have more panels than tabs).
+        pairs = list(zip(tab_btns, panels))
+        if len(panels) > len(tab_btns):
+            pairs += [(None, p) for p in panels[len(tab_btns):]]
+
+        to_drop_panels = []
+        to_drop_tabs = []
+        for tab, panel in pairs:
+            if _is_ts_panel(panel):
+                to_drop_panels.append(panel)
+                if tab:
+                    to_drop_tabs.append(tab)
+
+        for el in to_drop_tabs + to_drop_panels:
+            el.decompose()
+
+        # If wrapper is now empty, remove it entirely.
+        remaining = wrapper.select(".code-panel")
+        if not remaining:
+            wrapper.decompose()
+            continue
+
+        # Clean up the tab eyebrow: remove if empty, or hide if single tab.
+        if tabs_div:
+            left_tabs = tabs_div.select(".code-tab")
+            if not left_tabs:
+                tabs_div.decompose()
+            # If only one tab remains keep it as a label (CSS handles it fine).
+
+        # Make all remaining panels visible (tabs are now cosmetic in print).
+        for panel in wrapper.select(".code-panel"):
+            cls = panel.get("class") or []
+            if "active" not in cls:
+                cls = list(cls) + ["active"]
+                panel["class"] = cls
+
+    return str(soup)
+
+
+# ---------------------------------------------------------------------------
 # Section stripping
 # ---------------------------------------------------------------------------
 
@@ -1139,6 +1225,7 @@ def build_print_html(src_html: str, domain: str) -> str:
     html = replace_arch_animation(html)
     html = inject_front_matter(html, domain)
     html = _label_code_panels(html)
+    html = _drop_ts_panels(html)        # keep Python only
     # Pseudocode pass MUST run before _wrap_comments_in_code: the comment-
     # wrapper looks for raw `#` lines, but _pseudocodify_all escapes the
     # contents and runs keyword-wrapping. Order: pseudocode (rewrite + escape
