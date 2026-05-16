@@ -30,6 +30,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 OUTPUT_DIR = ROOT / "output"
+PDF_DIR    = ROOT / "output" / "pdf"
 
 # ---------------------------------------------------------------------------
 # Import shared pseudocode + browser helpers from build-capstone7-print-pdf.py
@@ -60,7 +61,7 @@ for _n in [1, 2, 3, 4, 5]:
         _CAPSTONE_REGISTRY.append({
             "num": _n, "domain": _d,
             "src": OUTPUT_DIR / f"CAPSTONE-{_n}-DOMAIN-{_d}.html",
-            "out": OUTPUT_DIR / f"CAPSTONE-{_n}-DOMAIN-{_d}-study.pdf",
+            "out": PDF_DIR / f"CAPSTONE-{_n}-DOMAIN-{_d}-study.pdf",
             "extra_strip": [],
         })
 
@@ -68,7 +69,7 @@ for _n in [1, 2, 3, 4, 5]:
 _CAPSTONE_REGISTRY.append({
     "num": 6, "domain": None,
     "src": OUTPUT_DIR / "CAPSTONE-6-data-pipeline-testing.html",
-    "out": OUTPUT_DIR / "CAPSTONE-6-data-pipeline-testing-study.pdf",
+    "out": PDF_DIR / "CAPSTONE-6-data-pipeline-testing-study.pdf",
     "extra_strip": [
         "anim-map", "anim-swarm", "anim-pipeline", "anim-formats",
         "anim-checks", "anim-dashboard", "anim-errors",
@@ -80,7 +81,7 @@ for _d in ["A", "B", "C"]:
     _CAPSTONE_REGISTRY.append({
         "num": 7, "domain": _d,
         "src": OUTPUT_DIR / f"CAPSTONE-7-DOMAIN-{_d}.html",
-        "out": OUTPUT_DIR / f"CAPSTONE-7-DOMAIN-{_d}-study.pdf",
+        "out": PDF_DIR / f"CAPSTONE-7-DOMAIN-{_d}-study.pdf",
         "extra_strip": [
             "anim-lanes", "anim-waterfall", "anim-time", "anim-spec", "anim-arch",
         ],

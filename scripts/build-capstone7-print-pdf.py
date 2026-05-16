@@ -36,6 +36,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 OUTPUT_DIR = ROOT / "output"
+PDF_DIR    = ROOT / "output" / "pdf"
 
 CHROME_CANDIDATES = [
     r"C:\Program Files\Google\Chrome\Application\chrome.exe",
@@ -52,21 +53,21 @@ CHROME_CANDIDATES = [
 DOMAINS: dict[str, dict] = {
     "A": {
         "src": OUTPUT_DIR / "CAPSTONE-7-DOMAIN-A.html",
-        "out": OUTPUT_DIR / "CAPSTONE-7-DOMAIN-A-print.pdf",
+        "out": PDF_DIR / "CAPSTONE-7-DOMAIN-A-print.pdf",
         "scenario": "Healthcare Pre-Authorization Decision Agent",
         "subtitle": "Build the same pre-auth agent three ways — raw API, Agent SDK + Claude Code, spec-driven.",
         "compliance": "HIPAA / PHI redaction baked in via hooks; every determination cites a policy_id.",
     },
     "B": {
         "src": OUTPUT_DIR / "CAPSTONE-7-DOMAIN-B.html",
-        "out": OUTPUT_DIR / "CAPSTONE-7-DOMAIN-B-print.pdf",
+        "out": PDF_DIR / "CAPSTONE-7-DOMAIN-B-print.pdf",
         "scenario": "B2B Order Exception Agent",
         "subtitle": "Build the same order-exception agent three ways — raw API, Agent SDK + Claude Code, spec-driven.",
         "compliance": "Tier-aware tone enforcement (ENTERPRISE vs SMB) and overpromise detection in PostToolUse hooks.",
     },
     "C": {
         "src": OUTPUT_DIR / "CAPSTONE-7-DOMAIN-C.html",
-        "out": OUTPUT_DIR / "CAPSTONE-7-DOMAIN-C-print.pdf",
+        "out": PDF_DIR / "CAPSTONE-7-DOMAIN-C-print.pdf",
         "scenario": "UCC Filing Risk Analyzer",
         "subtitle": "Build the same filing-risk agent three ways — raw API, Agent SDK + Claude Code, spec-driven.",
         "compliance": "Name-variant search + lien-risk scoring; query results must trace back to source filings.",
