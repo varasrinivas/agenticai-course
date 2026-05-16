@@ -5,6 +5,7 @@
 **Estimated Time**: 90-120 minutes
 **Track Color**: var(--track-capstones) / #D4A843
 **Cert Domains**: ALL — This module fills remaining gaps across all 5 domains and provides exam practice
+**SDK Tier**: 3 (SDK-default). All practice scenarios reference `claude-agent-sdk`, `HookMatcher`, `can_use_tool`, `.claude/agents/`, and spec-driven workflows. Anti-pattern section explicitly calls out "simulating the SDK with `client.messages.create()`" as a forbidden pattern. See `prompts/19-sdk-tier-policy.md`.
 
 ## Why This Module Exists
 This module has three jobs: (1) teach the remaining cert topics not covered in M25-M26, (2) present all 18 anti-patterns as an animated reference, and (3) provide mock exam scenarios with practice questions. It's the final preparation before sitting the exam.

@@ -540,6 +540,10 @@
       <a href="#objectives">Learning Objectives</a>
       <a href="#what-is-llm">What Is an LLM?</a>
       <a href="#how-claude-processes" class="sub">How Claude Processes Text</a>
+      <a href="#how-inference-works">How Inference Actually Works</a>
+      <a href="#sampling-mechanics" class="sub">Sampling &amp; Logits</a>
+      <a href="#latency-anatomy" class="sub">Latency Anatomy</a>
+      <a href="#streaming-vs-batch" class="sub">Streaming vs Batch</a>
       <a href="#temperature">Temperature &amp; Sampling</a>
       <a href="#calculator-vs-thinker" class="sub">Calculator vs. Thinker</a>
       <a href="#code-walkthrough">Code Walkthrough</a>
@@ -769,6 +773,174 @@ Output generation: 3600ms (120 tokens, one at a time)</code></pre>
             <button class="anim-btn" onclick="processRestart()" aria-label="Restart animation" title="Restart">&#8635;</button>
           </div>
         </div>
+      </section>
+
+      <!-- ======================== CONCEPT 2.5 &mdash; INFERENCE ======================== -->
+      <section class="section" id="how-inference-works">
+        <h2 id="how-inference-works-heading">How Inference Actually Works</h2>
+
+        <div class="analogy-box">
+          <span class="box-label">Everyday Analogy</span>
+          <p><strong>BEFORE:</strong> You probably picture an LLM as a function: question goes in, full answer comes out. That mental model is wrong in a specific way that matters once you start optimizing latency and cost.</p>
+          <p><strong>PAIN:</strong> Without the right picture, you can&rsquo;t reason about why the first token takes 800 ms but the next 200 tokens stream out at 60 ms each. You can&rsquo;t explain why a 50K-token prompt is expensive even before Claude writes a single word back. You can&rsquo;t budget for production.</p>
+          <p style="margin-bottom:0;"><strong>MAPPING:</strong> Inference is <strong>autoregressive</strong> &mdash; Claude generates output <em>one token at a time</em>, and each new token is conditioned on every token before it (yours and its own). Picture someone typing a long reply on a phone: they read what they&rsquo;ve typed so far, pick the most likely next letter, append it, re-read, pick the next letter, append, and so on. That&rsquo;s inference. There&rsquo;s no &ldquo;full answer&rdquo; sitting in the model waiting to be unwrapped &mdash; the answer is constructed token-by-token, in real time, in the same call.</p>
+        </div>
+
+        <div class="tech-def-box">
+          <span class="box-label">Technical Definition</span>
+          <p><span class="term-tooltip" tabindex="0">Inference<span class="tooltip-content" role="tooltip">The process of running a trained LLM to produce output. As opposed to training (which adjusts the model&rsquo;s weights), inference uses the frozen weights to predict tokens. The cost you pay per API call is inference cost.</span></span> is what happens when Claude is running, not learning. Every call to the API kicks off two distinct phases:</p>
+          <p><strong>1. Prefill (a.k.a. the &ldquo;forward pass&rdquo; over your prompt).</strong> Your prompt &mdash; system + messages + tool definitions &mdash; is tokenized (M02), converted to <span class="term-tooltip" tabindex="0">embeddings<span class="tooltip-content" role="tooltip">High-dimensional vectors (4096 numbers, in many models) that represent a token in a meaning-space. Tokens that are semantically related land near each other in that space. We&rsquo;ll dig into embeddings in M09.</span></span>, and pushed through every transformer layer <em>in parallel</em>. The model computes attention across all input tokens at once, which is fast per-token but heavy: cost is roughly O(N&sup2;) in prompt length. The output of prefill is one set of logits &mdash; a probability distribution over the entire vocabulary &mdash; for the next token to generate.</p>
+          <p><strong>2. Decode (a.k.a. token-by-token generation).</strong> The model samples one token from the prefill logits, appends it to the running sequence, and runs <em>just that new token</em> through the transformer (reusing cached attention values for everything before it &mdash; the <span class="term-tooltip" tabindex="0">KV cache<span class="tooltip-content" role="tooltip">Key/Value cache. During decode, the attention computations for already-processed tokens are kept in memory so each new token only needs to compute its own attention against the cache, not re-run the whole prompt. This is what makes streaming cheap per-token after the first one.</span></span>). That produces the next set of logits. Sample, append, repeat &mdash; until the model emits a stop token or hits <code>max_tokens</code>. Decode is sequential by construction: token <em>N</em> can&rsquo;t start until token <em>N&minus;1</em> exists.</p>
+          <p><strong>Two phases, two costs.</strong> Prefill latency is paid <em>once</em> per request and dominates &ldquo;time to first token.&rdquo; Decode latency is paid <em>per output token</em> and dominates &ldquo;tokens per second.&rdquo; This split is why a 50K-token prompt with a 100-token answer feels slow to start but finishes quickly &mdash; and why a 200-token prompt with a 4000-token answer feels snappy at first but takes forever.</p>
+        </div>
+
+        <div class="animation-container" aria-label="Inference loop: prefill once, decode N times" style="padding:1rem;">
+          <div class="animation-title">Prefill (once) &rarr; Decode (token-by-token, N times)</div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem; font-size:0.85rem;">
+            <div style="background:var(--bg-surface); border:1px solid var(--code-border); border-radius:8px; padding:0.85rem;">
+              <div style="font-family:'Bricolage Grotesque',sans-serif; font-weight:700; color:var(--text-secondary); margin-bottom:0.5rem;">1. PREFILL &mdash; runs once</div>
+              <ol style="margin:0 0 0 1rem; padding:0; color:var(--text-secondary);">
+                <li>Tokenize prompt (N tokens)</li>
+                <li>Embed all N tokens</li>
+                <li>Run through every transformer layer <em>in parallel</em></li>
+                <li>Build the KV cache for every token</li>
+                <li>Output: logits for token N+1</li>
+              </ol>
+              <p style="margin:0.6rem 0 0; font-size:0.78rem; color:var(--text-muted);">Cost: ~O(N&sup2;) compute, but parallelizable. Latency: drives <strong>time-to-first-token</strong>.</p>
+            </div>
+            <div style="background:rgba(184,134,11,0.08); border:1px solid var(--accent-primary); border-radius:8px; padding:0.85rem;">
+              <div style="font-family:'Bricolage Grotesque',sans-serif; font-weight:700; color:var(--accent-primary); margin-bottom:0.5rem;">2. DECODE &mdash; runs N times</div>
+              <ol style="margin:0 0 0 1rem; padding:0; color:var(--text-secondary);">
+                <li>Sample one token from current logits</li>
+                <li>Append it to the running sequence</li>
+                <li>Run just the new token through layers, reading KV cache</li>
+                <li>Get logits for the next token</li>
+                <li>Stop if token == &lt;end&gt; or budget hit; else go to step 1</li>
+              </ol>
+              <p style="margin:0.6rem 0 0; font-size:0.78rem; color:var(--text-muted);">Cost: ~O(1) per token (memory-bound). Latency: drives <strong>tokens-per-second</strong>.</p>
+            </div>
+          </div>
+        </div>
+
+        <h3 id="sampling-mechanics" style="margin-top:1.5rem;">Sampling &mdash; What &ldquo;Logits&rdquo; Become a Token</h3>
+        <p>The transformer doesn&rsquo;t pick a token; it outputs <strong>logits</strong> &mdash; a raw score per token in the vocabulary (~200K entries for Claude). To turn logits into a chosen token, three steps run:</p>
+        <ol>
+          <li><strong>Softmax with temperature.</strong> Logits &mdash; divide by temperature <em>T</em> &mdash; then softmax to a probability distribution. <em>T</em>&nbsp;=&nbsp;0 collapses to one-hot (always pick the argmax); <em>T</em>&nbsp;=&nbsp;1 keeps the model&rsquo;s native distribution; <em>T</em>&nbsp;&gt;&nbsp;1 flattens it (more surprise).</li>
+          <li><strong>Top-k / Top-p filter.</strong> Optionally truncate the distribution to either the top-<em>k</em> highest-probability tokens, or the smallest set whose cumulative probability exceeds <em>p</em> (nucleus sampling). This blocks the long tail of nonsense tokens.</li>
+          <li><strong>Sample.</strong> Draw one token from the (renormalized) filtered distribution. This single token becomes the &ldquo;next token,&rdquo; gets appended, and the loop continues.</li>
+        </ol>
+        <p>Important consequence: <em>the model&rsquo;s output is non-deterministic even at <code>temperature=1</code></em> because of the sampling step. Set <code>temperature=0</code> if you need reproducibility &mdash; that picks the argmax with no sampling. The next H2 on Temperature/Top-p/Top-k goes deeper on when to use each.</p>
+
+        <h3 id="latency-anatomy" style="margin-top:1.5rem;">Latency Anatomy &mdash; Where Your Seconds Go</h3>
+        <p>Real numbers, on Claude Sonnet 4.6 (typical 2026 production load, single-region):</p>
+        <table class="info-table" style="width:100%;border-collapse:collapse;font-size:0.88rem;margin-top:0.5rem;">
+          <thead><tr style="background:var(--bg-surface);">
+            <th style="padding:0.45rem 0.6rem;text-align:left;border-bottom:1px solid var(--code-border);">Phase</th>
+            <th style="padding:0.45rem 0.6rem;text-align:left;border-bottom:1px solid var(--code-border);">What dominates</th>
+            <th style="padding:0.45rem 0.6rem;text-align:left;border-bottom:1px solid var(--code-border);">Order of magnitude</th>
+          </tr></thead>
+          <tbody>
+            <tr><td style="padding:0.45rem 0.6rem;border-bottom:1px solid var(--code-border);"><strong>Network</strong></td><td style="padding:0.45rem 0.6rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">TLS, request routing, region distance</td><td style="padding:0.45rem 0.6rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">30&ndash;150 ms</td></tr>
+            <tr><td style="padding:0.45rem 0.6rem;border-bottom:1px solid var(--code-border);"><strong>Prefill (TTFT)</strong></td><td style="padding:0.45rem 0.6rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Prompt length; quadratic-ish in N</td><td style="padding:0.45rem 0.6rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">~50 ms / 1K tokens (uncached); &lt;5 ms / 1K cached</td></tr>
+            <tr><td style="padding:0.45rem 0.6rem;border-bottom:1px solid var(--code-border);"><strong>Decode</strong></td><td style="padding:0.45rem 0.6rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Output length; linear in tokens generated</td><td style="padding:0.45rem 0.6rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">~50&ndash;100 tokens/s (Sonnet); higher with speculative decoding</td></tr>
+            <tr><td style="padding:0.45rem 0.6rem;"><strong>Server queue</strong></td><td style="padding:0.45rem 0.6rem;color:var(--text-secondary);">Concurrent traffic, rate-limit tier</td><td style="padding:0.45rem 0.6rem;color:var(--text-secondary);">0&ndash;500 ms p99</td></tr>
+          </tbody>
+        </table>
+
+        <div class="callout-cost" style="margin-top:1rem;">
+          <span class="box-label">Practical Consequences</span>
+          <ul style="margin-bottom:0;">
+            <li><strong>Time-to-first-token (TTFT)</strong> is set almost entirely by prompt length and whether the prefix is cached. Prompt caching (M22) turns &ldquo;5 seconds of prefill&rdquo; into &ldquo;200 ms of prefill&rdquo; on repeat-heavy prompts.</li>
+            <li><strong>Tokens-per-second (TPS)</strong> is set by the decode step. Output length is the cost driver here &mdash; doubling <code>max_tokens</code> doubles decode time, regardless of how long the prompt was.</li>
+            <li><strong>Streaming</strong> (next subsection) doesn&rsquo;t change total wall-clock latency; it just delivers tokens as they&rsquo;re produced so users see something happening at TTFT instead of waiting for the full decode.</li>
+            <li><strong>Extended thinking</strong> (M22) and <strong>reasoning models</strong> add a hidden third phase &mdash; thinking tokens are decoded before any visible response. We&rsquo;ll connect the dots in M22.</li>
+          </ul>
+        </div>
+
+        <h3 id="streaming-vs-batch" style="margin-top:1.5rem;">Streaming vs Batch &mdash; Same Inference, Different Delivery</h3>
+        <p>One request, two ways to receive the answer:</p>
+        <ul>
+          <li><strong>Non-streaming</strong> &mdash; you wait for the full decode, then receive the entire response in one chunk. Simple; the agent code in M05&ndash;M07 uses this shape.</li>
+          <li><strong>Streaming</strong> &mdash; the server sends each decoded token (or small group) as Server-Sent Events. Same total time, but the user sees the first tokens immediately. Essential for chat UIs and any agent loop where you want to surface progress before the response is complete.</li>
+        </ul>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs">
+            <button class="code-tab active" onclick="switchTab(this, 'inf-stream-py')" aria-label="Python streaming">Python</button>
+            <button class="code-tab" onclick="switchTab(this, 'inf-stream-ts')" aria-label="Node.js streaming">Node.js</button>
+          </div>
+          <div class="code-panel active" id="inf-stream-py">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code class="language-python">from anthropic import Anthropic
+import time
+
+client = Anthropic()
+
+# Streaming: each token (or small chunk) arrives as it&rsquo;s decoded.
+t0 = time.perf_counter()
+first_token_t = None
+total_tokens = 0
+
+with client.messages.stream(
+    model="claude-sonnet-4-6",
+    max_tokens=512,
+    messages=[{"role": "user", "content": "Explain inference in one paragraph."}],
+) as stream:
+    for chunk in stream.text_stream:
+        if first_token_t is None:
+            first_token_t = time.perf_counter() - t0
+            print(f"[TTFT: {first_token_t*1000:.0f} ms]")
+        print(chunk, end="", flush=True)
+        total_tokens += 1   # text chunks, not perfect token counts &mdash; close enough for ops
+
+elapsed = time.perf_counter() - t0
+print(f"\n[total: {elapsed:.2f}s, decode rate ~ {total_tokens/max(elapsed-first_token_t, 0.001):.0f} chunks/s]")</code></pre>
+          </div>
+          <div class="code-panel" id="inf-stream-ts">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code class="language-typescript">import Anthropic from "@anthropic-ai/sdk";
+
+const client = new Anthropic();
+const t0 = performance.now();
+let firstTokenMs: number | null = null;
+let chunks = 0;
+
+const stream = client.messages.stream({
+  model: "claude-sonnet-4-6",
+  max_tokens: 512,
+  messages: [{ role: "user", content: "Explain inference in one paragraph." }],
+});
+
+for await (const event of stream) {
+  if (event.type === "content_block_delta" &amp;&amp; event.delta.type === "text_delta") {
+    if (firstTokenMs === null) {
+      firstTokenMs = performance.now() - t0;
+      console.log(`[TTFT: ${firstTokenMs.toFixed(0)} ms]`);
+    }
+    process.stdout.write(event.delta.text);
+    chunks++;
+  }
+}
+
+const elapsed = performance.now() - t0;
+console.log(`\n[total: ${(elapsed / 1000).toFixed(2)}s, decode rate ~ ${(chunks / Math.max((elapsed - (firstTokenMs ?? 0)) / 1000, 0.001)).toFixed(0)} chunks/s]`);</code></pre>
+          </div>
+        </div>
+
+        <div class="checkpoint">
+          <div class="checkpoint-label">&#x2714; What Just Happened?</div>
+          <p>You watched the two-phase model in real time. The <code>TTFT</code> print fires exactly when prefill finishes (and the first decoded token lands); the &ldquo;decode rate&rdquo; reports how fast subsequent tokens stream in. Run this against a short prompt and a 10K-token prompt back-to-back &mdash; you&rsquo;ll see TTFT scale roughly with prompt length while decode rate stays roughly constant. That&rsquo;s the prefill/decode split made visible.</p>
+        </div>
+
+        <div class="callout-warning">
+          <span class="box-label">Common Misconceptions</span>
+          <p><strong>&ldquo;Inference and training are the same thing.&rdquo;</strong> &mdash; They&rsquo;re not. Training updates billions of weights using gradient descent across millions of examples; inference reads those frozen weights to predict the next token. You only ever do inference when calling the API; training happened at Anthropic before the model shipped.</p>
+          <p><strong>&ldquo;Streaming is faster than non-streaming.&rdquo;</strong> &mdash; Same total time. Streaming just <em>shows</em> tokens as they decode rather than buffering them. Use streaming for UX (perceived latency); use non-streaming when you need the full response before doing anything (parsing JSON, tool dispatch).</p>
+          <p><strong>&ldquo;Big prompts are slow because Claude has to read them all.&rdquo;</strong> &mdash; Half-right. Prefill processes the prompt in parallel, but the work scales roughly with N&sup2; due to attention. Long prompts hurt TTFT, not decode rate. Prompt caching (M22) collapses that cost on repeat-heavy prompts.</p>
+          <p><strong>&ldquo;<code>temperature=0</code> means deterministic.&rdquo;</strong> &mdash; Mostly true, with caveats. At 0 the sampling step becomes argmax (no randomness in the model). But tie-breaking, server-side batching, and floating-point non-determinism on GPUs can still produce different outputs across runs. For strict reproducibility, also pin the model snapshot and seed if the API supports it.</p>
+        </div>
+
+        <div class="bridge">Now that you know <em>how</em> Claude turns logits into tokens, the next section explains <em>why</em> the temperature knob exists and when to turn it.</div>
       </section>
 
       <!-- ======================== CONCEPT 3 ======================== -->

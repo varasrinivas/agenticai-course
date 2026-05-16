@@ -199,6 +199,7 @@
       <a href="#stateless-reality">The Stateless Reality</a>
       <a href="#history-patterns">History Management</a>
       <a href="#token-budget">Token Budget Allocation</a>
+      <a href="#practical-context-mgmt" style="padding-left:1.25rem; font-size:0.8rem;">&rsaquo; Practical Context Mgmt</a>
       <a href="#pruning-strategies">Pruning Strategies</a>
       <a href="#conversation-manager">Building the Manager</a>
       <a href="#code-walkthrough">Code Walkthrough</a>
@@ -681,6 +682,79 @@ REMAINING:                       13,904 tokens  ⚠ barely fits a response</div>
           <span class="box-label" style="color:#D4A843;">&#127891; Cert Tip &mdash; Domain 5.1</span>
           <p style="margin:0;">The "lost in the middle" effect means information in the middle of long context gets lower recall than information at the start or end. Position critical data at the beginning (case facts) or end (current query).</p>
         </div>
+
+        <!-- ============ SUBSECTION: PRACTICAL CONTEXT WINDOW MANAGEMENT ============ -->
+        <h3 id="practical-context-mgmt" style="margin-top:2.5rem;">Practical Context Window Management</h3>
+        <p>Knowing the budget exists is one thing &mdash; actively managing it in production is another. The patterns below are what you will actually wire into a real <code>ConversationManager</code>. Four moving pieces work together: counting tokens before you send, allocating by percentage, handling overflow, and dynamically sizing the sliding window.</p>
+
+        <p><strong>1. Count tokens before the request.</strong> Never send first and hope it fits. Use Anthropic's <code>count_tokens</code> endpoint or a local tokenizer to size the payload up front:</p>
+        <div class="output-block"># Pseudocode &mdash; run BEFORE every API call
+input_tokens = count_tokens(system) \
+             + count_tokens(messages) \
+             + count_tokens(user_msg)
+
+if input_tokens + max_tokens &gt; CONTEXT_LIMIT:
+    messages = prune_to_budget(
+        messages,
+        target = CONTEXT_LIMIT - max_tokens - 5_000  # safety margin
+    )
+
+response = client.messages.create(...)</div>
+
+        <p><strong>2. Allocate by percentage, not absolutes.</strong> A typical production split for a 200K window: <strong>20%</strong> system prompt, <strong>50%</strong> history, <strong>20%</strong> current user message, <strong>10%</strong> response headroom. The animated bar below fills each band proportionally.</p>
+
+        <div class="diagram-container" style="margin:1rem 0 1.5rem;">
+          <style>
+            @keyframes pcm-grow-sys  { from { flex-grow: 0; } to { flex-grow: 20; } }
+            @keyframes pcm-grow-hist { from { flex-grow: 0; } to { flex-grow: 50; } }
+            @keyframes pcm-grow-usr  { from { flex-grow: 0; } to { flex-grow: 20; } }
+            @keyframes pcm-grow-rsp  { from { flex-grow: 0; } to { flex-grow: 10; } }
+            .pcm-bar { display:flex; height:46px; width:100%; border:1px solid var(--code-border); border-radius:8px; overflow:hidden; background:var(--bg-card); }
+            .pcm-seg { height:100%; display:flex; align-items:center; justify-content:center; font-family:'JetBrains Mono',monospace; font-size:0.7rem; font-weight:700; color:#f1f5f9; white-space:nowrap; overflow:hidden; flex-grow:0; flex-basis:0; animation-duration:1.4s; animation-fill-mode:forwards; animation-timing-function:cubic-bezier(.2,.7,.2,1); }
+            .pcm-seg.sys  { background:rgba(59,130,246,0.55);  animation-name:pcm-grow-sys;  animation-delay:0.1s; }
+            .pcm-seg.hist { background:rgba(6,182,212,0.55);   animation-name:pcm-grow-hist; animation-delay:0.6s; }
+            .pcm-seg.usr  { background:rgba(245,158,11,0.55);  animation-name:pcm-grow-usr;  animation-delay:1.5s; }
+            .pcm-seg.rsp  { background:rgba(139,92,246,0.55);  animation-name:pcm-grow-rsp;  animation-delay:2.0s; }
+            .pcm-caption { display:flex; justify-content:space-between; gap:0.5rem; margin-top:0.5rem; font-family:'JetBrains Mono',monospace; font-size:0.65rem; color:var(--text-muted); }
+            @media (prefers-reduced-motion: reduce) {
+              .pcm-seg.sys  { flex-grow:20; animation:none; }
+              .pcm-seg.hist { flex-grow:50; animation:none; }
+              .pcm-seg.usr  { flex-grow:20; animation:none; }
+              .pcm-seg.rsp  { flex-grow:10; animation:none; }
+            }
+          </style>
+          <div class="pcm-bar" role="img" aria-label="Animated stacked bar showing 200K token budget split: system prompt 20 percent (40K), history 50 percent (100K), user message 20 percent (40K), response headroom 10 percent (20K)">
+            <div class="pcm-seg sys">System 20% &middot; 40K</div>
+            <div class="pcm-seg hist">History 50% &middot; 100K</div>
+            <div class="pcm-seg usr">User 20% &middot; 40K</div>
+            <div class="pcm-seg rsp">Resp 10% &middot; 20K</div>
+          </div>
+          <div class="pcm-caption">
+            <span>Total budget: 200,000 tokens</span>
+            <span>Tune percentages per use case &mdash; long-context RAG often inverts system/history</span>
+          </div>
+        </div>
+
+        <p><strong>3. What overflow actually returns.</strong> Exceed the window and the request never reaches the model. The API answers with HTTP <strong>400</strong>:</p>
+        <div class="output-block">{
+  "type": "error",
+  "error": {
+    "type": "invalid_request_error",
+    "message": "prompt is too long: 215743 tokens &gt; 200000 maximum"
+  }
+}</div>
+        <p>Catch this in code: <code>anthropic.BadRequestError</code> (Python SDK) or status 400 with <code>error.type === "invalid_request_error"</code>. Then prune retroactively and retry once &mdash; do not loop, since a single oversized message will retry forever.</p>
+
+        <p><strong>4. Slide on tokens, not message count.</strong> A naive "keep last 10 messages" rule breaks the moment one tool result is 30K tokens. Walk newest-to-oldest and accumulate until you hit your history budget &mdash; short chitchat keeps 50 turns, large tool outputs keep only 3:</p>
+        <div class="output-block">kept, used = [], 0
+for msg in reversed(history):
+    t = count_tokens(msg)
+    if used + t &gt; budget_for_history:
+        break
+    kept.insert(0, msg)
+    used += t
+return kept   # newest preserved, oldest dropped</div>
+        <p>This adapts automatically to message size: a chatty support bot retains weeks of context, while a code-search agent that just received a giant grep dump keeps only the last two turns.</p>
       </section>
 
       <!-- ============ CONCEPT 4: PRUNING ============ -->

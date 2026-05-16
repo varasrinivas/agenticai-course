@@ -11,7 +11,7 @@ Write-Host ""
 Write-Host "[1/1] M00 - Adding business case with FastAPI comparison..." -ForegroundColor Green
 
 $cmd = @"
-Read prompts/15-why-agents.md for the complete Why Agents specification. Open the M00 HTML file in output/. Add a new section AFTER the Prelude and BEFORE What Is an Agent. Title: Why Agents: The Business Case.
+Read prompts/15-why-agents.md for the complete specification. Open the M00 HTML file in output/. Add a new section AFTER the Prelude and BEFORE What Is an Agent titled Why Agents The Business Case.
 
 CRITICAL: Start with the Both End Up in FastAPI comparison. Show two architecture diagrams side by side: ML model in FastAPI (hardcoded SQL and fixed logic and JSON response) vs Agent in FastAPI (Claude reasons about what to search and discovers variations and writes narrative). Show the three-layer model: Layer 1 Infrastructure (FastAPI and Docker - same in both) and Layer 2 Capabilities (tools and ML model - same in both) and Layer 3 Intelligence (Claude reasoning - NEW with agents). Make clear the ML model stays in Layer 2 in BOTH approaches. The difference is what is ABOVE it. Include the decision engine comparison table showing who decides what to query and who handles name variations and what changes when logic changes. Include the cost-benefit reality table with response time and cost per request and development time comparisons.
 
@@ -27,4 +27,3 @@ Write-Host ""
 
 Write-Host "=== DONE ===" -ForegroundColor Green
 Write-Host "M00 now explains WHY agents matter with the FastAPI architecture comparison."
-Write-Host "Students understand: same FastAPI and same ML model but different intelligence layer."

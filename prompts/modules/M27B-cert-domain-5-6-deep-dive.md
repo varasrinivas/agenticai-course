@@ -5,6 +5,7 @@
 **Estimated Time**: 60-75 minutes
 **Level**: Intermediate → Advanced
 **Track Color**: var(--track-capstones) / #D4A843 (gold — cert track signature)
+**SDK Tier**: 3 (SDK-default). All examples use `claude-agent-sdk`. See `prompts/19-sdk-tier-policy.md`.
 
 ## Why This Module Must Exist
 A coverage audit against the Claude Certified Architect study guide showed Domain 5.6 ("Information Provenance, Temporal Reliability, and Synthesis Output") is the **single biggest gap** in the course. Four named cert topics get zero or surface-only coverage in M00–M27:

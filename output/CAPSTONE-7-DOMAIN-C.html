@@ -496,40 +496,44 @@
         <div class="arch-panel" id="arch-2">
           <div class="arch-diagram">YOU OWN PINK; SDK OWNS GRAY
 +----------------------------------------------------------+
-|  agent.py (~120 lines)                                    |
+|  agent.py (~70 lines)                                     |
 |                                                           |
-|  agent = Agent(                                           |
-|    system_prompt="UCC analyst...",  &lt;&lt; YOU wrote         |
-|    tools=[search_filings, ...],     &lt;&lt; YOU decorated     |
+|  @tool("search_filings", ..., {...})    &lt;&lt; YOU wrote     |
+|  async def search_filings(args): ...                      |
+|                                                           |
+|  ucc_server = create_sdk_mcp_server(    &lt;&lt; YOU wrote     |
+|      name="ucc_tools", tools=[...])                       |
+|                                                           |
+|  OPTIONS = ClaudeAgentOptions(          &lt;&lt; YOU wrote     |
+|      system_prompt="UCC analyst...",                      |
+|      mcp_servers={"ucc": ucc_server},                     |
+|      allowed_tools=["mcp__ucc__..."],                     |
+|      hooks={"PreToolUse": [HookMatcher(...)]},            |
 |  )                                                        |
 |                                                           |
-|  @agent.hook("pre_tool_use")    &lt;&lt; YOU wrote             |
-|  def validate(tool, input): ...                           |
+|  async for msg in query(prompt=..., options=OPTIONS): ... |
 |                                                           |
-|  @agent.hook("post_tool_use")   &lt;&lt; YOU wrote             |
-|  def redact(tool, result): ...                            |
-|                                                           |
-|  agent.run(question, session_id=sid)                      |
-|                                                           |
-|  -- LOOP, MESSAGE-PASSING, AUDIT, CIRCUIT BREAKER --      |
-|  -- LIVE INSIDE THE SDK. YOU DO NOT WRITE THEM.   --      |
+|  -- LOOP, MESSAGE-PASSING, RETRIES, STREAMING ----        |
+|  -- LIVE INSIDE claude-agent-sdk. YOU DO NOT WRITE THEM. -|
 +----------------------------------------------------------+
         |                                  |
         v                                  v
-+----------------+                 +-----------------+
-|  Claude Code   |                 |  Anthropic SDK  |
-|  generated:    |                 |  managed:       |
-|  - hooks file  |                 |  - tool loop    |
-|  - server.py   |                 |  - sessions     |
-|  - Dockerfile  |                 |  - retries      |
-|  - tests       |                 |  - streaming    |
-+----------------+                 +-----------------+</div>
++----------------+                 +--------------------+
+|  Claude Code   |                 |  claude-agent-sdk  |
+|  generated:    |                 |  managed:          |
+|  - server.py   |                 |  - query() loop    |
+|  - Dockerfile  |                 |  - MCP transport   |
+|  - tests       |                 |  - HookMatcher     |
+| .claude/       |                 |  - resume tokens   |
+|  settings.json |                 |  - streaming       |
+|  + hooks/*.py  |                 +--------------------+
++----------------+</div>
         </div>
 
         <div class="arch-panel" id="arch-3">
           <div class="arch-diagram">YOU OWN ONLY THE GREEN BOX
 +----------------------------------------------------------+
-|  agent-spec.md (~100 lines)         &lt;&lt; YOU wrote         |
+|  spec/agent-spec.md (~100 lines)    &lt;&lt; YOU wrote         |
 |  ----------------------------------                       |
 |  # Sections                                              |
 |   1. Overview         8. API Wrapper                     |
@@ -543,17 +547,19 @@
                        |
                        v
 +----------------------------------------------------------+
+|  /generate-from-spec spec/agent-spec.md                  |
 |  Claude Code reads spec, generates ~18 files:            |
-|  agent.py | tools.py | hooks.py | sessions.py            |
+|  agent.py (claude-agent-sdk) | sessions.py | mock_data.py|
 |  server.py | Dockerfile | docker-compose.yml             |
-|  tests/test_*.py x5 | mock_data.py | model.pkl           |
-|  CLAUDE.md | .claude/commands/run-agent.md | ...         |
+|  .claude/settings.json | hooks/*.py | .claude/commands/  |
+|  tests/test_*.py x5 | spec/agent-spec.md (you)           |
+|  appendix/manual-loop.py (under-the-hood reference)      |
 +----------------------------------------------------------+
                        |
                        v
 +----------------------------------------------------------+
-|  Same runtime as Iter 2: Agent SDK + your hooks +        |
-|  your tools + your sessions. Same agent behavior.        |
+|  Same runtime as Iter 2: claude-agent-sdk +              |
+|  .claude/settings.json hooks + sessions. Same behavior.  |
 +----------------------------------------------------------+</div>
         </div>
       </div>
@@ -603,8 +609,8 @@
       </div>
 
       <div class="callout-warning">
-        <span class="box-label">If You Have Not Done M15B</span>
-        <p>Iteration 1 is essentially a re-implementation of the M15B reference agent for the UCC scenario. If you have not built an agent from raw API calls before, do M15B first &mdash; otherwise Iteration 1 will be confusing rather than illuminating, and Iteration 3's debugging steps will not work because you will not recognize what the generated code is doing.</p>
+        <span class="box-label">If You Have Not Done M15B / M26</span>
+        <p>Iteration 1 is essentially a re-implementation of the <a href="M15B-build-agent-subagent-system.html">M15B reference agent</a> for the UCC scenario. If you have not built an agent from raw API calls before, do M15B first &mdash; otherwise Iteration 1 will be confusing rather than illuminating, and Iteration 3's debugging steps will not work because you will not recognize what the generated code is doing. Iteration 2 leans heavily on the <code>claude-agent-sdk</code> patterns taught in <a href="M26-hooks-sessions-agent-sdk.html">M26 (Hooks &amp; Sessions &amp; Agent SDK)</a> &mdash; reach for it if any of the <code>@tool</code> / <code>HookMatcher</code> / <code>ClaudeAgentOptions</code> calls feel unfamiliar.</p>
       </div>
 
       <div class="tech-def-box">
@@ -642,7 +648,7 @@
             <button class="copy-btn" onclick="copyCode(this)">Copy</button>
             <pre><code>mkdir agent-iter1-raw &amp;&amp; cd agent-iter1-raw
 python -m venv venv &amp;&amp; source venv/bin/activate    # Windows: venv\Scripts\activate
-pip install anthropic scikit-learn pandas fastapi uvicorn
+pip install "anthropic&gt;=0.40" "scikit-learn&gt;=1.3" "pandas&gt;=2.0" "fastapi&gt;=0.110" "uvicorn&gt;=0.27"
 
 # Train the delinquency_model.pkl
 python -c "
@@ -822,23 +828,30 @@ def execute_tool(name, args):
         <p>The loop has three jobs in a fixed order: <strong>(1)</strong> send the running message history to <code>messages.create</code>, <strong>(2)</strong> inspect <code>response.stop_reason</code>, <strong>(3)</strong> if <code>tool_use</code>, execute the tool, append both the assistant turn and the <code>tool_result</code> turn to the messages list, and loop back. The single most common Iter-1 bug is appending the tool_use without the matching tool_result, which fails on the next turn with a confusing 400 error.</p>
 
         <div class="code-block-wrapper">
-          <div class="code-tabs"><button class="code-tab active" onclick="switchTab(this,'i1s3-py')">agent.py</button></div>
+          <div class="code-tabs"><button class="code-tab active" onclick="switchTab(this,'i1s3-py')">agent.py (Python)</button><button class="code-tab" onclick="switchTab(this,'i1s3-ts')">agent.ts (TypeScript)</button></div>
           <div class="code-panel active" id="i1s3-py">
             <button class="copy-btn" onclick="copyCode(this)">Copy</button>
-            <pre><code>"""agent.py &mdash; the raw API loop. Everything is hand-coded."""
+            <pre><code>"""agent.py &mdash; the raw API loop. Everything is hand-coded.
+
+Note: we split the loop into a private _run_messages() helper that takes a
+message list and returns (text, updated_messages). run_agent() is a thin
+wrapper for the single-shot case; in Step 6 the session manager will call
+_run_messages directly to support multi-turn."""
 import json, anthropic
 from tools import TOOLS, execute_tool
 
 client = anthropic.Anthropic()
 MODEL = "claude-sonnet-4-6"
+MAX_TURNS = 10
 SYSTEM = """You are a UCC filing risk analyst. When given a business name, search
 thoroughly using name variations including abbreviations and DBAs, gather filing
 statistics, run the delinquency model, examine the riskiest filings, and write
 a narrative report citing specific evidence."""
 
-def run_agent(question: str, max_turns: int = 10) -&gt; str:
-    messages = [{"role": "user", "content": question}]
-    for turn in range(max_turns):
+def _run_messages(messages: list) -&gt; tuple[str, list]:
+    """Drive the tool-use loop on the given messages list. Mutates messages.
+    Returns (final_text, messages)."""
+    for turn in range(MAX_TURNS):
         response = client.messages.create(
             model=MODEL,
             max_tokens=4096,
@@ -846,11 +859,12 @@ def run_agent(question: str, max_turns: int = 10) -&gt; str:
             tools=TOOLS,
             messages=messages,
         )
-        # Always append the assistant turn BEFORE handling tool calls
+        # Always append the assistant turn BEFORE handling tool calls.
         messages.append({"role": "assistant", "content": response.content})
 
         if response.stop_reason == "end_turn":
-            return next(b.text for b in response.content if b.type == "text")
+            text = next(b.text for b in response.content if b.type == "text")
+            return text, messages
 
         if response.stop_reason == "tool_use":
             tool_results = []
@@ -875,14 +889,104 @@ def run_agent(question: str, max_turns: int = 10) -&gt; str:
 
         raise RuntimeError(f"Unexpected stop_reason: {response.stop_reason}")
 
-    raise RuntimeError(f"Agent exceeded {max_turns} turns without finishing")
+    raise RuntimeError(f"Agent exceeded {MAX_TURNS} turns without finishing")
+
+def run_agent(question: str) -&gt; str:
+    """Single-shot entry point. Wraps _run_messages with a fresh history."""
+    text, _ = _run_messages([{"role": "user", "content": question}])
+    return text
 
 if __name__ == "__main__":
     print(run_agent("Assess the delinquency risk for Acme Corporation."))</code></pre>
           </div>
+          <div class="code-panel" id="i1s3-ts">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre><code>// agent.ts &mdash; the raw API loop. Everything is hand-coded.
+import Anthropic from "@anthropic-ai/sdk";
+import { TOOLS, executeTool } from "./tools.js";
+
+const client = new Anthropic();
+const MODEL = "claude-sonnet-4-6";
+const SYSTEM = `You are a UCC filing risk analyst. When given a business name,
+search thoroughly using name variations including abbreviations and DBAs,
+gather filing statistics, run the delinquency model, examine the riskiest
+filings, and write a narrative report citing specific evidence.`;
+
+export async function runAgent(question: string, maxTurns = 10): Promise&lt;string&gt; {
+  type Msg = Anthropic.MessageParam;
+  const messages: Msg[] = [{ role: "user", content: question }];
+
+  for (let turn = 0; turn &lt; maxTurns; turn++) {
+    const response = await client.messages.create({
+      model: MODEL, max_tokens: 4096,
+      system: SYSTEM, tools: TOOLS, messages,
+    });
+
+    // Always append the assistant turn BEFORE handling tool calls
+    messages.push({ role: "assistant", content: response.content });
+
+    if (response.stop_reason === "end_turn") {
+      const text = response.content.find(b =&gt; b.type === "text");
+      return text?.type === "text" ? text.text : "";
+    }
+
+    if (response.stop_reason === "tool_use") {
+      const toolResults: Anthropic.ToolResultBlockParam[] = [];
+      for (const block of response.content) {
+        if (block.type === "tool_use") {
+          try {
+            const result = await executeTool(block.name, block.input);
+            toolResults.push({
+              type: "tool_result",
+              tool_use_id: block.id,
+              content: JSON.stringify(result),
+            });
+          } catch (e) {
+            toolResults.push({
+              type: "tool_result",
+              tool_use_id: block.id,
+              content: `ERROR: ${(e as Error).message}`,
+              is_error: true,
+            });
+          }
+        }
+      }
+      messages.push({ role: "user", content: toolResults });
+      continue;
+    }
+
+    throw new Error(`Unexpected stop_reason: ${response.stop_reason}`);
+  }
+  throw new Error(`Agent exceeded ${maxTurns} turns without finishing`);
+}
+
+if (import.meta.url === `file://${process.argv[1]}`) {
+  console.log(await runAgent("Assess the delinquency risk for Acme Corporation."));
+}</code></pre>
+          </div>
         </div>
 
-        <div class="checkpoint"><div class="checkpoint-label">Checkpoint</div>Run <code>python agent.py</code>. After ~5&ndash;10 seconds you should see a narrative report mentioning multiple Acme filings across NY/CA/TX/FL, a delinquency probability, and a HIGH/MEDIUM/LOW verdict. If you see <code>tool_use_id</code> errors, check the order of <code>messages.append</code>.</div>
+        <p><strong>Run:</strong> <code>python agent.py</code></p>
+        <p><strong>Expected output (paraphrased &mdash; Claude's exact wording varies):</strong></p>
+        <div class="output-block" style="background:var(--code-bg);border:1px solid var(--code-border);border-radius:8px;padding:1rem 1.25rem;margin:0.75rem 0 1.5rem;font-family:'JetBrains Mono',monospace;font-size:0.8rem;color:var(--success);line-height:1.5;white-space:pre-wrap;">Acme Corporation has 9 active UCC filings across 4 states (NY:4, CA:2, TX:2, FL:1).
+The Florida filing uses the DBA "ACME CORP DBA ROADRUNNER SUPPLIES" &mdash; missed by
+naive name search.
+
+Risk score: 0.95 (HIGH, capped). Driven by 9 active filings spread across 4 states.
+Recommend deeper review of CA-2024-1201 (all assets) and TX-2024-0904 (recent
+UCC-3 continuation extending the lien another 5 years).</div>
+
+        <div class="checkpoint"><div class="checkpoint-label">&#9989; Checkpoint &mdash; Step 3</div>You should see a narrative report mentioning multiple Acme filings across NY/CA/TX/FL, the DBA variant, a probability, and a HIGH risk verdict. The exact wording will vary each run; the <em>structure</em> is what matters: did the agent search, score, and write a report? If yes, Iter 1's core loop is working.</div>
+
+        <div class="troubleshoot" style="background:var(--warning-bg);border-radius:6px;padding:0.75rem 1rem;margin-top:1rem;font-size:0.9rem;">
+          <div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:0.8rem;color:var(--warning);margin-bottom:0.5rem;">Troubleshooting</div>
+          <ul style="margin:0;font-size:0.85rem;">
+            <li><strong>tool_use_id error</strong> &rarr; the assistant turn must be appended to <code>messages</code> BEFORE the <code>tool_result</code> turn. Check the order in <code>_run_messages</code>.</li>
+            <li><strong>Agent stops with empty text</strong> &rarr; <code>max_tokens=4096</code> may be too low. Bump it to 8192.</li>
+            <li><strong>Agent loops forever / hits max_turns</strong> &rarr; the system prompt is too vague about when to stop. Add: "Once you have searched, scored, and written the report, stop."</li>
+            <li><strong>0 filings found</strong> &rarr; the agent isn't trying name variations. Add to the prompt: "Try ACME, ACME CORP, ACME CORPORATION, and DBA forms."</li>
+          </ul>
+        </div>
       </div>
 
       <div class="step" id="i1-step4">
@@ -924,7 +1028,93 @@ class CircuitBreaker:
           </div>
         </div>
 
-        <p>Wire each guardrail into <code>agent.py</code>: call <code>validate_input</code> before <code>execute_tool</code>, wrap the result in <code>redact_pii(json.dumps(result))</code>, sum tokens after each turn and abort if over <code>COST_LIMIT_TOKENS</code>, and call <code>CircuitBreaker.record</code> in the except branch.</p>
+        <p><strong>Now wire the guardrails into <code>_run_messages</code> in <code>agent.py</code>.</strong> This is the modified loop &mdash; replace your existing <code>_run_messages</code> function with the version below. New lines are flagged with <code># NEW</code> comments.</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs"><button class="code-tab active" onclick="switchTab(this,'i1s4-wired')">agent.py (replace _run_messages)</button></div>
+          <div class="code-panel active" id="i1s4-wired">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre><code># Add to the imports at the top of agent.py:
+from guardrails import (validate_input, redact_pii,
+                        CircuitBreaker, COST_LIMIT_TOKENS)   # NEW
+
+_breaker = CircuitBreaker()        # NEW &mdash; module-level instance
+
+def _run_messages(messages: list) -&gt; tuple[str, list]:
+    total_tokens = 0                # NEW &mdash; cost cap counter
+    for turn in range(MAX_TURNS):
+        response = client.messages.create(
+            model=MODEL, max_tokens=4096, system=SYSTEM,
+            tools=TOOLS, messages=messages,
+        )
+        total_tokens += (response.usage.input_tokens
+                         + response.usage.output_tokens)        # NEW
+        if total_tokens &gt; COST_LIMIT_TOKENS:                    # NEW
+            raise RuntimeError(f"Cost cap exceeded: {total_tokens} tokens")
+
+        messages.append({"role": "assistant", "content": response.content})
+
+        if response.stop_reason == "end_turn":
+            text = next(b.text for b in response.content if b.type == "text")
+            return text, messages
+
+        if response.stop_reason == "tool_use":
+            tool_results = []
+            for block in response.content:
+                if block.type == "tool_use":
+                    try:
+                        validate_input(block.name, block.input)  # NEW &mdash; pre-check
+                        result = execute_tool(block.name, block.input)
+                        _breaker.record(ok=True)                  # NEW
+                        # Redact PII from the JSON we send back to Claude.
+                        content = redact_pii(json.dumps(result, default=str))  # NEW
+                        tool_results.append({
+                            "type": "tool_result",
+                            "tool_use_id": block.id,
+                            "content": content,
+                        })
+                    except Exception as e:
+                        _breaker.record(ok=False)                 # NEW &mdash; trips on 3rd fail
+                        tool_results.append({
+                            "type": "tool_result",
+                            "tool_use_id": block.id,
+                            "content": f"ERROR: {e}",
+                            "is_error": True,
+                        })
+            messages.append({"role": "user", "content": tool_results})
+            continue
+
+        raise RuntimeError(f"Unexpected stop_reason: {response.stop_reason}")
+
+    raise RuntimeError(f"Agent exceeded {MAX_TURNS} turns without finishing")</code></pre>
+          </div>
+        </div>
+
+        <p><strong>Run:</strong> <code>python agent.py</code> (no behavior change yet on a clean Acme query &mdash; guardrails only fire on bad inputs)</p>
+
+        <p><strong>Test that the guardrails actually fire.</strong> Run this one-liner that calls the agent with a deliberately-broken question and confirms <code>validate_input</code> rejects it:</p>
+        <div class="code-block-wrapper">
+          <div class="code-panel active">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre><code>python -c "from agent import run_agent; print(run_agent('Search for company A'))"
+# Expected: agent attempts search_filings(debtor_name='A'), validate_input
+# raises ValueError, the error is fed back to Claude as is_error: true,
+# and Claude reformulates with a longer fragment.</code></pre>
+          </div>
+        </div>
+
+        <div class="checkpoint"><div class="checkpoint-label">&#9989; Checkpoint &mdash; Step 4</div>
+          The clean Acme query still works (same narrative as Step 3). The "company A" query gets rejected at <code>validate_input</code>, the error flows back to Claude, and Claude either reformulates or apologizes. If you see <code>RuntimeError: Cost cap exceeded</code>, your loop is unbounded &mdash; check that <code>total_tokens</code> is being checked after every <code>messages.create</code>.
+        </div>
+
+        <div class="troubleshoot" style="background:var(--warning-bg);border-radius:6px;padding:0.75rem 1rem;margin-top:1rem;font-size:0.9rem;">
+          <div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:0.8rem;color:var(--warning);margin-bottom:0.5rem;">Troubleshooting</div>
+          <ul style="margin:0;font-size:0.85rem;">
+            <li><code>ImportError: cannot import name 'validate_input' from 'guardrails'</code> &rarr; you didn't save <code>guardrails.py</code> in the project folder, OR the function name has a typo.</li>
+            <li><strong>Circuit breaker trips on first call</strong> &rarr; you wired <code>_breaker.record(ok=False)</code> on every tool call instead of only in the except. Move it back to the except branch.</li>
+            <li><strong>Cost cap fires immediately</strong> &rarr; <code>COST_LIMIT_TOKENS = 50_000</code> is for the whole run; if you set it to 50 by mistake it'll fire after the first response.</li>
+          </ul>
+        </div>
 
         <div class="callout-warning">
           <span class="box-label">Iter-1 Reality Check</span>
@@ -934,21 +1124,26 @@ class CircuitBreaker:
 
       <div class="step" id="i1-step5">
         <div class="step-header">Step 5: Add Logging Manually</div>
-        <div class="step-meta"><span>15 min</span><span>audit_log.jsonl</span></div>
-        <p><strong>What &amp; Why:</strong> Auditability is non-negotiable for production agents. Every tool call needs a timestamped record: which tool, which inputs (redacted), the result summary, and the token count. Write a small <code>append_audit()</code> function and call it from the loop after every <code>execute_tool</code>.</p>
+        <div class="step-meta"><span>15 min</span><span>audit.py + agent.py wiring</span></div>
+        <p><strong>What &amp; Why:</strong> Auditability is non-negotiable for production agents. Every tool call needs a timestamped record: which tool, which inputs (redacted), the result summary, and the token count. Write a small <code>append_audit()</code> function in its own file, then call it from <code>_run_messages</code> after every successful tool execution.</p>
 
+        <p><strong>Create a new file <code>audit.py</code> in the project folder:</strong></p>
         <div class="code-block-wrapper">
-          <div class="code-tabs"><button class="code-tab active" onclick="switchTab(this,'i1s5-py')">Python</button></div>
+          <div class="code-tabs"><button class="code-tab active" onclick="switchTab(this,'i1s5-py')">audit.py</button></div>
           <div class="code-panel active" id="i1s5-py">
             <button class="copy-btn" onclick="copyCode(this)">Copy</button>
-            <pre><code>import json, datetime
-def append_audit(tool_name, args, result, tokens, case_id):
+            <pre><code>"""audit.py &mdash; HIPAA-style audit log writer for the raw API loop."""
+import json, datetime
+from guardrails import redact_pii
+
+def append_audit(tool_name: str, args: dict, result, tokens: int,
+                 case_id: str = "default") -&gt; None:
     rec = {
         "ts": datetime.datetime.utcnow().isoformat() + "Z",
         "case_id": case_id,
         "tool": tool_name,
-        "input": args,
-        "output_summary": str(result)[:200],
+        "input_redacted": redact_pii(json.dumps(args, default=str)),
+        "output_summary": redact_pii(str(result))[:200],
         "tokens": tokens,
     }
     with open("audit_log.jsonl", "a") as f:
@@ -956,63 +1151,155 @@ def append_audit(tool_name, args, result, tokens, case_id):
           </div>
         </div>
 
-        <div class="checkpoint"><div class="checkpoint-label">Checkpoint</div>Run the agent once and inspect <code>audit_log.jsonl</code>. You should see one JSON object per tool call. If the file is missing, check the working directory; if records are unreadable, you forgot the <code>+ "\n"</code>.</div>
+        <p><strong>Now wire it into <code>_run_messages</code>.</strong> Add the import and the <code>append_audit</code> call right after the successful <code>execute_tool</code>:</p>
+        <div class="code-block-wrapper">
+          <div class="code-tabs"><button class="code-tab active" onclick="switchTab(this,'i1s5-wire')">agent.py (additions)</button></div>
+          <div class="code-panel active" id="i1s5-wire">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre><code># Add to the imports at the top of agent.py:
+from audit import append_audit                    # NEW
+
+# Inside _run_messages, in the try-block right after `result = execute_tool(...)`:
+                        result = execute_tool(block.name, block.input)
+                        _breaker.record(ok=True)
+                        append_audit(                              # NEW
+                            tool_name=block.name,
+                            args=block.input,
+                            result=result,
+                            tokens=total_tokens,
+                            case_id=messages[0]["content"][:40] if messages else "default",
+                        )
+                        content = redact_pii(json.dumps(result, default=str))
+                        # ... rest of the try-block unchanged ...</code></pre>
+          </div>
+        </div>
+
+        <p><strong>Run:</strong> <code>python agent.py</code></p>
+        <p><strong>Then inspect the audit file:</strong></p>
+        <div class="code-block-wrapper">
+          <div class="code-panel active">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre><code>cat audit_log.jsonl   # macOS/Linux
+type audit_log.jsonl  # Windows cmd
+Get-Content audit_log.jsonl  # Windows PowerShell</code></pre>
+          </div>
+        </div>
+        <p><strong>Expected output (one JSON object per tool call &mdash; you should see roughly 4&ndash;6 lines):</strong></p>
+        <div class="output-block" style="background:var(--code-bg);border:1px solid var(--code-border);border-radius:8px;padding:1rem 1.25rem;margin:0.75rem 0 1.5rem;font-family:'JetBrains Mono',monospace;font-size:0.78rem;color:var(--success);line-height:1.5;white-space:pre-wrap;">{"ts": "2026-05-09T12:01:14Z", "case_id": "Assess the delinquency risk for Acme", "tool": "search_filings", "input_redacted": "{\"debtor_name\": \"Acme Corporation\"}", "output_summary": "[{\"filing_number\": \"NY-2024-0847\", ...}]", "tokens": 1842}
+{"ts": "2026-05-09T12:01:18Z", "case_id": "Assess the delinquency risk for Acme", "tool": "search_filings", "input_redacted": "{\"debtor_name\": \"ACME CORP\"}", "output_summary": "[{\"filing_number\": \"NY-2024-0847\", ...}]", "tokens": 3021}
+{"ts": "2026-05-09T12:01:22Z", "case_id": "Assess the delinquency risk for Acme", "tool": "predict_delinquency", "input_redacted": "{\"active_filing_count\": 9, ...}", "output_summary": "{\"probability\": 0.95, \"prediction\": \"HIGH\"}", "tokens": 4380}</div>
+
+        <div class="checkpoint"><div class="checkpoint-label">&#9989; Checkpoint &mdash; Step 5</div>You should see one JSON object per line in <code>audit_log.jsonl</code>. If the file is missing, you ran the agent from the wrong directory; <code>cd</code> into the project folder. If the records are unreadable on one line, you forgot the <code>+ "\n"</code> in the <code>f.write</code> call.</div>
+
+        <div class="troubleshoot" style="background:var(--warning-bg);border-radius:6px;padding:0.75rem 1rem;margin-top:1rem;font-size:0.9rem;">
+          <div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:0.8rem;color:var(--warning);margin-bottom:0.5rem;">Troubleshooting</div>
+          <ul style="margin:0;font-size:0.85rem;">
+            <li><code>ImportError: No module named 'audit'</code> &rarr; <code>audit.py</code> is in the wrong folder. Move it next to <code>agent.py</code>.</li>
+            <li><strong>audit_log.jsonl is empty</strong> &rarr; either the agent didn't make any tool calls (rare &mdash; check the system prompt) or your <code>append_audit</code> call is in the wrong place. It must be inside the try-block, after <code>execute_tool</code>, before the append to <code>tool_results</code>.</li>
+            <li><strong>JSON parse errors when re-reading the log</strong> &rarr; missing newline. Confirm <code>f.write(json.dumps(rec) + "\n")</code>.</li>
+          </ul>
+        </div>
       </div>
 
       <div class="step" id="i1-step6">
         <div class="step-header">Step 6: Multi-Turn Conversation</div>
         <div class="step-meta"><span>15 min</span><span>session.py</span></div>
-        <p><strong>What &amp; Why:</strong> Real users ask follow-ups. "What about Pinnacle?" should reuse the analyst persona without re-asking the system prompt. Iter 1 implements this by hand &mdash; a sliding window of the last N turns, plus a session_id keyed dictionary in memory.</p>
+        <p><strong>What &amp; Why:</strong> Real users ask follow-ups. "What about Pinnacle?" should reuse the analyst persona without re-asking the system prompt and without losing the prior conversation. Iter 1 implements multi-turn by maintaining a per-session messages list, appending the new user message, and reusing the same <code>_run_messages</code> helper from <code>agent.py</code>. A sliding window keeps the list from growing forever.</p>
 
+        <p><strong>Create a new file <code>session.py</code> in the project folder:</strong></p>
         <div class="code-block-wrapper">
           <div class="code-tabs"><button class="code-tab active" onclick="switchTab(this,'i1s6-py')">session.py</button></div>
           <div class="code-panel active" id="i1s6-py">
             <button class="copy-btn" onclick="copyCode(this)">Copy</button>
-            <pre><code>SESSIONS = {}  # session_id -&gt; messages list
-WINDOW = 20    # last 20 turns
+            <pre><code>"""session.py &mdash; multi-turn over the same _run_messages helper from Step 3."""
+from agent import _run_messages
+
+SESSIONS: dict[str, list] = {}   # session_id -&gt; messages list
+WINDOW = 20                      # keep the last N messages
 
 def chat(session_id: str, user_msg: str) -&gt; str:
+    """Append the user's message to the session, run the loop, return the answer."""
     msgs = SESSIONS.setdefault(session_id, [])
     msgs.append({"role": "user", "content": user_msg})
-    answer, msgs = run_agent_with_history(msgs)
-    SESSIONS[session_id] = msgs[-WINDOW:]   # sliding window
+    answer, msgs = _run_messages(msgs)
+    # Sliding window: keep only the last WINDOW messages so context doesn't grow forever.
+    SESSIONS[session_id] = msgs[-WINDOW:]
     return answer</code></pre>
           </div>
+        </div>
+
+        <p><strong>Try it &mdash; multi-turn from the Python REPL:</strong></p>
+        <div class="code-block-wrapper">
+          <div class="code-panel active">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre><code>python -c "
+from session import chat
+print(chat('case-001', 'What is the lien exposure for Acme Corporation?'))
+print('---')
+print(chat('case-001', 'Now compare to Pinnacle Industries.'))
+"</code></pre>
+          </div>
+        </div>
+        <p><strong>Expected behavior:</strong> the second call refers to Pinnacle <em>in contrast to Acme</em> &mdash; only possible if the session retained the first turn. If you instead get a generic "Pinnacle Industries has 2 active filings..." that doesn't reference Acme, the session isn't carrying over.</p>
+
+        <div class="checkpoint"><div class="checkpoint-label">&#9989; Checkpoint &mdash; Step 6</div>The second call's answer mentions Acme by name (proving the prior context survived). Try a third call: <code>chat('case-001', 'Which one is higher risk?')</code> &mdash; the agent should answer with reference to both. If it says "I don't know which two you mean", your <code>SESSIONS</code> dict isn't persisting across calls.</div>
+
+        <div class="troubleshoot" style="background:var(--warning-bg);border-radius:6px;padding:0.75rem 1rem;margin-top:1rem;font-size:0.9rem;">
+          <div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:0.8rem;color:var(--warning);margin-bottom:0.5rem;">Troubleshooting</div>
+          <ul style="margin:0;font-size:0.85rem;">
+            <li><code>ImportError: cannot import name '_run_messages' from 'agent'</code> &rarr; you skipped Step 3's refactor of <code>agent.py</code>. Go back and split the loop into <code>_run_messages</code> + <code>run_agent</code>.</li>
+            <li><strong>Each call starts fresh</strong> &rarr; <code>SESSIONS</code> is a <em>module-level</em> dict. If you import <code>session</code> separately each time (e.g., from a fresh subprocess), the dict resets. For a real server, use a database or Redis instead of an in-memory dict.</li>
+            <li><strong>Window slices off the wrong end</strong> &rarr; <code>msgs[-WINDOW:]</code> keeps the LAST N messages (recent), not the first N. If your follow-ups lose context after many turns, the window is too small &mdash; bump <code>WINDOW</code> to 40.</li>
+          </ul>
         </div>
       </div>
 
       <div class="step" id="i1-step7">
         <div class="step-header">Step 7: Deploy as FastAPI + Docker</div>
-        <div class="step-meta"><span>20 min</span><span>server.py + Dockerfile</span></div>
-        <p><strong>What &amp; Why:</strong> Wrap the agent in a small HTTP API and a container so it is reachable from anywhere. Same Tier-1 deployment as M22B; the agent code does not care that it is in a container.</p>
+        <div class="step-meta"><span>20 min</span><span>server.py + Dockerfile + requirements.txt</span></div>
+        <p><strong>What &amp; Why:</strong> Wrap the agent in a small HTTP API and a container so it is reachable from anywhere. Same Tier-1 deployment as M22B; the agent code does not care that it is in a container. We need three new files: <code>server.py</code> (FastAPI handlers), <code>Dockerfile</code> (build recipe), and <code>requirements.txt</code> (pinned dependencies the Dockerfile installs).</p>
 
+        <p><strong>Create three files at the project root.</strong></p>
         <div class="code-block-wrapper">
           <div class="code-tabs">
             <button class="code-tab active" onclick="switchTab(this,'i1s7-py')">server.py</button>
             <button class="code-tab" onclick="switchTab(this,'i1s7-docker')">Dockerfile</button>
+            <button class="code-tab" onclick="switchTab(this,'i1s7-req')">requirements.txt</button>
           </div>
           <div class="code-panel active" id="i1s7-py">
             <button class="copy-btn" onclick="copyCode(this)">Copy</button>
-            <pre><code>from fastapi import FastAPI, HTTPException
+            <pre><code>"""server.py &mdash; FastAPI wrapper around run_agent + session.chat."""
+from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from agent import run_agent
-from session import chat
+from session import chat as session_chat
 
-app = FastAPI()
-class Q(BaseModel): question: str
-class C(BaseModel): session_id: str; message: str
+app = FastAPI(title="UCC Risk Analyzer (Iter 1)")
+
+class Q(BaseModel):
+    question: str
+
+class C(BaseModel):
+    session_id: str
+    message: str
 
 @app.get("/health")
-def health(): return {"status": "ok"}
+def health():
+    return {"status": "ok", "iter": 1}
 
 @app.post("/query")
 def query(q: Q):
-    try: return {"answer": run_agent(q.question)}
-    except Exception as e: raise HTTPException(500, str(e))
+    try:
+        return {"answer": run_agent(q.question)}
+    except Exception as e:
+        raise HTTPException(500, str(e))
 
 @app.post("/chat")
 def chat_ep(c: C):
-    return {"answer": chat(c.session_id, c.message)}</code></pre>
+    try:
+        return {"answer": session_chat(c.session_id, c.message)}
+    except Exception as e:
+        raise HTTPException(500, str(e))</code></pre>
           </div>
           <div class="code-panel" id="i1s7-docker">
             <button class="copy-btn" onclick="copyCode(this)">Copy</button>
@@ -1022,21 +1309,109 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 EXPOSE 8000
+ENV PYTHONUNBUFFERED=1
 CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8000"]</code></pre>
+          </div>
+          <div class="code-panel" id="i1s7-req">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre><code>anthropic&gt;=0.40
+fastapi&gt;=0.110
+uvicorn&gt;=0.27
+pydantic&gt;=2.0</code></pre>
           </div>
         </div>
 
-        <div class="checkpoint"><div class="checkpoint-label">Iteration 1 Complete</div>Run <code>docker build -t iter1-c . &amp;&amp; docker run -p 8000:8000 -e ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY iter1-c</code>, then <code>curl -X POST localhost:8000/query -H "Content-Type: application/json" -d '{"question":"Risk for Acme?"}'</code>. You should see the narrative report.</div>
+        <p><strong>Run locally first (no Docker):</strong></p>
+        <div class="code-block-wrapper">
+          <div class="code-panel active">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre><code>uvicorn server:app --reload --port 8000</code></pre>
+          </div>
+        </div>
+        <p>In another terminal:</p>
+        <div class="code-block-wrapper">
+          <div class="code-panel active">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre><code>curl localhost:8000/health
+# Expected: {"status":"ok","iter":1}
 
-        <div class="callout-why">
-          <span class="box-label">Iteration 1 Metrics</span>
-          <ul style="margin-bottom:0;">
-            <li><strong>Files:</strong> 7 (agent.py, tools.py, mock_data.py, guardrails.py, session.py, server.py, Dockerfile)</li>
-            <li><strong>Lines you wrote:</strong> ~250</li>
-            <li><strong>Time:</strong> ~3 hours</li>
-            <li><strong>Abstractions used:</strong> none &mdash; just <code>anthropic</code> SDK and FastAPI</li>
+curl -X POST localhost:8000/query \
+     -H "Content-Type: application/json" \
+     -d '{"question":"Risk for Acme Corporation?"}'
+# Expected: {"answer":"Acme Corporation has 9 active UCC filings ..."}</code></pre>
+          </div>
+        </div>
+
+        <p><strong>Then build and run the Docker container:</strong></p>
+        <div class="code-block-wrapper">
+          <div class="code-panel active">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre><code>docker build -t iter1-c .
+docker run --rm -p 8000:8000 -e ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY iter1-c
+# In another terminal:
+curl localhost:8000/health</code></pre>
+          </div>
+        </div>
+
+        <div class="troubleshoot" style="background:var(--warning-bg);border-radius:6px;padding:0.75rem 1rem;margin-top:1rem;font-size:0.9rem;">
+          <div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:0.8rem;color:var(--warning);margin-bottom:0.5rem;">Troubleshooting</div>
+          <ul style="margin:0;font-size:0.85rem;">
+            <li><code>docker: command not found</code> &rarr; install Docker Desktop and confirm <code>docker --version</code> works.</li>
+            <li><code>OSError: [Errno 98] Address already in use</code> &rarr; port 8000 is taken. Use <code>--port 8001</code> for uvicorn or <code>-p 8001:8000</code> for docker.</li>
+            <li><strong>Container starts but /query returns 500 with "ANTHROPIC_API_KEY not set"</strong> &rarr; you forgot the <code>-e ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY</code> flag on docker run.</li>
+            <li><strong>Container rebuild is slow</strong> &rarr; expected. Each build re-installs dependencies. Use <code>--reload</code> with uvicorn for dev work; only build the image when you ship.</li>
           </ul>
         </div>
+      </div>
+
+      <!-- ===== END-OF-ITER-1 VERIFICATION ===== -->
+      <div class="checkpoint" style="background:var(--success-bg);border:2px solid var(--success);">
+        <div class="checkpoint-label" style="color:var(--success);">&#127881; Iteration 1 Complete &mdash; End-to-End Verification</div>
+        <p>You should now have <strong>8 files</strong> in your project folder:</p>
+        <pre style="background:var(--code-bg);border-radius:6px;padding:0.6rem 0.9rem;font-size:0.78rem;color:var(--text-secondary);margin:0.5rem 0;">agent-iter1-raw/
+&boxv;&boxh;&boxh; agent.py            # the loop + _run_messages + run_agent
+&boxv;&boxh;&boxh; tools.py            # 3 tool schemas + execute_tool dispatcher
+&boxv;&boxh;&boxh; mock_data.py        # 12 UCC filings (9 Acme + 2 Pinnacle + 1 Sunrise)
+&boxv;&boxh;&boxh; delinquency_model.pkl   # sklearn RandomForest from Step 1
+&boxv;&boxh;&boxh; guardrails.py       # validate_input + redact_pii + CircuitBreaker
+&boxv;&boxh;&boxh; audit.py            # append_audit writer
+&boxv;&boxh;&boxh; session.py          # multi-turn chat() over _run_messages
+&boxv;&boxh;&boxh; server.py           # FastAPI handlers
+&boxv;&boxh;&boxh; Dockerfile          # python:3.11-slim build recipe
+&boxv;&boxh;&boxh; requirements.txt    # pinned deps</pre>
+        <p><strong>Run the full Iter-1 acceptance test:</strong></p>
+        <div class="code-block-wrapper" style="margin:0.5rem 0;">
+          <div class="code-panel active">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre><code># 1. Single-shot risk analysis
+curl -s -X POST localhost:8000/query -H "Content-Type: application/json" \
+     -d '{"question":"Risk for Acme Corporation?"}' | python -m json.tool
+
+# 2. Multi-turn (session_id keeps context)
+curl -s -X POST localhost:8000/chat -H "Content-Type: application/json" \
+     -d '{"session_id":"acceptance","message":"Lien exposure for Acme?"}' | python -m json.tool
+curl -s -X POST localhost:8000/chat -H "Content-Type: application/json" \
+     -d '{"session_id":"acceptance","message":"Now compare to Pinnacle."}' | python -m json.tool
+
+# 3. Guardrails fire on a too-broad query
+curl -s -X POST localhost:8000/query -H "Content-Type: application/json" \
+     -d '{"question":"Search for company A"}' | python -m json.tool
+
+# 4. Inspect the audit log
+docker exec $(docker ps -q --filter ancestor=iter1-c) cat audit_log.jsonl | head -10</code></pre>
+          </div>
+        </div>
+        <p><strong>You pass Iter 1 if:</strong> (1) <code>/health</code> returns <code>ok</code>; (2) <code>/query</code> returns a narrative mentioning 9 Acme filings and a HIGH score; (3) the second <code>/chat</code> call references Acme (proving multi-turn); (4) the broad query gets reformulated by the agent after the gate denies it; (5) <code>audit_log.jsonl</code> has redacted entries for every tool call.</p>
+      </div>
+
+      <div class="callout-why">
+        <span class="box-label">Iteration 1 Metrics</span>
+        <ul style="margin-bottom:0;">
+          <li><strong>Files:</strong> 10 (agent.py, tools.py, mock_data.py, delinquency_model.pkl, guardrails.py, audit.py, session.py, server.py, Dockerfile, requirements.txt)</li>
+          <li><strong>Lines you wrote:</strong> ~250 (count <code>find . -name "*.py" -exec wc -l {} + | tail -1</code>)</li>
+          <li><strong>Time:</strong> ~3 hours</li>
+          <li><strong>Abstractions used:</strong> none &mdash; just <code>anthropic</code> Messages API and FastAPI</li>
+        </ul>
       </div>
 
       <div class="debug-block" id="iter1-debug">
@@ -1109,6 +1484,9 @@ CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8000"]</code></pre
           <div class="code-panel active" id="i2s8-bash">
             <button class="copy-btn" onclick="copyCode(this)">Copy</button>
             <pre><code>mkdir agent-iter2-sdk &amp;&amp; cd agent-iter2-sdk
+python -m venv venv &amp;&amp; source venv/bin/activate    # Windows: venv\Scripts\activate
+pip install "claude-agent-sdk&gt;=0.2" "scikit-learn&gt;=1.3" "fastapi&gt;=0.110" "uvicorn&gt;=0.27"
+npm i -g @anthropic-ai/claude-code   # if not already installed
 claude
 &gt; /init</code></pre>
           </div>
@@ -1117,16 +1495,19 @@ claude
             <pre><code># Agent: UCC Filing Risk Analyzer (Iteration 2)
 
 ## Stack
-- Python 3.11+, Anthropic Agent SDK
+- Python 3.11+
+- `claude-agent-sdk` (the official Agent SDK &mdash; NOT a wrapper around `client.messages.create()`)
 - scikit-learn for delinquency_model.pkl
 - FastAPI + Docker for deployment
 - Mock data in mock_data.py (12 UCC filings)
 
 ## File Layout
-- agent.py     &mdash; Agent + @agent.tool decorators (search_filings, get_filing_details, predict_delinquency)
-- hooks.py     &mdash; pre/post tool-use hooks
-- sessions.py  &mdash; multi-turn session management
-- server.py    &mdash; FastAPI wrapper
+- agent.py            &mdash; query() entry point + @tool-decorated tools + create_sdk_mcp_server
+- hooks/              &mdash; PreToolUse + PostToolUse hook scripts (referenced from .claude/settings.json)
+- .claude/settings.json &mdash; hooks registration
+- .claude/agents/     &mdash; subagent definitions (optional)
+- sessions.py         &mdash; multi-turn session management
+- server.py           &mdash; FastAPI wrapper
 
 ## System Prompt
 You are a UCC filing risk analyst. Search thoroughly using name variations
@@ -1137,162 +1518,479 @@ model, examine riskiest filings, write a narrative report citing evidence.</code
       </div>
 
       <div class="step" id="i2-step9">
-        <div class="step-header">Step 9: Build Agent with @agent.tool Decorators</div>
+        <div class="step-header">Step 9: Build Agent with @tool Decorators (claude-agent-sdk)</div>
         <div class="step-meta"><span>15 min</span><span>agent.py</span></div>
-        <p><strong>What &amp; Why:</strong> The Agent SDK lets you define tools as decorated Python functions instead of JSON schemas. The decorator generates the schema from the type hints. The SDK runs the message loop for you &mdash; no <code>while True</code>, no <code>messages.append</code>, no <code>stop_reason</code> checks.</p>
+        <p><strong>What &amp; Why:</strong> The <code>claude-agent-sdk</code> lets you define tools as <code>@tool</code>-decorated async functions registered with an in-process MCP server. <code>query()</code> drives the loop for you &mdash; no <code>while True</code>, no <code>messages.append</code>, no <code>stop_reason</code> checks. The SDK is a real package; do NOT simulate it with <code>client.messages.create()</code>.</p>
+
+        <div class="callout-warning">
+          <span class="box-label">What the Real SDK Looks Like</span>
+          <p>If you've used <code>client.messages.create()</code> in Iter 1, you might expect the SDK to be a thin <code>Agent</code> class wrapping it. It is not. The SDK is built around <strong>MCP tools</strong> + <strong>an async <code>query()</code> generator</strong> + <strong>options/hooks via <code>ClaudeAgentOptions</code></strong>. Tools return <code>{"content": [{"type": "text", "text": ...}]}</code> (MCP shape), not bare Python values.</p>
+        </div>
 
         <div class="code-block-wrapper">
-          <div class="code-tabs"><button class="code-tab active" onclick="switchTab(this,'i2s9-prompt')">Claude Code prompt</button><button class="code-tab" onclick="switchTab(this,'i2s9-py')">Resulting agent.py</button></div>
+          <div class="code-tabs"><button class="code-tab active" onclick="switchTab(this,'i2s9-prompt')">Claude Code prompt</button><button class="code-tab" onclick="switchTab(this,'i2s9-py')">agent.py (Python)</button><button class="code-tab" onclick="switchTab(this,'i2s9-ts')">agent.ts (TypeScript)</button></div>
           <div class="code-panel active" id="i2s9-prompt">
             <button class="copy-btn" onclick="copyCode(this)">Copy</button>
-            <pre><code>&gt; Create agent.py using the Anthropic Agent SDK. Implement three UCC tools:
-&gt; search_filings(debtor_name: str, state: str = ""), get_filing_details(filing_number: str),
-&gt; and predict_delinquency with the 6 ML features. Read mock_data.py for the data
-&gt; and delinquency_model.pkl for the model. Use the system prompt from CLAUDE.md.</code></pre>
+            <pre><code>&gt; Create agent.py using `claude-agent-sdk`. Define three UCC tools as
+&gt; @tool-decorated async functions: search_filings(debtor_name, state),
+&gt; get_filing_details(filing_number), predict_delinquency(...6 features).
+&gt; Wire them into a create_sdk_mcp_server, build ClaudeAgentOptions with the
+&gt; system prompt from CLAUDE.md, and expose an async run(question) entry
+&gt; point that drives query() and concatenates AssistantMessage text.</code></pre>
           </div>
           <div class="code-panel" id="i2s9-py">
             <button class="copy-btn" onclick="copyCode(this)">Copy</button>
-            <pre><code>"""agent.py &mdash; Agent SDK version. ~50 lines incl. tools."""
-import pickle
-from anthropic import Agent
-from mock_data import FILINGS
-
-agent = Agent(
-    model="claude-sonnet-4-6",
-    system="You are a UCC filing risk analyst. Search thoroughly using name "
-           "variations including abbreviations and DBAs, gather statistics, "
-           "run the model, examine riskiest filings, cite evidence.",
+            <pre><code>"""agent.py &mdash; claude-agent-sdk version. ~70 lines incl. tools."""
+import json, pickle
+from claude_agent_sdk import (
+    query, tool, create_sdk_mcp_server,
+    ClaudeAgentOptions, AssistantMessage,
 )
+from mock_data import FILINGS
 
 _MODEL = pickle.load(open("delinquency_model.pkl", "rb"))
 
-@agent.tool
-def search_filings(debtor_name: str, state: str = "") -&gt; list:
-    """Search UCC filings by debtor name (case-insensitive)."""
-    q = debtor_name.lower()
-    return [f for f in FILINGS
+@tool("search_filings",
+      "Search UCC filings by debtor name (case-insensitive partial match).",
+      {"debtor_name": str, "state": str})
+async def search_filings(args):
+    q = args["debtor_name"].lower()
+    st = (args.get("state") or "").upper()
+    hits = [f for f in FILINGS
             if q in f["debtor_name"].lower()
-            and (not state or f["state"] == state.upper())]
+            and (not st or f["state"] == st)]
+    return {"content": [{"type": "text", "text": json.dumps(hits)}]}
 
-@agent.tool
-def get_filing_details(filing_number: str) -&gt; dict:
-    """Get full details for a filing."""
-    return next((f for f in FILINGS if f["filing_number"] == filing_number),
-                {"error": "not found"})
+@tool("get_filing_details",
+      "Get full details for a filing by filing number.",
+      {"filing_number": str})
+async def get_filing_details(args):
+    rec = next((f for f in FILINGS if f["filing_number"] == args["filing_number"]),
+               {"error": "not found"})
+    return {"content": [{"type": "text", "text": json.dumps(rec)}]}
 
-@agent.tool
-def predict_delinquency(active_filing_count: int, state_count: int,
-                        collateral_types: int, filing_age_years: float,
-                        amendment_frequency: float, months_to_lapse: float) -&gt; dict:
-    """Run the delinquency ML model."""
-    feats = [[active_filing_count, state_count, collateral_types,
-              filing_age_years, amendment_frequency, months_to_lapse]]
+@tool("predict_delinquency",
+      "Run the delinquency ML model.",
+      {"active_filing_count": int, "state_count": int,
+       "collateral_types": int, "filing_age_years": float,
+       "amendment_frequency": float, "months_to_lapse": float})
+async def predict_delinquency(args):
+    feats = [[args["active_filing_count"], args["state_count"],
+              args["collateral_types"], args["filing_age_years"],
+              args["amendment_frequency"], args["months_to_lapse"]]]
     p = float(_MODEL.predict_proba(feats)[0][1])
-    return {"probability": p,
-            "prediction": "HIGH" if p &gt; 0.66 else "MEDIUM" if p &gt; 0.33 else "LOW"}
+    out = {"probability": p,
+           "prediction": "HIGH" if p &gt; 0.66 else "MEDIUM" if p &gt; 0.33 else "LOW"}
+    return {"content": [{"type": "text", "text": json.dumps(out)}]}
 
-def run(question: str) -&gt; str:
-    return agent.run(question).text</code></pre>
+ucc_server = create_sdk_mcp_server(
+    name="ucc_tools", version="1.0.0",
+    tools=[search_filings, get_filing_details, predict_delinquency],
+)
+
+OPTIONS = ClaudeAgentOptions(
+    model="claude-sonnet-4-6",
+    system_prompt=("You are a UCC filing risk analyst. Search thoroughly using "
+                   "name variations including abbreviations and DBAs, gather "
+                   "statistics, run the model, examine riskiest filings, cite "
+                   "evidence."),
+    mcp_servers={"ucc": ucc_server},
+    allowed_tools=["mcp__ucc__search_filings",
+                   "mcp__ucc__get_filing_details",
+                   "mcp__ucc__predict_delinquency"],
+    max_turns=10,
+)
+
+async def run(question: str) -&gt; str:
+    parts = []
+    async for msg in query(prompt=question, options=OPTIONS):
+        if isinstance(msg, AssistantMessage):
+            for block in msg.content:
+                if getattr(block, "text", None):
+                    parts.append(block.text)
+    return "\n".join(parts)</code></pre>
+          </div>
+          <div class="code-panel" id="i2s9-ts">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre><code>// agent.ts &mdash; @anthropic-ai/claude-agent-sdk version
+import { query, tool, createSdkMcpServer } from "@anthropic-ai/claude-agent-sdk";
+import { z } from "zod";
+import { readFileSync } from "fs";
+import { FILINGS } from "./mock_data.js";
+// (load delinquency model via your preferred Node ML lib, e.g. onnxruntime-node)
+
+const searchFilings = tool(
+  "search_filings",
+  "Search UCC filings by debtor name (case-insensitive partial match).",
+  { debtor_name: z.string(), state: z.string().optional() },
+  async (args) =&gt; {
+    const q = args.debtor_name.toLowerCase();
+    const st = (args.state ?? "").toUpperCase();
+    const hits = FILINGS.filter(f =&gt;
+      f.debtor_name.toLowerCase().includes(q) &amp;&amp;
+      (!st || f.state === st));
+    return { content: [{ type: "text", text: JSON.stringify(hits) }] };
+  }
+);
+
+const getFilingDetails = tool(
+  "get_filing_details",
+  "Get full details for a filing by filing number.",
+  { filing_number: z.string() },
+  async (args) =&gt; {
+    const rec = FILINGS.find(f =&gt; f.filing_number === args.filing_number)
+      ?? { error: "not found" };
+    return { content: [{ type: "text", text: JSON.stringify(rec) }] };
+  }
+);
+
+const predictDelinquency = tool(
+  "predict_delinquency",
+  "Run the delinquency ML model.",
+  {
+    active_filing_count: z.number().int(), state_count: z.number().int(),
+    collateral_types: z.number().int(),   filing_age_years: z.number(),
+    amendment_frequency: z.number(),       months_to_lapse: z.number(),
+  },
+  async (args) =&gt; {
+    const p = await runModel(args);   // your model wrapper
+    const out = { probability: p,
+                  prediction: p &gt; 0.66 ? "HIGH" : p &gt; 0.33 ? "MEDIUM" : "LOW" };
+    return { content: [{ type: "text", text: JSON.stringify(out) }] };
+  }
+);
+
+const uccServer = createSdkMcpServer({
+  name: "ucc_tools",
+  tools: [searchFilings, getFilingDetails, predictDelinquency],
+});
+
+const OPTIONS = {
+  model: "claude-sonnet-4-6",
+  systemPrompt: "You are a UCC filing risk analyst. ...",
+  mcpServers: { ucc: uccServer },
+  allowedTools: [
+    "mcp__ucc__search_filings",
+    "mcp__ucc__get_filing_details",
+    "mcp__ucc__predict_delinquency",
+  ],
+  maxTurns: 10,
+};
+
+export async function run(question: string): Promise&lt;string&gt; {
+  const parts: string[] = [];
+  for await (const msg of query({ prompt: question, options: OPTIONS })) {
+    if (msg.type === "assistant") {
+      for (const block of msg.content) {
+        if ("text" in block) parts.push(block.text);
+      }
+    }
+  }
+  return parts.join("\n");
+}</code></pre>
           </div>
         </div>
 
         <div class="callout-why">
           <span class="box-label">What Just Disappeared</span>
-          <p>You no longer write the message loop, the stop_reason check, the tool_result append, or the JSON schemas. The 90-line raw loop from Iter 1 collapsed to a single <code>agent.run()</code> call. <strong>Same behavior, ~50 lines instead of ~120.</strong></p>
+          <p>You no longer write the message loop, the stop_reason check, the tool_result append, or JSON schema dicts. The 90-line raw loop from Iter 1 collapsed to one <code>async for msg in query(...)</code> (Python) / <code>for await</code> (TS). The MCP server is created in 4 lines. <strong>Same behavior, ~70 lines instead of ~140.</strong></p>
+        </div>
+
+        <div class="troubleshoot" style="background:var(--warning-bg);border-radius:6px;padding:0.75rem 1rem;margin-top:1rem;font-size:0.9rem;">
+          <div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:0.8rem;color:var(--warning);margin-bottom:0.5rem;">Troubleshooting</div>
+          <ul style="margin:0;font-size:0.85rem;">
+            <li><code>ModuleNotFoundError: No module named 'claude_agent_sdk'</code> &rarr; <code>pip install "claude-agent-sdk&gt;=0.2"</code> in your venv.</li>
+            <li><code>ImportError: cannot import name 'Agent' from 'anthropic'</code> &rarr; you're trying the old fictional API. The real SDK is <code>claude_agent_sdk</code>, not <code>anthropic.Agent</code>.</li>
+            <li>Tool returns "Tool not allowed" &rarr; add <code>"mcp__&lt;server&gt;__&lt;tool&gt;"</code> to <code>allowed_tools</code>.</li>
+          </ul>
         </div>
       </div>
 
       <div class="step" id="i2-step10">
-        <div class="step-header">Step 10: Add Hooks for Logging, Validation, Redaction, Audit</div>
-        <div class="step-meta"><span>20 min</span><span>hooks.py</span></div>
-        <p><strong>What &amp; Why:</strong> Hooks fire at <code>pre_tool_use</code> and <code>post_tool_use</code>. They are how the SDK lets you inject guardrails without polluting <code>agent.py</code>. Same four guardrails from Iter 1 become four small hook functions in their own file. Remove the file, the agent still runs &mdash; just without the guardrails.</p>
+        <div class="step-header">Step 10: Add Hooks via .claude/settings.json + HookMatcher</div>
+        <div class="step-meta"><span>20 min</span><span>hooks/*.py + .claude/settings.json</span></div>
+        <p><strong>What &amp; Why:</strong> The SDK supports two hook surfaces: (a) <strong>file-based hooks</strong> in <code>.claude/settings.json</code> that shell out to scripts (production-friendly, language-agnostic), and (b) <strong>in-process hooks</strong> via <code>HookMatcher</code> in <code>ClaudeAgentOptions(hooks={...})</code>. We use (a) for redaction/audit (matches the Tier 3 cert pattern) and (b) for in-process validation that needs to raise.</p>
 
         <div class="code-block-wrapper">
-          <div class="code-tabs"><button class="code-tab active" onclick="switchTab(this,'i2s10-py')">hooks.py</button></div>
-          <div class="code-panel active" id="i2s10-py">
+          <div class="code-tabs">
+            <button class="code-tab active" onclick="switchTab(this,'i2s10-settings')">.claude/settings.json</button>
+            <button class="code-tab" onclick="switchTab(this,'i2s10-hookpy')">hooks/redact_pii.py</button>
+            <button class="code-tab" onclick="switchTab(this,'i2s10-inproc')">In-process validation</button>
+          </div>
+          <div class="code-panel active" id="i2s10-settings">
             <button class="copy-btn" onclick="copyCode(this)">Copy</button>
-            <pre><code>"""hooks.py &mdash; pre/post tool-use hooks. Modular guardrails."""
-import re, json, datetime
-from agent import agent
+            <pre><code>{
+  "hooks": {
+    "PreToolUse": [
+      { "matcher": "mcp__ucc__search_filings",
+        "command": "python hooks/log_call.py" }
+    ],
+    "PostToolUse": [
+      { "matcher": "*", "command": "python hooks/redact_pii.py" },
+      { "matcher": "*", "command": "python hooks/audit.py" }
+    ]
+  }
+}</code></pre>
+          </div>
+          <div class="code-panel" id="i2s10-hookpy">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre><code>"""hooks/redact_pii.py &mdash; reads tool result on stdin, writes redacted JSON on stdout."""
+import sys, json, re
 
 SSN_RE = re.compile(r"\b\d{3}-\d{2}-\d{4}\b")
 PHONE_RE = re.compile(r"\b\d{3}-\d{3}-\d{4}\b")
 
-@agent.hook("pre_tool_use")
-def log_call(tool_name, tool_input):
-    print(f"[{datetime.datetime.utcnow().isoformat()}Z] CALL {tool_name}({tool_input})")
-    return True
+payload = json.load(sys.stdin)
+text = json.dumps(payload.get("tool_result"), default=str)
+text = SSN_RE.sub("[SSN_REDACTED]", text)
+text = PHONE_RE.sub("[PHONE_REDACTED]", text)
+payload["tool_result"] = json.loads(text)
+json.dump(payload, sys.stdout)</code></pre>
+          </div>
+          <div class="code-panel" id="i2s10-inproc">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre><code>"""Add to agent.py: in-process validation hook via HookMatcher."""
+from claude_agent_sdk import HookMatcher
 
-@agent.hook("pre_tool_use")
-def validate(tool_name, tool_input):
-    if tool_name == "search_filings":
-        if len(tool_input.get("debtor_name", "").strip()) &lt; 3:
-            raise ValueError("Query too broad")
-    return True
+async def validate_query(input_data, tool_use_id, context):
+    if input_data.get("tool_name", "").endswith("search_filings"):
+        q = (input_data.get("tool_input", {}).get("debtor_name") or "").strip()
+        if len(q) &lt; 3:
+            return {"hookSpecificOutput": {"hookEventName": "PreToolUse",
+                                            "permissionDecision": "deny",
+                                            "permissionDecisionReason": "Query too broad"}}
+    return {}
 
-@agent.hook("post_tool_use")
-def redact(tool_name, tool_input, tool_result):
-    s = json.dumps(tool_result, default=str)
-    s = SSN_RE.sub("[SSN_REDACTED]", s)
-    s = PHONE_RE.sub("[PHONE_REDACTED]", s)
-    return json.loads(s)
-
-@agent.hook("post_tool_use")
-def audit(tool_name, tool_input, tool_result):
-    rec = {"ts": datetime.datetime.utcnow().isoformat() + "Z",
-           "tool": tool_name, "input": tool_input,
-           "output_summary": str(tool_result)[:200]}
-    with open("audit_log.jsonl", "a") as f:
-        f.write(json.dumps(rec) + "\n")
-    return tool_result</code></pre>
+# Then update OPTIONS in agent.py:
+OPTIONS = ClaudeAgentOptions(
+    # ... existing fields ...
+    hooks={"PreToolUse": [HookMatcher(matcher="mcp__ucc__search_filings",
+                                      hooks=[validate_query])]},
+)</code></pre>
           </div>
         </div>
 
-        <div class="checkpoint"><div class="checkpoint-label">Checkpoint</div>Run <code>python -c "import agent, hooks; print(agent.run('Risk for Acme?'))"</code>. You should see timestamped log lines AND the final report. Inspect <code>audit_log.jsonl</code> &mdash; one record per tool call.</div>
+        <p><strong>Create the supporting hook scripts</strong> &mdash; both follow the same stdin/stdout pattern as <code>redact_pii.py</code>. Save these in <code>hooks/</code>:</p>
+        <div class="code-block-wrapper">
+          <div class="code-tabs">
+            <button class="code-tab active" onclick="switchTab(this,'i2s10-log')">hooks/log_call.py</button>
+            <button class="code-tab" onclick="switchTab(this,'i2s10-audit')">hooks/audit.py</button>
+          </div>
+          <div class="code-panel active" id="i2s10-log">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre><code>"""hooks/log_call.py &mdash; PreToolUse: print to stderr, pass payload through unchanged."""
+import sys, json, datetime
+
+payload = json.load(sys.stdin)
+ts = datetime.datetime.utcnow().isoformat() + "Z"
+name = payload.get("tool_name", "?")
+args = payload.get("tool_input", {})
+print(f"[{ts}] PRE  {name}({args})", file=sys.stderr)
+json.dump(payload, sys.stdout)   # pass-through &mdash; do NOT modify</code></pre>
+          </div>
+          <div class="code-panel" id="i2s10-audit">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre><code>"""hooks/audit.py &mdash; PostToolUse: append a redacted record to audit_log.jsonl."""
+import sys, json, datetime
+
+payload = json.load(sys.stdin)
+rec = {
+    "ts": datetime.datetime.utcnow().isoformat() + "Z",
+    "tool": payload.get("tool_name"),
+    "input": payload.get("tool_input"),
+    "output_summary": str(payload.get("tool_result"))[:200],
+}
+with open("audit_log.jsonl", "a") as f:
+    f.write(json.dumps(rec, default=str) + "\n")
+json.dump(payload, sys.stdout)   # pass-through</code></pre>
+          </div>
+        </div>
+
+        <p><strong>Debug each hook standalone before wiring them up:</strong></p>
+        <div class="code-block-wrapper">
+          <div class="code-panel active">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre><code># Smoke-test the redactor (should replace the SSN):
+echo '{"tool_name":"search_filings","tool_result":"customer SSN 123-45-6789"}' \
+  | python hooks/redact_pii.py
+
+# Smoke-test the audit writer (should append a line):
+echo '{"tool_name":"search_filings","tool_input":{"debtor_name":"Acme"},"tool_result":"ok"}' \
+  | python hooks/audit.py
+cat audit_log.jsonl  # should show the new entry</code></pre>
+          </div>
+        </div>
+
+        <p><strong>Then run the agent end-to-end:</strong></p>
+        <div class="code-block-wrapper">
+          <div class="code-panel active">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre><code>python -c "import asyncio, agent; print(asyncio.run(agent.run('Risk for Acme Corporation?')))"</code></pre>
+          </div>
+        </div>
+
+        <div class="checkpoint"><div class="checkpoint-label">&#9989; Checkpoint &mdash; Step 10</div>
+          You should see (1) <code>[timestamp] PRE search_filings(...)</code> log lines on stderr from <code>log_call.py</code>, (2) the agent's narrative report on stdout, (3) one line per tool call in <code>audit_log.jsonl</code>. Try a 1-character query &mdash; the in-process <code>HookMatcher</code> validator should deny it with "Query too broad".
+        </div>
+
+        <div class="troubleshoot" style="background:var(--warning-bg);border-radius:6px;padding:0.75rem 1rem;margin-top:1rem;font-size:0.9rem;">
+          <div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:0.8rem;color:var(--warning);margin-bottom:0.5rem;">Troubleshooting</div>
+          <ul style="margin:0;font-size:0.85rem;">
+            <li><strong>Hooks don't run at all</strong> &rarr; the SDK looks for <code>.claude/settings.json</code> in the current working directory. Run from the project root.</li>
+            <li><strong>Hook script crashes on JSON parse</strong> &rarr; you forgot to <code>json.dump(payload, sys.stdout)</code> as the LAST line. The SDK reads the script's stdout and parses it back as JSON; an empty or malformed stdout breaks the pipe.</li>
+            <li><strong>Audit log missing entries</strong> &rarr; the matcher is too narrow. <code>"matcher": "*"</code> matches every tool call; <code>"matcher": "search_filings"</code> only matches that one tool name.</li>
+            <li><strong>In-process validator never fires</strong> &rarr; check that <code>hooks={"PreToolUse": [HookMatcher(...)]}</code> is a kwarg on <code>ClaudeAgentOptions</code>, not a separate variable.</li>
+          </ul>
+        </div>
       </div>
 
       <div class="step" id="i2-step11">
-        <div class="step-header">Step 11: Sessions &mdash; Multi-Turn + Fork</div>
+        <div class="step-header">Step 11: Sessions &mdash; Multi-Turn + Resume</div>
         <div class="step-meta"><span>15 min</span><span>sessions.py</span></div>
-        <p><strong>What &amp; Why:</strong> The Agent SDK provides <code>session.fork()</code> &mdash; clone a conversation at any point and run a hypothetical branch without polluting the original history. Iter 1's <code>SESSIONS</code> dict was a hand-rolled approximation; here it is one SDK feature.</p>
+        <p><strong>What &amp; Why:</strong> The SDK supports session continuation via the <code>resume</code> option (or <code>continue_conversation=True</code> for the most recent), and what-if branching via copying a session id. Iter 1's <code>SESSIONS</code> dict was a hand-rolled approximation; here we keep a thin in-memory map of <code>session_id &rarr; last_resume_token</code> and let the SDK handle the rest.</p>
 
         <div class="code-block-wrapper">
           <div class="code-tabs"><button class="code-tab active" onclick="switchTab(this,'i2s11-py')">sessions.py</button></div>
           <div class="code-panel active" id="i2s11-py">
             <button class="copy-btn" onclick="copyCode(this)">Copy</button>
-            <pre><code>from agent import agent
-SESSIONS = {}
+            <pre><code>"""sessions.py &mdash; multi-turn via SDK resume tokens."""
+from dataclasses import replace
+from claude_agent_sdk import query, AssistantMessage
+from agent import OPTIONS
 
-def chat(session_id: str, msg: str) -&gt; str:
-    sess = SESSIONS.setdefault(session_id, agent.session())
-    return sess.send(msg).text
+SESSIONS: dict[str, str] = {}   # case_id -&gt; resume token (session_id)
 
-def what_if(session_id: str, hypothetical: str) -&gt; str:
-    """Fork the session for a what-if without polluting the main thread."""
-    base = SESSIONS[session_id]
-    branch = base.fork()
-    return branch.send(hypothetical).text</code></pre>
+async def _drive(prompt: str, options) -&gt; tuple[str, str | None]:
+    parts, last_session_id = [], None
+    async for msg in query(prompt=prompt, options=options):
+        if isinstance(msg, AssistantMessage):
+            for block in msg.content:
+                if getattr(block, "text", None):
+                    parts.append(block.text)
+        # The SDK emits a session_id on the result message at the end.
+        sid = getattr(msg, "session_id", None)
+        if sid: last_session_id = sid
+    return "\n".join(parts), last_session_id
+
+async def chat(session_id: str, msg: str) -&gt; str:
+    resume = SESSIONS.get(session_id)
+    options = replace(OPTIONS, resume=resume) if resume else OPTIONS
+    text, sid = await _drive(msg, options)
+    if sid: SESSIONS[session_id] = sid
+    return text
+
+async def what_if(session_id: str, hypothetical: str) -&gt; str:
+    """Fork: resume from the same point but do NOT update the main session."""
+    resume = SESSIONS.get(session_id)
+    options = replace(OPTIONS, resume=resume) if resume else OPTIONS
+    text, _ = await _drive(hypothetical, options)
+    return text</code></pre>
           </div>
+        </div>
+
+        <p><strong>Try it &mdash; multi-turn + fork demo:</strong></p>
+        <div class="code-block-wrapper">
+          <div class="code-panel active">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre><code>python -c "
+import asyncio
+from sessions import chat, what_if
+
+async def main():
+    # Turn 1: establish context
+    print('T1:', await chat('case-001', 'What is the lien exposure for Acme Corporation?'))
+    # Turn 2: builds on T1
+    print('T2:', await chat('case-001', 'Now compare to Pinnacle Industries.'))
+    # Fork: hypothetical that does NOT pollute the main session
+    print('FORK:', await what_if('case-001', 'What if Acme files a UCC-3 termination on NY-2024-0848?'))
+    # Turn 3 on the original session: the fork's hypothetical was NOT seen
+    print('T3:', await chat('case-001', 'Summarize Acme vs Pinnacle in one sentence.'))
+
+asyncio.run(main())
+"</code></pre>
+          </div>
+        </div>
+
+        <div class="checkpoint"><div class="checkpoint-label">&#9989; Checkpoint &mdash; Step 11</div>
+          T2 should reference Acme by name (proving session persistence). T3 should NOT mention the hypothetical UCC-3 termination from FORK (proving fork isolation). If T3 includes the termination scenario, your <code>what_if</code> is updating <code>SESSIONS[session_id]</code> when it shouldn't.
+        </div>
+
+        <div class="troubleshoot" style="background:var(--warning-bg);border-radius:6px;padding:0.75rem 1rem;margin-top:1rem;font-size:0.9rem;">
+          <div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:0.8rem;color:var(--warning);margin-bottom:0.5rem;">Troubleshooting</div>
+          <ul style="margin:0;font-size:0.85rem;">
+            <li><code>TypeError: replace() got an unexpected keyword argument 'resume'</code> &rarr; <code>ClaudeAgentOptions</code> in your installed SDK version doesn't support <code>resume=</code>. Upgrade with <code>pip install -U "claude-agent-sdk&gt;=0.2"</code>.</li>
+            <li><strong>session_id is always None on first call</strong> &rarr; expected. The SDK only emits <code>session_id</code> on the result message AFTER the agent finishes. The first turn has no resume token; subsequent turns do.</li>
+            <li><strong>Fork still updates the main session</strong> &rarr; check that <code>what_if</code> uses <code>text, _ = await _drive(...)</code> (discarding the new sid) rather than <code>text, sid = await _drive(...)</code> followed by an assignment.</li>
+          </ul>
         </div>
       </div>
 
       <div class="step" id="i2-step12">
         <div class="step-header">Step 12: Slash Commands</div>
-        <div class="step-meta"><span>15 min</span><span>.claude/commands/*.md</span></div>
+        <div class="step-meta"><span>15 min</span><span>.claude/commands/*.md (3 files)</span></div>
         <p><strong>What &amp; Why:</strong> Claude Code slash commands let you run reusable workflows from inside the IDE. <code>/run-agent</code> calls the agent on a question; <code>/test-agent</code> runs the unit test suite; <code>/eval-agent</code> runs the 10-question UCC eval set and reports per-scenario scoring.</p>
 
+        <p><strong>Create 3 files in <code>.claude/commands/</code>:</strong></p>
         <div class="code-block-wrapper">
-          <div class="code-tabs"><button class="code-tab active" onclick="switchTab(this,'i2s12-md')">run-agent.md</button></div>
-          <div class="code-panel active" id="i2s12-md">
+          <div class="code-tabs">
+            <button class="code-tab active" onclick="switchTab(this,'i2s12-run')">run-agent.md</button>
+            <button class="code-tab" onclick="switchTab(this,'i2s12-test')">test-agent.md</button>
+            <button class="code-tab" onclick="switchTab(this,'i2s12-eval')">eval-agent.md</button>
+          </div>
+          <div class="code-panel active" id="i2s12-run">
             <button class="copy-btn" onclick="copyCode(this)">Copy</button>
             <pre><code>---
 description: Run the UCC Risk Analyzer agent on a question
 argument-hint: [question]
 ---
-Run `python -c "from agent import run; print(run('$ARGUMENTS'))"`. If --verbose
-is in $ARGUMENTS, set AGENT_VERBOSE=1 to enable hook debug logging. Print the
-final report and the token + cost summary.</code></pre>
+Run `python -c "import asyncio, agent; print(asyncio.run(agent.run('$ARGUMENTS')))"`.
+If --verbose is in $ARGUMENTS, set AGENT_VERBOSE=1 (read by hooks/log_call.py).
+Print the final report and the token + cost summary from query()'s ResultMessage.</code></pre>
           </div>
+          <div class="code-panel" id="i2s12-test">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre><code>---
+description: Run the unit test suite for the UCC agent
+---
+Run `pytest tests/ -v`. The test suite covers tools, hooks, sessions, and the
+end-to-end agent (must find all 9 Acme filings including the DBA variant).
+Report each test's pass/fail and a summary at the end. If any tests fail,
+read the spec at `spec/agent-spec.md` (in Iter 3) to see expected behavior,
+then fix the implementation.</code></pre>
+          </div>
+          <div class="code-panel" id="i2s12-eval">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre><code>---
+description: Run the 10-question evaluation suite
+---
+Read `test_scenarios.json` (10 question/expected-output pairs). For each
+question, call `agent.run()`, score the response on a rubric: did it find
+the right entities? did it return the right risk level? did it cite specific
+filings? Report per-scenario score (0-5) and an overall percentage.</code></pre>
+          </div>
+        </div>
+
+        <p><strong>Try it from inside Claude Code:</strong></p>
+        <div class="code-block-wrapper">
+          <div class="code-panel active">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre><code>claude
+&gt; /run-agent What is the lien exposure for Acme Corporation?
+&gt; /test-agent
+&gt; /eval-agent</code></pre>
+          </div>
+        </div>
+
+        <div class="checkpoint"><div class="checkpoint-label">&#9989; Checkpoint &mdash; Step 12</div>
+          When you type <code>/</code> in Claude Code, the three commands appear in the autocomplete. Running <code>/run-agent</code> with a UCC question produces the narrative report. <code>/test-agent</code> requires you to first create a <code>tests/</code> folder &mdash; in Iter 3 the spec generates these for you.
+        </div>
+
+        <div class="troubleshoot" style="background:var(--warning-bg);border-radius:6px;padding:0.75rem 1rem;margin-top:1rem;font-size:0.9rem;">
+          <div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:0.8rem;color:var(--warning);margin-bottom:0.5rem;">Troubleshooting</div>
+          <ul style="margin:0;font-size:0.85rem;">
+            <li><strong>Slash commands don't appear in autocomplete</strong> &rarr; the directory must be exactly <code>.claude/commands/</code> at the project root. Restart Claude Code after creating new files.</li>
+            <li><code>$ARGUMENTS</code> isn't substituted &rarr; this is a Claude Code template variable; it works inside the slash command, not in plain bash. If you're testing the underlying Python directly, hardcode the question.</li>
+          </ul>
         </div>
       </div>
 
@@ -1305,23 +2003,150 @@ final report and the token + cost summary.</code></pre>
           <div class="code-tabs"><button class="code-tab active" onclick="switchTab(this,'i2s13-prompt')">Claude Code prompt</button></div>
           <div class="code-panel active" id="i2s13-prompt">
             <button class="copy-btn" onclick="copyCode(this)">Copy</button>
-            <pre><code>&gt; Create server.py and Dockerfile. Endpoints: GET /health, POST /query (single-shot),
-&gt; POST /chat (session_id + message). Use the existing agent.run() and sessions.chat().
-&gt; Dockerfile based on python:3.11-slim, expose 8000, uvicorn entrypoint.</code></pre>
+            <pre><code>&gt; Create server.py and Dockerfile. Endpoints: GET /health, POST /query
+&gt; (single-shot), POST /chat (session_id + message). The endpoints are async
+&gt; FastAPI handlers that await agent.run() and sessions.chat() respectively
+&gt; (both are async coroutines from claude-agent-sdk). Dockerfile based on
+&gt; python:3.11-slim, install claude-agent-sdk + dependencies, expose 8000,
+&gt; uvicorn entrypoint. Mount .claude/ into the container so settings.json
+&gt; and hook scripts are picked up.</code></pre>
           </div>
         </div>
 
-        <div class="checkpoint"><div class="checkpoint-label">Iteration 2 Complete</div>Same curl commands as Iter 1; same outputs. The agent's <em>behavior</em> is unchanged &mdash; you just wrote half the code.</div>
+        <p><strong>What Claude Code produces (review before saving):</strong></p>
+        <div class="code-block-wrapper">
+          <div class="code-tabs">
+            <button class="code-tab active" onclick="switchTab(this,'i2s13-server')">server.py</button>
+            <button class="code-tab" onclick="switchTab(this,'i2s13-dock')">Dockerfile</button>
+            <button class="code-tab" onclick="switchTab(this,'i2s13-req')">requirements.txt</button>
+          </div>
+          <div class="code-panel active" id="i2s13-server">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre><code>"""server.py &mdash; async FastAPI wrapper around the SDK agent."""
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+from agent import run as agent_run
+from sessions import chat as session_chat
 
-        <div class="callout-why">
-          <span class="box-label">Iteration 2 Metrics</span>
-          <ul style="margin-bottom:0;">
-            <li><strong>Files:</strong> 8 (CLAUDE.md, agent.py, hooks.py, sessions.py, server.py, Dockerfile, slash commands)</li>
-            <li><strong>Lines you wrote:</strong> ~120</li>
-            <li><strong>Time:</strong> ~2 hours</li>
-            <li><strong>Abstractions used:</strong> Agent SDK + hooks + sessions + Claude Code</li>
+app = FastAPI(title="UCC Risk Analyzer (Iter 2 &mdash; SDK)")
+
+class Q(BaseModel): question: str
+class C(BaseModel): session_id: str; message: str
+
+@app.get("/health")
+def health(): return {"status": "ok", "iter": 2}
+
+@app.post("/query")
+async def query(q: Q):
+    try: return {"answer": await agent_run(q.question)}
+    except Exception as e: raise HTTPException(500, str(e))
+
+@app.post("/chat")
+async def chat_ep(c: C):
+    try: return {"answer": await session_chat(c.session_id, c.message)}
+    except Exception as e: raise HTTPException(500, str(e))</code></pre>
+          </div>
+          <div class="code-panel" id="i2s13-dock">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre><code>FROM python:3.11-slim
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY . .
+# .claude/settings.json + hooks/ must be in the build context for hooks to fire
+EXPOSE 8000
+ENV PYTHONUNBUFFERED=1
+CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8000"]</code></pre>
+          </div>
+          <div class="code-panel" id="i2s13-req">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre><code>claude-agent-sdk&gt;=0.2
+fastapi&gt;=0.110
+uvicorn&gt;=0.27
+pydantic&gt;=2.0</code></pre>
+          </div>
+        </div>
+
+        <p><strong>Run locally first:</strong></p>
+        <div class="code-block-wrapper">
+          <div class="code-panel active">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre><code>uvicorn server:app --reload --port 8000
+# In another terminal:
+curl localhost:8000/health
+# Expected: {"status":"ok","iter":2}
+
+curl -X POST localhost:8000/query -H "Content-Type: application/json" \
+     -d '{"question":"Risk for Acme Corporation?"}'</code></pre>
+          </div>
+        </div>
+
+        <p><strong>Then build and run with Docker:</strong></p>
+        <div class="code-block-wrapper">
+          <div class="code-panel active">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre><code>docker build -t iter2-c .
+docker run --rm -p 8000:8000 -e ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY iter2-c</code></pre>
+          </div>
+        </div>
+
+        <div class="troubleshoot" style="background:var(--warning-bg);border-radius:6px;padding:0.75rem 1rem;margin-top:1rem;font-size:0.9rem;">
+          <div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:0.8rem;color:var(--warning);margin-bottom:0.5rem;">Troubleshooting</div>
+          <ul style="margin:0;font-size:0.85rem;">
+            <li><strong>Container starts but hooks don't fire</strong> &rarr; <code>.claude/</code> wasn't copied into the image. Confirm <code>COPY . .</code> includes the <code>.claude/</code> folder; some <code>.dockerignore</code> setups exclude dotfiles.</li>
+            <li><code>RuntimeError: This event loop is already running</code> &rarr; the FastAPI handlers must be <code>async def</code>, not plain <code>def</code> (they're awaiting the SDK's async <code>query()</code>).</li>
+            <li><strong>Slow build</strong> &rarr; pin versions in requirements.txt and add a <code>.dockerignore</code> with <code>venv/</code>, <code>__pycache__/</code>, <code>*.pyc</code> to skip unnecessary copies.</li>
           </ul>
         </div>
+      </div>
+
+      <!-- ===== END-OF-ITER-2 VERIFICATION ===== -->
+      <div class="checkpoint" style="background:var(--success-bg);border:2px solid var(--success);">
+        <div class="checkpoint-label" style="color:var(--success);">&#127881; Iteration 2 Complete &mdash; End-to-End Verification</div>
+        <p>You should now have <strong>~13 files</strong> in your project:</p>
+        <pre style="background:var(--code-bg);border-radius:6px;padding:0.6rem 0.9rem;font-size:0.78rem;color:var(--text-secondary);margin:0.5rem 0;">agent-iter2-sdk/
+&boxv;&boxh;&boxh; CLAUDE.md
+&boxv;&boxh;&boxh; agent.py            # query() + 3 @tool functions + create_sdk_mcp_server
+&boxv;&boxh;&boxh; sessions.py         # chat() and what_if() over SDK resume tokens
+&boxv;&boxh;&boxh; mock_data.py        # same 12 records as Iter 1
+&boxv;&boxh;&boxh; delinquency_model.pkl
+&boxv;&boxh;&boxh; .claude/
+&boxv;&boxh;   &boxv;&boxh;&boxh; settings.json    # PreToolUse + PostToolUse matchers
+&boxv;&boxh;   &boxv;&boxh;&boxh; commands/run-agent.md, test-agent.md, eval-agent.md
+&boxv;&boxh;&boxh; hooks/
+&boxv;&boxh;   &boxv;&boxh;&boxh; log_call.py, redact_pii.py, audit.py
+&boxv;&boxh;&boxh; server.py | Dockerfile | requirements.txt</pre>
+
+        <p><strong>Run the same Iter-1 acceptance test against the Iter-2 deployment</strong> &mdash; the curl shape and outputs are identical:</p>
+        <div class="code-block-wrapper" style="margin:0.5rem 0;">
+          <div class="code-panel active">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre><code># Same 4 acceptance curls as Iter 1, but pointing at the Iter-2 container.
+# Outputs should be functionally identical to Iter 1 (same 9 Acme filings, HIGH score).
+curl -s -X POST localhost:8000/query -H "Content-Type: application/json" \
+     -d '{"question":"Risk for Acme Corporation?"}' | python -m json.tool
+
+# Multi-turn via the SDK's resume token (different mechanism than Iter 1's transcript)
+curl -s -X POST localhost:8000/chat -H "Content-Type: application/json" \
+     -d '{"session_id":"acceptance","message":"Lien exposure for Acme?"}' | python -m json.tool
+curl -s -X POST localhost:8000/chat -H "Content-Type: application/json" \
+     -d '{"session_id":"acceptance","message":"Now compare to Pinnacle."}' | python -m json.tool
+
+# Hook-driven audit (instead of Iter-1's hand-rolled append_audit call)
+docker exec $(docker ps -q --filter ancestor=iter2-c) cat audit_log.jsonl | head -10</code></pre>
+          </div>
+        </div>
+        <p><strong>You pass Iter 2 if:</strong> all 4 outputs are functionally equivalent to Iter 1, but you wrote ~120 lines instead of ~250. The agent's <em>observable behavior</em> is unchanged; the implementation underneath uses the SDK + hooks + Claude Code.</p>
+      </div>
+
+      <div class="callout-why">
+        <span class="box-label">Iteration 2 Metrics</span>
+        <ul style="margin-bottom:0;">
+          <li><strong>Files:</strong> ~13 (CLAUDE.md, agent.py, sessions.py, mock_data.py, delinquency_model.pkl, .claude/settings.json, .claude/commands/&times;3, hooks/&times;3, server.py, Dockerfile, requirements.txt)</li>
+          <li><strong>Lines you wrote:</strong> ~120 (vs Iter 1's ~250)</li>
+          <li><strong>Time:</strong> ~2 hours (vs Iter 1's ~3)</li>
+          <li><strong>Abstractions used:</strong> <code>claude-agent-sdk</code> (query / @tool / create_sdk_mcp_server / ClaudeAgentOptions / HookMatcher / PermissionResultDeny) + Claude Code slash commands</li>
+        </ul>
       </div>
 
       <div class="debug-block" id="iter2-debug">
@@ -1330,23 +2155,31 @@ final report and the token + cost summary.</code></pre>
 
         <div class="debug-method">
           <div class="debug-method-title">A. Hooks as Debug Probes</div>
-          <p>Hooks fire at every tool call. Add a temporary verbose hook for diagnostic runs:</p>
+          <p>Hooks fire at every tool call. The simplest debug surface is a stdin-stdout script registered in <code>.claude/settings.json</code> that pretty-prints to stderr (so it doesn't pollute the hook payload):</p>
           <div class="code-block-wrapper">
-            <div class="code-tabs"><button class="code-tab active" onclick="switchTab(this,'i2d-py')">hooks_debug.py</button></div>
+            <div class="code-tabs"><button class="code-tab active" onclick="switchTab(this,'i2d-py')">hooks/debug.py</button><button class="code-tab" onclick="switchTab(this,'i2d-settings')">.claude/settings.json (debug)</button></div>
             <div class="code-panel active" id="i2d-py">
               <button class="copy-btn" onclick="copyCode(this)">Copy</button>
-              <pre><code>@agent.hook("pre_tool_use")
-def debug_pre(tool_name, tool_input):
-    print(f"[DEBUG PRE] {tool_name}: {tool_input}")
-    return True
-
-@agent.hook("post_tool_use")
-def debug_post(tool_name, tool_input, tool_result):
-    print(f"[DEBUG POST] {tool_name} -&gt; {str(tool_result)[:200]}")
-    return tool_result</code></pre>
+              <pre><code>"""hooks/debug.py &mdash; passthrough that pretty-prints to stderr."""
+import sys, json
+payload = json.load(sys.stdin)
+print(f"[HOOK {payload.get('hook_event_name','?')}] "
+      f"{payload.get('tool_name','?')}: "
+      f"{json.dumps(payload.get('tool_input', payload.get('tool_result')))[:200]}",
+      file=sys.stderr)
+json.dump(payload, sys.stdout)   # pass-through</code></pre>
+            </div>
+            <div class="code-panel" id="i2d-settings">
+              <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+              <pre><code>{
+  "hooks": {
+    "PreToolUse":  [{ "matcher": "*", "command": "python hooks/debug.py" }],
+    "PostToolUse": [{ "matcher": "*", "command": "python hooks/debug.py" }]
+  }
+}</code></pre>
             </div>
           </div>
-          <p>BETTER than Iter-1 print statements because hooks are modular &mdash; remove the file when done and the agent code stays clean.</p>
+          <p>BETTER than Iter-1 print statements because hooks are modular &mdash; swap <code>.claude/settings.json</code> back to the production version when you're done debugging and the agent code stays untouched.</p>
         </div>
 
         <div class="debug-method">
@@ -1395,71 +2228,79 @@ filings, running an ML model, and writing a narrative risk report.
 
 ## 2. Configuration
 - Model: claude-sonnet-4-6
-- Framework: Anthropic Agent SDK
-- Max tool calls per request: 10
+- Framework: claude-agent-sdk (Python). Tools registered via
+  create_sdk_mcp_server. Driver: query() with ClaudeAgentOptions.
+- Max turns: 10
 - Max tokens per response: 4096
 
-## 3. Tools
+## 3. Tools (registered as MCP server "ucc")
 
-### search_filings
-- Description: Search UCC filings by debtor name with partial match.
-- Parameters: debtor_name (str, required), state (str, optional)
-- Returns: List of filing dicts with filing_number, debtor_name, state,
-  filing_type, status, filing_date, lapse_date, collateral, secured_party
-- Mock data: 9 filings for Acme across NY/CA/TX/FL incl. one DBA variant.
+### search_filings  &mdash; mcp__ucc__search_filings
+- @tool decorator with schema {debtor_name: str, state: str}
+- Returns list of filing dicts wrapped in {"content": [{"type":"text","text": json}]}
+- Mock data: 9 Acme filings across NY/CA/TX/FL incl. one DBA variant
 
-### get_filing_details
-- Description: Get full details for a filing by filing number.
-- Parameters: filing_number (str, required)
+### get_filing_details &mdash; mcp__ucc__get_filing_details
+- {filing_number: str}
 
-### predict_delinquency
-- Description: Run delinquency ML model.
-- Parameters: 6 features (active_filing_count, state_count, collateral_types,
+### predict_delinquency &mdash; mcp__ucc__predict_delinquency
+- 6 features (active_filing_count, state_count, collateral_types,
   filing_age_years, amendment_frequency, months_to_lapse)
-- Returns: probability (float), prediction (HIGH | MEDIUM | LOW)
-- Implementation: Load sklearn RandomForest from delinquency_model.pkl
+- Implementation: load sklearn RandomForest from delinquency_model.pkl
 
-## 4. System Prompt
+## 4. System Prompt (passed to ClaudeAgentOptions.system_prompt)
 You are a UCC filing risk analyst. Search thoroughly using name variations
 including abbreviations and DBAs, gather statistics, run the model, examine
 riskiest filings, write a narrative report citing specific evidence.
 
 ## 5. Hooks
-- PreToolUse: log every call with ISO timestamp
-- PreToolUse: validate &mdash; block search_filings calls with debtor_name &lt; 3 chars
-- PostToolUse: redact SSN (NNN-NN-NNNN) and phone (NNN-NNN-NNNN)
-- PostToolUse: audit log to audit_log.jsonl
+File-based via .claude/settings.json:
+- PreToolUse  matcher "*"                command "python hooks/log_call.py"
+- PostToolUse matcher "*"                command "python hooks/redact_pii.py"
+- PostToolUse matcher "*"                command "python hooks/audit.py"
+
+In-process via ClaudeAgentOptions.hooks (HookMatcher):
+- PreToolUse matcher "mcp__ucc__search_filings": deny if debtor_name &lt; 3 chars
+
+PHI patterns to redact: SSN (NNN-NN-NNNN), phone (NNN-NNN-NNNN).
 
 ## 6. Sessions
-Multi-turn via session_id. Support session.fork() for what-if. In-memory.
+Multi-turn via SDK resume tokens (sessions.py keeps a session_id -&gt; resume map).
+what_if() forks by re-using a resume token without persisting the new session_id.
 
 ## 7. Mock Data
-9 Acme filings across NY (4), CA (2), TX (2), FL (1, DBA).
-2 Pinnacle Industries filings. 1 Sunrise Holdings filing.
+9 Acme filings (NY:4, CA:2, TX:2, FL:1 DBA). 2 Pinnacle. 1 Sunrise.
 
 ## 8. API Wrapper
-FastAPI: POST /query, POST /chat, GET /health.
+FastAPI async handlers: POST /query, POST /chat, GET /health.
 Auth via X-API-Key header. Rate limit 10/min/key.
 
 ## 9. Deployment
-Tier 1: Docker + DuckDB for audit log storage.
+Tier 1: Docker. Mount .claude/ into container so hooks resolve at runtime.
 
 ## 10. Tests
-test_tools.py, test_agent.py (must find all 9 Acme filings incl. DBA),
-test_hooks.py, test_sessions.py, test_api.py.
+test_tools.py, test_agent.py (must find all 9 Acme incl. DBA),
+test_hooks.py (validates HookMatcher denies short queries),
+test_sessions.py (resume token reuse), test_api.py.
 
 ## 11. Evaluation
-test_scenarios.json with 10 questions covering name variations, state filter,
-risk levels, what-if, broad synthesis, missing entities, lapse detection.
+spec/test_scenarios.json with 10 questions covering name variations, state
+filter, risk levels, what-if, broad synthesis, missing entities, lapse detection.
 
 ## 12. File Structure
 ucc-risk-agent/
+&boxv;&boxh;&boxh; spec/agent-spec.md          # this file
+&boxv;&boxh;&boxh; spec/test_scenarios.json
 &boxv;&boxh;&boxh; CLAUDE.md
+&boxv;&boxh;&boxh; .claude/settings.json       # PreToolUse/PostToolUse matchers
 &boxv;&boxh;&boxh; .claude/commands/ {run-agent.md, test-agent.md, eval-agent.md}
-&boxv;&boxh;&boxh; agent.py | tools.py | hooks.py | mock_data.py
-&boxv;&boxh;&boxh; delinquency_model.pkl
-&boxv;&boxh;&boxh; server.py | Dockerfile | docker-compose.yml
-&boxv;&boxh;&boxh; tests/ x5 | test_scenarios.json</code></pre>
+&boxv;&boxh;&boxh; agent.py                    # query() + @tool + create_sdk_mcp_server
+&boxv;&boxh;&boxh; sessions.py                 # resume-token sessions
+&boxv;&boxh;&boxh; mock_data.py | delinquency_model.pkl
+&boxv;&boxh;&boxh; hooks/{log_call,redact_pii,audit}.py
+&boxv;&boxh;&boxh; server.py | Dockerfile | docker-compose.yml | requirements.txt
+&boxv;&boxh;&boxh; tests/ x5
+&boxv;&boxh;&boxh; appendix/manual-loop.py     # Iter-1 reference, not for production</code></pre>
           </div>
         </div>
       </div>
@@ -1473,14 +2314,80 @@ ucc-risk-agent/
           <div class="code-tabs"><button class="code-tab active" onclick="switchTab(this,'i3s15-prompt')">Claude Code prompt</button></div>
           <div class="code-panel active" id="i3s15-prompt">
             <button class="copy-btn" onclick="copyCode(this)">Copy</button>
-            <pre><code>&gt; Read agent-spec.md and build the entire project. Create every file listed
-&gt; in the File Structure section. Implement every tool, hook, test, and
-&gt; endpoint exactly as specified. Use the Agent SDK. Create realistic mock
-&gt; UCC filing data. Train and save the pickle model. Make every file runnable.</code></pre>
+            <pre><code>&gt; /generate-from-spec spec/agent-spec.md
+
+# (or, if /generate-from-spec is not installed:)
+&gt; Read spec/agent-spec.md and build the entire project. Create every file
+&gt; listed in section 12 (File Structure). Implement every tool, hook, test,
+&gt; and endpoint exactly as specified. Use the `claude-agent-sdk` package
+&gt; (NOT a fictional anthropic.Agent class). Tools must be @tool-decorated
+&gt; async functions registered via create_sdk_mcp_server. The driver is
+&gt; query() + ClaudeAgentOptions. Hooks live in .claude/settings.json
+&gt; AND in OPTIONS.hooks (HookMatcher) per section 5. Generate realistic
+&gt; mock UCC filing data. Train and save the pickle model. Also generate
+&gt; appendix/manual-loop.py as an under-the-hood reference.</code></pre>
           </div>
         </div>
 
-        <div class="checkpoint"><div class="checkpoint-label">Checkpoint</div>Run <code>/test-agent</code>. All tests should pass. If <code>test_finds_all_acme_filings</code> fails (got 5, expected 9), the generated <code>search_filings</code> probably skipped the DBA. See debugging block below.</div>
+        <p><strong>What you should see Claude Code create</strong> &mdash; expect a stream of file-creation messages over 5&ndash;10 minutes:</p>
+        <div class="output-block" style="background:var(--code-bg);border:1px solid var(--code-border);border-radius:8px;padding:1rem 1.25rem;margin:0.75rem 0 1.5rem;font-family:'JetBrains Mono',monospace;font-size:0.78rem;color:var(--success);line-height:1.5;white-space:pre-wrap;">Reading spec/agent-spec.md ...
+Created agent.py (78 lines)
+Created tools.py (52 lines &mdash; 3 @tool functions + create_sdk_mcp_server)
+Created hooks/log_call.py (12 lines)
+Created hooks/redact_pii.py (14 lines)
+Created hooks/audit.py (15 lines)
+Created sessions.py (28 lines)
+Created mock_data.py (62 lines &mdash; 12 UCC filings)
+Created delinquency_model.pkl (binary, 28 KB &mdash; trained sklearn RandomForest)
+Created server.py (24 lines)
+Created Dockerfile (8 lines)
+Created docker-compose.yml (10 lines)
+Created requirements.txt (4 lines)
+Created CLAUDE.md (35 lines)
+Created .claude/settings.json (12 lines)
+Created .claude/commands/run-agent.md, test-agent.md, eval-agent.md (3 files)
+Created tests/test_tools.py, test_agent.py, test_hooks.py, test_sessions.py, test_api.py (5 files)
+Created spec/test_scenarios.json (10 scenarios)
+Created appendix/manual-loop.py (~80 lines &mdash; under-the-hood reference)
+Total: 24 files, ~510 generated lines + 100 lines of spec you wrote.</div>
+
+        <p><strong>Verify it actually works:</strong></p>
+        <div class="code-block-wrapper">
+          <div class="code-panel active">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre><code># From inside Claude Code:
+&gt; /test-agent
+
+# Or from a regular shell:
+pytest tests/ -v</code></pre>
+          </div>
+        </div>
+
+        <p><strong>Expected pytest output:</strong></p>
+        <div class="output-block" style="background:var(--code-bg);border:1px solid var(--code-border);border-radius:8px;padding:1rem 1.25rem;margin:0.75rem 0 1.5rem;font-family:'JetBrains Mono',monospace;font-size:0.78rem;color:var(--success);line-height:1.5;white-space:pre-wrap;">tests/test_tools.py::test_search_filings_acme_finds_9 PASSED
+tests/test_tools.py::test_get_filing_details_returns_full_record PASSED
+tests/test_tools.py::test_predict_delinquency_returns_probability PASSED
+tests/test_agent.py::test_finds_all_acme_filings_including_dba PASSED
+tests/test_agent.py::test_returns_high_risk_for_acme PASSED
+tests/test_hooks.py::test_pii_redacted_from_audit_log PASSED
+tests/test_hooks.py::test_short_query_denied_by_validator PASSED
+tests/test_sessions.py::test_chat_persists_context PASSED
+tests/test_sessions.py::test_what_if_does_not_pollute_main_session PASSED
+tests/test_api.py::test_health_returns_ok PASSED
+=========================== 10 passed in 12.34s ============================</div>
+
+        <div class="checkpoint"><div class="checkpoint-label">&#9989; Checkpoint &mdash; Step 15</div>
+          All 10 tests pass on the first run. If <code>test_finds_all_acme_filings_including_dba</code> fails (got 5, expected 9), the generated <code>search_filings</code> probably skipped the DBA variant &mdash; the spec was ambiguous. See the debugging block below for how to fix it via spec edit (NOT by editing the generated code).
+        </div>
+
+        <div class="troubleshoot" style="background:var(--warning-bg);border-radius:6px;padding:0.75rem 1rem;margin-top:1rem;font-size:0.9rem;">
+          <div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:0.8rem;color:var(--warning);margin-bottom:0.5rem;">Troubleshooting</div>
+          <ul style="margin:0;font-size:0.85rem;">
+            <li><strong>Claude Code asks clarifying questions instead of generating</strong> &rarr; the spec has gaps. Either answer inline or update the spec and re-prompt with "Use the updated spec".</li>
+            <li><strong>Some files are missing</strong> &rarr; section 12 of the spec lists every expected file; if the generator missed one, point it out: "tests/test_hooks.py wasn't created &mdash; please add it per spec section 10".</li>
+            <li><strong>Generated code uses fictional API</strong> &rarr; re-issue the prompt and explicitly say "use the real <code>claude_agent_sdk</code> package &mdash; do NOT use anthropic.Agent or @agent.tool". Then ask it to compare the generated agent.py against spec section 2.</li>
+          </ul>
+        </div>
       </div>
 
       <div class="step" id="i3-step16">
@@ -1501,28 +2408,100 @@ ucc-risk-agent/
       <div class="step" id="i3-step17">
         <div class="step-header">Step 17: Deploy &amp; Compare</div>
         <div class="step-meta"><span>15 min</span><span>same curl, same output</span></div>
-        <p><strong>What &amp; Why:</strong> The Dockerfile and docker-compose.yml are already generated. Build, run, curl, compare output to Iter 1 and Iter 2.</p>
+        <p><strong>What &amp; Why:</strong> The Dockerfile and docker-compose.yml are already generated. Build, run, curl, compare output to Iter 1 and Iter 2 &mdash; the test of "spec-driven works" is that the agent's <em>observable behavior</em> matches the prior iterations.</p>
 
         <div class="code-block-wrapper">
           <div class="code-tabs"><button class="code-tab active" onclick="switchTab(this,'i3s17-bash')">Shell</button></div>
           <div class="code-panel active" id="i3s17-bash">
             <button class="copy-btn" onclick="copyCode(this)">Copy</button>
-            <pre><code>docker compose up --build -d
+            <pre><code># Build and run via docker-compose (generated by Claude Code)
+docker compose up --build -d
+docker compose ps   # confirm container is "Up"
+
+# Health check
+curl localhost:8000/health
+# Expected: {"status":"ok","iter":3}
+
+# Same query as Iter 1 and Iter 2
 curl -X POST localhost:8000/query \
      -H "Content-Type: application/json" \
-     -d '{"question":"Risk for Acme?"}'</code></pre>
+     -d '{"question":"Risk for Acme Corporation?"}' | python -m json.tool</code></pre>
           </div>
         </div>
 
-        <div class="callout-why">
-          <span class="box-label">Iteration 3 Metrics</span>
-          <ul style="margin-bottom:0;">
-            <li><strong>Files:</strong> ~18 (all generated)</li>
-            <li><strong>Lines you wrote:</strong> ~100 (spec only)</li>
-            <li><strong>Time:</strong> ~1 hour (most spent thinking, not typing)</li>
-            <li><strong>Abstractions used:</strong> spec format + Claude Code + Agent SDK + hooks + sessions</li>
-          </ul>
+        <p><strong>Cross-iteration diff &mdash; this is where the punchline lands:</strong></p>
+        <div class="code-block-wrapper">
+          <div class="code-panel active">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre><code># Run the same query against all three deployments and diff
+# (assumes Iter 1 on :8001, Iter 2 on :8002, Iter 3 on :8003)
+for port in 8001 8002 8003; do
+  echo "=== Iter on :$port ==="
+  curl -s -X POST localhost:$port/query \
+       -H "Content-Type: application/json" \
+       -d '{"question":"Risk for Acme Corporation?"}' \
+    | python -c "import json, sys; d = json.load(sys.stdin); print(d['answer'][:300])"
+  echo
+done</code></pre>
+          </div>
         </div>
+
+        <p><strong>Expected:</strong> all three responses mention 9 Acme filings, 4 states, the DBA variant, and HIGH risk. Wording will vary (Claude is non-deterministic), but the <em>facts</em> match.</p>
+      </div>
+
+      <!-- ===== END-OF-ITER-3 VERIFICATION ===== -->
+      <div class="checkpoint" style="background:var(--success-bg);border:2px solid var(--success);">
+        <div class="checkpoint-label" style="color:var(--success);">&#127881; Iteration 3 Complete &mdash; The Whole Capstone</div>
+        <p>You should have <strong>~24 generated files</strong> (Claude Code wrote them) plus your <strong>~100-line spec</strong>:</p>
+        <pre style="background:var(--code-bg);border-radius:6px;padding:0.6rem 0.9rem;font-size:0.78rem;color:var(--text-secondary);margin:0.5rem 0;">ucc-risk-agent/
+&boxv;&boxh;&boxh; spec/agent-spec.md          # YOU wrote this
+&boxv;&boxh;&boxh; spec/test_scenarios.json    # generated
+&boxv;&boxh;&boxh; CLAUDE.md                   # generated
+&boxv;&boxh;&boxh; .claude/settings.json       # generated
+&boxv;&boxh;&boxh; .claude/commands/ &times;3        # generated
+&boxv;&boxh;&boxh; agent.py | tools.py | sessions.py    # generated (SDK)
+&boxv;&boxh;&boxh; hooks/ &times;3                    # generated
+&boxv;&boxh;&boxh; mock_data.py | delinquency_model.pkl   # generated
+&boxv;&boxh;&boxh; tests/ &times;5                    # generated
+&boxv;&boxh;&boxh; server.py | Dockerfile | docker-compose.yml | requirements.txt   # generated
+&boxv;&boxh;&boxh; appendix/manual-loop.py     # generated reference</pre>
+
+        <p><strong>Acceptance test &mdash; same shape as Iter 1 and Iter 2:</strong></p>
+        <div class="code-block-wrapper" style="margin:0.5rem 0;">
+          <div class="code-panel active">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre><code># 1. Eval suite passes
+pytest tests/ -v
+# Expected: 10 passed
+
+# 2. End-to-end question on the deployed container
+curl -s -X POST localhost:8000/query -H "Content-Type: application/json" \
+     -d '{"question":"Risk for Acme Corporation?"}' | python -m json.tool
+
+# 3. Multi-turn (SDK resume tokens)
+curl -s -X POST localhost:8000/chat -H "Content-Type: application/json" \
+     -d '{"session_id":"acceptance","message":"Lien exposure for Acme?"}' | python -m json.tool
+curl -s -X POST localhost:8000/chat -H "Content-Type: application/json" \
+     -d '{"session_id":"acceptance","message":"Now compare to Pinnacle."}' | python -m json.tool
+
+# 4. Spec-vs-code drift check (the Iter-3 specific verification)
+claude
+&gt; Read spec/agent-spec.md and compare to agent.py + hooks/. Report any drift.
+# Expected: "No drift detected. Code matches spec section by section."</code></pre>
+          </div>
+        </div>
+        <p><strong>You pass Iter 3 if:</strong> (1) all 10 generated tests pass; (2) curl outputs match Iter 1/2 facts; (3) the spec-vs-code drift check returns "no drift". You wrote a 100-line spec; Claude Code wrote 510 lines of working code from it.</p>
+      </div>
+
+      <div class="callout-why">
+        <span class="box-label">Iteration 3 Metrics</span>
+        <ul style="margin-bottom:0;">
+          <li><strong>Files:</strong> ~24 (all generated by Claude Code from your spec)</li>
+          <li><strong>Lines you wrote:</strong> ~100 (the spec only)</li>
+          <li><strong>Lines Claude Code wrote:</strong> ~510 (and they're all readable, runnable, and pass the tests)</li>
+          <li><strong>Time:</strong> ~1 hour (~30 min writing the spec, ~10 min on the generation prompt, ~20 min reviewing + fixing)</li>
+          <li><strong>Abstractions used:</strong> spec format + <code>/generate-from-spec</code> + Claude Code + the same SDK runtime as Iter 2</li>
+        </ul>
       </div>
 
       <div class="debug-block" id="iter3-debug">
@@ -1533,7 +2512,9 @@ curl -X POST localhost:8000/query \
           <div class="debug-method-title">A. Spec vs Code Comparison</div>
           <p>Most spec-driven bugs are spec/code drift. Ask Claude Code:</p>
           <div class="code-block-wrapper">
-            <div class="code-panel active">
+            <div class="code-tabs"><button class="code-tab active" onclick="switchTab(this,'i3d-spec')">Claude Code prompt</button></div>
+            <div class="code-panel active" id="i3d-spec">
+              <button class="copy-btn" onclick="copyCode(this)">Copy</button>
               <pre><code>&gt; Read agent-spec.md and compare it to the generated agent.py and tools.py.
 &gt; Report any deviations where the code does not match the spec.</code></pre>
             </div>
@@ -1545,7 +2526,9 @@ curl -X POST localhost:8000/query \
           <div class="debug-method-title">B. Test-Driven Debugging</div>
           <p>The spec includes test definitions. When tests fail:</p>
           <div class="code-block-wrapper">
-            <div class="code-panel active">
+            <div class="code-tabs"><button class="code-tab active" onclick="switchTab(this,'i3d-test')">Claude Code prompt</button></div>
+            <div class="code-panel active" id="i3d-test">
+              <button class="copy-btn" onclick="copyCode(this)">Copy</button>
               <pre><code>&gt; Test test_finds_all_acme_filings failed: expected 9 filings, got 5.
 &gt; Read agent-spec.md section 3 (Tools) for the search_filings spec.
 &gt; Read the generated search_filings function. Find why it misses 4 filings
@@ -1644,7 +2627,7 @@ curl -X POST localhost:8000/query \
           <div class="rubric-pct">25%</div>
           <div>
             <div class="rubric-name">Iteration 2: Agent SDK + Claude Code</div>
-            <div class="rubric-criteria">Agent SDK with @agent.tool decorators. All four guardrails as @agent.hook. Sessions with fork() demoed. At least 3 slash commands. Same FastAPI + Docker deployment. CLAUDE.md present and accurate. Code count ~120 lines.</div>
+            <div class="rubric-criteria">Real <code>claude-agent-sdk</code> with @tool-decorated async functions registered via <code>create_sdk_mcp_server</code>. Hooks split between <code>.claude/settings.json</code> (file-based redact/audit) and <code>HookMatcher</code> in <code>ClaudeAgentOptions.hooks</code> (in-process validate). Sessions resumed via SDK <code>resume</code> token. At least 3 slash commands. Same FastAPI + Docker deployment. CLAUDE.md present and accurate. Code count ~120 lines.</div>
             <div class="rubric-bar" style="margin-top:0.5rem;"><div class="rubric-bar-fill" style="width:25%;"></div></div>
           </div>
           <div style="text-align:center;font-family:'JetBrains Mono',monospace;font-size:0.7rem;color:var(--iter2);font-weight:700;">ITER 2</div>
@@ -1761,7 +2744,7 @@ curl -X POST localhost:8000/query \
         <h4>Q5: You need to add SSN/phone redaction to all three iterations. Which iteration requires the LEAST disruptive change?</h4>
         <ul class="quiz-options">
           <li><label><input type="radio" name="q5" value="a"> Iter 1 &mdash; just add a redact() call inside the loop</label></li>
-          <li><label><input type="radio" name="q5" value="b"> Iter 2 &mdash; add a single @agent.hook("post_tool_use") function in hooks.py</label></li>
+          <li><label><input type="radio" name="q5" value="b"> Iter 2 &mdash; add a single PostToolUse entry to <code>.claude/settings.json</code> pointing to <code>hooks/redact_pii.py</code></label></li>
           <li><label><input type="radio" name="q5" value="c"> Iter 3 &mdash; add 3-5 lines to the spec's Hooks section, then ask Claude Code to regenerate hooks.py</label></li>
           <li><label><input type="radio" name="q5" value="d"> They are all roughly equal effort</label></li>
         </ul>
@@ -1988,11 +2971,13 @@ const SPEC_LINES = [
   "# 12. File Structure", "  agent.py, tools.py, hooks.py...",
 ];
 const GEN_FILES = [
-  "agent.py", "tools.py", "hooks.py", "sessions.py", "mock_data.py",
-  "delinquency_model.pkl", "server.py", "Dockerfile", "docker-compose.yml",
-  "requirements.txt", "CLAUDE.md", "tests/test_tools.py", "tests/test_agent.py",
-  "tests/test_hooks.py", "tests/test_sessions.py", "tests/test_api.py",
-  "test_scenarios.json", ".claude/commands/run-agent.md",
+  "agent.py", "sessions.py", "mock_data.py", "delinquency_model.pkl",
+  "hooks/log_call.py", "hooks/redact_pii.py", "hooks/audit.py",
+  ".claude/settings.json", ".claude/commands/run-agent.md",
+  "server.py", "Dockerfile", "docker-compose.yml",
+  "requirements.txt", "CLAUDE.md",
+  "tests/test_tools.py", "tests/test_agent.py", "tests/test_hooks.py",
+  "tests/test_sessions.py", "appendix/manual-loop.py",
 ];
 const specDoc = document.getElementById('specDoc');
 SPEC_LINES.forEach(line => {

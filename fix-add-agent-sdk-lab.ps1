@@ -11,7 +11,7 @@ Write-Host ""
 Write-Host "[1/1] M26 - Adding Agent SDK hands-on build lab..." -ForegroundColor Green
 
 $cmd = @"
-Read prompts/modules/M26-hooks-sessions-agent-sdk.md for the complete expanded module specification. Open the M26 HTML file in output/. This module needs a major expansion. Add or replace content to include all 6 sections:
+Read prompts/modules/M26-hooks-sessions-agent-sdk.md for the complete expanded module specification. Open the M26 HTML file in output/. Add or replace content to include all 6 sections:
 
 Section 1: Raw Loop vs Agent SDK comparison table showing what each approach handles. When to use which.
 
@@ -33,4 +33,3 @@ Write-Host ""
 
 Write-Host "=== DONE ===" -ForegroundColor Green
 Write-Host "M26 now includes a complete hands-on lab building the same UCC agent with the Agent SDK."
-Write-Host "Students see: raw loop (M15B) vs Agent SDK (M26) for the same problem."

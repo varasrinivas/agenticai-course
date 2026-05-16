@@ -710,6 +710,27 @@
           <li>Semantic conventions for GenAI are still evolving &mdash; expect attribute names to stabilize over the next year</li>
         </ul>
 
+        <h3>OpenTelemetry for Agent Observability</h3>
+        <p><strong>Why OTel:</strong> OpenTelemetry is the vendor-neutral CNCF standard for traces, metrics, and logs. You instrument your agent once with the OTel SDK and ship the same telemetry to Datadog, Grafana (Tempo + Loki), or New Relic without rewriting code. For enterprises where the platform team has already standardized on one of these APMs, OTel is the path of least resistance &mdash; agent traces flow into the same dashboards engineers already use for the rest of the stack.</p>
+        <p><strong>Key concepts mapped to agents:</strong> one <em>trace</em> per user request (the full agent run from prompt to final response), and one <em>span</em> per tool call, LLM call, or guardrail check inside that run. Span attributes carry the agent-specific signal: <code>llm.model</code>, <code>llm.input_tokens</code>, <code>llm.output_tokens</code>, <code>tool.name</code>, <code>tool.success</code>.</p>
+        <p><strong>Pseudocode for OTel instrumentation:</strong></p>
+        <div class="code-block-wrapper">
+          <pre><code class="language-python">tracer = trace.get_tracer("agent")
+
+with tracer.start_as_current_span("agent.run") as root:
+    root.set_attribute("user.id", hash_user_id(user_id))
+    while not done:
+        with tracer.start_as_current_span("llm.call") as s:
+            s.set_attribute("llm.model", "claude-sonnet-4-6")
+            response = client.messages.create(...)
+            s.set_attribute("llm.output_tokens", response.usage.output_tokens)
+        for tool_call in response.tool_uses:
+            with tracer.start_as_current_span(f"tool.{tool_call.name}") as ts:
+                ts.set_attribute("tool.name", tool_call.name)
+                result = run_tool(tool_call)</code></pre>
+        </div>
+        <p><strong>When to use which:</strong> reach for <strong>Langfuse</strong> when you need agent-specific UX out of the box &mdash; prompt playground, model cost rollups, eval datasets, side-by-side trace diffing. Reach for <strong>OTel</strong> when the requirement is enterprise APM consolidation &mdash; SLO dashboards, on-call alerting, and end-to-end traces that span the load balancer, API server, agent, and downstream microservices in one waterfall. Many production teams run both: OTel feeds the platform APM, Langfuse owns the LLM-native workflow.</p>
+
         <h3>LangSmith (LangChain Ecosystem)</h3>
         <p><strong>Best for:</strong> Teams already using LangChain/LangGraph who want tight integration. LangSmith provides tracing, evaluation, and dataset management in one platform.</p>
         <ul>

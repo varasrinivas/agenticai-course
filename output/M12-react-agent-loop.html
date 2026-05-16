@@ -299,6 +299,7 @@
       <a href="#implementing-react">Implementing ReAct</a>
       <a href="#thought-traces">Thought Traces</a>
       <a href="#stop-conditions">Stop Conditions</a>
+      <a href="#inference-in-agent-loop">Inference &amp; Reasoning in the Loop</a>
       <a href="#code-walkthrough">Code Walkthrough</a>
       <a href="#error-handling">Error Handling &amp; Retry</a>
       <a href="#extended-thinking">Extended Thinking</a>
@@ -1954,7 +1955,132 @@ deliver the final answer.
         </div>
       </section>
 
-      <div class="bridge">You now understand the five stop conditions and why they're essential. Before we write code, think about how this applies to your domain. In a UCC filing research agent (Domain C), the agent might search for debtor filings, cross-reference secured parties, and calculate lien risk scores — each step requiring a different tool. In a healthcare pre-auth agent (Domain A), it might look up CPT codes, check clinical criteria, and verify patient history. The ReAct loop is the same; only the tools change. Let's put it all together.</div>
+      <div class="bridge">You now understand the five stop conditions and why they're essential. Before writing code, one more design lens: the ReAct loop has been treated as a single "Claude call" so far. In reality each loop step is a full inference round-trip &mdash; with prefill, decode, and tool latency &mdash; and the choice of <em>model</em> per step changes the entire cost and latency profile. Most production-grade agents pick a different model for different steps. The next section makes that decision explicit.</div>
+
+      <!-- Section 5.5: Inference & Reasoning in the Agent Loop -->
+      <section class="section" id="inference-in-agent-loop">
+        <h2 id="inference-in-agent-loop-heading">Inference &amp; Reasoning in the Agent Loop</h2>
+
+        <p>M01 explained how a single Claude call breaks into <strong>prefill</strong> (drives time-to-first-token) and <strong>decode</strong> (drives tokens-per-second). M22 showed how <strong>reasoning models</strong> (Claude extended thinking, OpenAI o-series, DeepSeek R1, Gemini Deep Think) add an internal thinking phase before the visible answer. The ReAct loop is where those two ideas collide: an agent is N back-to-back inference calls, and the model you pick per call cascades into your end-to-end latency and cost. Production agents almost always run on a <em>mix</em> of models, not one model for everything.</p>
+
+        <div class="analogy-box">
+          <span class="box-label">Everyday Analogy</span>
+          <p>An ER doesn&rsquo;t have one doctor see every patient front-to-back. A triage nurse classifies severity in 30 seconds, an ER physician handles emergencies, a specialist gets paged only for the cases that need them. Same hospital, different operator per step, optimized for the task.</p>
+          <p>Single-model agents are like staffing the whole ER with cardiothoracic surgeons. Every step is &ldquo;handled&rdquo; &mdash; expensively, slowly, and with massive overkill on the routine ones. A real ReAct loop has at most one or two steps that actually need the heavyweight model; everything else &mdash; routing, parameter extraction, simple tool dispatch, summarization &mdash; runs faster and cheaper on a Haiku-tier model.</p>
+        </div>
+
+        <h3 id="loop-cost-math" style="margin-top:1.25rem;">The Loop-Cost Math &mdash; Why &ldquo;N Turns&rdquo; Compounds</h3>
+        <p>For a ReAct loop with <strong>N</strong> turns, your end-to-end wall-clock and bill aren&rsquo;t one inference cost &mdash; they&rsquo;re a sum. Each turn pays:</p>
+        <pre style="background:var(--code-bg);border:1px solid var(--code-border);border-radius:8px;padding:0.85rem;font-family:'JetBrains Mono',monospace;font-size:0.82rem;color:var(--code-text);overflow-x:auto;margin:0.75rem 0;"><code>turn_latency = network_RTT + prefill(prompt_so_far) + thinking_decode? + answer_decode + tool_exec
+total_latency = sum(turn_latency for each of N turns)
+total_cost    = sum(input_tokens * input_price + output_tokens * output_price) over N turns</code></pre>
+
+        <p>Two things make this surprising in practice:</p>
+        <ul>
+          <li><strong>Prompt grows every turn.</strong> Each turn appends the previous assistant message + tool result to <code>messages</code>. Turn 5&rsquo;s prompt is roughly the sum of turns 1&ndash;4&rsquo;s inputs and outputs &mdash; so prefill cost is <em>quadratic</em> in N if you do nothing about it. Prompt caching (M22) and message-history trimming (M08) flatten this curve.</li>
+          <li><strong>Reasoning models add a hidden phase.</strong> Every turn with extended thinking enabled pays for thinking tokens <em>before</em> any visible response. If you enable thinking on every turn of a 6-turn loop, you&rsquo;ve paid for thinking 6 times &mdash; usually 5 of those payments are wasted on routine tool dispatch.</li>
+        </ul>
+
+        <div class="animation-container" aria-label="Cost composition across an N-turn ReAct loop" style="padding:1rem;">
+          <div class="animation-title">Where the Seconds &amp; Dollars Go &mdash; A 5-Turn ReAct Loop</div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem; font-size:0.85rem;">
+            <div style="background:var(--bg-surface); border:1px solid var(--code-border); border-radius:8px; padding:0.85rem;">
+              <div style="font-family:'Bricolage Grotesque',sans-serif; font-weight:700; color:var(--text-secondary); margin-bottom:0.5rem;">Naive: one big model, thinking always on</div>
+              <ul style="margin:0 0 0 1rem; padding:0; color:var(--text-secondary); list-style:none;">
+                <li>Turn 1: 800 ms prefill + 2 s thinking + 600 ms answer + 200 ms tool</li>
+                <li>Turn 2: 900 ms prefill + 2 s thinking + 500 ms answer + 200 ms tool</li>
+                <li>Turn 3: 1.0 s + 2 s + 500 ms + 200 ms</li>
+                <li>Turn 4: 1.1 s + 2 s + 500 ms + 200 ms</li>
+                <li>Turn 5: 1.2 s + 2 s + 800 ms (final synthesis) + 0</li>
+              </ul>
+              <p style="margin:0.6rem 0 0; font-weight:700; color:var(--text-primary);">~18 s wall-clock &middot; ~$0.30 / run on Opus</p>
+              <p style="margin:0.2rem 0 0; font-size:0.78rem; color:var(--text-muted);">The 2 s thinking phase happens 5 times &mdash; for routine tool dispatch.</p>
+            </div>
+            <div style="background:rgba(184,134,11,0.08); border:1px solid var(--accent-primary); border-radius:8px; padding:0.85rem;">
+              <div style="font-family:'Bricolage Grotesque',sans-serif; font-weight:700; color:var(--accent-primary); margin-bottom:0.5rem;">Routed: Sonnet for tool steps, Opus+thinking for synthesis</div>
+              <ul style="margin:0 0 0 1rem; padding:0; color:var(--text-secondary); list-style:none;">
+                <li>Turn 1 (Sonnet): 150 ms prefill (cached) + 400 ms answer + 200 ms tool</li>
+                <li>Turn 2 (Sonnet): 180 ms + 400 ms + 200 ms</li>
+                <li>Turn 3 (Sonnet): 200 ms + 400 ms + 200 ms</li>
+                <li>Turn 4 (Sonnet): 220 ms + 400 ms + 200 ms</li>
+                <li>Turn 5 (Opus+thinking): 1.2 s + 2 s + 800 ms (final synthesis)</li>
+              </ul>
+              <p style="margin:0.6rem 0 0; font-weight:700; color:var(--text-primary);">~7.2 s wall-clock &middot; ~$0.06 / run</p>
+              <p style="margin:0.2rem 0 0; font-size:0.78rem; color:var(--text-muted);">Heavyweight model fires once, on the only step that genuinely needs it.</p>
+            </div>
+          </div>
+        </div>
+        <p style="font-size:0.85rem; color:var(--text-muted); margin-top:0.4rem;">Numbers are illustrative; magnitudes match real Claude Sonnet 4.6 / Opus 4.7 traces with prompt caching enabled. Your ratios depend on the task.</p>
+
+        <h3 id="model-per-step" style="margin-top:1.25rem;">Model-Per-Step &mdash; Routing Across the Loop</h3>
+        <p>A useful pattern: classify each turn by what it&rsquo;s doing, then pick the cheapest model that handles that job. The decision matrix below is what most production teams converge on after a few months of operating an agent:</p>
+
+        <div class="tech-def-box">
+          <span class="box-label">Decision Matrix &mdash; Which Model Per Turn?</span>
+          <div style="overflow-x:auto;">
+          <table style="width:100%;border-collapse:collapse;font-size:0.85rem;margin-top:0.5rem;">
+            <thead><tr style="background:var(--bg-surface);">
+              <th style="padding:0.4rem 0.5rem;text-align:left;border-bottom:1px solid var(--code-border);">Step type</th>
+              <th style="padding:0.4rem 0.5rem;text-align:left;border-bottom:1px solid var(--code-border);">What it does</th>
+              <th style="padding:0.4rem 0.5rem;text-align:left;border-bottom:1px solid var(--code-border);">Pick</th>
+              <th style="padding:0.4rem 0.5rem;text-align:left;border-bottom:1px solid var(--code-border);">Why</th>
+            </tr></thead>
+            <tbody>
+              <tr><td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);"><strong>Router / classifier</strong></td>
+                  <td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Decide which subagent or pattern to dispatch to</td>
+                  <td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);"><strong>Haiku</strong></td>
+                  <td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">One-shot classification; latency &gt; smarts</td></tr>
+              <tr><td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);"><strong>Tool dispatch</strong></td>
+                  <td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Pick a tool, fill its arguments, observe result, decide next tool</td>
+                  <td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);"><strong>Sonnet</strong></td>
+                  <td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Reliable tool-use; thinking off (waste on routine steps)</td></tr>
+              <tr><td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);"><strong>Planner</strong></td>
+                  <td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Decompose the task into a DAG of sub-tasks (Plan-Execute, M13)</td>
+                  <td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);"><strong>Opus + extended thinking</strong></td>
+                  <td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Mistakes here cascade; pay for reasoning once, save on retries</td></tr>
+              <tr><td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);"><strong>Final synthesis</strong></td>
+                  <td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Assemble retrieved facts + tool results into the user-facing answer</td>
+                  <td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);"><strong>Sonnet</strong> (Opus+thinking if multi-document)</td>
+                  <td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Writing quality matters; reasoning helps on multi-source synthesis</td></tr>
+              <tr><td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);"><strong>Output validator / guardrail</strong></td>
+                  <td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Check schema, policy, factuality before returning to user (M16-M17)</td>
+                  <td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);"><strong>Haiku</strong> (or rules)</td>
+                  <td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Cheap check; escalate only on positive flag</td></tr>
+              <tr><td style="padding:0.4rem 0.5rem;"><strong>Subagent worker</strong> (M14)</td>
+                  <td style="padding:0.4rem 0.5rem;color:var(--text-secondary);">Specialist that handles one narrow part (tax lookup, claim validation, etc.)</td>
+                  <td style="padding:0.4rem 0.5rem;"><strong>Sonnet</strong> (or Haiku for narrow tasks)</td>
+                  <td style="padding:0.4rem 0.5rem;color:var(--text-secondary);">Cheap per-call; runs concurrently with peers</td></tr>
+            </tbody>
+          </table>
+          </div>
+          <p style="margin-top:0.75rem; margin-bottom:0;"><strong>Rule of thumb:</strong> the heavyweight model fires at most twice in a typical loop &mdash; once at the planner step (if you have one) and once at the final synthesis. Everything in between runs on Sonnet without thinking. Reverse this and your costs go 5-10&times;.</p>
+        </div>
+
+        <div class="callout-warning">
+          <span class="box-label">&#9888;&#65039; The Reasoning-Model-In-Tool-Loop Trap</span>
+          <p>It&rsquo;s tempting to put a pure reasoning model (Claude Opus extended thinking, OpenAI o3, DeepSeek R1) at <em>every</em> step of the ReAct loop &ldquo;to be safe.&rdquo; In practice this often makes the agent <em>worse</em>:</p>
+          <ul style="margin-bottom:0.5rem;">
+            <li><strong>Tool selection regresses.</strong> Some reasoning models pick the wrong tool more often than the general model &mdash; they over-reason their way past the obvious answer. Production telemetry on agent tool-success rate often <em>drops</em> when extended thinking is turned on across the board.</li>
+            <li><strong>Latency compounds catastrophically.</strong> A 2 s thinking phase on every turn of a 6-turn loop adds 12 s on top of normal decode &mdash; the loop now exceeds typical user-patience thresholds even before any tool runs.</li>
+            <li><strong>Cost compounds too.</strong> Thinking tokens bill at the output rate. A 4K-token budget &times; 6 turns &times; Opus output pricing &times; per-user runs adds up fast. The same task often completes at higher quality with Sonnet on the middle steps and one Opus+thinking call at the end.</li>
+          </ul>
+          <p style="margin-bottom:0;"><strong>Antidote:</strong> evaluate (M18) the agent with thinking ON vs OFF on YOUR task and YOUR tool set. Promote thinking only on the steps where the eval shows it actually helps &mdash; usually planning and final synthesis, almost never tool dispatch.</p>
+        </div>
+
+        <div class="callout-cost">
+          <span class="box-label">&#x1F4A1; Practical Implications for the Code You&rsquo;re About to Write</span>
+          <p>The code walkthrough below uses one model for the whole loop &mdash; perfect for learning. In production:</p>
+          <ul style="margin-bottom:0;">
+            <li><strong>Pass a <code>model</code> argument per call</strong> instead of hard-coding the model at the top of the loop. The loop body stays the same.</li>
+            <li><strong>Cache the system prompt + tool definitions</strong> (M22 prompt caching) &mdash; without this, turn N pays the full prefill for everything before it.</li>
+            <li><strong>Trim message history</strong> (M08) once it exceeds a budget &mdash; otherwise prefill grows quadratically.</li>
+            <li><strong>Enable extended thinking surgically</strong> &mdash; pass <code>thinking</code> only on planner and final synthesis calls, not on every tool-dispatch turn.</li>
+            <li><strong>Stream the final synthesis turn only.</strong> Streaming intermediate turns doesn&rsquo;t help &mdash; users don&rsquo;t see them. Streaming the final answer dramatically improves perceived latency.</li>
+          </ul>
+        </div>
+
+        <div class="bridge">With the inference-cost lens in place, the code below is more than a working ReAct loop &mdash; it&rsquo;s a baseline you can refactor toward the production patterns above. We&rsquo;ll add model routing in M13 (planning) and cross-vendor reasoning in M14 (multi-agent supervisors).</div>
+      </section>
 
       <!-- Section 6: Code Walkthrough -->
       <section class="section" id="code-walkthrough">
@@ -2766,13 +2892,8 @@ console.log(formatTrace(result.trace));</code></pre>
 
         <div class="callout-cert" style="margin-top:1.5rem;">
           <span class="box-label">The Evolution of This Loop</span>
-          <p>In M05 you made a single tool call. Now you have wrapped it in a <code>while</code> loop that checks <code>stop_reason</code> and lets Claude decide what to do next. This is the RAW ReAct loop &mdash; you see every line.</p>
-          <p style="margin-top:0.75rem;"><strong>What comes next:</strong></p>
-          <ul style="margin-top:0.5rem;">
-            <li><strong>M15B</strong> &mdash; You will add a coordinator that delegates to subagent functions. Each subagent runs its own loop with its own tools. Same pattern, but orchestrated.</li>
-            <li><strong>M26</strong> &mdash; The Agent SDK replaces this entire <code>while</code> loop. You define tools with <code>agent.tool</code> decorators and the SDK runs the loop for you. Hooks let you intercept each tool call for logging and guardrails without touching the loop code.</li>
-            <li><strong>M25</strong> &mdash; You write a spec document describing the agent and Claude Code generates the loop, tools, hooks, and tests from the spec.</li>
-          </ul>
+          <p>In M05 you made a single tool call. Now you have wrapped it in a <code>while</code> loop.</p>
+          <p style="margin-top:0.75rem;"><strong>What comes next:</strong> <strong>M15B</strong> adds a coordinator with subagents, each running its own loop. <strong>M26</strong> replaces this entire <code>while</code> loop with the Agent SDK, where hooks intercept each tool call. <strong>M25</strong> generates everything from a spec.</p>
           <p style="margin-top:0.75rem;">You are learning the engine before using the car. Understanding this raw loop is what lets you debug the SDK when something goes wrong.</p>
         </div>
       </section>

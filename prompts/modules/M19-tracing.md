@@ -4,6 +4,7 @@
 **Prerequisites**: M05, M12
 **Estimated Time**: 50-60 minutes
 **Track Color**: var(--track-observability) / #22C55E
+**SDK Tier**: 2 (dual-track). Lab ships `solution/` (manual logger that wraps each `client.messages.create()` call) AND `solution-sdk/` (tracing via `PreToolUse`/`PostToolUse` hooks plus iteration over the message stream from `query()`; demonstrates that hooks ARE the observability primitive in SDK-land). See `prompts/19-sdk-tier-policy.md`.
 
 ## Concepts
 - Why observability matters for agents (animated "debugging blind" scenario)

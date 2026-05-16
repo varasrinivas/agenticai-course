@@ -207,7 +207,8 @@
       <a href="#security">Security Checklist</a>
       <a href="#build">Build Your Own Server</a>
       <a href="#protocol">Protocol Anatomy</a>
-      <a href="#lab">Hands-On Lab</a>
+      <a href="#lab">Lab 1 &mdash; Postgres MCP</a>
+      <a href="#lab-inspector">Lab 2 &mdash; Inspector Debug</a>
       <a href="#quiz">Knowledge Check</a>
       <a href="#summary">Summary</a>
     </nav>
@@ -611,7 +612,7 @@ async def main():
       </section>
 
       <section class="section" id="lab">
-        <h2>Hands-On Lab &mdash; Connect a Postgres MCP to the UCC Schema</h2>
+        <h2>Lab 1 &mdash; Connect a Postgres MCP to the UCC Schema</h2>
 
         <p>Working in the <strong>PublicRecords API</strong>. The starter uses H2 in-memory; production uses Postgres. This lab spins up a local Postgres seeded with the same UCC data, registers the official Postgres MCP server with Claude Code, and asks Claude natural-language questions that get answered with real SQL. About 15 minutes (mostly waiting on Docker).</p>
 
@@ -771,6 +772,197 @@ $ claude mcp add postgres-ucc --scope project \
         <div class="checkpoint">
           <div class="checkpoint-label">Lab complete &mdash; what you should have</div>
           <p>A local Postgres seeded with UCC data, the Postgres MCP server connected via a read-only role, env-var-referenced credentials so <code>.mcp.json</code> is safe to commit, and a working pattern for asking Claude data questions in plain English while keeping the blast radius small. CC14 ships all of this through CI/CD.</p>
+        </div>
+      </section>
+
+      <section class="section" id="lab-inspector">
+        <h2>Lab 2 &mdash; Debugging MCP Servers with the Inspector</h2>
+
+        <p>You met the <a href="#inspecting-your-server-with-the-mcp-inspector">Inspector</a> earlier &mdash; one terminal command and a paragraph. That's enough to know it exists; this lab is enough to make it part of your daily MCP-development workflow. About 20 minutes.</p>
+
+        <div class="how-it-works">
+          <span class="how-it-works-label">How it works</span>
+          <p>The <strong>MCP Inspector</strong> is the official, browser-based <em>client</em> for any MCP server. It speaks the same JSON-RPC protocol Claude Code does, so whatever the Inspector can talk to, Claude Code can too &mdash; and vice versa. The UI gives you what stdout-based debugging can't: tool-schema introspection, click-to-invoke forms, a live JSON-RPC traffic log, server-side notifications, and resource browsing. <strong>Think of it as Postman for MCP</strong> &mdash; the visual debugger the protocol always needed.</p>
+        </div>
+
+        <h3 id="lab2-prereqs">Prerequisites</h3>
+        <ul>
+          <li>The <code>server.py</code> FastMCP server you wrote earlier in this module (the one with <code>lookup_filing</code>, the <code>filings://stats</code> resource, and the <code>summarize_filing</code> prompt). If you skipped that, the code is in the &ldquo;Build Your Own MCP Server&rdquo; section above.</li>
+          <li>Node 20+ (the Inspector ships as an npm package).</li>
+          <li>A modern browser. The Inspector UI runs on <code>http://localhost:6274</code> by default.</li>
+        </ul>
+
+        <h3 id="lab2-step1">Step 1 &mdash; Launch the Inspector pointed at your server</h3>
+
+        <p>One command. The Inspector spawns your MCP server as a subprocess over stdio, then opens a UI session in your browser.</p>
+
+        <div class="terminal-block">
+          <button class="lab-copy-btn" onclick="copyCode(this)" aria-label="Copy command">Copy</button><div class="terminal-cmd"><code>npx @modelcontextprotocol/inspector python server.py</code></div>
+        </div>
+
+        <p>Output should look like:</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-panel">
+            <pre><code class="language-text">Starting MCP inspector...
+&#x2713;  Proxy server listening on 127.0.0.1:6277
+&#x1F517; Open inspector with token pre-filled:
+   http://localhost:6274/?MCP_PROXY_AUTH_TOKEN=abc123...
+&#x1F50C; Connecting to server: python server.py</code></pre>
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">copy</button>
+          </div>
+        </div>
+
+        <p>Open the pre-filled URL (it auto-opens in most environments). You'll land on the connection panel; pick <strong>stdio</strong> transport and click <strong>Connect</strong>. The header should turn green: <em>&ldquo;Connected to python server.py&rdquo;</em>.</p>
+
+        <div class="callout-why">
+          <span class="box-label">If it doesn't connect</span>
+          <p>99% of failures are the subprocess crashing on startup &mdash; usually a Python <code>ImportError</code> or a stray <code>print()</code> that writes to stdout (which corrupts the JSON-RPC stream). The Inspector logs subprocess stderr in the <strong>Server Info</strong> tab. Run <code>python server.py</code> by itself once and confirm it produces zero stdout output before retrying.</p>
+        </div>
+
+        <h3 id="lab2-step2">Step 2 &mdash; Tour the five panels</h3>
+
+        <p>The Inspector has five tabs across the top. Each maps directly to a JSON-RPC method group from the Protocol Anatomy section above:</p>
+
+        <table>
+          <thead><tr><th>Tab</th><th>Maps to</th><th>What it's for</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Tools</strong></td><td><code>tools/list</code> &middot; <code>tools/call</code></td><td>See every tool's schema; click to invoke with form-filled args.</td></tr>
+            <tr><td><strong>Resources</strong></td><td><code>resources/list</code> &middot; <code>resources/read</code></td><td>Browse URI-addressable data your server exposes (e.g. <code>filings://stats</code>).</td></tr>
+            <tr><td><strong>Prompts</strong></td><td><code>prompts/list</code> &middot; <code>prompts/get</code></td><td>Instantiate prompt templates with arg substitution.</td></tr>
+            <tr><td><strong>Notifications</strong></td><td><code>notifications/*</code></td><td>Server-pushed messages &mdash; log lines, progress updates.</td></tr>
+            <tr><td><strong>Server Info</strong></td><td><code>initialize</code></td><td>Protocol version, server name/version, declared capabilities, subprocess stderr.</td></tr>
+          </tbody>
+        </table>
+
+        <p>Click <strong>Tools</strong> &rarr; you should see <code>lookup_filing</code> with its description and a form derived from the function's type hints. <strong>The same form Claude sees</strong> when it picks tools, rendered for human eyes.</p>
+
+        <h3 id="lab2-step3">Step 3 &mdash; Invoke a tool from the UI and read the wire trace</h3>
+
+        <p>In the Tools tab, click <code>lookup_filing</code>. The form has one field, <code>po_number</code>. Enter <code>PO-100001</code> and click <strong>Run Tool</strong>.</p>
+
+        <p>Two things appear:</p>
+        <ol>
+          <li><strong>Tool Result</strong> panel: the structured response from your function.</li>
+          <li><strong>History / JSON-RPC pane</strong> at the bottom: the raw wire-format exchange.</li>
+        </ol>
+
+        <p>Click on the request in the history pane to expand it:</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-panel">
+            <pre><code class="language-json">// 12:42:18  &rarr; SEND
+{
+  "jsonrpc": "2.0",
+  "id": 7,
+  "method": "tools/call",
+  "params": {
+    "name": "lookup_filing",
+    "arguments": { "po_number": "PO-100001" }
+  }
+}
+
+// 12:42:18  &larr; RECV
+{
+  "jsonrpc": "2.0",
+  "id": 7,
+  "result": {
+    "content": [
+      { "type": "text", "text": "{\"po_number\": \"PO-100001\", \"state\": \"TX\", ...}" }
+    ],
+    "isError": false
+  }
+}</code></pre>
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">copy</button>
+          </div>
+        </div>
+
+        <p>This is exactly what Claude Code sends and receives. If something looks off in Claude's behavior, this trace is the ground truth.</p>
+
+        <h3 id="lab2-step4">Step 4 &mdash; Trigger a deliberate failure and read the two error shapes</h3>
+
+        <p>Now invoke <code>lookup_filing</code> with <code>po_number</code> = <code>NOPE</code>. The tool returns whatever your server does for &ldquo;not found&rdquo; &mdash; probably an empty object or an exception.</p>
+
+        <p>Look at the JSON-RPC response. Two failure shapes are common, and they mean different things to Claude:</p>
+
+        <table>
+          <thead><tr><th>Shape</th><th>JSON-RPC envelope</th><th>What Claude sees</th></tr></thead>
+          <tbody>
+            <tr>
+              <td><strong>Tool-level error</strong></td>
+              <td><code>"isError": true</code>, <code>content</code> with error text</td>
+              <td>&ldquo;Tool ran and returned an error&rdquo; &mdash; Claude can react, retry, or ask the user.</td>
+            </tr>
+            <tr>
+              <td><strong>Protocol-level error</strong></td>
+              <td><code>"error": { "code": -32603, "message": "..." }</code></td>
+              <td>&ldquo;Tool is broken&rdquo; &mdash; Claude treats this as fatal; no graceful recovery.</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <p>You want tool-level errors for expected failures (not found, invalid arg, rate limit). Reserve protocol-level errors for unrecoverable bugs. <strong>In FastMCP</strong>: return a structured dict with an <code>error</code> key &rarr; tool-level. <code>raise Exception(...)</code> &rarr; protocol-level. Knowing the difference is one of the easiest production wins you can ship.</p>
+
+        <h3 id="lab2-step5">Step 5 &mdash; Read resources and instantiate prompts</h3>
+
+        <p>Switch to the <strong>Resources</strong> tab. Click <code>filings://stats</code> &rarr; <strong>Read Resource</strong>. The response surfaces as raw text plus mime type. This is how Claude pulls in static-ish data via <code>@filings://stats</code> mentions inside Claude Code.</p>
+
+        <p>Switch to <strong>Prompts</strong>. Click <code>summarize_filing</code>; the Inspector renders a form for the template's parameters. Fill in <code>filing_id=PO-100001</code> and click <strong>Get Prompt</strong>. The response is the substituted prompt text Claude would receive &mdash; useful when prompts misbehave in Claude Code and you need to verify what's actually being injected.</p>
+
+        <h3 id="lab2-step6">Step 6 &mdash; Watch server-side notifications (your observability channel)</h3>
+
+        <p>Add a notification when a lookup runs. Modify the tool in <code>server.py</code>:</p>
+
+        <div class="lab-file">
+          <div class="lab-file-header">
+            <div class="lab-file-header-left">
+              <span class="lab-lang">Python</span>
+              <span class="lab-label">Server &mdash; add to lookup_filing</span>
+            </div>
+            <span class="lab-file-path">server.py</span>
+            <button class="lab-copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+          </div>
+          <pre><code class="language-python">from fastmcp import Context
+
+@mcp.tool
+async def lookup_filing(ctx: Context, po_number: str) -&gt; dict:
+    await ctx.info(f"Looking up {po_number}")  # &lt;-- server-&gt;client notification
+    # ... existing lookup logic ...
+    return {...}</code></pre>
+        </div>
+
+        <p>Hit the toolbar's <strong>Restart Server</strong> button (or <code>Cmd/Ctrl + R</code>). Run the tool again. Switch to <strong>Notifications</strong>: you'll see <code>notifications/message</code> events with your log line. <strong>This is your production observability channel</strong> &mdash; everything you emit via <code>ctx.info / ctx.warning / ctx.error</code> flows to any MCP client. Claude Code surfaces these in <code>/mcp</code> logs; the Inspector surfaces them live.</p>
+
+        <h3 id="lab2-step7">Step 7 &mdash; Inspect the Postgres MCP server from Lab 1</h3>
+
+        <p>The Inspector isn't just for servers you wrote. Point it at the official Postgres MCP you registered in Lab 1:</p>
+
+        <div class="terminal-block">
+          <button class="lab-copy-btn" onclick="copyCode(this)" aria-label="Copy command">Copy</button><div class="terminal-cmd"><code>npx @modelcontextprotocol/inspector npx -y @modelcontextprotocol/server-postgres "postgresql://claude_ro:ro-only-pw@localhost:5433/postgres"</code></div>
+        </div>
+
+        <p>You'll see <code>query</code> in the Tools tab. Run <code>SELECT state, count(*) FROM filings GROUP BY state</code> through the form. <strong>The same SQL Claude would generate</strong> when you ask plain-English questions &mdash; now you can verify the tool works <em>before</em> wiring up Claude, isolating &ldquo;my server is broken&rdquo; from &ldquo;Claude picked wrong args.&rdquo;</p>
+
+        <h3 id="lab2-stretch">Stretch &mdash; Drive the Inspector from CI</h3>
+
+        <p>The Inspector ships a <code>--cli</code> mode that runs without a browser. Use it in CI to smoke-test MCP servers as part of your build:</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-panel">
+            <pre><code class="language-bash">$ npx @modelcontextprotocol/inspector --cli python server.py \
+    --method tools/call \
+    --tool-name lookup_filing \
+    --tool-arg po_number=PO-100001
+# exits 0 on tool-success, non-zero on protocol or tool errors &mdash; perfect for CI gates</code></pre>
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">copy</button>
+          </div>
+        </div>
+
+        <p>Drop a step like this into the <code>.github/workflows/mcp-smoke.yml</code> alongside the patterns from CC14, and every PR is gated on a working MCP server contract.</p>
+
+        <div class="checkpoint">
+          <div class="checkpoint-label">Lab complete &mdash; what you can now do</div>
+          <p>Invoke any MCP server's tools, resources, and prompts from a browser UI. Read the raw JSON-RPC traffic to ground-truth what Claude sees. Distinguish tool-level from protocol-level errors and design your server to use them correctly. Surface server-side logs via notifications. Smoke-test MCP servers in CI without a browser. <strong>The Inspector is the missing visual debugger for the MCP development loop</strong> &mdash; treat any server failure as &ldquo;did I check the Inspector first?&rdquo; before chasing it through Claude Code logs.</p>
         </div>
       </section>
 

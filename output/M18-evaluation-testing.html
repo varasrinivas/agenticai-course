@@ -558,6 +558,38 @@
           </div>
         </div>
 
+        <h3 id="ci-cd-testing">Agent Testing in CI/CD</h3>
+
+        <p><strong>The challenge.</strong> Wiring agent evals into CI/CD is harder than running unit tests. Agent runs are non-deterministic (the same input may produce different outputs), slow (each test case is a multi-second LLM call), and they cost real money — a 200-case suite at ~$0.05 per case is $10 per run, and at 30 PRs/day that's $9,000/month just for CI. You can't run the full suite on every commit, and you can't let flaky tests block deploys.</p>
+
+        <p><strong>Three-tier strategy.</strong> Stratify by frequency, scope, and cost:</p>
+        <ul>
+          <li><strong>Tier 1 — every commit, zero API calls.</strong> Pure unit tests on parsing, schema validation, tool argument shaping, and retry logic, with mocked LLM responses. Runs in &lt;30s, costs $0.</li>
+          <li><strong>Tier 2 — on PR merge, 10 scenarios.</strong> Curated smoke suite covering the most critical end-to-end paths, hitting the real API. Runs in ~3 minutes, costs ~$0.05 per merge.</li>
+          <li><strong>Tier 3 — nightly, 100 scenarios.</strong> Full eval suite with rubric-based scoring, regression comparison vs. the last green build, and per-category breakdown. Runs at 02:00 UTC, costs ~$0.50 per night.</li>
+        </ul>
+
+        <p><strong>GitHub Actions pseudocode.</strong></p>
+        <div class="output-block"># .github/workflows/agent-evals.yml
+on:
+  pull_request: { types: [closed] }   # Tier 2 trigger
+  schedule:     [{ cron: "0 2 * * *" }] # Tier 3 nightly
+
+jobs:
+  tier2-smoke:
+    if: github.event.pull_request.merged == true
+    steps:
+      - run: pytest tests/smoke --eval-suite=critical-10 --retries=3
+  tier3-nightly:
+    if: github.event_name == 'schedule'
+    steps:
+      - run: python eval/run_full_suite.py --cases=100 --baseline=last-green
+      - run: python eval/post_regression_report.py --slack=#eval-alerts</div>
+
+        <p><strong>Handling flaky tests.</strong> Because outputs vary run-to-run, a single failure isn't a regression. Retry failed cases up to 3 times and count a real failure only if it fails ≥2 of 3. Track flake rate as its own metric — a case that flakes &gt;20% of the time has an ambiguous rubric and should be rewritten, not retried forever.</p>
+
+        <p><strong>Monthly budget with alerts.</strong> Set an explicit CI/CD API budget (e.g. $300/month) and wire two alerts: 80% triggers a Slack warning, 100% pauses Tier 3 runs and pages the on-call. Without a hard ceiling, a misconfigured retry loop can burn $2,000 overnight. Tag every CI request with header <code>x-source: ci-tier-2</code> so you can attribute spend per tier in Anthropic's usage dashboard and spot runaway costs early.</p>
+
         <div class="callout-why">
           <span class="box-label">✅ Why It Matters</span>
           <p>Without regression testing, prompt engineering is whack-a-mole. You fix the agent's handling of refund requests, but accidentally break its ability to answer shipping questions. You don't know until 3 days later when support tickets spike. With a 50-case regression suite running on every PR, you catch the break in 5 minutes. At $0.15 per eval run (50 cases × $0.003 per judge call), that's cheaper than a single customer support ticket caused by a broken agent.</p>

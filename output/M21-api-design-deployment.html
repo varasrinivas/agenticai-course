@@ -956,6 +956,30 @@ console.log(await askAgent("And how does that compare to Q3?", session));</code>
           <div class="checkpoint-label">What Just Happened?</div>
           You learned that agent APIs are I/O-bound, not CPU-bound, so you must scale on concurrent requests. Queues absorb traffic spikes. Rate limiting requires exponential backoff with jitter, and a circuit breaker prevents cascading failures when the upstream API is overwhelmed.
         </div>
+
+        <h3 id="long-running-agents">Handling Long-Running Agents</h3>
+        <p><strong>The problem.</strong> Real agent runs &mdash; multi-tool loops, deep retrieval, multi-step reasoning &mdash; routinely take 2&ndash;5 minutes. But the HTTP world disagrees: browsers, CDNs, API gateways, and load balancers idle out connections at 30&ndash;60 seconds. The user sees a <code>504 Gateway Timeout</code> while the agent is still happily working in the background. You cannot solve this by raising timeouts everywhere; you must decouple <em>accepting</em> a request from <em>delivering</em> its result.</p>
+
+        <p>Three patterns handle this cleanly:</p>
+        <ul>
+          <li><strong>Pattern A &mdash; Async job queue.</strong> <code>POST /chat</code> enqueues the task and immediately returns <code>202 Accepted</code> with a <code>job_id</code>. The client polls <code>GET /jobs/{job_id}</code> every few seconds until <code>status: done</code>. Simple, survives client disconnects, works through any proxy. Trade-off: polling latency and no progressive output.</li>
+          <li><strong>Pattern B &mdash; Server-Sent Events (SSE).</strong> One-way streaming over a long-lived HTTP connection. The server pushes incremental events (<code>token</code>, <code>tool_call</code>, <code>step_complete</code>) as they happen. Best UX for progressive output, traverses most proxies, native browser support via <code>EventSource</code>.</li>
+          <li><strong>Pattern C &mdash; WebSocket.</strong> Full duplex, so the client can send <code>cancel</code> mid-run, adjust parameters, or interject. Use when you need bidirectional control. Costlier to scale (sticky sessions) and harder to debug.</li>
+        </ul>
+
+        <p>Pattern B with FastAPI looks like this:</p>
+        <div class="output-block">@app.get("/chat/stream")
+async def stream(prompt: str):
+    async def gen():
+        try:
+            async for ev in asyncio.wait_for(run_agent(prompt), timeout=300):
+                yield f"event: {ev.type}\ndata: {ev.json()}\n\n"
+            yield "event: done\ndata: {}\n\n"
+        except asyncio.TimeoutError:
+            yield f"event: partial\ndata: {partial_state(truncated=True)}\n\n"
+    return StreamingResponse(gen(), media_type="text/event-stream")</div>
+
+        <p><strong>Timeout handling.</strong> Cap every run at 5 minutes via <code>asyncio.wait_for</code>. On timeout, do not raise &mdash; emit a <code>partial</code> event containing whatever the agent produced so far (tool results, draft answer) plus a <code>truncated: true</code> flag. A partial answer the user can act on is far more useful than a 504.</p>
       </section>
 
       <div class="bridge">Theory is useful, but code is truth. Let us build a complete agent API with streaming, health checks, rate limiting, and a production-ready Dockerfile.</div>

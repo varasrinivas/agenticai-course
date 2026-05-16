@@ -4,6 +4,7 @@
 **Prerequisites**: M16
 **Estimated Time**: 60-75 minutes
 **Track Color**: var(--track-guardrails) / #EF4444
+**SDK Tier**: 2 (dual-track). Lab ships `solution/` (manual output filter wrapper + HITL approval loop) AND `solution-sdk/` (output guardrails via a `PostToolUse` hook in `.claude/settings.json`; HITL approvals via the `can_use_tool` permission callback returning `PermissionResultDeny` until a human approves out-of-band). See `prompts/19-sdk-tier-policy.md`.
 
 ## Concepts
 - Output validation: hallucination detection, toxicity filtering, format verification

@@ -481,40 +481,45 @@
         <div class="arch-panel" id="arch-2">
           <div class="arch-diagram">YOU OWN PINK; SDK OWNS GRAY
 +----------------------------------------------------------+
-|  agent.py (~120 lines)                                    |
+|  agent.py (~90 lines)                                     |
 |                                                           |
-|  agent = Agent(                                           |
-|    system_prompt="Pre-auth analyst...",  &lt;&lt; YOU wrote    |
-|    tools=[lookup_clinical_criteria, ...],                 |
+|  @tool("lookup_clinical_criteria", ..., {...})            |
+|  async def lookup_clinical_criteria(args): ...            |
+|  (5 @tool functions total)             &lt;&lt; YOU wrote      |
+|                                                           |
+|  preauth_server = create_sdk_mcp_server(                  |
+|      name="preauth_tools", tools=[...])                   |
+|                                                           |
+|  OPTIONS = ClaudeAgentOptions(                            |
+|      system_prompt="Pre-auth analyst...",                 |
+|      mcp_servers={"preauth": preauth_server},             |
+|      allowed_tools=["mcp__preauth__..."],                 |
+|      hooks={"PreToolUse": [HookMatcher(validate_input)]}, |
 |  )                                                        |
 |                                                           |
-|  @agent.hook("pre_tool_use")    &lt;&lt; YOU wrote             |
-|  def validate(tool, input): ...                           |
+|  async for msg in query(prompt=..., options=OPTIONS): ... |
 |                                                           |
-|  @agent.hook("post_tool_use")   &lt;&lt; YOU wrote             |
-|  def redact_phi(tool, result): ...                        |
-|                                                           |
-|  agent.run(question, session_id=case_id)                  |
-|                                                           |
-|  -- LOOP, MESSAGE-PASSING, AUDIT, CIRCUIT BREAKER --      |
-|  -- LIVE INSIDE THE SDK. YOU DO NOT WRITE THEM.   --      |
+|  -- LOOP, MESSAGE-PASSING, RETRIES, STREAMING ----        |
+|  -- LIVE INSIDE claude-agent-sdk. YOU DO NOT WRITE THEM. -|
 +----------------------------------------------------------+
         |                                  |
         v                                  v
-+----------------+                 +-----------------+
-|  Claude Code   |                 |  Anthropic SDK  |
-|  generated:    |                 |  managed:       |
-|  - hooks file  |                 |  - tool loop    |
-|  - server.py   |                 |  - sessions     |
-|  - Dockerfile  |                 |  - retries      |
-|  - tests       |                 |  - streaming    |
-+----------------+                 +-----------------+</div>
++--------------------+              +--------------------+
+|  Claude Code       |              |  claude-agent-sdk  |
+|  generated:        |              |  managed:          |
+|  - server.py       |              |  - query() loop    |
+|  - Dockerfile      |              |  - MCP transport   |
+|  - tests           |              |  - HookMatcher     |
+| .claude/           |              |  - resume tokens   |
+|  settings.json     |              |  - streaming       |
+|  + hooks/*.py      |              +--------------------+
++--------------------+</div>
         </div>
 
         <div class="arch-panel" id="arch-3">
           <div class="arch-diagram">YOU OWN ONLY THE GREEN BOX
 +----------------------------------------------------------+
-|  agent-spec.md (~100 lines)         &lt;&lt; YOU wrote         |
+|  spec/agent-spec.md (~100 lines)    &lt;&lt; YOU wrote         |
 |  ----------------------------------                       |
 |  # Sections                                              |
 |   1. Overview         8. API Wrapper                     |
@@ -528,11 +533,13 @@
                        |
                        v
 +----------------------------------------------------------+
+|  /generate-from-spec spec/agent-spec.md                  |
 |  Claude Code reads spec, generates ~18 files:            |
-|  agent.py | tools.py | hooks.py | sessions.py            |
-|  server.py | Dockerfile | docker-compose.yml             |
-|  tests/test_*.py x5 | mock_data/*.json (4 files)         |
-|  CLAUDE.md | .claude/commands/run-agent.md | ...         |
+|  agent.py (claude-agent-sdk) | sessions.py               |
+|  mock_data/*.json (4 files) | server.py | Dockerfile     |
+|  .claude/settings.json | hooks/*.py | .claude/commands/  |
+|  tests/test_*.py x5 | spec/agent-spec.md (you)           |
+|  appendix/manual-loop.py (Iter-1 reference)              |
 +----------------------------------------------------------+</div>
         </div>
       </div>
@@ -580,8 +587,8 @@
       </div>
 
       <div class="callout-warning">
-        <span class="box-label">If You Have Not Done M15B</span>
-        <p>Iteration 1 is essentially a re-implementation of the M15B reference agent for the pre-auth scenario. If you have not built an agent from raw API calls before, do M15B first.</p>
+        <span class="box-label">If You Have Not Done M15B / M26</span>
+        <p>Iteration 1 is a re-implementation of the <a href="M15B-build-agent-subagent-system.html">M15B reference agent</a> for the pre-auth scenario. Do M15B first if you have not built an agent from raw API calls. Iteration 2 leans on the <code>claude-agent-sdk</code> patterns taught in <a href="M26-hooks-sessions-agent-sdk.html">M26 (Hooks &amp; Sessions &amp; Agent SDK)</a> &mdash; reach for it if <code>@tool</code> / <code>HookMatcher</code> / <code>ClaudeAgentOptions</code> feels unfamiliar.</p>
       </div>
 
       <div class="tech-def-box">
@@ -618,7 +625,7 @@
             <button class="copy-btn" onclick="copyCode(this)">Copy</button>
             <pre><code>mkdir -p agent-iter1-raw/mock_data &amp;&amp; cd agent-iter1-raw
 python -m venv venv &amp;&amp; source venv/bin/activate    # Windows: venv\Scripts\activate
-pip install anthropic fastapi uvicorn pydantic</code></pre>
+pip install "anthropic&gt;=0.40" "fastapi&gt;=0.110" "uvicorn&gt;=0.27" "pydantic&gt;=2.0"</code></pre>
           </div>
           <div class="code-panel" id="i1s1-mock">
             <button class="copy-btn" onclick="copyCode(this)">Copy</button>
@@ -804,15 +811,21 @@ def execute_tool(name, args):
         <p><strong>What &amp; Why:</strong> This is the heart of the iteration &mdash; the agentic loop you will replace twice over. Write it once by hand and you will recognize what the SDK and Claude Code generate later. The system prompt is the most important part for pre-auth: Claude needs to know to call all 5 tools in the right order, never approve without a network check, and always cite a policy.</p>
 
         <div class="code-block-wrapper">
-          <div class="code-tabs"><button class="code-tab active" onclick="switchTab(this,'i1s3-py')">agent.py</button></div>
+          <div class="code-tabs"><button class="code-tab active" onclick="switchTab(this,'i1s3-py')">agent.py (Python)</button><button class="code-tab" onclick="switchTab(this,'i1s3-ts')">agent.ts (TypeScript)</button></div>
           <div class="code-panel active" id="i1s3-py">
             <button class="copy-btn" onclick="copyCode(this)">Copy</button>
-            <pre><code>"""agent.py &mdash; the raw API loop. Everything is hand-coded."""
+            <pre><code>"""agent.py &mdash; the raw API loop. Pre-auth decision flow.
+
+Note: we split the loop into a private _run_messages() helper that takes a
+message list and returns (text, updated_messages). run_agent() is a thin
+wrapper for the single-shot case; in Step 6 the session manager will call
+_run_messages directly to support multi-turn case follow-ups."""
 import json, anthropic
 from tools import TOOLS, execute_tool
 
 client = anthropic.Anthropic()
 MODEL = "claude-sonnet-4-6"
+MAX_TURNS = 12
 SYSTEM = """You are a pre-authorization decision agent for medical procedures.
 For every case, follow this order:
 1. lookup_clinical_criteria for the CPT + payer
@@ -825,21 +838,19 @@ Always cite the policy_id in your rationale. Never APPROVE without a successful
 diagnosis match AND in-network provider AND covered benefit. Use REQUEST_INFO
 when missing data, DENY when criteria fail."""
 
-def run_agent(question: str, max_turns: int = 12) -&gt; str:
-    messages = [{"role": "user", "content": question}]
-    for turn in range(max_turns):
+def _run_messages(messages: list) -&gt; tuple[str, list]:
+    """Drive the tool-use loop on the given messages list. Returns (final_text, messages)."""
+    for turn in range(MAX_TURNS):
         response = client.messages.create(
-            model=MODEL,
-            max_tokens=4096,
-            system=SYSTEM,
-            tools=TOOLS,
-            messages=messages,
+            model=MODEL, max_tokens=4096, system=SYSTEM,
+            tools=TOOLS, messages=messages,
         )
-        # Always append assistant turn BEFORE handling tool calls
+        # Always append assistant turn BEFORE handling tool calls.
         messages.append({"role": "assistant", "content": response.content})
 
         if response.stop_reason == "end_turn":
-            return next(b.text for b in response.content if b.type == "text")
+            text = next(b.text for b in response.content if b.type == "text")
+            return text, messages
 
         if response.stop_reason == "tool_use":
             tool_results = []
@@ -863,16 +874,95 @@ def run_agent(question: str, max_turns: int = 12) -&gt; str:
             continue
 
         raise RuntimeError(f"Unexpected stop_reason: {response.stop_reason}")
-    raise RuntimeError(f"Agent exceeded {max_turns} turns without finishing")
+    raise RuntimeError(f"Agent exceeded {MAX_TURNS} turns without finishing")
+
+def run_agent(question: str) -&gt; str:
+    """Single-shot entry point. Wraps _run_messages with a fresh history."""
+    text, _ = _run_messages([{"role": "user", "content": question}])
+    return text
 
 if __name__ == "__main__":
     q = ("Should pre-auth PA-2025-0001 (CPT 27447, ICD-10 M17.11, "
          "member A123456, provider NPI 1234567890, payer Aetna) be approved?")
     print(run_agent(q))</code></pre>
           </div>
+          <div class="code-panel" id="i1s3-ts">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre><code>// agent.ts &mdash; the raw API loop. Pre-auth decision flow.
+import Anthropic from "@anthropic-ai/sdk";
+import { TOOLS, executeTool } from "./tools.js";
+
+const client = new Anthropic();
+const MODEL = "claude-sonnet-4-6";
+const SYSTEM = `You are a pre-authorization decision agent for medical procedures.
+For every case, follow this order:
+1. lookup_clinical_criteria for the CPT + payer
+2. verify_diagnosis_match for the patient's ICD-10
+3. check_network_status for the provider + payer
+4. get_benefit_summary for the member + CPT
+5. generate_determination with APPROVE / DENY / REQUEST_INFO
+
+Always cite the policy_id in your rationale. Never APPROVE without successful
+diagnosis match AND in-network provider AND covered benefit. Use REQUEST_INFO
+when missing data, DENY when criteria fail.`;
+
+export async function runAgent(question: string, maxTurns = 12): Promise&lt;string&gt; {
+  const messages: Anthropic.MessageParam[] = [{ role: "user", content: question }];
+  for (let turn = 0; turn &lt; maxTurns; turn++) {
+    const response = await client.messages.create({
+      model: MODEL, max_tokens: 4096, system: SYSTEM, tools: TOOLS, messages,
+    });
+    messages.push({ role: "assistant", content: response.content });
+    if (response.stop_reason === "end_turn") {
+      const text = response.content.find(b =&gt; b.type === "text");
+      return text?.type === "text" ? text.text : "";
+    }
+    if (response.stop_reason === "tool_use") {
+      const toolResults: Anthropic.ToolResultBlockParam[] = [];
+      for (const block of response.content) {
+        if (block.type === "tool_use") {
+          try {
+            const result = await executeTool(block.name, block.input);
+            toolResults.push({ type: "tool_result", tool_use_id: block.id,
+                                content: JSON.stringify(result) });
+          } catch (e) {
+            toolResults.push({ type: "tool_result", tool_use_id: block.id,
+                                content: `ERROR: ${(e as Error).message}`, is_error: true });
+          }
+        }
+      }
+      messages.push({ role: "user", content: toolResults });
+      continue;
+    }
+    throw new Error(`Unexpected stop_reason: ${response.stop_reason}`);
+  }
+  throw new Error(`Agent exceeded ${maxTurns} turns without finishing`);
+}</code></pre>
+          </div>
         </div>
 
-        <div class="checkpoint"><div class="checkpoint-label">Checkpoint</div>Run <code>python agent.py</code>. After ~5&ndash;10 seconds you should see a determination of <code>APPROVE</code> with a rationale citing policy CPB-0660, in-network confirmation, and covered benefit. If the agent stops after only 1-2 tool calls, the system prompt is too vague &mdash; reinforce the 5-step order.</div>
+        <p><strong>Run:</strong> <code>python agent.py</code></p>
+        <p><strong>Expected output (paraphrased &mdash; Claude generates fresh text each run):</strong></p>
+        <div class="output-block" style="background:var(--code-bg);border:1px solid var(--code-border);border-radius:8px;padding:1rem 1.25rem;margin:0.75rem 0 1.5rem;font-family:'JetBrains Mono',monospace;font-size:0.8rem;color:var(--success);line-height:1.5;white-space:pre-wrap;">Determination: APPROVE
+Case: PA-2025-0001 | Member: A123456 | CPT: 27447 (knee replacement)
+Diagnosis: M17.11 (right knee primary osteoarthritis) &mdash; matches Aetna policy CPB-0660
+approved indications. Provider NPI 1234567890 confirmed in-network. Member benefit
+verified: covered, $250 copay, $850 deductible remaining.
+
+Rationale: All Aetna CPB-0660 medical-necessity criteria satisfied (symptomatic OA
+confirmed, in-network provider, benefit verified). Approving per policy CPB-0660 v2024.</div>
+
+        <div class="checkpoint"><div class="checkpoint-label">&#9989; Checkpoint &mdash; Step 3</div>You should see <code>Determination: APPROVE</code> with a rationale citing <strong>policy CPB-0660</strong>, in-network confirmation, and covered benefit. If the agent stops after only 1&ndash;2 tool calls, the system prompt is too vague &mdash; reinforce the 5-step order with an explicit "use ALL FIVE tools before generating the determination."</div>
+
+        <div class="troubleshoot" style="background:var(--warning-bg);border-radius:6px;padding:0.75rem 1rem;margin-top:1rem;font-size:0.9rem;">
+          <div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:0.8rem;color:var(--warning);margin-bottom:0.5rem;">Troubleshooting</div>
+          <ul style="margin:0;font-size:0.85rem;">
+            <li><strong>Agent returns DENY when it should APPROVE</strong> &rarr; check that <code>verify_diagnosis_match</code> returns <code>match: true</code> for M17.11 against the CPB-0660 indications. Mock data must include M17.11 in the approved_indications list.</li>
+            <li><strong>tool_use_id error on second turn</strong> &rarr; the assistant turn must be appended to <code>messages</code> BEFORE the <code>tool_result</code> turn. Check the order in <code>_run_messages</code>.</li>
+            <li><strong>Agent loops forever, hits MAX_TURNS</strong> &rarr; the system prompt isn't telling it when to stop. Add: "Once you have called generate_determination, stop &mdash; do not search further."</li>
+            <li><strong>Agent hallucinates a CPT code or member ID not in the question</strong> &rarr; tighten the system prompt: "Use ONLY the CPT code, ICD-10 code, NPI, and member ID provided in the user's request. Do not invent values."</li>
+          </ul>
+        </div>
       </div>
 
       <div class="step" id="i1-step4">
@@ -928,32 +1018,120 @@ class CircuitBreaker:
           </div>
         </div>
 
-        <p>Wire each guardrail into <code>agent.py</code>: <code>validate_input</code> before <code>execute_tool</code>, <code>redact_phi(json.dumps(result))</code> before writing to <code>audit_log.jsonl</code> (NOT before sending back to Claude &mdash; the agent needs the unredacted member_id to call the next tool), token sum after each turn, circuit breaker on exceptions.</p>
+        <p><strong>Now wire the guardrails into <code>_run_messages</code> in <code>agent.py</code>.</strong> Replace your existing <code>_run_messages</code> with the version below. Note: <code>redact_phi</code> is called only when writing to the audit log (Step 5) &mdash; the unredacted member_id flows back to Claude so the agent can chain tool calls (lookup &rarr; verify &rarr; check_network &rarr; benefits &rarr; determination).</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs"><button class="code-tab active" onclick="switchTab(this,'i1s4-wired')">agent.py (replace _run_messages)</button></div>
+          <div class="code-panel active" id="i1s4-wired">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre><code># Add to the imports at the top of agent.py:
+from guardrails import validate_input, CircuitBreaker, COST_LIMIT_TOKENS   # NEW
+
+_breaker = CircuitBreaker()        # NEW &mdash; module-level instance
+
+def _run_messages(messages: list) -&gt; tuple[str, list]:
+    total_tokens = 0                # NEW &mdash; cost cap counter
+    for turn in range(MAX_TURNS):
+        response = client.messages.create(
+            model=MODEL, max_tokens=4096, system=SYSTEM,
+            tools=TOOLS, messages=messages,
+        )
+        total_tokens += (response.usage.input_tokens
+                         + response.usage.output_tokens)              # NEW
+        if total_tokens &gt; COST_LIMIT_TOKENS:                          # NEW
+            raise RuntimeError(f"Cost cap exceeded: {total_tokens} tokens")
+
+        messages.append({"role": "assistant", "content": response.content})
+
+        if response.stop_reason == "end_turn":
+            text = next(b.text for b in response.content if b.type == "text")
+            return text, messages
+
+        if response.stop_reason == "tool_use":
+            tool_results = []
+            for block in response.content:
+                if block.type == "tool_use":
+                    try:
+                        validate_input(block.name, block.input)        # NEW &mdash; CPT/NPI/ICD-10 check
+                        result = execute_tool(block.name, block.input)
+                        _breaker.record(ok=True)                        # NEW
+                        # Pass the UNREDACTED result back to Claude.
+                        # The agent needs the literal member_id to chain.
+                        # PHI redaction happens inside append_audit (Step 5).
+                        tool_results.append({
+                            "type": "tool_result",
+                            "tool_use_id": block.id,
+                            "content": json.dumps(result, default=str),
+                        })
+                    except Exception as e:
+                        _breaker.record(ok=False)                       # NEW &mdash; trips on 3rd fail
+                        tool_results.append({
+                            "type": "tool_result",
+                            "tool_use_id": block.id,
+                            "content": f"ERROR: {e}",
+                            "is_error": True,
+                        })
+            messages.append({"role": "user", "content": tool_results})
+            continue
+
+        raise RuntimeError(f"Unexpected stop_reason: {response.stop_reason}")
+
+    raise RuntimeError(f"Agent exceeded {MAX_TURNS} turns without finishing")</code></pre>
+          </div>
+        </div>
+
+        <p><strong>Test that the guardrails fire on bad input:</strong></p>
+        <div class="code-block-wrapper">
+          <div class="code-panel active">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre><code>python -c "from agent import run_agent; print(run_agent('Pre-auth for CPT BAD123 ICD M17.11 NPI 12345 Aetna member A123456'))"
+# Expected: agent attempts lookup_clinical_criteria(cpt_code='BAD123'),
+# validate_input raises ValueError, error flows back as is_error: true,
+# Claude either reformulates with a valid CPT or apologizes.</code></pre>
+          </div>
+        </div>
+
+        <div class="checkpoint"><div class="checkpoint-label">&#9989; Checkpoint &mdash; Step 4</div>
+          The clean PA-2025-0001 query still produces APPROVE (same as Step 3). The "BAD123" query gets rejected at <code>validate_input</code> &mdash; you should see the agent reformulate or apologize. If <code>RuntimeError: Cost cap exceeded</code>, your loop is unbounded; verify the token sum is being checked after every <code>messages.create</code>.
+        </div>
 
         <div class="callout-security">
-          <span class="box-label">PHI Redaction is Trickier Than It Looks</span>
-          <p>The agent NEEDS the unredacted member_id and provider_npi in its working memory to call the next tool. You only redact when writing to logs and audit. If you redact too aggressively (e.g., before the tool_result goes back to Claude), the agent can't chain tool calls. Test this by running the agent and confirming it still completes the full 5-tool flow while the audit log shows <code>[MEMBER_ID_REDACTED]</code>.</p>
+          <span class="box-label">&#9888;&#65039; PHI Redaction is Trickier Than It Looks</span>
+          <p>Notice we did NOT call <code>redact_phi</code> on the tool_result that flows back to Claude. This is critical: the agent NEEDS the unredacted <code>member_id</code> (e.g., <code>A123456</code>) to call <code>get_benefit_summary</code> in the next turn. If you redact too aggressively, the agent passes <code>[MEMBER_ID_REDACTED]</code> to <code>get_benefit_summary</code> and the lookup fails with "no benefit record".</p>
+          <p>PHI redaction happens in <strong>Step 5</strong>'s <code>append_audit</code> function &mdash; only when writing to the persistent audit log, not in the runtime message stream.</p>
+        </div>
+
+        <div class="troubleshoot" style="background:var(--warning-bg);border-radius:6px;padding:0.75rem 1rem;margin-top:1rem;font-size:0.9rem;">
+          <div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:0.8rem;color:var(--warning);margin-bottom:0.5rem;">Troubleshooting</div>
+          <ul style="margin:0;font-size:0.85rem;">
+            <li><code>ImportError: cannot import name 'validate_input' from 'guardrails'</code> &rarr; <code>guardrails.py</code> isn't in the project folder, or the function name is misspelled.</li>
+            <li><strong>Agent fails on <code>get_benefit_summary</code> with "no benefit record"</strong> &rarr; you redacted the member_id in the tool_result. Don't &mdash; only redact in <code>append_audit</code>.</li>
+            <li><strong>Circuit breaker trips on first call</strong> &rarr; <code>_breaker.record(ok=False)</code> is in the wrong branch. It belongs only in the except, not after <code>execute_tool</code>.</li>
+          </ul>
         </div>
       </div>
 
       <div class="step" id="i1-step5">
-        <div class="step-header">Step 5: Add Audit Logging</div>
-        <div class="step-meta"><span>15 min</span><span>audit_log.jsonl</span></div>
-        <p><strong>What &amp; Why:</strong> HIPAA requires audit trails for any system that touches PHI. Every tool call needs a timestamped, redacted record: case_id, tool, redacted inputs, redacted output summary, token count. Write a <code>append_audit()</code> function and call it after every tool execution.</p>
+        <div class="step-header">Step 5: Add HIPAA Audit Logging</div>
+        <div class="step-meta"><span>15 min</span><span>audit.py + agent.py wiring</span></div>
+        <p><strong>What &amp; Why:</strong> HIPAA requires audit trails for any system that touches PHI. Every tool call needs a timestamped, redacted record: case_id, tool, redacted inputs, redacted output summary, token count. <strong>Critical:</strong> redaction happens here when writing to disk &mdash; the agent's runtime message stream stays unredacted so tool chaining works (per Step 4 callout).</p>
 
+        <p><strong>Create a new file <code>audit.py</code> in the project folder:</strong></p>
         <div class="code-block-wrapper">
-          <div class="code-tabs"><button class="code-tab active" onclick="switchTab(this,'i1s5-py')">Python</button></div>
+          <div class="code-tabs"><button class="code-tab active" onclick="switchTab(this,'i1s5-py')">audit.py</button></div>
           <div class="code-panel active" id="i1s5-py">
             <button class="copy-btn" onclick="copyCode(this)">Copy</button>
-            <pre><code>import json, datetime
+            <pre><code>"""audit.py &mdash; HIPAA-compliant audit log writer."""
+import json, datetime
 from guardrails import redact_phi
 
-def append_audit(tool_name, args, result, tokens, case_id):
+def append_audit(tool_name: str, args: dict, result, tokens: int,
+                 case_id: str = "default") -&gt; None:
     rec = {
         "ts": datetime.datetime.utcnow().isoformat() + "Z",
         "case_id": case_id,
         "tool": tool_name,
-        "input_redacted": redact_phi(json.dumps(args)),
+        "input_redacted": redact_phi(json.dumps(args, default=str)),
         "output_summary": redact_phi(str(result))[:200],
         "tokens": tokens,
     }
@@ -962,28 +1140,116 @@ def append_audit(tool_name, args, result, tokens, case_id):
           </div>
         </div>
 
-        <div class="checkpoint"><div class="checkpoint-label">Checkpoint</div>Run the agent on PA-2025-0001 and inspect <code>audit_log.jsonl</code>. You should see 5 records (one per tool call). The <code>input_redacted</code> field should NOT contain the literal member_id <code>A123456</code> &mdash; it should contain <code>[MEMBER_ID_REDACTED]</code>.</div>
+        <p><strong>Now wire it into <code>_run_messages</code>.</strong> Add the import and the <code>append_audit</code> call right after the successful <code>execute_tool</code>:</p>
+        <div class="code-block-wrapper">
+          <div class="code-tabs"><button class="code-tab active" onclick="switchTab(this,'i1s5-wire')">agent.py (additions)</button></div>
+          <div class="code-panel active" id="i1s5-wire">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre><code># Add to the imports at the top of agent.py:
+from audit import append_audit                    # NEW
+
+# Inside _run_messages, in the try-block right after `result = execute_tool(...)`:
+                        result = execute_tool(block.name, block.input)
+                        _breaker.record(ok=True)
+                        # Use the case_id from the user's first message (PA-YYYY-NNNN).
+                        case_id = next(
+                            (w for w in messages[0]["content"].split() if w.startswith("PA-")),
+                            "default"
+                        )
+                        append_audit(                              # NEW
+                            tool_name=block.name,
+                            args=block.input,
+                            result=result,
+                            tokens=total_tokens,
+                            case_id=case_id,
+                        )
+                        tool_results.append({...})
+                        # ... rest of try-block unchanged ...</code></pre>
+          </div>
+        </div>
+
+        <p><strong>Run:</strong> <code>python agent.py</code></p>
+        <p><strong>Then inspect the audit file:</strong></p>
+        <div class="code-block-wrapper">
+          <div class="code-panel active">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre><code>cat audit_log.jsonl   # macOS/Linux
+type audit_log.jsonl  # Windows cmd
+Get-Content audit_log.jsonl  # Windows PowerShell</code></pre>
+          </div>
+        </div>
+        <p><strong>Expected output (5 lines, one per tool call) &mdash; notice the member_id is redacted:</strong></p>
+        <div class="output-block" style="background:var(--code-bg);border:1px solid var(--code-border);border-radius:8px;padding:1rem 1.25rem;margin:0.75rem 0 1.5rem;font-family:'JetBrains Mono',monospace;font-size:0.78rem;color:var(--success);line-height:1.5;white-space:pre-wrap;">{"ts": "2026-05-09T12:01:14Z", "case_id": "PA-2025-0001", "tool": "lookup_clinical_criteria", "input_redacted": "{\"cpt_code\": \"27447\", \"payer\": \"Aetna\"}", "output_summary": "{\"policy_id\": \"CPB-0660\", \"approved_indications\": ...}", "tokens": 1842}
+{"ts": "2026-05-09T12:01:18Z", "case_id": "PA-2025-0001", "tool": "verify_diagnosis_match", "input_redacted": "{\"icd10_code\": \"M17.11\", \"criteria_id\": \"27447_AETNA\"}", "output_summary": "{\"match\": true, ...}", "tokens": 2510}
+{"ts": "2026-05-09T12:01:22Z", "case_id": "PA-2025-0001", "tool": "check_network_status", "input_redacted": "{\"provider_npi\": \"1234567890\", \"payer\": \"Aetna\"}", "output_summary": "{\"in_network\": true, ...}", "tokens": 3185}
+{"ts": "2026-05-09T12:01:26Z", "case_id": "PA-2025-0001", "tool": "get_benefit_summary", "input_redacted": "{\"member_id\": \"[MEMBER_ID_REDACTED]\", \"cpt_code\": \"27447\"}", "output_summary": "{\"covered\": true, \"copay\": 250, ...}", "tokens": 3920}
+{"ts": "2026-05-09T12:01:30Z", "case_id": "PA-2025-0001", "tool": "generate_determination", "input_redacted": "{\"case_id\": \"PA-2025-0001\", \"decision\": \"APPROVE\", ...}", "output_summary": "{\"case_id\": \"PA-2025-0001\", \"decision\": \"APPROVE\"}", "tokens": 4480}</div>
+
+        <div class="checkpoint"><div class="checkpoint-label">&#9989; Checkpoint &mdash; Step 5</div>You should see <strong>5 lines</strong> in <code>audit_log.jsonl</code> (one per tool call). The <code>input_redacted</code> for <code>get_benefit_summary</code> should contain <code>[MEMBER_ID_REDACTED]</code> &mdash; NOT <code>A123456</code>. The agent's response (printed to stdout) should still APPROVE the case &mdash; if it returns a "member not found" error, you accidentally redacted the member_id in the runtime stream, not just the audit log.</div>
+
+        <div class="troubleshoot" style="background:var(--warning-bg);border-radius:6px;padding:0.75rem 1rem;margin-top:1rem;font-size:0.9rem;">
+          <div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:0.8rem;color:var(--warning);margin-bottom:0.5rem;">Troubleshooting</div>
+          <ul style="margin:0;font-size:0.85rem;">
+            <li><code>ImportError: No module named 'audit'</code> &rarr; <code>audit.py</code> is in the wrong folder. Move it next to <code>agent.py</code>.</li>
+            <li><strong>audit_log.jsonl shows literal member_id <code>A123456</code></strong> &rarr; either you forgot the <code>redact_phi</code> call inside <code>append_audit</code>, or your MEMBER_ID_RE regex doesn't match the format. Test it: <code>python -c "from guardrails import redact_phi; print(redact_phi('A123456'))"</code> should print <code>[MEMBER_ID_REDACTED]</code>.</li>
+            <li><strong>Agent returns "no benefit record"</strong> &rarr; you wrapped the tool_result in <code>redact_phi</code> before sending it back to Claude. Don't &mdash; only the audit write redacts.</li>
+            <li><strong>case_id is "default" instead of "PA-2025-0001"</strong> &rarr; the parsing logic doesn't handle your prompt format. Pass case_id explicitly via the user's first message.</li>
+          </ul>
+        </div>
       </div>
 
       <div class="step" id="i1-step6">
-        <div class="step-header">Step 6: Multi-Turn Conversation</div>
+        <div class="step-header">Step 6: Multi-Turn Case Sessions</div>
         <div class="step-meta"><span>15 min</span><span>session.py</span></div>
-        <p><strong>What &amp; Why:</strong> Real reviewers ask follow-ups: "What about the same procedure but for a UnitedHealth member?" should reuse the analyst persona. Iter 1 implements this by hand &mdash; sliding window of last N turns, session_id keyed dictionary in memory.</p>
+        <p><strong>What &amp; Why:</strong> Clinical reviewers ask follow-ups on the same case: "What if the provider were out-of-network?" or "What about the same procedure but for a UnitedHealth member?" Iter 1 implements multi-turn case sessions by maintaining a per-case messages list, appending the new user message, and reusing the same <code>_run_messages</code> helper from Step 3. A sliding window keeps the list bounded.</p>
 
+        <p><strong>Create a new file <code>session.py</code> in the project folder:</strong></p>
         <div class="code-block-wrapper">
           <div class="code-tabs"><button class="code-tab active" onclick="switchTab(this,'i1s6-py')">session.py</button></div>
           <div class="code-panel active" id="i1s6-py">
             <button class="copy-btn" onclick="copyCode(this)">Copy</button>
-            <pre><code>SESSIONS = {}  # case_id -&gt; messages list
-WINDOW = 24    # last 24 turns (5 tools + buffer)
+            <pre><code>"""session.py &mdash; multi-turn case sessions over the same _run_messages helper."""
+from agent import _run_messages
+
+SESSIONS: dict[str, list] = {}   # case_id -&gt; messages list
+WINDOW = 24                      # 5 tool calls per turn &times; ~5 turns + buffer
 
 def chat(case_id: str, user_msg: str) -&gt; str:
+    """Append the user's message to the case session, run the loop, return the answer."""
     msgs = SESSIONS.setdefault(case_id, [])
     msgs.append({"role": "user", "content": user_msg})
-    answer, msgs = run_agent_with_history(msgs)
+    answer, msgs = _run_messages(msgs)
+    # Sliding window: keep only the last WINDOW messages so context doesn't grow forever.
     SESSIONS[case_id] = msgs[-WINDOW:]
     return answer</code></pre>
           </div>
+        </div>
+
+        <p><strong>Try it &mdash; multi-turn from the Python REPL:</strong></p>
+        <div class="code-block-wrapper">
+          <div class="code-panel active">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre><code>python -c "
+from session import chat
+print(chat('PA-2025-0001', 'Should pre-auth PA-2025-0001 (CPT 27447, ICD M17.11, member A123456, NPI 1234567890, payer Aetna) be approved?'))
+print('---')
+print(chat('PA-2025-0001', 'What if the provider NPI were 9999999999 (out-of-network) instead?'))
+"</code></pre>
+          </div>
+        </div>
+        <p><strong>Expected behavior:</strong> the second call references the same case context (CPT, ICD, member) but with the changed NPI &mdash; should produce REQUEST_INFO or DENY because the provider is out-of-network. Without session continuity, the agent would have no idea what "the same case" means.</p>
+
+        <div class="checkpoint"><div class="checkpoint-label">&#9989; Checkpoint &mdash; Step 6</div>
+          The second call references CPT 27447 / M17.11 (proving the prior context survived) and produces a DIFFERENT determination because the NPI changed. If the second call says "I need more information" without the original CPT/ICD context, the session isn't carrying over &mdash; verify <code>SESSIONS</code> is populated after the first call.
+        </div>
+
+        <div class="troubleshoot" style="background:var(--warning-bg);border-radius:6px;padding:0.75rem 1rem;margin-top:1rem;font-size:0.9rem;">
+          <div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:0.8rem;color:var(--warning);margin-bottom:0.5rem;">Troubleshooting</div>
+          <ul style="margin:0;font-size:0.85rem;">
+            <li><code>ImportError: cannot import name '_run_messages' from 'agent'</code> &rarr; you skipped Step 3's refactor of <code>agent.py</code>. Go back and split the loop into <code>_run_messages</code> + <code>run_agent</code>.</li>
+            <li><strong>Each call starts a fresh case</strong> &rarr; <code>SESSIONS</code> is module-level. If you're calling from separate Python processes (e.g., via <code>subprocess</code>), use a database or Redis instead.</li>
+            <li><strong>Context window exceeded after a few turns</strong> &rarr; <code>WINDOW = 24</code> may be too generous. Each tool call adds 2 messages (assistant + tool_result), so 5 tools = 10 messages per turn. Drop to 12 for shorter cases.</li>
+          </ul>
         </div>
       </div>
 
@@ -1025,21 +1291,109 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
 EXPOSE 8000
+ENV PYTHONUNBUFFERED=1
 CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8000"]</code></pre>
           </div>
         </div>
 
-        <div class="checkpoint"><div class="checkpoint-label">Iteration 1 Complete</div>Run <code>docker build -t iter1-a . &amp;&amp; docker run -p 8000:8000 -e ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY iter1-a</code>, then <code>curl -X POST localhost:8000/preauth -H "Content-Type: application/json" -d '{"question":"Is PA-2025-0001 approvable?"}'</code>. You should see an APPROVE determination with policy citation.</div>
+        <p><strong>Also create <code>requirements.txt</code> at the project root:</strong></p>
+        <div class="code-block-wrapper">
+          <div class="code-panel active">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre><code>anthropic&gt;=0.40
+fastapi&gt;=0.110
+uvicorn&gt;=0.27
+pydantic&gt;=2.0</code></pre>
+          </div>
+        </div>
 
-        <div class="callout-why">
-          <span class="box-label">Iteration 1 Metrics</span>
-          <ul style="margin-bottom:0;">
-            <li><strong>Files:</strong> 7 + 4 mock JSON</li>
-            <li><strong>Lines you wrote:</strong> ~250</li>
-            <li><strong>Time:</strong> ~3 hours</li>
-            <li><strong>Abstractions used:</strong> none</li>
+        <p><strong>Run locally first (no Docker):</strong></p>
+        <div class="code-block-wrapper">
+          <div class="code-panel active">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre><code>uvicorn server:app --reload --port 8000
+# In another terminal:
+curl localhost:8000/health
+# Expected: {"status":"ok"}
+
+curl -X POST localhost:8000/preauth -H "Content-Type: application/json" \
+     -d '{"question":"Is PA-2025-0001 approvable?"}'
+# Expected: {"determination":"Determination: APPROVE..."}</code></pre>
+          </div>
+        </div>
+
+        <p><strong>Then build and run with Docker:</strong></p>
+        <div class="code-block-wrapper">
+          <div class="code-panel active">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre><code>docker build -t iter1-a .
+docker run --rm -p 8000:8000 -e ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY iter1-a</code></pre>
+          </div>
+        </div>
+
+        <div class="troubleshoot" style="background:var(--warning-bg);border-radius:6px;padding:0.75rem 1rem;margin-top:1rem;font-size:0.9rem;">
+          <div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:0.8rem;color:var(--warning);margin-bottom:0.5rem;">Troubleshooting</div>
+          <ul style="margin:0;font-size:0.85rem;">
+            <li><code>docker: command not found</code> &rarr; install Docker Desktop and confirm <code>docker --version</code> works.</li>
+            <li><code>OSError: [Errno 98] Address already in use</code> &rarr; port 8000 is taken. <code>--port 8001</code> for uvicorn or <code>-p 8001:8000</code> for docker.</li>
+            <li><strong>Container starts but /preauth returns 500 with "ANTHROPIC_API_KEY not set"</strong> &rarr; you forgot the <code>-e ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY</code> flag on docker run.</li>
+            <li><strong>HIPAA concern: audit_log.jsonl is on the container's writable layer</strong> &rarr; in production, mount a volume: <code>-v $(pwd)/audit:/app/audit</code> and have <code>append_audit</code> write to <code>/app/audit/audit_log.jsonl</code>.</li>
           </ul>
         </div>
+      </div>
+
+      <!-- ===== END-OF-ITER-1 VERIFICATION ===== -->
+      <div class="checkpoint" style="background:var(--success-bg);border:2px solid var(--success);">
+        <div class="checkpoint-label" style="color:var(--success);">&#127881; Iteration 1 Complete &mdash; End-to-End Verification</div>
+        <p>You should now have <strong>10 files</strong> in your project folder:</p>
+        <pre style="background:var(--code-bg);border-radius:6px;padding:0.6rem 0.9rem;font-size:0.78rem;color:var(--text-secondary);margin:0.5rem 0;">agent-iter1-raw/
+&boxv;&boxh;&boxh; agent.py            # _run_messages + run_agent
+&boxv;&boxh;&boxh; tools.py            # 5 pre-auth tool schemas + execute_tool
+&boxv;&boxh;&boxh; mock_data/
+&boxv;&boxh;   &boxv;&boxh;&boxh; preauth_requests.json     # 15 cases across 5 procedures &times; 3 payers
+&boxv;&boxh;   &boxv;&boxh;&boxh; clinical_criteria.json    # CPB-0660 etc.
+&boxv;&boxh;   &boxv;&boxh;&boxh; provider_directory.json   # 10 providers w/ networks
+&boxv;&boxh;   &boxv;&boxh;&boxh; benefits.json             # 30 member-procedure records
+&boxv;&boxh;&boxh; guardrails.py       # validate_input + redact_phi + CircuitBreaker
+&boxv;&boxh;&boxh; audit.py            # HIPAA-compliant append_audit
+&boxv;&boxh;&boxh; session.py          # multi-turn case sessions
+&boxv;&boxh;&boxh; server.py           # FastAPI handlers
+&boxv;&boxh;&boxh; Dockerfile | requirements.txt</pre>
+
+        <p><strong>Run the full Iter-1 acceptance test:</strong></p>
+        <div class="code-block-wrapper" style="margin:0.5rem 0;">
+          <div class="code-panel active">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre><code># 1. Single pre-auth (should APPROVE)
+curl -s -X POST localhost:8000/preauth -H "Content-Type: application/json" \
+     -d '{"question":"Is PA-2025-0001 (CPT 27447, ICD M17.11, member A123456, NPI 1234567890, Aetna) approvable?"}' | python -m json.tool
+
+# 2. Multi-turn case session (out-of-network what-if)
+curl -s -X POST localhost:8000/chat -H "Content-Type: application/json" \
+     -d '{"case_id":"PA-2025-0001","message":"Should this be approved? CPT 27447, ICD M17.11, member A123456, NPI 1234567890, Aetna"}' | python -m json.tool
+curl -s -X POST localhost:8000/chat -H "Content-Type: application/json" \
+     -d '{"case_id":"PA-2025-0001","message":"What if NPI 9999999999 (out-of-network) instead?"}' | python -m json.tool
+
+# 3. Guardrail fires on bad CPT
+curl -s -X POST localhost:8000/preauth -H "Content-Type: application/json" \
+     -d '{"question":"Is CPT BAD123 approvable?"}' | python -m json.tool
+
+# 4. HIPAA: audit log shows redacted PHI
+docker exec $(docker ps -q --filter ancestor=iter1-a) cat audit_log.jsonl | head -5
+# Look for "[MEMBER_ID_REDACTED]" instead of literal "A123456"</code></pre>
+          </div>
+        </div>
+        <p><strong>You pass Iter 1 if:</strong> (1) /health returns ok; (2) PA-2025-0001 returns APPROVE with policy CPB-0660 cited; (3) the second /chat call returns DIFFERENT determination (REQUEST_INFO or DENY) because the NPI changed; (4) the BAD123 query gets reformulated by the agent; (5) <code>audit_log.jsonl</code> has redacted PHI but the agent's runtime stream still resolves member benefits correctly.</p>
+      </div>
+
+      <div class="callout-why">
+        <span class="box-label">Iteration 1 Metrics</span>
+        <ul style="margin-bottom:0;">
+          <li><strong>Files:</strong> 10 (agent.py, tools.py, mock_data/&times;4, guardrails.py, audit.py, session.py, server.py, Dockerfile, requirements.txt)</li>
+          <li><strong>Lines you wrote:</strong> ~250</li>
+          <li><strong>Time:</strong> ~3 hours</li>
+          <li><strong>Abstractions used:</strong> none &mdash; just <code>anthropic</code> Messages API and FastAPI</li>
+        </ul>
       </div>
 
       <div class="debug-block" id="iter1-debug">
@@ -1109,6 +1463,9 @@ CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8000"]</code></pre
           <div class="code-panel active" id="i2s8-bash">
             <button class="copy-btn" onclick="copyCode(this)">Copy</button>
             <pre><code>mkdir agent-iter2-sdk &amp;&amp; cd agent-iter2-sdk
+python -m venv venv &amp;&amp; source venv/bin/activate    # Windows: venv\Scripts\activate
+pip install "claude-agent-sdk&gt;=0.2" "fastapi&gt;=0.110" "uvicorn&gt;=0.27" "pydantic&gt;=2.0"
+npm i -g @anthropic-ai/claude-code   # if not already installed
 claude
 &gt; /init</code></pre>
           </div>
@@ -1117,19 +1474,22 @@ claude
             <pre><code># Agent: Pre-Authorization Decision Agent (Iteration 2)
 
 ## Stack
-- Python 3.11+, Anthropic Agent SDK
+- Python 3.11+
+- `claude-agent-sdk` (the official Agent SDK &mdash; NOT a wrapper around `client.messages.create()`)
 - FastAPI + Docker for deployment
 - Mock data in mock_data/*.json (4 files)
 
 ## File Layout
-- agent.py     &mdash; Agent + 5 @agent.tool decorators
-- hooks.py     &mdash; pre/post tool-use hooks (PHI redaction is critical)
-- sessions.py  &mdash; multi-turn case sessions
-- server.py    &mdash; FastAPI wrapper
+- agent.py            &mdash; query() entry point + 5 @tool-decorated MCP tools + create_sdk_mcp_server
+- hooks/              &mdash; PreToolUse + PostToolUse hook scripts
+- .claude/settings.json &mdash; hooks registration (matchers + commands)
+- sessions.py         &mdash; multi-case session resume
+- server.py           &mdash; FastAPI async wrapper
 
 ## Compliance Rules (encode these in hooks)
-- PHI MUST be redacted from audit logs (member_id, names, DOBs)
-- PHI MUST NOT be redacted from agent working memory (breaks tool chaining)
+- PHI MUST be redacted in PostToolUse hooks BEFORE writing to audit log
+- PHI MUST NOT be stripped from the tool_result returned to the agent
+  (the agent needs the literal member_id to chain the next tool call)
 - All determinations MUST cite a policy_id
 
 ## System Prompt Rules
@@ -1147,108 +1507,230 @@ REQUEST_INFO when missing data; DENY when criteria fail.</code></pre>
       </div>
 
       <div class="step" id="i2-step9">
-        <div class="step-header">Step 9: Build Agent with @agent.tool Decorators</div>
+        <div class="step-header">Step 9: Build Agent with @tool Decorators (claude-agent-sdk)</div>
         <div class="step-meta"><span>15 min</span><span>agent.py</span></div>
-        <p><strong>What &amp; Why:</strong> The Agent SDK lets you define tools as decorated Python functions. The decorator generates the schema from type hints. The SDK runs the message loop for you.</p>
+        <p><strong>What &amp; Why:</strong> The <code>claude-agent-sdk</code> lets you define tools as <code>@tool</code>-decorated async functions registered with an in-process MCP server. <code>query()</code> drives the loop. This is a real package &mdash; do NOT simulate it with <code>client.messages.create()</code>.</p>
+
+        <div class="callout-warning">
+          <span class="box-label">What the Real SDK Looks Like</span>
+          <p>If you've used <code>client.messages.create()</code> in Iter 1, you might expect the SDK to be a thin <code>Agent</code> class wrapping it. It is not. The SDK is built around <strong>MCP tools</strong> + <strong>an async <code>query()</code> generator</strong> + <strong>options/hooks via <code>ClaudeAgentOptions</code></strong>. Tools return <code>{"content": [{"type": "text", "text": ...}]}</code> (MCP shape), not bare Python values.</p>
+        </div>
 
         <div class="code-block-wrapper">
-          <div class="code-tabs"><button class="code-tab active" onclick="switchTab(this,'i2s9-prompt')">Claude Code prompt</button><button class="code-tab" onclick="switchTab(this,'i2s9-py')">Resulting agent.py</button></div>
+          <div class="code-tabs"><button class="code-tab active" onclick="switchTab(this,'i2s9-prompt')">Claude Code prompt</button><button class="code-tab" onclick="switchTab(this,'i2s9-py')">agent.py (Python)</button><button class="code-tab" onclick="switchTab(this,'i2s9-ts')">agent.ts (TypeScript)</button></div>
           <div class="code-panel active" id="i2s9-prompt">
             <button class="copy-btn" onclick="copyCode(this)">Copy</button>
-            <pre><code>&gt; Create agent.py using the Anthropic Agent SDK. Implement five pre-auth tools:
-&gt; lookup_clinical_criteria(cpt_code, payer), verify_diagnosis_match(icd10_code, criteria_id),
-&gt; check_network_status(provider_npi, payer), get_benefit_summary(member_id, cpt_code),
-&gt; generate_determination(case_id, decision, rationale, policy_citation).
-&gt; Read mock data from mock_data/*.json. Use the system prompt rules from CLAUDE.md.</code></pre>
+            <pre><code>&gt; Create agent.py using `claude-agent-sdk`. Define five pre-auth tools as
+&gt; @tool-decorated async functions returning MCP-shaped {"content":[...]}:
+&gt; lookup_clinical_criteria, verify_diagnosis_match, check_network_status,
+&gt; get_benefit_summary, generate_determination. Wire them into a
+&gt; create_sdk_mcp_server, build ClaudeAgentOptions with the system prompt
+&gt; from CLAUDE.md, and expose async run(question) driving query() and
+&gt; concatenating AssistantMessage text.</code></pre>
           </div>
           <div class="code-panel" id="i2s9-py">
             <button class="copy-btn" onclick="copyCode(this)">Copy</button>
-            <pre><code>"""agent.py &mdash; Agent SDK version. ~70 lines incl. 5 tools."""
+            <pre><code>"""agent.py &mdash; claude-agent-sdk version. ~90 lines incl. 5 tools."""
 import json
 from pathlib import Path
-from anthropic import Agent
+from claude_agent_sdk import (
+    query, tool, create_sdk_mcp_server,
+    ClaudeAgentOptions, AssistantMessage,
+)
 
 DATA = Path("mock_data")
 CRITERIA = json.loads((DATA / "clinical_criteria.json").read_text())
 PROVIDERS = json.loads((DATA / "provider_directory.json").read_text())
 BENEFITS = json.loads((DATA / "benefits.json").read_text())
 
-agent = Agent(
-    model="claude-sonnet-4-6",
-    system="""You are a pre-auth decision agent. Always call tools in order:
-lookup_clinical_criteria, verify_diagnosis_match, check_network_status,
-get_benefit_summary, generate_determination. Never APPROVE without match
-AND in-network AND covered. Always cite policy_id in rationale.""",
+@tool("lookup_clinical_criteria",
+      "Get medical-necessity criteria for a CPT + payer.",
+      {"cpt_code": str, "payer": str})
+async def lookup_clinical_criteria(args):
+    rec = CRITERIA.get(f"{args['cpt_code']}_{args['payer'].upper()}",
+                       {"error": "no policy"})
+    return {"content": [{"type": "text", "text": json.dumps(rec)}]}
+
+@tool("verify_diagnosis_match",
+      "Check if an ICD-10 matches the approved indications.",
+      {"icd10_code": str, "criteria_id": str})
+async def verify_diagnosis_match(args):
+    for k, c in CRITERIA.items():
+        if k == args["criteria_id"] or c.get("policy_id") == args["criteria_id"]:
+            out = {"match": args["icd10_code"] in c["approved_indications"],
+                   "approved_indications": c["approved_indications"]}
+            return {"content": [{"type": "text", "text": json.dumps(out)}]}
+    return {"content": [{"type": "text", "text": json.dumps({"error": "criteria not found"})}]}
+
+@tool("check_network_status",
+      "Return in-network status for a provider + payer.",
+      {"provider_npi": str, "payer": str})
+async def check_network_status(args):
+    p = PROVIDERS.get(args["provider_npi"])
+    if not p:
+        out = {"error": "provider not found"}
+    else:
+        out = {"npi": p["npi"], "specialty": p["specialty"],
+               "in_network": args["payer"] in p.get("networks", []),
+               "payer": args["payer"]}
+    return {"content": [{"type": "text", "text": json.dumps(out)}]}
+
+@tool("get_benefit_summary",
+      "Coverage, copay, deductible-remaining for member + procedure.",
+      {"member_id": str, "cpt_code": str})
+async def get_benefit_summary(args):
+    rec = BENEFITS.get(f"{args['member_id']}_{args['cpt_code']}",
+                       {"covered": False, "error": "no benefit record"})
+    return {"content": [{"type": "text", "text": json.dumps(rec)}]}
+
+@tool("generate_determination",
+      "Produce final structured determination.",
+      {"case_id": str, "decision": str, "rationale": str, "policy_citation": str})
+async def generate_determination(args):
+    assert args["decision"] in ("APPROVE", "DENY", "REQUEST_INFO")
+    out = {"case_id": args["case_id"], "decision": args["decision"],
+           "rationale": args["rationale"],
+           "policy_citation": args.get("policy_citation", "")}
+    return {"content": [{"type": "text", "text": json.dumps(out)}]}
+
+preauth_server = create_sdk_mcp_server(
+    name="preauth_tools", version="1.0.0",
+    tools=[lookup_clinical_criteria, verify_diagnosis_match,
+           check_network_status, get_benefit_summary, generate_determination],
 )
 
-@agent.tool
-def lookup_clinical_criteria(cpt_code: str, payer: str) -&gt; dict:
-    """Get medical-necessity criteria for a CPT + payer."""
-    return CRITERIA.get(f"{cpt_code}_{payer.upper()}", {"error": "no policy"})
+OPTIONS = ClaudeAgentOptions(
+    model="claude-sonnet-4-6",
+    system_prompt=("You are a pre-auth decision agent. Always call tools in "
+                   "this order: lookup_clinical_criteria, verify_diagnosis_match, "
+                   "check_network_status, get_benefit_summary, generate_determination. "
+                   "Never APPROVE without successful match AND in-network AND covered. "
+                   "Always cite policy_id in rationale."),
+    mcp_servers={"preauth": preauth_server},
+    allowed_tools=[f"mcp__preauth__{n}" for n in (
+        "lookup_clinical_criteria", "verify_diagnosis_match",
+        "check_network_status", "get_benefit_summary", "generate_determination")],
+    max_turns=12,
+)
 
-@agent.tool
-def verify_diagnosis_match(icd10_code: str, criteria_id: str) -&gt; dict:
-    """Check if an ICD-10 matches the approved indications in given criteria."""
-    for k, c in CRITERIA.items():
-        if k == criteria_id or c.get("policy_id") == criteria_id:
-            return {"match": icd10_code in c["approved_indications"],
-                    "approved_indications": c["approved_indications"]}
-    return {"error": "criteria not found"}
+async def run(question: str) -&gt; str:
+    parts = []
+    async for msg in query(prompt=question, options=OPTIONS):
+        if isinstance(msg, AssistantMessage):
+            for block in msg.content:
+                if getattr(block, "text", None):
+                    parts.append(block.text)
+    return "\n".join(parts)</code></pre>
+          </div>
+          <div class="code-panel" id="i2s9-ts">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre><code>// agent.ts &mdash; @anthropic-ai/claude-agent-sdk version
+import { query, tool, createSdkMcpServer } from "@anthropic-ai/claude-agent-sdk";
+import { z } from "zod";
+import * as fs from "fs";
 
-@agent.tool
-def check_network_status(provider_npi: str, payer: str) -&gt; dict:
-    """Return in-network status for a provider + payer."""
-    p = PROVIDERS.get(provider_npi)
-    if not p: return {"error": "provider not found"}
-    return {"npi": p["npi"], "specialty": p["specialty"],
-            "in_network": payer in p.get("networks", []), "payer": payer}
+const CRITERIA  = JSON.parse(fs.readFileSync("mock_data/clinical_criteria.json", "utf8"));
+const PROVIDERS = JSON.parse(fs.readFileSync("mock_data/provider_directory.json", "utf8"));
+const BENEFITS  = JSON.parse(fs.readFileSync("mock_data/benefits.json", "utf8"));
 
-@agent.tool
-def get_benefit_summary(member_id: str, cpt_code: str) -&gt; dict:
-    """Coverage, copay, deductible-remaining for member + procedure."""
-    return BENEFITS.get(f"{member_id}_{cpt_code}",
-                        {"covered": False, "error": "no benefit record"})
+const lookupClinicalCriteria = tool(
+  "lookup_clinical_criteria",
+  "Get medical-necessity criteria for a CPT + payer.",
+  { cpt_code: z.string(), payer: z.string() },
+  async (args) =&gt; {
+    const rec = CRITERIA[`${args.cpt_code}_${args.payer.toUpperCase()}`]
+              ?? { error: "no policy" };
+    return { content: [{ type: "text", text: JSON.stringify(rec) }] };
+  }
+);
+// (verify_diagnosis_match, check_network_status, get_benefit_summary,
+//  generate_determination defined the same way &mdash; see Python for full set)
 
-@agent.tool
-def generate_determination(case_id: str, decision: str, rationale: str,
-                           policy_citation: str = "") -&gt; dict:
-    """Produce final structured determination."""
-    assert decision in ("APPROVE", "DENY", "REQUEST_INFO")
-    return {"case_id": case_id, "decision": decision,
-            "rationale": rationale, "policy_citation": policy_citation}
+const preauthServer = createSdkMcpServer({
+  name: "preauth_tools",
+  tools: [lookupClinicalCriteria, /* ... 4 more ... */],
+});
 
-def run(question: str) -&gt; str:
-    return agent.run(question).text</code></pre>
+const OPTIONS = {
+  model: "claude-sonnet-4-6",
+  systemPrompt: "You are a pre-auth decision agent. Always call tools in order: " +
+                "lookup_clinical_criteria, verify_diagnosis_match, check_network_status, " +
+                "get_benefit_summary, generate_determination. Never APPROVE without " +
+                "match AND in-network AND covered. Always cite policy_id.",
+  mcpServers: { preauth: preauthServer },
+  allowedTools: [
+    "mcp__preauth__lookup_clinical_criteria",
+    "mcp__preauth__verify_diagnosis_match",
+    "mcp__preauth__check_network_status",
+    "mcp__preauth__get_benefit_summary",
+    "mcp__preauth__generate_determination",
+  ],
+  maxTurns: 12,
+};
+
+export async function run(question: string): Promise&lt;string&gt; {
+  const parts: string[] = [];
+  for await (const msg of query({ prompt: question, options: OPTIONS })) {
+    if (msg.type === "assistant") {
+      for (const block of msg.content) {
+        if ("text" in block) parts.push(block.text);
+      }
+    }
+  }
+  return parts.join("\n");
+}</code></pre>
           </div>
         </div>
 
         <div class="callout-why">
           <span class="box-label">What Just Disappeared</span>
-          <p>You no longer write the message loop, the stop_reason check, the tool_result append, or the JSON schemas. The 90-line raw loop from Iter 1 collapsed to <code>agent.run()</code>. <strong>Same five-tool decision flow, ~70 lines instead of ~140.</strong></p>
+          <p>You no longer write the message loop, the stop_reason check, the tool_result append, or JSON schema dicts. The 90-line raw loop from Iter 1 collapsed to one <code>async for msg in query(...)</code> (Python) / <code>for await</code> (TS). <strong>Same five-tool decision flow, ~90 lines.</strong></p>
+        </div>
+
+        <div class="troubleshoot" style="background:var(--warning-bg);border-radius:6px;padding:0.75rem 1rem;margin-top:1rem;font-size:0.9rem;">
+          <div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:0.8rem;color:var(--warning);margin-bottom:0.5rem;">Troubleshooting</div>
+          <ul style="margin:0;font-size:0.85rem;">
+            <li><code>ModuleNotFoundError: No module named 'claude_agent_sdk'</code> &rarr; <code>pip install "claude-agent-sdk&gt;=0.2"</code> in your venv.</li>
+            <li><code>ImportError: cannot import name 'Agent' from 'anthropic'</code> &rarr; you're trying the old fictional API. The real SDK is <code>claude_agent_sdk</code>.</li>
+            <li>Tool call rejected with "not allowed" &rarr; add the tool's <code>mcp__preauth__&lt;name&gt;</code> entry to <code>allowed_tools</code>.</li>
+          </ul>
         </div>
       </div>
 
       <div class="step" id="i2-step10">
-        <div class="step-header">Step 10: Add Hooks for PHI Redaction, Validation, Audit</div>
-        <div class="step-meta"><span>20 min</span><span>hooks.py</span></div>
-        <p><strong>What &amp; Why:</strong> Hooks fire at <code>pre_tool_use</code> and <code>post_tool_use</code>. The four guardrails from Iter 1 become four hook functions in their own file. The PHI hook is the critical one for HIPAA: it redacts when serializing to audit but NOT when returning to the agent.</p>
+        <div class="step-header">Step 10: HIPAA Hooks via .claude/settings.json + HookMatcher</div>
+        <div class="step-meta"><span>20 min</span><span>hooks/*.py + .claude/settings.json</span></div>
+        <p><strong>What &amp; Why:</strong> The SDK supports two hook surfaces: (a) <strong>file-based hooks</strong> in <code>.claude/settings.json</code> that shell out to scripts (production-friendly, language-agnostic, ideal for the audit-redaction pipeline) and (b) <strong>in-process hooks</strong> via <code>HookMatcher</code> in <code>ClaudeAgentOptions(hooks={...})</code> for validation that needs to deny the call. We use both. <strong>Critical:</strong> the audit redactor only modifies what gets WRITTEN to the audit log, not what flows back to the agent &mdash; otherwise tool chaining breaks.</p>
 
         <div class="code-block-wrapper">
-          <div class="code-tabs"><button class="code-tab active" onclick="switchTab(this,'i2s10-py')">hooks.py</button></div>
-          <div class="code-panel active" id="i2s10-py">
+          <div class="code-tabs">
+            <button class="code-tab active" onclick="switchTab(this,'i2s10-settings')">.claude/settings.json</button>
+            <button class="code-tab" onclick="switchTab(this,'i2s10-hookpy')">hooks/audit_redacted.py</button>
+            <button class="code-tab" onclick="switchTab(this,'i2s10-inproc')">In-process validation (HookMatcher)</button>
+          </div>
+          <div class="code-panel active" id="i2s10-settings">
             <button class="copy-btn" onclick="copyCode(this)">Copy</button>
-            <pre><code>"""hooks.py &mdash; pre/post tool-use hooks. Modular HIPAA guardrails."""
-import re, json, datetime
-from agent import agent
+            <pre><code>{
+  "hooks": {
+    "PreToolUse": [
+      { "matcher": "*", "command": "python hooks/log_redacted.py" }
+    ],
+    "PostToolUse": [
+      { "matcher": "*", "command": "python hooks/audit_redacted.py" }
+    ]
+  }
+}</code></pre>
+          </div>
+          <div class="code-panel" id="i2s10-hookpy">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre><code>"""hooks/audit_redacted.py &mdash; redact PHI only for the audit log,
+pass the original payload back to the agent unchanged."""
+import sys, json, re, datetime
 
 MEMBER_RE = re.compile(r"\b[A-Z]\d{6,9}\b")
-SSN_RE = re.compile(r"\b\d{3}-\d{2}-\d{4}\b")
-PHONE_RE = re.compile(r"\b\d{3}-\d{3}-\d{4}\b")
-DOB_RE = re.compile(r"\b\d{4}-\d{2}-\d{2}\b")
-
-CPT_RE = re.compile(r"^[0-9]{5}$|^[A-Z][0-9]{4}$")
-NPI_RE = re.compile(r"^[0-9]{10}$")
-ICD10_RE = re.compile(r"^[A-Z]\d{2}(\.\d{1,4})?$")
+SSN_RE    = re.compile(r"\b\d{3}-\d{2}-\d{4}\b")
+PHONE_RE  = re.compile(r"\b\d{3}-\d{3}-\d{4}\b")
+DOB_RE    = re.compile(r"\b\d{4}-\d{2}-\d{2}\b")
 
 def _redact(s: str) -&gt; str:
     s = MEMBER_RE.sub("[MEMBER_ID_REDACTED]", s)
@@ -1257,40 +1739,120 @@ def _redact(s: str) -&gt; str:
     s = DOB_RE.sub("[DOB_REDACTED]", s)
     return s
 
-@agent.hook("pre_tool_use")
-def log_call(tool_name, tool_input):
-    # Log redacted &mdash; never write raw PHI to stdout
-    print(f"[{datetime.datetime.utcnow().isoformat()}Z] CALL {tool_name}"
-          f"({_redact(json.dumps(tool_input))})")
-    return True
+payload = json.load(sys.stdin)
+tool_name   = payload.get("tool_name", "")
+tool_input  = payload.get("tool_input", {})
+tool_result = payload.get("tool_result")
 
-@agent.hook("pre_tool_use")
-def validate(tool_name, tool_input):
-    if tool_name == "lookup_clinical_criteria":
-        if not CPT_RE.match(tool_input.get("cpt_code", "")):
-            raise ValueError(f"Invalid CPT: {tool_input.get('cpt_code')}")
-    if tool_name == "verify_diagnosis_match":
-        if not ICD10_RE.match(tool_input.get("icd10_code", "")):
-            raise ValueError(f"Invalid ICD-10: {tool_input.get('icd10_code')}")
-    if tool_name == "check_network_status":
-        if not NPI_RE.match(tool_input.get("provider_npi", "")):
-            raise ValueError(f"Invalid NPI: {tool_input.get('provider_npi')}")
-    return True
+rec = {"ts": datetime.datetime.utcnow().isoformat() + "Z",
+       "tool": tool_name,
+       "input_redacted": _redact(json.dumps(tool_input)),
+       "output_summary": _redact(json.dumps(tool_result))[:200]}
+with open("audit_log.jsonl", "a") as f:
+    f.write(json.dumps(rec) + "\n")
 
-@agent.hook("post_tool_use")
-def audit(tool_name, tool_input, tool_result):
-    # Redact ONLY for audit log &mdash; return original to agent so chaining works
-    rec = {"ts": datetime.datetime.utcnow().isoformat() + "Z",
-           "tool": tool_name,
-           "input_redacted": _redact(json.dumps(tool_input)),
-           "output_summary": _redact(str(tool_result))[:200]}
-    with open("audit_log.jsonl", "a") as f:
-        f.write(json.dumps(rec) + "\n")
-    return tool_result   # &lt;- IMPORTANT: return UNREDACTED to agent</code></pre>
+# CRITICAL: return the ORIGINAL payload so the agent gets unredacted PHI
+# for chaining (e.g., member_id needs to flow into the next tool call).
+json.dump(payload, sys.stdout)</code></pre>
+          </div>
+          <div class="code-panel" id="i2s10-inproc">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre><code>"""Add to agent.py: in-process input validation via HookMatcher."""
+import re
+from claude_agent_sdk import HookMatcher
+
+CPT_RE   = re.compile(r"^[0-9]{5}$|^[A-Z][0-9]{4}$")
+NPI_RE   = re.compile(r"^[0-9]{10}$")
+ICD10_RE = re.compile(r"^[A-Z]\d{2}(\.\d{1,4})?$")
+
+async def validate_input(input_data, tool_use_id, context):
+    name  = input_data.get("tool_name", "")
+    args  = input_data.get("tool_input", {}) or {}
+    fail = None
+    if name.endswith("lookup_clinical_criteria") and not CPT_RE.match(args.get("cpt_code", "")):
+        fail = f"Invalid CPT: {args.get('cpt_code')!r}"
+    elif name.endswith("verify_diagnosis_match") and not ICD10_RE.match(args.get("icd10_code", "")):
+        fail = f"Invalid ICD-10: {args.get('icd10_code')!r}"
+    elif name.endswith("check_network_status") and not NPI_RE.match(args.get("provider_npi", "")):
+        fail = f"Invalid NPI (must be 10 digits): {args.get('provider_npi')!r}"
+    if fail:
+        return {"hookSpecificOutput": {"hookEventName": "PreToolUse",
+                                        "permissionDecision": "deny",
+                                        "permissionDecisionReason": fail}}
+    return {}
+
+# Then update OPTIONS in agent.py:
+OPTIONS = ClaudeAgentOptions(
+    # ... existing fields ...
+    hooks={"PreToolUse": [HookMatcher(matcher="mcp__preauth__*",
+                                      hooks=[validate_input])]},
+)</code></pre>
           </div>
         </div>
 
-        <div class="checkpoint"><div class="checkpoint-label">Checkpoint</div>Run the agent on PA-2025-0001. The audit log should show <code>[MEMBER_ID_REDACTED]</code> instead of <code>A123456</code>. The agent should still complete all 5 tool calls and produce APPROVE.</div>
+        <p><strong>Create the supporting log_redacted.py hook</strong> &mdash; same stdin/stdout pattern, prints to stderr (so the log line itself doesn't accidentally leak PHI to anything that captures stdout):</p>
+        <div class="code-block-wrapper">
+          <div class="code-tabs"><button class="code-tab active" onclick="switchTab(this,'i2s10-log')">hooks/log_redacted.py</button></div>
+          <div class="code-panel active" id="i2s10-log">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre><code>"""hooks/log_redacted.py &mdash; PreToolUse: print redacted call info to stderr."""
+import sys, json, re, datetime
+
+MEMBER_RE = re.compile(r"\b[A-Z]\d{6,9}\b")
+SSN_RE    = re.compile(r"\b\d{3}-\d{2}-\d{4}\b")
+
+payload = json.load(sys.stdin)
+ts = datetime.datetime.utcnow().isoformat() + "Z"
+name = payload.get("tool_name", "?")
+args_str = json.dumps(payload.get("tool_input", {}))
+args_str = MEMBER_RE.sub("[MEMBER_ID_REDACTED]", args_str)
+args_str = SSN_RE.sub("[SSN_REDACTED]", args_str)
+print(f"[{ts}] PRE  {name}({args_str})", file=sys.stderr)
+json.dump(payload, sys.stdout)   # CRITICAL: pass-through unchanged</code></pre>
+          </div>
+        </div>
+
+        <p><strong>Smoke-test each hook script standalone before wiring them up:</strong></p>
+        <div class="code-block-wrapper">
+          <div class="code-panel active">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre><code># Test the log hook (should print redacted to stderr, pass through stdout):
+echo '{"tool_name":"get_benefit_summary","tool_input":{"member_id":"A123456","cpt_code":"27447"}}' \
+  | python hooks/log_redacted.py
+
+# Test the audit hook (should append a redacted line to audit_log.jsonl):
+echo '{"tool_name":"get_benefit_summary","tool_input":{"member_id":"A123456"},"tool_result":{"covered":true}}' \
+  | python hooks/audit_redacted.py
+cat audit_log.jsonl</code></pre>
+          </div>
+        </div>
+
+        <p><strong>Then run the agent end-to-end:</strong></p>
+        <div class="code-block-wrapper">
+          <div class="code-panel active">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre><code>python -c "import asyncio, agent; print(asyncio.run(agent.run('Is PA-2025-0001 approvable? CPT 27447 ICD M17.11 member A123456 NPI 1234567890 Aetna')))"</code></pre>
+          </div>
+        </div>
+
+        <div class="checkpoint"><div class="checkpoint-label">&#9989; Checkpoint &mdash; Step 10</div>
+          You should see (1) <code>[timestamp] PRE</code> log lines on stderr with member_id REDACTED, (2) the agent's APPROVE determination on stdout with the literal member_id correctly used in the rationale, (3) <code>audit_log.jsonl</code> has redacted records. Try a 2-character CPT &mdash; the in-process <code>HookMatcher</code> validator should deny it.
+        </div>
+
+        <div class="callout-security">
+          <span class="box-label">&#9888;&#65039; PHI Redaction is Trickier Than It Looks (still)</span>
+          <p>The agent NEEDS the unredacted member_id and provider_npi in its working memory to call the next tool. The hook script writes the REDACTED record to <code>audit_log.jsonl</code>, but it returns the ORIGINAL payload via stdout. If you redact the stdout payload too, the agent can't chain &mdash; <code>get_benefit_summary</code> will see <code>[MEMBER_ID_REDACTED]</code> as the member_id and 404. Test by running the agent and confirming both: (1) <code>audit_log.jsonl</code> has redacted records, (2) the agent still completes all 5 tool calls successfully.</p>
+        </div>
+
+        <div class="troubleshoot" style="background:var(--warning-bg);border-radius:6px;padding:0.75rem 1rem;margin-top:1rem;font-size:0.9rem;">
+          <div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:0.8rem;color:var(--warning);margin-bottom:0.5rem;">Troubleshooting</div>
+          <ul style="margin:0;font-size:0.85rem;">
+            <li><strong>Hooks don't run</strong> &rarr; the SDK looks for <code>.claude/settings.json</code> in cwd. Run from the project root.</li>
+            <li><strong>Audit log shows literal member_id</strong> &rarr; you forgot to call <code>_redact()</code> inside the audit script. Test the redactor standalone first.</li>
+            <li><strong>Agent fails on get_benefit_summary with "no benefit record"</strong> &rarr; you redacted the stdout payload too aggressively. Only redact what's WRITTEN to the audit log; pass through the original payload to stdout.</li>
+            <li><strong>In-process validator never fires</strong> &rarr; check that <code>hooks={"PreToolUse": [HookMatcher(...)]}</code> is a kwarg on <code>ClaudeAgentOptions</code> with the matcher pattern <code>"mcp__preauth__*"</code>.</li>
+          </ul>
+        </div>
       </div>
 
       <div class="step" id="i2-step11">
@@ -1302,38 +1864,109 @@ def audit(tool_name, tool_input, tool_result):
           <div class="code-tabs"><button class="code-tab active" onclick="switchTab(this,'i2s11-py')">sessions.py</button></div>
           <div class="code-panel active" id="i2s11-py">
             <button class="copy-btn" onclick="copyCode(this)">Copy</button>
-            <pre><code>from agent import agent
-SESSIONS = {}  # case_id -&gt; session
+            <pre><code>"""sessions.py &mdash; multi-case via SDK resume tokens."""
+from dataclasses import replace
+from claude_agent_sdk import query, AssistantMessage
+from agent import OPTIONS
 
-def chat(case_id: str, msg: str) -&gt; str:
-    sess = SESSIONS.setdefault(case_id, agent.session())
-    return sess.send(msg).text
+SESSIONS: dict[str, str] = {}   # case_id -&gt; resume token (session_id)
 
-def what_if(case_id: str, hypothetical: str) -&gt; str:
-    """Fork: 'what if the payer were UnitedHealth?'"""
-    branch = SESSIONS[case_id].fork()
-    return branch.send(hypothetical).text</code></pre>
+async def _drive(prompt, options):
+    parts, sid = [], None
+    async for msg in query(prompt=prompt, options=options):
+        if isinstance(msg, AssistantMessage):
+            for block in msg.content:
+                if getattr(block, "text", None): parts.append(block.text)
+        s = getattr(msg, "session_id", None)
+        if s: sid = s
+    return "\n".join(parts), sid
+
+async def chat(case_id: str, msg: str) -&gt; str:
+    resume = SESSIONS.get(case_id)
+    options = replace(OPTIONS, resume=resume) if resume else OPTIONS
+    text, sid = await _drive(msg, options)
+    if sid: SESSIONS[case_id] = sid
+    return text
+
+async def what_if(case_id: str, hypothetical: str) -&gt; str:
+    """Fork: 'what if the payer were UnitedHealth?' &mdash; do NOT save the new sid."""
+    resume = SESSIONS.get(case_id)
+    options = replace(OPTIONS, resume=resume) if resume else OPTIONS
+    text, _ = await _drive(hypothetical, options)
+    return text</code></pre>
           </div>
+        </div>
+
+        <p><strong>Try it &mdash; multi-case + fork demo:</strong></p>
+        <div class="code-block-wrapper">
+          <div class="code-panel active">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre><code>python -c "
+import asyncio
+from sessions import chat, what_if
+
+async def main():
+    print('T1:', await chat('PA-2025-0001', 'Is this approvable? CPT 27447, ICD M17.11, member A123456, NPI 1234567890, Aetna'))
+    print('FORK:', await what_if('PA-2025-0001', 'What if the payer were UnitedHealth instead?'))
+    print('T2:', await chat('PA-2025-0001', 'Stick with Aetna. What about a peer-to-peer review?'))
+
+asyncio.run(main())
+"</code></pre>
+          </div>
+        </div>
+
+        <div class="checkpoint"><div class="checkpoint-label">&#9989; Checkpoint &mdash; Step 11</div>
+          T1 produces APPROVE under Aetna. FORK shows what would happen with UnitedHealth (different policy, possibly different determination) WITHOUT polluting the main case session. T2 continues from T1 (Aetna context preserved) and addresses the peer-to-peer ask. If T2 references the UnitedHealth hypothetical, your <code>what_if</code> is leaking state into <code>SESSIONS</code>.
         </div>
       </div>
 
       <div class="step" id="i2-step12">
         <div class="step-header">Step 12: Slash Commands</div>
-        <div class="step-meta"><span>15 min</span><span>.claude/commands/*.md</span></div>
-        <p><strong>What &amp; Why:</strong> <code>/run-preauth PA-2025-0001</code>, <code>/test-agent</code>, <code>/eval-agent</code> turn the agent into a one-line workflow inside Claude Code.</p>
+        <div class="step-meta"><span>15 min</span><span>.claude/commands/*.md (3 files)</span></div>
+        <p><strong>What &amp; Why:</strong> <code>/run-preauth PA-2025-0001</code>, <code>/test-agent</code>, <code>/eval-agent</code> turn the agent into a one-line workflow inside Claude Code. Reviewers can adjudicate cases without leaving their IDE.</p>
 
+        <p><strong>Create 3 files in <code>.claude/commands/</code>:</strong></p>
         <div class="code-block-wrapper">
-          <div class="code-tabs"><button class="code-tab active" onclick="switchTab(this,'i2s12-md')">run-preauth.md</button></div>
-          <div class="code-panel active" id="i2s12-md">
+          <div class="code-tabs">
+            <button class="code-tab active" onclick="switchTab(this,'i2s12-run')">run-preauth.md</button>
+            <button class="code-tab" onclick="switchTab(this,'i2s12-test')">test-agent.md</button>
+            <button class="code-tab" onclick="switchTab(this,'i2s12-eval')">eval-agent.md</button>
+          </div>
+          <div class="code-panel active" id="i2s12-run">
             <button class="copy-btn" onclick="copyCode(this)">Copy</button>
             <pre><code>---
 description: Run the pre-auth agent on a case_id from preauth_requests.json
 argument-hint: [case_id]
 ---
 Look up case $ARGUMENTS in mock_data/preauth_requests.json. Build the question
-string. Run `python -c "from agent import run; print(run(question))"`.
-Print determination, rationale, policy citation, total tokens, total cost.</code></pre>
+string. Run `python -c "import asyncio, agent; print(asyncio.run(agent.run(q)))"`
+where q is the question. Print determination, rationale, policy citation,
+total tokens, total cost from the ResultMessage emitted by query().</code></pre>
           </div>
+          <div class="code-panel" id="i2s12-test">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre><code>---
+description: Run the unit test suite for the pre-auth agent
+---
+Run `pytest tests/ -v`. Critical tests: test_phi_not_in_audit (PHI must be
+redacted in audit_log.jsonl), test_member_id_passes_to_get_benefit_summary
+(unredacted in agent stream), test_approves_pa_2025_0001 (canonical case
+should APPROVE with policy CPB-0660 cited).</code></pre>
+          </div>
+          <div class="code-panel" id="i2s12-eval">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre><code>---
+description: Run the 15-case evaluation suite
+---
+Read test_scenarios.json (15 pre-auth cases: 11 APPROVE, 2 DENY, 2 REQUEST_INFO).
+For each, call agent.run(), score on: correct decision, policy_id cited, all 5
+tools called, tone is appropriate for clinical context. Report per-case score
+and overall percentage.</code></pre>
+          </div>
+        </div>
+
+        <div class="checkpoint"><div class="checkpoint-label">&#9989; Checkpoint &mdash; Step 12</div>
+          When you type <code>/</code> in Claude Code, the three commands appear in autocomplete. <code>/run-preauth PA-2025-0001</code> produces the APPROVE determination. <code>/test-agent</code> requires a <code>tests/</code> folder &mdash; in Iter 3 the spec generates these for you.
         </div>
       </div>
 
@@ -1343,24 +1976,117 @@ Print determination, rationale, policy citation, total tokens, total cost.</code
         <p><strong>What &amp; Why:</strong> Same FastAPI + Docker pattern as Iter 1, but Claude Code writes it.</p>
 
         <div class="code-block-wrapper">
-          <div class="code-tabs"><button class="code-tab active" onclick="switchTab(this,'i2s13-prompt')">Claude Code prompt</button></div>
+          <div class="code-tabs"><button class="code-tab active" onclick="switchTab(this,'i2s13-prompt')">Claude Code prompt</button><button class="code-tab" onclick="switchTab(this,'i2s13-server')">Resulting server.py</button><button class="code-tab" onclick="switchTab(this,'i2s13-dock')">Dockerfile</button></div>
           <div class="code-panel active" id="i2s13-prompt">
             <button class="copy-btn" onclick="copyCode(this)">Copy</button>
             <pre><code>&gt; Create server.py and Dockerfile. Endpoints: GET /health,
 &gt; POST /preauth (single-shot determination), POST /chat (case_id + message).
-&gt; Use agent.run() and sessions.chat(). python:3.11-slim base, expose 8000.</code></pre>
+&gt; Async FastAPI handlers awaiting agent.run() and sessions.chat() (both are
+&gt; async coroutines from claude-agent-sdk). python:3.11-slim base, install
+&gt; claude-agent-sdk + dependencies, expose 8000. Mount .claude/ into the
+&gt; container so settings.json + hook scripts resolve at runtime.</code></pre>
+          </div>
+          <div class="code-panel" id="i2s13-server">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre><code>"""server.py &mdash; async FastAPI wrapper around the SDK pre-auth agent."""
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+from agent import run as agent_run
+from sessions import chat as session_chat
+
+app = FastAPI(title="Pre-Auth Decision Agent (Iter 2 &mdash; SDK)")
+
+class Q(BaseModel): question: str
+class C(BaseModel): case_id: str; message: str
+
+@app.get("/health")
+def health(): return {"status": "ok", "iter": 2}
+
+@app.post("/preauth")
+async def preauth(q: Q):
+    try: return {"determination": await agent_run(q.question)}
+    except Exception as e: raise HTTPException(500, str(e))
+
+@app.post("/chat")
+async def chat_ep(c: C):
+    try: return {"answer": await session_chat(c.case_id, c.message)}
+    except Exception as e: raise HTTPException(500, str(e))</code></pre>
+          </div>
+          <div class="code-panel" id="i2s13-dock">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre><code>FROM python:3.11-slim
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY . .
+EXPOSE 8000
+ENV PYTHONUNBUFFERED=1
+CMD ["uvicorn", "server:app", "--host", "0.0.0.0", "--port", "8000"]</code></pre>
           </div>
         </div>
 
-        <div class="checkpoint"><div class="checkpoint-label">Iteration 2 Complete</div>Same curl as Iter 1; same APPROVE output. The agent's <em>behavior</em> is unchanged &mdash; you just wrote half the code.</div>
+        <p><strong>Run locally first, then Docker:</strong></p>
+        <div class="code-block-wrapper">
+          <div class="code-panel active">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre><code>uvicorn server:app --reload --port 8000
+# In another terminal:
+curl localhost:8000/health
+curl -X POST localhost:8000/preauth -H "Content-Type: application/json" \
+     -d '{"question":"Is PA-2025-0001 approvable?"}'
+
+# Then build the container (mounts .claude/ at COPY time):
+docker build -t iter2-a .
+docker run --rm -p 8000:8000 -e ANTHROPIC_API_KEY=$ANTHROPIC_API_KEY iter2-a</code></pre>
+          </div>
+        </div>
+      </div>
+
+      <!-- ===== END-OF-ITER-2 VERIFICATION ===== -->
+      <div class="checkpoint" style="background:var(--success-bg);border:2px solid var(--success);">
+        <div class="checkpoint-label" style="color:var(--success);">&#127881; Iteration 2 Complete &mdash; End-to-End Verification</div>
+        <p>You should now have <strong>~14 files</strong> in your project:</p>
+        <pre style="background:var(--code-bg);border-radius:6px;padding:0.6rem 0.9rem;font-size:0.78rem;color:var(--text-secondary);margin:0.5rem 0;">agent-iter2-sdk/
+&boxv;&boxh;&boxh; CLAUDE.md
+&boxv;&boxh;&boxh; agent.py            # query() + 5 @tool functions + create_sdk_mcp_server
+&boxv;&boxh;&boxh; sessions.py         # chat() + what_if() over SDK resume tokens
+&boxv;&boxh;&boxh; mock_data/ &times;4       # same as Iter 1
+&boxv;&boxh;&boxh; .claude/
+&boxv;&boxh;   &boxv;&boxh;&boxh; settings.json
+&boxv;&boxh;   &boxv;&boxh;&boxh; commands/run-preauth.md, test-agent.md, eval-agent.md
+&boxv;&boxh;&boxh; hooks/
+&boxv;&boxh;   &boxv;&boxh;&boxh; log_redacted.py, audit_redacted.py
+&boxv;&boxh;&boxh; server.py | Dockerfile | requirements.txt</pre>
+
+        <p><strong>Acceptance test &mdash; same shape as Iter 1:</strong></p>
+        <div class="code-block-wrapper" style="margin:0.5rem 0;">
+          <div class="code-panel active">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre><code># 1. Single pre-auth (should APPROVE, same as Iter 1)
+curl -s -X POST localhost:8000/preauth -H "Content-Type: application/json" \
+     -d '{"question":"Is PA-2025-0001 approvable?"}' | python -m json.tool
+
+# 2. Multi-case with SDK resume tokens
+curl -s -X POST localhost:8000/chat -H "Content-Type: application/json" \
+     -d '{"case_id":"PA-2025-0001","message":"Is this approvable? CPT 27447, ICD M17.11"}' | python -m json.tool
+curl -s -X POST localhost:8000/chat -H "Content-Type: application/json" \
+     -d '{"case_id":"PA-2025-0001","message":"What about a peer-to-peer review?"}' | python -m json.tool
+
+# 3. PHI verification
+docker exec $(docker ps -q --filter ancestor=iter2-a) cat audit_log.jsonl | head -5
+# Look for [MEMBER_ID_REDACTED] but the agent's response should still resolve benefits.</code></pre>
+          </div>
+        </div>
+        <p><strong>You pass Iter 2 if:</strong> all 3 outputs are functionally equivalent to Iter 1, but you wrote ~120 lines instead of ~250. Iter-2's hooks and SDK do the work the Iter-1 loop did manually.</p>
+      </div>
 
         <div class="callout-why">
           <span class="box-label">Iteration 2 Metrics</span>
           <ul style="margin-bottom:0;">
-            <li><strong>Files:</strong> 8 + 4 mock JSON</li>
+            <li><strong>Files:</strong> ~10 (CLAUDE.md, agent.py, sessions.py, server.py, Dockerfile, .claude/settings.json, hooks/{log_redacted,audit_redacted}.py, slash commands) + 4 mock JSON</li>
             <li><strong>Lines you wrote:</strong> ~120</li>
             <li><strong>Time:</strong> ~2 hours</li>
-            <li><strong>Abstractions used:</strong> Agent SDK + hooks + sessions + Claude Code</li>
+            <li><strong>Abstractions used:</strong> <code>claude-agent-sdk</code> (query / @tool / MCP server / ClaudeAgentOptions / HookMatcher) + <code>.claude/settings.json</code> + Claude Code</li>
           </ul>
         </div>
       </div>
@@ -1371,23 +2097,35 @@ Print determination, rationale, policy citation, total tokens, total cost.</code
 
         <div class="debug-method">
           <div class="debug-method-title">A. Hooks as Debug Probes</div>
-          <p>Add a verbose debug hook for diagnostic runs (remember to redact PHI):</p>
+          <p>Swap <code>.claude/settings.json</code> to a debug variant during diagnostic runs (the script writes redacted info to stderr and passes the original payload through stdout):</p>
           <div class="code-block-wrapper">
-            <div class="code-tabs"><button class="code-tab active" onclick="switchTab(this,'i2d-py')">hooks_debug.py</button></div>
+            <div class="code-tabs"><button class="code-tab active" onclick="switchTab(this,'i2d-py')">hooks/debug_redacted.py</button><button class="code-tab" onclick="switchTab(this,'i2d-settings')">.claude/settings.debug.json</button></div>
             <div class="code-panel active" id="i2d-py">
               <button class="copy-btn" onclick="copyCode(this)">Copy</button>
-              <pre><code>@agent.hook("pre_tool_use")
-def debug_pre(tool_name, tool_input):
-    print(f"[DEBUG PRE] {tool_name}: {_redact(json.dumps(tool_input))}")
-    return True
+              <pre><code>"""hooks/debug_redacted.py &mdash; pretty-print to stderr (redacted), pass through."""
+import sys, json, re
 
-@agent.hook("post_tool_use")
-def debug_post(tool_name, tool_input, tool_result):
-    print(f"[DEBUG POST] {tool_name} -&gt; {_redact(str(tool_result))[:200]}")
-    return tool_result</code></pre>
+MEMBER_RE = re.compile(r"\b[A-Z]\d{6,9}\b")
+def _r(s): return MEMBER_RE.sub("[MEMBER_ID_REDACTED]", s)
+
+payload = json.load(sys.stdin)
+print(f"[HOOK {payload.get('hook_event_name','?')}] "
+      f"{payload.get('tool_name','?')}: "
+      f"{_r(json.dumps(payload.get('tool_input', payload.get('tool_result'))))[:200]}",
+      file=sys.stderr)
+json.dump(payload, sys.stdout)   # pass-through unchanged</code></pre>
+            </div>
+            <div class="code-panel" id="i2d-settings">
+              <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+              <pre><code>{
+  "hooks": {
+    "PreToolUse":  [{ "matcher": "*", "command": "python hooks/debug_redacted.py" }],
+    "PostToolUse": [{ "matcher": "*", "command": "python hooks/debug_redacted.py" }]
+  }
+}</code></pre>
             </div>
           </div>
-          <p>BETTER than Iter-1 print statements because hooks are modular and remember to redact.</p>
+          <p>BETTER than Iter-1 print statements because hooks are modular &mdash; symlink <code>.claude/settings.json</code> to the debug variant for one run, then back to production. Agent code stays untouched.</p>
         </div>
 
         <div class="debug-method">
@@ -1434,40 +2172,41 @@ def debug_post(tool_name, tool_input, tool_result):
             <pre><code># Agent Specification: Pre-Authorization Decision Agent
 
 ## 1. Overview
-An agent that determines APPROVE / DENY / REQUEST_INFO for medical pre-auth
-requests by checking clinical criteria, diagnosis match, network status,
-and benefits, then producing a structured determination with policy citation.
+APPROVE / DENY / REQUEST_INFO determinations for medical pre-auth by checking
+clinical criteria, diagnosis match, network status, and benefits, then
+producing a structured determination with policy citation.
 
 ## 2. Configuration
 - Model: claude-sonnet-4-6
-- Framework: Anthropic Agent SDK
-- Max tool calls per request: 12
+- Framework: claude-agent-sdk (Python). Tools registered via
+  create_sdk_mcp_server. Driver: query() with ClaudeAgentOptions.
+- Max turns: 12
 - Max tokens per response: 4096
 
-## 3. Tools (call in this order)
+## 3. Tools (registered as MCP server "preauth", call in this order)
 
-### lookup_clinical_criteria
-Parameters: cpt_code (str, regex ^[0-9]{5}$|^[A-Z][0-9]{4}$), payer (str enum)
-Returns: criteria dict with policy_id, approved_indications, criteria text
+### mcp__preauth__lookup_clinical_criteria
+- @tool with schema {cpt_code: str, payer: str}
+- Returns criteria dict with policy_id, approved_indications, criteria text
+  wrapped in {"content":[{"type":"text","text": json}]}
 
-### verify_diagnosis_match
-Parameters: icd10_code (str, ICD-10 format), criteria_id (str)
-Returns: {match: bool, approved_indications: list}
+### mcp__preauth__verify_diagnosis_match
+- {icd10_code: str, criteria_id: str}
+- Returns {match, approved_indications}
 
-### check_network_status
-Parameters: provider_npi (str, 10 digits), payer (str)
-Returns: {npi, specialty, in_network: bool, payer}
+### mcp__preauth__check_network_status
+- {provider_npi: str (10 digits), payer: str}
+- Returns {npi, specialty, in_network, payer}
 
-### get_benefit_summary
-Parameters: member_id (str), cpt_code (str)
-Returns: {covered, deductible_remaining, copay, coinsurance_pct, prior_auth_required}
+### mcp__preauth__get_benefit_summary
+- {member_id: str, cpt_code: str}
+- Returns {covered, deductible_remaining, copay, coinsurance_pct, prior_auth_required}
 
-### generate_determination
-Parameters: case_id, decision (APPROVE|DENY|REQUEST_INFO), rationale, policy_citation
-Returns: structured determination dict
+### mcp__preauth__generate_determination
+- {case_id, decision (APPROVE|DENY|REQUEST_INFO), rationale, policy_citation}
 
-## 4. System Prompt
-You are a pre-auth decision agent. For every case follow this fixed order:
+## 4. System Prompt (passed to ClaudeAgentOptions.system_prompt)
+For every case follow this fixed order:
 1. lookup_clinical_criteria
 2. verify_diagnosis_match (use criteria_id from step 1)
 3. check_network_status
@@ -1479,16 +2218,25 @@ REQUEST_INFO when missing data; DENY when criteria fail.
 Always cite the policy_id in the rationale.
 
 ## 5. Hooks (HIPAA-aware)
-- PreToolUse: log redacted call (no PHI in stdout)
-- PreToolUse: validate CPT (5 digits or letter+4), NPI (10 digits), ICD-10 format
-- PostToolUse: redact PHI for audit ONLY (return UNREDACTED to agent)
-- PostToolUse: append redacted record to audit_log.jsonl
 
-PHI patterns: SSN (NNN-NN-NNNN), phone (NNN-NNN-NNNN), member_id ([A-Z]\d{6,9}),
-DOB (YYYY-MM-DD).
+In-process via ClaudeAgentOptions.hooks (HookMatcher):
+- PreToolUse matcher "mcp__preauth__lookup_clinical_criteria":
+    deny if cpt_code does not match ^[0-9]{5}$|^[A-Z][0-9]{4}$
+- PreToolUse matcher "mcp__preauth__verify_diagnosis_match":
+    deny if icd10_code does not match ^[A-Z]\d{2}(\.\d{1,4})?$
+- PreToolUse matcher "mcp__preauth__check_network_status":
+    deny if provider_npi is not 10 digits
+
+File-based via .claude/settings.json:
+- PreToolUse  matcher "*"  command "python hooks/log_redacted.py"
+- PostToolUse matcher "*"  command "python hooks/audit_redacted.py"
+
+PHI patterns to redact (in audit only, NOT in agent payload):
+SSN (NNN-NN-NNNN), phone (NNN-NNN-NNNN), member_id ([A-Z]\d{6,9}), DOB (YYYY-MM-DD).
 
 ## 6. Sessions
-Multi-case via case_id. session.fork() for what-if (e.g., different payer).
+Multi-case via SDK resume tokens. sessions.py keeps case_id -&gt; session_id map.
+what_if() forks by re-using a resume token without persisting the new session_id.
 
 ## 7. Mock Data
 - mock_data/preauth_requests.json: 15 requests (5 procedures &times; 3 payers)
@@ -1497,30 +2245,34 @@ Multi-case via case_id. session.fork() for what-if (e.g., different payer).
 - mock_data/benefits.json: 30 member-procedure benefit records
 
 ## 8. API Wrapper
-FastAPI: GET /health, POST /preauth (single-shot), POST /chat (case_id + message).
+FastAPI async handlers: GET /health, POST /preauth, POST /chat.
 
 ## 9. Deployment
-Tier 1: Docker. Audit log persisted to mounted volume.
+Tier 1: Docker. Mount .claude/ into container. Audit log on mounted volume.
 
 ## 10. Tests
-test_tools.py, test_agent.py (must produce APPROVE for PA-2025-0001 with policy_id),
-test_hooks.py (PHI redacted in audit, NOT in tool_result), test_sessions.py, test_api.py.
+test_tools.py, test_agent.py (PA-2025-0001 produces APPROVE with policy_id),
+test_hooks.py (audit_log.jsonl contains [MEMBER_ID_REDACTED]; tool_result
+returned to agent contains the literal member_id), test_sessions.py, test_api.py.
 
 ## 11. Evaluation
-test_scenarios.json with 15 cases: 11 APPROVE, 2 DENY (criteria fail),
-2 REQUEST_INFO (out-of-network or missing benefit). Score on:
-- Correct decision (APPROVE/DENY/REQUEST_INFO)
-- Policy citation present
-- All 5 tools called
+spec/test_scenarios.json with 15 cases: 11 APPROVE, 2 DENY, 2 REQUEST_INFO.
+Score on: correct decision, policy citation present, all 5 tools called.
 
 ## 12. File Structure
 preauth-agent/
+&boxv;&boxh;&boxh; spec/agent-spec.md          # this file
+&boxv;&boxh;&boxh; spec/test_scenarios.json
 &boxv;&boxh;&boxh; CLAUDE.md
+&boxv;&boxh;&boxh; .claude/settings.json       # PreToolUse/PostToolUse matchers
 &boxv;&boxh;&boxh; .claude/commands/ {run-preauth.md, test-agent.md, eval-agent.md}
-&boxv;&boxh;&boxh; agent.py | hooks.py | sessions.py
+&boxv;&boxh;&boxh; agent.py                    # query() + 5 @tool + create_sdk_mcp_server
+&boxv;&boxh;&boxh; sessions.py                 # resume-token sessions
 &boxv;&boxh;&boxh; mock_data/ {preauth_requests, clinical_criteria, provider_directory, benefits}.json
-&boxv;&boxh;&boxh; server.py | Dockerfile | docker-compose.yml
-&boxv;&boxh;&boxh; tests/ x5 | test_scenarios.json</code></pre>
+&boxv;&boxh;&boxh; hooks/{log_redacted,audit_redacted}.py
+&boxv;&boxh;&boxh; server.py | Dockerfile | docker-compose.yml | requirements.txt
+&boxv;&boxh;&boxh; tests/ x5
+&boxv;&boxh;&boxh; appendix/manual-loop.py     # Iter-1 reference, not for production</code></pre>
           </div>
         </div>
       </div>
@@ -1533,15 +2285,79 @@ preauth-agent/
           <div class="code-tabs"><button class="code-tab active" onclick="switchTab(this,'i3s15-prompt')">Claude Code prompt</button></div>
           <div class="code-panel active" id="i3s15-prompt">
             <button class="copy-btn" onclick="copyCode(this)">Copy</button>
-            <pre><code>&gt; Read agent-spec.md and build the entire project. Create every file listed
-&gt; in the File Structure section. Implement every tool, hook, test, and
-&gt; endpoint exactly as specified. Use the Agent SDK. Generate realistic
-&gt; mock pre-auth data with 15 cases as described in section 7. Make every
-&gt; file runnable.</code></pre>
+            <pre><code>&gt; /generate-from-spec spec/agent-spec.md
+
+# (or, if /generate-from-spec is not installed:)
+&gt; Read spec/agent-spec.md and build the entire project. Create every file
+&gt; listed in section 12. Use the `claude-agent-sdk` package (NOT a fictional
+&gt; anthropic.Agent class). Tools must be @tool-decorated async functions
+&gt; registered via create_sdk_mcp_server. Hooks split between
+&gt; .claude/settings.json (file-based redact/audit) and OPTIONS.hooks
+&gt; (HookMatcher in-process validation) per section 5. Generate realistic
+&gt; mock pre-auth data with 15 cases. Also generate appendix/manual-loop.py
+&gt; as an under-the-hood reference.</code></pre>
           </div>
         </div>
 
-        <div class="checkpoint"><div class="checkpoint-label">Checkpoint</div>Run <code>/test-agent</code>. All tests should pass. If <code>test_phi_not_in_audit</code> fails, the generated <code>hooks.py</code> probably forgot to redact the audit log. See debugging block.</div>
+        <p><strong>What you should see Claude Code create:</strong></p>
+        <div class="output-block" style="background:var(--code-bg);border:1px solid var(--code-border);border-radius:8px;padding:1rem 1.25rem;margin:0.75rem 0 1.5rem;font-family:'JetBrains Mono',monospace;font-size:0.78rem;color:var(--success);line-height:1.5;white-space:pre-wrap;">Reading spec/agent-spec.md ...
+Created agent.py (95 lines &mdash; 5 @tool functions + create_sdk_mcp_server + ClaudeAgentOptions)
+Created sessions.py (32 lines)
+Created hooks/log_redacted.py (15 lines)
+Created hooks/audit_redacted.py (24 lines &mdash; PHI redaction critical)
+Created mock_data/preauth_requests.json (15 cases)
+Created mock_data/clinical_criteria.json (5 procedures &times; 3 payers = 15 policies)
+Created mock_data/provider_directory.json (10 providers)
+Created mock_data/benefits.json (30 member-procedure records)
+Created server.py (28 lines &mdash; async FastAPI)
+Created Dockerfile (8 lines)
+Created docker-compose.yml (10 lines)
+Created requirements.txt (4 lines)
+Created CLAUDE.md (40 lines)
+Created .claude/settings.json (12 lines)
+Created .claude/commands/run-preauth.md, test-agent.md, eval-agent.md
+Created tests/test_tools.py, test_agent.py, test_hooks.py, test_sessions.py, test_api.py
+Created spec/test_scenarios.json (15 scenarios)
+Created appendix/manual-loop.py (~85 lines)
+Total: 24 files, ~570 generated lines + 100 lines of spec you wrote.</div>
+
+        <p><strong>Verify it actually works:</strong></p>
+        <div class="code-block-wrapper">
+          <div class="code-panel active">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre><code># From inside Claude Code:
+&gt; /test-agent
+
+# Or from a regular shell:
+pytest tests/ -v</code></pre>
+          </div>
+        </div>
+
+        <p><strong>Expected pytest output (focus on the HIPAA-critical tests):</strong></p>
+        <div class="output-block" style="background:var(--code-bg);border:1px solid var(--code-border);border-radius:8px;padding:1rem 1.25rem;margin:0.75rem 0 1.5rem;font-family:'JetBrains Mono',monospace;font-size:0.78rem;color:var(--success);line-height:1.5;white-space:pre-wrap;">tests/test_tools.py::test_lookup_clinical_criteria_returns_cpb_0660 PASSED
+tests/test_tools.py::test_verify_diagnosis_match_m17_11 PASSED
+tests/test_tools.py::test_check_network_status_in_network PASSED
+tests/test_agent.py::test_pa_2025_0001_returns_approve_with_policy_citation PASSED
+tests/test_hooks.py::test_phi_not_in_audit_log PASSED        # &lt;-- HIPAA-critical
+tests/test_hooks.py::test_member_id_passes_to_get_benefit_summary PASSED  # &lt;-- chaining works
+tests/test_hooks.py::test_invalid_cpt_denied_by_validator PASSED
+tests/test_sessions.py::test_chat_persists_case_context PASSED
+tests/test_sessions.py::test_what_if_does_not_pollute_main_case PASSED
+tests/test_api.py::test_health_returns_ok PASSED
+=========================== 10 passed in 14.21s ============================</div>
+
+        <div class="checkpoint"><div class="checkpoint-label">&#9989; Checkpoint &mdash; Step 15</div>
+          All 10 tests pass on the first run. If <code>test_phi_not_in_audit_log</code> fails, the generated audit hook forgot the redactor. If <code>test_member_id_passes_to_get_benefit_summary</code> fails, the audit hook redacted the stdout payload too aggressively (broke chaining). Both are spec-level fixes &mdash; edit section 5 to be more explicit about WHEN to redact.
+        </div>
+
+        <div class="troubleshoot" style="background:var(--warning-bg);border-radius:6px;padding:0.75rem 1rem;margin-top:1rem;font-size:0.9rem;">
+          <div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:0.8rem;color:var(--warning);margin-bottom:0.5rem;">Troubleshooting</div>
+          <ul style="margin:0;font-size:0.85rem;">
+            <li><strong>Generated hook redacts the stdout payload, breaking tool chaining</strong> &rarr; the spec was ambiguous. Section 5 should explicitly say: "Redact ONLY in the persisted audit log; pass the original payload through stdout so the agent can chain."</li>
+            <li><strong>Generated mock data has wrong format</strong> &rarr; section 7 of the spec should give a sample record per file. If it just says "preauth_requests.json with 15 cases", Claude Code may invent the schema.</li>
+            <li><strong>Some tests are missing</strong> &rarr; section 10 should enumerate every test name. Re-prompt with: "tests/test_hooks.py is missing test_phi_not_in_audit_log per spec section 10."</li>
+          </ul>
+        </div>
       </div>
 
       <div class="step" id="i3-step16">
@@ -1559,27 +2375,93 @@ preauth-agent/
       <div class="step" id="i3-step17">
         <div class="step-header">Step 17: Deploy &amp; Compare</div>
         <div class="step-meta"><span>15 min</span><span>same curl, same output</span></div>
+        <p><strong>What &amp; Why:</strong> Build, run, curl, compare against Iter 1 and Iter 2. The test of "spec-driven works" is that the agent's <em>observable behavior</em> matches the prior iterations.</p>
 
         <div class="code-block-wrapper">
           <div class="code-tabs"><button class="code-tab active" onclick="switchTab(this,'i3s17-bash')">Shell</button></div>
           <div class="code-panel active" id="i3s17-bash">
             <button class="copy-btn" onclick="copyCode(this)">Copy</button>
             <pre><code>docker compose up --build -d
+docker compose ps   # confirm "Up"
+
+curl localhost:8000/health
+# Expected: {"status":"ok","iter":3}
+
 curl -X POST localhost:8000/preauth \
      -H "Content-Type: application/json" \
-     -d '{"question":"Is PA-2025-0001 approvable?"}'</code></pre>
+     -d '{"question":"Is PA-2025-0001 approvable?"}' | python -m json.tool</code></pre>
           </div>
         </div>
 
-        <div class="callout-why">
-          <span class="box-label">Iteration 3 Metrics</span>
-          <ul style="margin-bottom:0;">
-            <li><strong>Files:</strong> ~18 (all generated)</li>
-            <li><strong>Lines you wrote:</strong> ~100 (spec only)</li>
-            <li><strong>Time:</strong> ~1 hour</li>
-            <li><strong>Abstractions used:</strong> spec format + Claude Code + Agent SDK + hooks + sessions</li>
-          </ul>
+        <p><strong>Cross-iteration diff &mdash; the punchline of the whole capstone:</strong></p>
+        <div class="code-block-wrapper">
+          <div class="code-panel active">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre><code># Same query against all three deployments (assumes :8001/8002/8003)
+for port in 8001 8002 8003; do
+  echo "=== Iter on :$port ==="
+  curl -s -X POST localhost:$port/preauth -H "Content-Type: application/json" \
+       -d '{"question":"Is PA-2025-0001 approvable?"}' \
+    | python -c "import json, sys; d = json.load(sys.stdin); print((d.get('determination') or d.get('answer'))[:300])"
+  echo
+done</code></pre>
+          </div>
         </div>
+
+        <p><strong>Expected:</strong> all three return APPROVE with policy CPB-0660 cited. Wording varies; facts match.</p>
+      </div>
+
+      <!-- ===== END-OF-ITER-3 VERIFICATION ===== -->
+      <div class="checkpoint" style="background:var(--success-bg);border:2px solid var(--success);">
+        <div class="checkpoint-label" style="color:var(--success);">&#127881; Iteration 3 Complete &mdash; The Whole Capstone</div>
+        <p>You have <strong>~24 generated files</strong> + your <strong>~100-line spec</strong>:</p>
+        <pre style="background:var(--code-bg);border-radius:6px;padding:0.6rem 0.9rem;font-size:0.78rem;color:var(--text-secondary);margin:0.5rem 0;">preauth-agent/
+&boxv;&boxh;&boxh; spec/agent-spec.md          # YOU wrote this
+&boxv;&boxh;&boxh; spec/test_scenarios.json    # generated
+&boxv;&boxh;&boxh; CLAUDE.md | .claude/settings.json | .claude/commands/ &times;3   # generated
+&boxv;&boxh;&boxh; agent.py | sessions.py      # generated (SDK)
+&boxv;&boxh;&boxh; hooks/log_redacted.py | hooks/audit_redacted.py
+&boxv;&boxh;&boxh; mock_data/ &times;4               # 15 cases, 15 policies, 10 providers, 30 benefits
+&boxv;&boxh;&boxh; tests/ &times;5                    # generated
+&boxv;&boxh;&boxh; server.py | Dockerfile | docker-compose.yml | requirements.txt
+&boxv;&boxh;&boxh; appendix/manual-loop.py     # under-the-hood reference</pre>
+
+        <p><strong>Acceptance test &mdash; same shape as Iter 1 and Iter 2:</strong></p>
+        <div class="code-block-wrapper" style="margin:0.5rem 0;">
+          <div class="code-panel active">
+            <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+            <pre><code># 1. All 10 generated tests pass
+pytest tests/ -v
+# Expected: 10 passed (especially test_phi_not_in_audit_log)
+
+# 2. End-to-end pre-auth determination
+curl -s -X POST localhost:8000/preauth -H "Content-Type: application/json" \
+     -d '{"question":"Is PA-2025-0001 approvable?"}' | python -m json.tool
+
+# 3. Multi-case session via SDK resume tokens
+curl -s -X POST localhost:8000/chat -H "Content-Type: application/json" \
+     -d '{"case_id":"PA-2025-0001","message":"Is this approvable?"}' | python -m json.tool
+curl -s -X POST localhost:8000/chat -H "Content-Type: application/json" \
+     -d '{"case_id":"PA-2025-0001","message":"What about peer-to-peer review?"}' | python -m json.tool
+
+# 4. Spec-vs-code drift check
+claude
+&gt; Read spec/agent-spec.md sections 5 and 10. Compare to hooks/ and tests/.
+&gt; Report any drift, especially around PHI redaction.</code></pre>
+          </div>
+        </div>
+        <p><strong>You pass Iter 3 if:</strong> (1) all 10 tests pass; (2) PA-2025-0001 returns APPROVE; (3) the second /chat call references prior context; (4) drift check returns "no drift" &mdash; especially confirming the audit hook redacts but the agent stream doesn't.</p>
+      </div>
+
+      <div class="callout-why">
+        <span class="box-label">Iteration 3 Metrics</span>
+        <ul style="margin-bottom:0;">
+          <li><strong>Files:</strong> ~24 (all generated by Claude Code from your spec)</li>
+          <li><strong>Lines you wrote:</strong> ~100 (the spec only)</li>
+          <li><strong>Lines Claude Code wrote:</strong> ~570 (readable, runnable, all tests pass)</li>
+          <li><strong>Time:</strong> ~1 hour (~30 min spec, ~10 min generation, ~20 min review/fix)</li>
+          <li><strong>Abstractions used:</strong> spec format + <code>/generate-from-spec</code> + same SDK runtime as Iter 2</li>
+        </ul>
       </div>
 
       <div class="debug-block" id="iter3-debug">
@@ -1589,7 +2471,9 @@ curl -X POST localhost:8000/preauth \
         <div class="debug-method">
           <div class="debug-method-title">A. Spec vs Code Comparison</div>
           <div class="code-block-wrapper">
-            <div class="code-panel active">
+            <div class="code-tabs"><button class="code-tab active" onclick="switchTab(this,'i3d-spec')">Claude Code prompt</button></div>
+            <div class="code-panel active" id="i3d-spec">
+              <button class="copy-btn" onclick="copyCode(this)">Copy</button>
               <pre><code>&gt; Read agent-spec.md and compare it to the generated agent.py and hooks.py.
 &gt; Report any deviations &mdash; especially around PHI redaction (section 5).</code></pre>
             </div>
@@ -1600,7 +2484,9 @@ curl -X POST localhost:8000/preauth \
         <div class="debug-method">
           <div class="debug-method-title">B. Test-Driven Debugging</div>
           <div class="code-block-wrapper">
-            <div class="code-panel active">
+            <div class="code-tabs"><button class="code-tab active" onclick="switchTab(this,'i3d-test')">Claude Code prompt</button></div>
+            <div class="code-panel active" id="i3d-test">
+              <button class="copy-btn" onclick="copyCode(this)">Copy</button>
               <pre><code>&gt; Test test_phi_not_in_audit failed: audit_log.jsonl contains literal "A123456".
 &gt; Read agent-spec.md section 5 (Hooks). Read generated hooks.py. Find why
 &gt; the post_tool_use audit hook isn't running redaction. Fix it.</code></pre>
@@ -1648,7 +2534,7 @@ curl -X POST localhost:8000/preauth \
           <tr><td>Lines YOU wrote</td><td>~250</td><td>~120</td><td>~100 (spec only)</td></tr>
           <tr><td>Time to build</td><td>~3 hours</td><td>~2 hours</td><td>~1 hour</td></tr>
           <tr><td>Agent output</td><td>Baseline</td><td>Same</td><td>Same</td></tr>
-          <tr><td>PHI redaction</td><td>Inline in loop</td><td>One @agent.hook</td><td>5 lines in spec section 5</td></tr>
+          <tr><td>PHI redaction</td><td>Inline in loop</td><td>One <code>.claude/settings.json</code> entry + a 20-line stdin/stdout script</td><td>5 lines in spec section 5</td></tr>
           <tr><td>Multi-case sessions</td><td>Manual history dict</td><td>SDK sessions</td><td>SDK sessions (generated)</td></tr>
           <tr><td>Adding a 6th tool (peer-to-peer)</td><td>Edit 3 files + add validation</td><td>One Claude Code prompt</td><td>Update spec, ask to regen</td></tr>
           <tr><td>Tests (must pass for HIPAA)</td><td>Manual</td><td>Claude Code generated</td><td>Spec generates them</td></tr>
@@ -1687,7 +2573,7 @@ curl -X POST localhost:8000/preauth \
           <div class="rubric-pct">25%</div>
           <div>
             <div class="rubric-name">Iteration 2: Agent SDK + Claude Code</div>
-            <div class="rubric-criteria">Agent SDK with @agent.tool decorators for all 5 tools. PHI hooks correctly redact for audit but pass UNREDACTED to agent. Sessions with fork() demoed. At least 3 slash commands. Same FastAPI + Docker. CLAUDE.md present with compliance rules.</div>
+            <div class="rubric-criteria">Real <code>claude-agent-sdk</code> with @tool-decorated async functions registered via <code>create_sdk_mcp_server</code> for all 5 tools. PHI hooks (in <code>.claude/settings.json</code>) correctly redact for audit but pass UNREDACTED tool_result back to the agent. In-process <code>HookMatcher</code> validates CPT/NPI/ICD-10. Sessions resumed via SDK <code>resume</code> token. At least 3 slash commands. Same FastAPI + Docker. CLAUDE.md present with compliance rules.</div>
             <div class="rubric-bar" style="margin-top:0.5rem;"><div class="rubric-bar-fill" style="width:25%;"></div></div>
           </div>
           <div style="text-align:center;font-family:'JetBrains Mono',monospace;font-size:0.7rem;color:var(--iter2);font-weight:700;">ITER 2</div>
@@ -1804,7 +2690,7 @@ curl -X POST localhost:8000/preauth \
         <h4>Q5: You need to add ICD-10 hierarchy lookup (e.g., "M17.11" should match a criteria entry of "M17"). Which iteration requires the LEAST disruptive change?</h4>
         <ul class="quiz-options">
           <li><label><input type="radio" name="q5" value="a"> Iter 1 &mdash; just add prefix matching to verify_diagnosis_match</label></li>
-          <li><label><input type="radio" name="q5" value="b"> Iter 2 &mdash; modify the @agent.tool function</label></li>
+          <li><label><input type="radio" name="q5" value="b"> Iter 2 &mdash; modify the @tool-decorated <code>verify_diagnosis_match</code> async function</label></li>
           <li><label><input type="radio" name="q5" value="c"> Iter 3 &mdash; add 1-2 lines to the spec's verify_diagnosis_match section ("match by hierarchy, not just exact"), regenerate tools.py</label></li>
           <li><label><input type="radio" name="q5" value="d"> They are all roughly equal effort</label></li>
         </ul>
@@ -2028,13 +2914,14 @@ const SPEC_LINES = [
   "# 12. File Structure", "  preauth-agent/...",
 ];
 const GEN_FILES = [
-  "agent.py", "hooks.py", "sessions.py",
+  "agent.py", "sessions.py",
   "mock_data/preauth_requests.json", "mock_data/clinical_criteria.json",
   "mock_data/provider_directory.json", "mock_data/benefits.json",
-  "server.py", "Dockerfile", "docker-compose.yml",
-  "requirements.txt", "CLAUDE.md", "tests/test_tools.py", "tests/test_agent.py",
-  "tests/test_hooks.py", "tests/test_sessions.py", "tests/test_api.py",
-  "test_scenarios.json", ".claude/commands/run-preauth.md",
+  "hooks/log_redacted.py", "hooks/audit_redacted.py",
+  ".claude/settings.json", ".claude/commands/run-preauth.md",
+  "server.py", "Dockerfile", "docker-compose.yml", "requirements.txt", "CLAUDE.md",
+  "tests/test_tools.py", "tests/test_agent.py", "tests/test_hooks.py",
+  "tests/test_sessions.py", "appendix/manual-loop.py",
 ];
 const specDoc = document.getElementById('specDoc');
 SPEC_LINES.forEach(line => {

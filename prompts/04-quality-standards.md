@@ -12,6 +12,12 @@
 8. All API calls use Claude's current API format (Anthropic SDK v0.30+, Messages API)
 9. Include version numbers for all dependencies
 10. Never hardcode API keys — always use environment variables with clear instructions
+11. **SDK tier compliance** — every module follows the tier assigned in `prompts/19-sdk-tier-policy.md`:
+    - Tier 1 (M01–M11, M15, M18, M20, M21, M22, CAPSTONE-6): raw Messages API only, no `claude-agent-sdk` import
+    - Tier 2 (M12, M13, M14, M16, M17, M19): ship BOTH `solution/` (raw) AND `solution-sdk/` (SDK), with side-by-side comparison
+    - Tier 3 (M15B, M22B, M25–M27B, CAPSTONE-1..5, 7): primary `solution/` uses `claude-agent-sdk`; capstones + M15B also ship `spec/agent-spec.md`
+12. **No fake SDK simulations** — never reimplement `query()` with `client.messages.create()` and call it "the SDK." If the lab needs to run offline, use `claude-agent-sdk`'s real testing primitives (see `labs/capstone-4-agent-team/domain-a-healthcare/sdk_tests/` for the canonical pattern)
+13. **Subagents and hooks live in config files** — Tier 3 multi-agent labs declare subagents in `.claude/agents/<name>.md`; Tier 3 guardrail labs declare hooks in `.claude/settings.json`. Don't reinvent these as Python decorators when they belong in config.
 
 ## Accessibility Requirements
 
@@ -28,6 +34,8 @@
 - Both Python AND Node.js/TypeScript for every code example
 - Use tabbed panels to switch between languages
 - Every code block has a "Copy" button
+- **For Tier 2/3 SDK code blocks**, use the imports and patterns from the cheat sheet in `prompts/19-sdk-tier-policy.md` verbatim — do not invent alternative SDK APIs
+- **For Tier 2 modules**, the HTML must include a "Manual vs SDK — side by side" comparison section showing the same logic both ways
 - Use syntax highlighting via Prism.js or highlight.js (loaded from CDN)
 - Include complete import statements
 - Include error handling (try/except or try/catch)

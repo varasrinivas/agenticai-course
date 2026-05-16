@@ -5,6 +5,7 @@
 **Estimated Time**: 75-90 minutes
 **Track Color**: var(--track-capstones) / #D4A843
 **Cert Domain**: Domain 3 — Claude Code Configuration & Workflows (~20% of exam)
+**SDK Tier**: 3 (SDK-default + spec-driven). Lab uses Claude Code with slash commands, hooks (`.claude/settings.json`), subagents (`.claude/agents/`), and skills. Spec-driven section drives `/generate-from-spec` against an example `agent-spec.md`. See `prompts/19-sdk-tier-policy.md` and `prompts/17-spec-driven-development.md`.
 
 ## Why This Module Exists
 Domain 3 is 20% of the certification exam and is the biggest gap in the base course. Your course teaches building agents via the API. The cert also tests configuring Claude Code itself — CLAUDE.md, skills, commands, plan mode, CI/CD. This module fills that entire gap.

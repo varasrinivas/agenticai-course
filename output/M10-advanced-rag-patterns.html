@@ -200,6 +200,7 @@
       <a href="#hybrid-search">Hybrid Search</a>
       <a href="#reranking">Re-Ranking</a>
       <a href="#query-transformation">Query Transformation</a>
+      <a href="#agentic-rag">Agentic RAG</a>
       <a href="#compression-eval">Compression &amp; Evaluation</a>
       <a href="#code-walkthrough">Code Walkthrough</a>
       <a href="#exercise">Hands-On Exercise</a>
@@ -707,6 +708,235 @@ Original query: "How does filing 2024-FL-0093 affect the debtor?"
           <div class="checkpoint-label">&#x2714; What Just Happened?</div>
           <p>You learned three strategies for fixing bad queries before they reach your search engine. HyDE generates a fake answer to embed (better vector matches). Multi-query tries multiple phrasings (broader recall). Step-back abstracts to a general question first (better context). All three are cheap LLM calls that dramatically improve retrieval quality.</p>
         </div>
+      </section>
+
+      <!-- ============ AGENTIC RAG ============ -->
+      <section class="section" id="agentic-rag">
+        <h2 id="agentic-rag-heading">Agentic RAG &mdash; When the Agent Decides What to Retrieve</h2>
+
+        <div class="analogy-box">
+          <span class="box-label">Everyday Analogy</span>
+          <p>Naive RAG (M09) is a vending machine: you put in a query, it spits out the top-k chunks, you eat what comes out. Hybrid + re-ranking + transformation (this module so far) is a <em>better</em> vending machine &mdash; smarter sorting, more selection &mdash; but still one-shot: one query in, one set of chunks out.</p>
+          <p>The pain shows up the moment a question can&rsquo;t be answered from a single retrieval. &ldquo;Compare Acme&rsquo;s 2024 and 2025 quarterly filings&rdquo; needs <em>two</em> retrievals &mdash; one per year &mdash; and then a synthesis step. &ldquo;Find the clause that contradicts what we agreed in last week&rsquo;s memo&rdquo; needs to retrieve the memo first, <em>then</em> search for contradictions. A vending machine can&rsquo;t do this. A research assistant can.</p>
+          <p><strong>Agentic RAG</strong> hands retrieval over to the agent itself. The agent treats the retriever as <em>a tool</em>, calls it once, looks at what came back, decides whether to call it again with a refined query, and stops when it has enough &mdash; the M12 ReAct loop, but for retrieval. Same patterns you already know, applied to the search problem.</p>
+        </div>
+
+        <div class="tech-def-box">
+          <span class="box-label">Technical Definition</span>
+          <p><span class="term-tooltip" tabindex="0">Agentic RAG<span class="tooltip-content" role="tooltip">A retrieval pattern where the LLM agent treats retrieval as a tool it can call multiple times, with the agent deciding which corpus to query, how to phrase each query, and when it has enough context to answer. Contrasts with &ldquo;passive RAG&rdquo; where retrieval is a fixed preprocessing step before the LLM ever sees the question.</span></span> is RAG where the agent itself orchestrates retrieval &mdash; deciding which index/corpus to query, how to phrase the query, whether to re-query after seeing partial results, and when to stop. Mechanically: <code>search</code> is registered as a tool (M05), and Claude decides whether and how to invoke it inside its normal tool-use loop.</p>
+          <p>Three properties distinguish it from the passive RAG of M09:</p>
+          <ol>
+            <li><strong>Multi-step retrieval.</strong> The agent can retrieve once, read the chunks, decide it needs more, and retrieve again with a sharpened query. Passive RAG is one-shot by construction.</li>
+            <li><strong>Corpus routing.</strong> If you have multiple indices &mdash; product docs, support tickets, public filings, internal wikis &mdash; the agent picks which to hit based on the question. Passive RAG hits a single index it was wired to at build time.</li>
+            <li><strong>Self-stopping.</strong> The agent stops retrieving when it has enough to answer (or escalates when it never gets there). Passive RAG always retrieves <em>exactly k</em> chunks, whether the question needs 1 or 20.</li>
+          </ol>
+          <p style="margin-bottom:0;">It&rsquo;s the M12 ReAct pattern applied to retrieval, with the same upsides (smarter, handles multi-hop questions, can use multiple corpora) and the same downsides (more LLM calls, more latency, harder to evaluate). Worth reaching for when single-shot retrieval keeps failing on the questions that matter; <em>not</em> worth reaching for when hybrid + re-rank already lands the right chunk on the first try.</p>
+        </div>
+
+        <div class="animation-container" aria-label="Passive RAG vs Agentic RAG comparison" style="padding:1rem;">
+          <div class="animation-title">Passive RAG (M09 / Hybrid) vs Agentic RAG</div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem; font-size:0.85rem;">
+            <div style="background:var(--bg-surface); border:1px solid var(--code-border); border-radius:8px; padding:0.85rem;">
+              <div style="font-family:'Bricolage Grotesque',sans-serif; font-weight:700; color:var(--text-secondary); margin-bottom:0.5rem;">Passive RAG &mdash; one-shot, fixed</div>
+              <ol style="margin:0 0 0 1rem; padding:0; color:var(--text-secondary);">
+                <li>Embed the question</li>
+                <li>Retrieve top-k chunks (one index)</li>
+                <li>Stuff chunks + question into prompt</li>
+                <li>Claude answers from what was handed to it</li>
+              </ol>
+              <p style="margin:0.6rem 0 0; font-size:0.78rem; color:var(--text-muted);">LLM calls per question: <strong>1</strong>. Latency: low. Failure mode: question needed info not in top-k =&gt; wrong answer.</p>
+            </div>
+            <div style="background:rgba(184,134,11,0.08); border:1px solid var(--accent-primary); border-radius:8px; padding:0.85rem;">
+              <div style="font-family:'Bricolage Grotesque',sans-serif; font-weight:700; color:var(--accent-primary); margin-bottom:0.5rem;">Agentic RAG &mdash; multi-step, adaptive</div>
+              <ol style="margin:0 0 0 1rem; padding:0; color:var(--text-secondary);">
+                <li>Claude reads the question</li>
+                <li>Claude picks an index, drafts a query, calls <code>search</code> tool</li>
+                <li>Claude reads the returned chunks</li>
+                <li>If insufficient: refine query, hit a different index, or both &mdash; loop</li>
+                <li>If sufficient: stop and answer</li>
+                <li>If never sufficient after N tries: escalate to human (M17)</li>
+              </ol>
+              <p style="margin:0.6rem 0 0; font-size:0.78rem; color:var(--text-muted);">LLM calls per question: <strong>2-6</strong>. Latency: higher. Failure mode: agent loops; mitigation = step cap + eval.</p>
+            </div>
+          </div>
+        </div>
+
+        <p>In practice, &ldquo;agentic RAG&rdquo; is what you get when you take the M09 retriever, wrap it as a tool, and drop it into the M12 ReAct loop. Here&rsquo;s a minimal working example over two corpora &mdash; product docs + support tickets &mdash; with the agent choosing per-call which to hit:</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs">
+            <button class="code-tab active" onclick="switchTab(this, 'arag-py')" aria-label="Python agentic RAG">Python</button>
+            <button class="code-tab" onclick="switchTab(this, 'arag-ts')" aria-label="TypeScript agentic RAG">Node.js</button>
+          </div>
+          <div class="code-panel active" id="arag-py">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code class="language-python">from anthropic import Anthropic
+import chromadb
+
+client = Anthropic()
+chroma = chromadb.PersistentClient(path="./vector_db")
+
+# Two corpora &mdash; the agent picks which to query per call.
+INDICES = {
+    "product_docs":    chroma.get_collection("product_docs"),
+    "support_tickets": chroma.get_collection("support_tickets"),
+}
+
+# === The retrieval tool. Claude decides corpus + query + k. =================
+tools = [{
+    "name": "search",
+    "description": (
+        "Search a corpus by semantic similarity. "
+        "Use 'product_docs' for behavior/spec questions, "
+        "'support_tickets' for known-issues / customer cases. "
+        "Call multiple times if the first result is insufficient or off-topic."
+    ),
+    "input_schema": {
+        "type": "object",
+        "properties": {
+            "corpus": {"type": "string", "enum": list(INDICES)},
+            "query":  {"type": "string", "description": "Natural-language query"},
+            "k":      {"type": "integer", "minimum": 1, "maximum": 8, "default": 4},
+        },
+        "required": ["corpus", "query"],
+    },
+}]
+
+def run_tool(name: str, args: dict) -&gt; str:
+    if name != "search":
+        raise ValueError(f"Unknown tool: {name}")
+    idx = INDICES.get(args["corpus"])
+    if idx is None:
+        return f"ERROR: unknown corpus '{args['corpus']}'"
+    res = idx.query(query_texts=[args["query"]], n_results=args.get("k", 4))
+    docs = res["documents"][0]
+    return "\n---\n".join(f"[chunk {i+1}] {d}" for i, d in enumerate(docs)) or "(no hits)"
+
+# === The agentic loop &mdash; standard M12 ReAct, just with `search` as the tool. ===
+def agentic_rag(question: str, *, max_iters: int = 6) -&gt; str:
+    messages = [{"role": "user", "content": question}]
+    for step in range(max_iters):
+        resp = client.messages.create(
+            model="claude-sonnet-4-6",
+            max_tokens=2048,
+            tools=tools,
+            messages=messages,
+        )
+        if resp.stop_reason == "end_turn":
+            return "".join(b.text for b in resp.content if b.type == "text")
+
+        messages.append({"role": "assistant", "content": resp.content})
+        tool_results = []
+        for block in resp.content:
+            if block.type == "tool_use":
+                try:
+                    result = run_tool(block.name, block.input)
+                except Exception as e:
+                    result = f"TOOL_ERROR: {e}"
+                tool_results.append({
+                    "type": "tool_result", "tool_use_id": block.id, "content": result,
+                })
+        messages.append({"role": "user", "content": tool_results})
+
+    # Hit the step cap &mdash; escalate per M17 rather than guess.
+    raise RuntimeError(f"Agentic RAG exceeded {max_iters} retrieval steps")</code></pre>
+          </div>
+          <div class="code-panel" id="arag-ts">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code class="language-typescript">import Anthropic from "@anthropic-ai/sdk";
+import { ChromaClient } from "chromadb";
+
+const client = new Anthropic();
+const chroma = new ChromaClient({ path: "./vector_db" });
+
+const INDICES: Record&lt;string, any&gt; = {
+  product_docs:    await chroma.getCollection({ name: "product_docs" }),
+  support_tickets: await chroma.getCollection({ name: "support_tickets" }),
+};
+
+// === The retrieval tool. Claude decides corpus + query + k. =================
+const tools = [{
+  name: "search",
+  description:
+    "Search a corpus by semantic similarity. " +
+    "Use 'product_docs' for behavior/spec questions, " +
+    "'support_tickets' for known-issues / customer cases. " +
+    "Call multiple times if the first result is insufficient or off-topic.",
+  input_schema: {
+    type: "object",
+    properties: {
+      corpus: { type: "string", enum: Object.keys(INDICES) },
+      query:  { type: "string", description: "Natural-language query" },
+      k:      { type: "integer", minimum: 1, maximum: 8, default: 4 },
+    },
+    required: ["corpus", "query"],
+  },
+}];
+
+async function runTool(name: string, args: any): Promise&lt;string&gt; {
+  if (name !== "search") throw new Error(`Unknown tool: ${name}`);
+  const idx = INDICES[args.corpus];
+  if (!idx) return `ERROR: unknown corpus '${args.corpus}'`;
+  const res = await idx.query({ queryTexts: [args.query], nResults: args.k ?? 4 });
+  const docs: string[] = res.documents[0] ?? [];
+  return docs.length
+    ? docs.map((d, i) =&gt; `[chunk ${i + 1}] ${d}`).join("\n---\n")
+    : "(no hits)";
+}
+
+// === The agentic loop &mdash; standard M12 ReAct, just with `search` as the tool. ===
+export async function agenticRag(question: string, maxIters = 6): Promise&lt;string&gt; {
+  const messages: any[] = [{ role: "user", content: question }];
+  for (let step = 0; step &lt; maxIters; step++) {
+    const resp = await client.messages.create({
+      model: "claude-sonnet-4-6",
+      max_tokens: 2048,
+      tools,
+      messages,
+    });
+    if (resp.stop_reason === "end_turn") {
+      return resp.content.filter((b: any) =&gt; b.type === "text").map((b: any) =&gt; b.text).join("");
+    }
+
+    messages.push({ role: "assistant", content: resp.content });
+    const toolResults: any[] = [];
+    for (const block of resp.content as any[]) {
+      if (block.type === "tool_use") {
+        let result: string;
+        try { result = await runTool(block.name, block.input); }
+        catch (e: any) { result = `TOOL_ERROR: ${e.message}`; }
+        toolResults.push({ type: "tool_result", tool_use_id: block.id, content: result });
+      }
+    }
+    messages.push({ role: "user", content: toolResults });
+  }
+
+  // Hit the step cap &mdash; escalate per M17 rather than guess.
+  throw new Error(`Agentic RAG exceeded ${maxIters} retrieval steps`);
+}</code></pre>
+          </div>
+        </div>
+
+        <div class="checkpoint">
+          <div class="checkpoint-label">&#x2714; What Just Happened?</div>
+          <p>You wrapped the M09 retriever as a tool and gave Claude the M12 ReAct loop. The only domain-specific lines are the corpus enum and the tool description &mdash; the loop is the same one you wrote in M12. The agent now decides per-question: <em>which</em> corpus to hit, <em>what</em> query to send, and whether the chunks it got back are sufficient to answer. The <code>max_iters</code> cap is the budget; if the agent can&rsquo;t find enough after 6 retrieval steps, it raises &mdash; you escalate (M17), you don&rsquo;t fabricate.</p>
+        </div>
+
+        <div class="callout-cost">
+          <span class="box-label">When to Reach for Agentic RAG</span>
+          <p><strong>Use it when:</strong> questions span multiple corpora; questions are <em>multi-hop</em> (need to retrieve, read, then retrieve again with new info); single-shot retrieval keeps missing the right chunk and your re-ranker tuning has plateaued; users phrase the same question 20 different ways and a fixed query template can&rsquo;t cover them all.</p>
+          <p><strong>Skip it when:</strong> a hybrid search + good re-ranker already lands the right chunk on the first try (don&rsquo;t pay for extra LLM calls you don&rsquo;t need); latency budget is sub-second (each retrieval step is another model round-trip); your eval set is tiny and you can&rsquo;t measure whether the extra calls actually improve answer quality.</p>
+          <p style="margin-bottom:0;"><strong>Cost calibration on Sonnet 4.6:</strong> a 4-step agentic RAG question costs roughly 4&times; the LLM tokens of a 1-step passive RAG question, plus 4 retrieval round-trips. For a 5K-token question that&rsquo;s ~$0.06 vs ~$0.015 (4&times;), with ~3-6 seconds added latency. Worth it for the questions that need it; wasteful otherwise.</p>
+        </div>
+
+        <div class="callout-warning">
+          <span class="box-label">Common Misconceptions</span>
+          <p><strong>&ldquo;Agentic RAG replaces hybrid search and re-ranking.&rdquo;</strong> &mdash; No. The agent <em>uses</em> them. Inside the <code>search</code> tool you should still be doing hybrid retrieval and cross-encoder re-ranking (this module&rsquo;s earlier sections). Agentic RAG is the <em>outer</em> loop; hybrid + re-rank is the <em>inner</em> implementation.</p>
+          <p><strong>&ldquo;If passive RAG works, agentic RAG works better.&rdquo;</strong> &mdash; Not automatically. For single-fact lookups, agentic RAG often <em>under-performs</em> because the agent second-guesses correct first-shot results. Measure on your eval set (M18) before switching.</p>
+          <p><strong>&ldquo;Self-RAG / Corrective RAG / Adaptive RAG are different things.&rdquo;</strong> &mdash; They&rsquo;re named papers; mechanically they&rsquo;re all agentic RAG with different prompts and stop conditions. You can read them as reference, but you don&rsquo;t need a separate framework for each &mdash; just adjust the tool description and step cap.</p>
+        </div>
+
+        <div class="bridge">Agentic RAG is the most powerful retrieval pattern in this module but also the most expensive. The next section covers the cheapest fix that&rsquo;s often even more impactful: compressing retrieved chunks before they hit Claude&rsquo;s context.</div>
       </section>
 
       <!-- ============ CONTEXTUAL COMPRESSION & EVALUATION ============ -->

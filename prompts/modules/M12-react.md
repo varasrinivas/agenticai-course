@@ -4,6 +4,7 @@
 **Prerequisites**: M05, M06
 **Estimated Time**: 75-90 minutes
 **Track Color**: var(--track-architecture) / #F97316
+**SDK Tier**: 2 (dual-track) — this is the **pivot module**. The lab ships `solution/` (the manual ReAct loop, ~50 lines, written by hand) AND `solution-sdk/` (the same flow via `claude-agent-sdk`'s `query()` in ~15 lines). The HTML must include a side-by-side comparison: "you just built this loop — here is the SDK doing the same thing." See `prompts/19-sdk-tier-policy.md`.
 
 ## Concepts
 

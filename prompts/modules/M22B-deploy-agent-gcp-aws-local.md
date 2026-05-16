@@ -5,6 +5,7 @@
 **Estimated Time**: 2-3 hours (hands-on deployment lab)
 **Level**: Advanced
 **Track Color**: var(--track-deployment) / #3B82F6
+**SDK Tier**: 3 (SDK-default). The agent being deployed is the `claude-agent-sdk`-based agent from M15B (NOT a hand-rolled loop). All three deployment targets (Docker, Cloud Run, Lambda) bundle the SDK and its dependencies. The Dockerfile installs `claude-agent-sdk`; the Lambda layer includes it; the Cloud Run service runs the same FastAPI wrapper around `query()`. See `prompts/19-sdk-tier-policy.md`.
 
 ## Why This Module Must Exist
 M21 teaches API design concepts and M22 teaches cost optimization, but neither has the student actually DEPLOY a running agent. This module takes the agent built in M15B and deploys it to three environments — local Docker, Google Cloud Run, and AWS Lambda. The student ends with a live URL they can call from anywhere.

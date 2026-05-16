@@ -29,4 +29,3 @@ Write-Host ""
 
 Write-Host "=== DONE ===" -ForegroundColor Green
 Write-Host "M00 now starts with the ML-to-Agent prelude including hands-on lab."
-Write-Host "Students run all 3 approaches themselves and see the difference."

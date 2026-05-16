@@ -194,7 +194,7 @@
       <a href="#token-optimization">Token Optimization</a>
       <a href="#code-walkthrough">Code Walkthrough</a>
       <a href="#prompt-caching">Prompt Caching</a>
-      <a href="#extended-thinking">Extended Thinking</a>
+      <a href="#extended-thinking">Extended Thinking &amp; Reasoning Models</a>
       <a href="#batch-api">Batch API</a>
       <a href="#hands-on">Hands-On Lab</a>
       <a href="#quiz">Knowledge Check</a>
@@ -476,6 +476,26 @@ system: [{
           <div class="checkpoint-label">What Just Happened?</div>
           <p>You learned the three layers of caching: prompt caching (Anthropic native, 90% input savings, 5-min TTL), response caching (semantic similarity, 100% savings on cache hits), and embedding caching (Redis LRU for RAG vectors). Each layer targets a different type of repeated work, and together they can cut costs by 50-90%.</p>
         </div>
+
+        <h3 id="cache-tool-results">Caching Tool Results Across Conversations</h3>
+        <p><strong>The problem:</strong> A compliance agent searches the SEC filing for "Acme Corp 10-K 2024" <strong>100 times per day</strong> across different conversations. Each call hits a paid third-party API at $0.01. The filing has not changed since it was published &mdash; but every conversation pays from scratch because tool results live inside one conversation's history, not across them.</p>
+        <p><strong>Three caching layers</strong> sit in front of the tool, ordered by speed and scope:</p>
+        <ul>
+          <li><strong>In-memory (LRU):</strong> single process, sub-millisecond reads. Resets on deploy &mdash; best for hot keys hit repeatedly by the same worker.</li>
+          <li><strong>Redis or DuckDB:</strong> shared across the agent fleet, ~5ms reads, persists across deploys. The workhorse layer where most cached calls land.</li>
+          <li><strong>CDN edge:</strong> geographically distributed for public, read-heavy results (open datasets, public filings). Free reads after upload.</li>
+        </ul>
+        <p><strong>Cache invalidation</strong> picks one of two modes. <strong>TTL-based</strong> sets an expiry (24h for filings, 5min for stock prices) &mdash; simple, but you serve stale data inside the window. <strong>Event-based</strong> purges the key when the source publishes a change webhook &mdash; always fresh, but requires the source to notify you.</p>
+        <pre style="background:var(--code-bg);border:1px solid var(--code-border);border-radius:8px;padding:0.85rem;font-family:'JetBrains Mono',monospace;font-size:0.78rem;color:var(--code-text);overflow-x:auto;margin:0.75rem 0;"><code># Cached tool wrapper &mdash; check fastest layer first
+def cached_tool(key, ttl=86400):
+    if hit := memory.get(key): return hit         # L1: in-process LRU
+    if hit := redis.get(key):                     # L2: shared Redis
+        memory.set(key, hit); return hit
+    result = expensive_search(key)                # MISS &mdash; pay the API
+    redis.set(key, result, ex=ttl)
+    memory.set(key, result)
+    return result</code></pre>
+        <p><strong>Cost math:</strong> 100 searches &times; $0.01 = <strong>$1.00/day uncached</strong>. With caching: 1 miss &times; $0.01 + 99 hits &times; ~$0 = <strong>$0.01/day</strong> &mdash; a <strong>99% reduction</strong>. Across a 50-tool agent fleet, that is roughly $1,500/month recovered from a single wrapper.</p>
 
         <div class="bridge">Caching eliminates redundant work. But what about the requests that DO need an LLM call? Not every request needs your most powerful (and most expensive) model. Next, you will learn model routing &mdash; sending each request to the cheapest model that can handle it.</div>
       </section>
@@ -1713,7 +1733,7 @@ const tracker = new CostTracker();
 
       <!-- Extended Thinking -->
       <section class="section" id="extended-thinking">
-        <h2 id="extended-thinking-heading">Extended Thinking &mdash; Pay for Reasoning, Not Length</h2>
+        <h2 id="extended-thinking-heading">Extended Thinking &amp; Reasoning Models</h2>
 
         <p>Sometimes the right cost lever is to spend <em>more</em> tokens on the right thing. Anthropic's Claude Opus and Sonnet models support an <strong>extended thinking</strong> mode where the model produces a private reasoning trace before its final answer. You pay for those thinking tokens, but on hard tasks (math, multi-step planning, code refactors that touch a dependency graph) the win in answer quality dwarfs the marginal cost &mdash; and the alternative is paying many more tokens across a buggy multi-turn agent loop.</p>
 
@@ -1752,6 +1772,138 @@ const tracker = new CostTracker();
             <rect x="340" y="170" width="160" height="32" fill="rgba(16,185,129,0.25)" stroke="#10B981"/>
             <text x="420" y="191" text-anchor="middle" fill="#10B981" font-family="Bricolage Grotesque" font-weight="700" font-size="11">Output (final)</text>
           </svg>
+        </div>
+
+        <h3 id="reasoning-models-category" style="margin-top:1.25rem;">Reasoning Models &mdash; The Wider Category</h3>
+        <p>Extended thinking is Anthropic&rsquo;s flavor of a 2025-era trend: <strong>reasoning models</strong>. The shared idea is that a model uses internal &ldquo;thinking tokens&rdquo; &mdash; tokens it generates and consumes before the visible answer &mdash; to deliberate. Where the implementations differ is whether reasoning is a <em>parameter</em> on a general model (Anthropic) or a <em>separate model family</em> (OpenAI o-series, DeepSeek R1, Gemini Deep Think) and how much of the trace you can inspect.</p>
+
+        <div class="tech-def-box">
+          <span class="box-label">The 2026 Reasoning-Model Landscape</span>
+          <div style="overflow-x:auto;">
+          <table style="width:100%;border-collapse:collapse;font-size:0.85rem;margin-top:0.5rem;">
+            <thead><tr style="background:var(--bg-surface);">
+              <th style="padding:0.4rem 0.5rem;text-align:left;border-bottom:1px solid var(--code-border);">Vendor</th>
+              <th style="padding:0.4rem 0.5rem;text-align:left;border-bottom:1px solid var(--code-border);">Reasoning surface</th>
+              <th style="padding:0.4rem 0.5rem;text-align:left;border-bottom:1px solid var(--code-border);">Inspect trace?</th>
+              <th style="padding:0.4rem 0.5rem;text-align:left;border-bottom:1px solid var(--code-border);">Budget control</th>
+              <th style="padding:0.4rem 0.5rem;text-align:left;border-bottom:1px solid var(--code-border);">Best at</th>
+            </tr></thead>
+            <tbody>
+              <tr><td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);"><strong>Anthropic</strong><br><span style="font-size:0.78rem;color:var(--text-muted);">Claude Opus/Sonnet 4.x extended thinking</span></td>
+                  <td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);"><em>Parameter</em> on a general model (<code>thinking={"type":"enabled","budget_tokens":N}</code>)</td>
+                  <td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Yes &mdash; thinking blocks returned alongside text</td>
+                  <td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Explicit <code>budget_tokens</code> per request</td>
+                  <td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Agent workflows (same model handles tools + reasoning seamlessly)</td></tr>
+              <tr><td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);"><strong>OpenAI</strong><br><span style="font-size:0.78rem;color:var(--text-muted);">o-series (o3, o4-mini, etc.)</span></td>
+                  <td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);"><em>Separate model family</em>; reasoning is implicit per call</td>
+                  <td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Summary only (full trace hidden)</td>
+                  <td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);"><code>reasoning.effort</code>: <code>minimal</code>/<code>low</code>/<code>medium</code>/<code>high</code></td>
+                  <td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Hard math, code competitions, multi-step proofs</td></tr>
+              <tr><td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);"><strong>DeepSeek</strong><br><span style="font-size:0.78rem;color:var(--text-muted);">R1 / R1-Distill family</span></td>
+                  <td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);"><em>Separate model</em>, open weights; reasoning implicit</td>
+                  <td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Yes &mdash; full trace inline (<code>&lt;think&gt;...&lt;/think&gt;</code>)</td>
+                  <td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">No formal budget; trace length emerges from the task</td>
+                  <td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Self-hosted reasoning; cost-sensitive workloads</td></tr>
+              <tr><td style="padding:0.4rem 0.5rem;"><strong>Google</strong><br><span style="font-size:0.78rem;color:var(--text-muted);">Gemini 2.5 Pro Deep Think / Gemini 3</span></td>
+                  <td style="padding:0.4rem 0.5rem;color:var(--text-secondary);"><em>Mode</em> on the Gemini model (<code>thinking_config</code>)</td>
+                  <td style="padding:0.4rem 0.5rem;color:var(--text-secondary);">Summary; raw trace not exposed in standard API</td>
+                  <td style="padding:0.4rem 0.5rem;color:var(--text-secondary);"><code>thinking_budget</code> tokens; <code>-1</code> = auto</td>
+                  <td style="padding:0.4rem 0.5rem;color:var(--text-secondary);">Multi-modal reasoning (image + text + audio)</td></tr>
+            </tbody>
+          </table>
+          </div>
+        </div>
+
+        <p>The Claude SDK exposes both the thinking trace and the final answer in the same response &mdash; useful for debugging and for guardrails that audit how the model arrived at a decision (M16-M17):</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs">
+            <button class="code-tab active" onclick="switchTab(this, 'rm-claude-py')" aria-label="Python reasoning">Python</button>
+            <button class="code-tab" onclick="switchTab(this, 'rm-claude-ts')" aria-label="Node.js reasoning">Node.js</button>
+          </div>
+          <div class="code-panel active" id="rm-claude-py">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code class="language-python">from anthropic import Anthropic
+
+client = Anthropic()
+
+response = client.messages.create(
+    model="claude-opus-4-7",
+    max_tokens=8000,                                   # must be &gt; budget_tokens
+    thinking={"type": "enabled", "budget_tokens": 4000},
+    messages=[{
+        "role": "user",
+        "content": "Refactor this 12-file module so add_user() can accept either email or phone, without breaking the existing callers. Plan it before writing any code."
+    }],
+)
+
+# response.content is a list of blocks. Walk them; thinking blocks are separate
+# from text blocks so you can log/audit reasoning without surfacing it to the user.
+thinking_blocks, text_blocks = [], []
+for block in response.content:
+    if block.type == "thinking":
+        thinking_blocks.append(block.thinking)        # full private trace
+    elif block.type == "text":
+        text_blocks.append(block.text)                # what to show the user
+
+print("ANSWER:\n", "\n".join(text_blocks))
+
+# Cost &amp; quality observability &mdash; pipe to your tracing layer (M19).
+usage = response.usage
+print(f"\ninput tokens:    {usage.input_tokens}")
+print(f"thinking tokens: {usage.cache_creation_input_tokens or 0}   # billed at output rate")
+print(f"output tokens:   {usage.output_tokens}")
+print(f"reasoning trace: {len(''.join(thinking_blocks))} chars across {len(thinking_blocks)} blocks")</code></pre>
+          </div>
+          <div class="code-panel" id="rm-claude-ts">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code class="language-typescript">import Anthropic from "@anthropic-ai/sdk";
+
+const client = new Anthropic();
+
+const response = await client.messages.create({
+  model: "claude-opus-4-7",
+  max_tokens: 8000,                                  // must be &gt; budget_tokens
+  thinking: { type: "enabled", budget_tokens: 4000 },
+  messages: [{
+    role: "user",
+    content:
+      "Refactor this 12-file module so add_user() can accept either email or phone, " +
+      "without breaking the existing callers. Plan it before writing any code.",
+  }],
+});
+
+const thinking: string[] = [];
+const text: string[] = [];
+for (const block of response.content as any[]) {
+  if (block.type === "thinking") thinking.push(block.thinking);   // private trace
+  else if (block.type === "text") text.push(block.text);          // user-facing
+}
+
+console.log("ANSWER:\n", text.join("\n"));
+
+// Pipe to your tracing layer (M19) for cost &amp; quality observability.
+const u = response.usage;
+console.log(`\ninput tokens:    ${u.input_tokens}`);
+console.log(`output tokens:   ${u.output_tokens}`);
+console.log(`reasoning trace: ${thinking.join("").length} chars across ${thinking.length} blocks`);</code></pre>
+          </div>
+        </div>
+
+        <div class="callout-cost">
+          <span class="box-label">&#9881;&#65039; Picking a Reasoning Surface</span>
+          <p><strong>Claude extended thinking</strong> &mdash; default if you&rsquo;re already on Claude. One model handles tools + reasoning + final answer; you keep the inspectable trace. Best for agent workflows where reasoning and tool-use interleave.</p>
+          <p><strong>OpenAI o-series</strong> &mdash; reach for it when the task is pure heavy reasoning (math contests, theorem-style code) and you don&rsquo;t need to see the trace. The <code>reasoning.effort</code> parameter gives you four coarse rungs (<code>minimal</code> &harr; <code>high</code>) instead of an exact token budget.</p>
+          <p><strong>DeepSeek R1</strong> &mdash; consider when you need <em>self-hosted</em> reasoning (sovereignty, sensitive data, very high volume). Open weights, full visible trace, but you bring the inference infra.</p>
+          <p style="margin-bottom:0;"><strong>Gemini Deep Think</strong> &mdash; multi-modal reasoning (image + text + audio) where the trace can mix media. Useful when reasoning has to incorporate visual content directly.</p>
+        </div>
+
+        <div class="callout-warning">
+          <span class="box-label">&#9888;&#65039; Reasoning-Model Gotchas</span>
+          <p><strong>Thinking tokens still count toward your latency budget.</strong> A 4K-token thinking pass adds roughly 4&times; the per-token decode time before the first user-visible token. Streaming hides nothing &mdash; the thinking phase finishes before any answer text leaves the server.</p>
+          <p><strong>You can&rsquo;t feed Claude&rsquo;s thinking blocks back as context.</strong> Thinking blocks are model-private. If you want the reasoning preserved across turns, summarize the conclusion (not the trace) and put the summary in the next user message.</p>
+          <p><strong>Reasoning models aren&rsquo;t always smarter on agent tasks.</strong> Tool use, structured output, and instruction-following are sometimes <em>worse</em> on a pure reasoning model than on the general model. Evaluate (M18) on YOUR task before defaulting to a reasoning model for everything.</p>
+          <p style="margin-bottom:0;"><strong>Budget = ceiling, not floor.</strong> The model usually thinks for less than the budget on easy tasks. You only pay for thinking tokens actually produced, not the full budget.</p>
         </div>
 
         <h3>When Extended Thinking Pays Off</h3>

@@ -4,6 +4,7 @@
 **Prerequisites**: M12
 **Estimated Time**: 60-75 minutes
 **Track Color**: var(--track-architecture) / #F97316
+**SDK Tier**: 2 (dual-track). Lab ships `solution/` (manual planner that calls `client.messages.create()` for each plan step) AND `solution-sdk/` (planner expressed as a `query()` call with a `plan` tool, plus a worker subagent in `.claude/agents/executor.md`). See `prompts/19-sdk-tier-policy.md`.
 
 ## Concepts
 - Why complex tasks need planning (the "IKEA furniture" analogy)

@@ -204,6 +204,7 @@
       <a href="#debug">Debug &amp; Observe</a>
       <a href="#lab1">Lab 1 &mdash; Your First Agent</a>
       <a href="#lab">Lab 2 &mdash; UCC Assistant</a>
+      <a href="#lab3">Lab 3 &mdash; Visual Debug UI</a>
       <a href="#quiz">Knowledge Check</a>
       <a href="#summary">Summary</a>
     </nav>
@@ -1128,6 +1129,343 @@ Be concise. Always cite filing ids in your answer.
         <div class="checkpoint">
           <div class="checkpoint-label">Lab complete &mdash; what you built</div>
           <p>A standalone Python or TypeScript program that runs Claude as a tool-using agent against the PublicRecords API &mdash; no terminal, no human in the loop. The same MCP server can be reused as a Claude Code subagent for interactive use. <strong>You've now seen all three Claude surfaces in one project</strong>: Claude Code CLI (CC0&ndash;CC14), Agent SDK (this module), and the underlying Messages API (the layer the SDK is built on).</p>
+        </div>
+      </section>
+
+      <section class="section" id="lab3">
+        <h2>Lab 3 &mdash; Build a Visual Debugging UI for Your Agent Runs</h2>
+
+        <p>The <a href="#debug">Debug &amp; Observe</a> section earlier in this module showed how to print messages, tool calls, and costs to stdout, and how to dump a <code>repr()</code>-based trace to JSONL. That works for one run. For a real tuning loop &mdash; tweak prompt, re-run, compare &mdash; stdout becomes a blur and a flat <code>repr</code> trace isn't introspectable. This lab turns the SDK's message stream into a <strong>browsable HTML timeline</strong>: every run captured, every tool call inspectable, every cost line visible at a glance. About 25 minutes.</p>
+
+        <div class="how-it-works">
+          <span class="how-it-works-label">How it works</span>
+          <p>The Agent SDK's <code>query()</code> yields a typed message stream &mdash; <code>SystemMessage</code>, <code>AssistantMessage</code>, <code>UserMessage</code> (tool results), <code>ResultMessage</code>. We tap that stream <em>once</em> at the top of the agent loop, serialize each message to a structured dict (not <code>repr</code>), and append it to <code>traces/&lt;timestamp&gt;.jsonl</code>. Then a ~70-line FastAPI app reads those files and renders them as a timeline. Re-run the agent: new trace appears. The viewer polls every 1.5s so you can <em>tail</em> a run live.</p>
+          <p>You're building the visual debugger the SDK doesn't ship with &mdash; small enough to vendor into any repo, transparent enough to extend (filtering, search, side-by-side run comparison).</p>
+        </div>
+
+        <h3 id="lab3-prereqs">Prerequisites</h3>
+        <ul>
+          <li>Lab 2 complete &mdash; you have <code>ucc_mcp.py</code> and <code>ucc_agent.py</code> under <code>~/cc-labs/ucc-agent/</code>, and the PublicRecords API running on port 8080.</li>
+          <li>The Python environment from Lab 2 with <code>claude-agent-sdk</code> installed.</li>
+          <li>One extra dep for the viewer:</li>
+        </ul>
+
+        <div class="terminal-block">
+          <button class="lab-copy-btn" onclick="copyCode(this)" aria-label="Copy command">Copy</button><div class="terminal-cmd"><code>pip install fastapi uvicorn</code></div>
+        </div>
+
+        <h3 id="lab3-step1">Step 1 &mdash; Capture the message stream as structured JSONL</h3>
+
+        <p>The <code>trace_to_file.py</code> snippet from the Debug section uses <code>repr(msg)[:2000]</code> &mdash; great for grep, terrible for a UI. We want each message rendered as a dict so the viewer can introspect content blocks, tool inputs, and costs individually.</p>
+
+        <div class="lab-file">
+          <div class="lab-file-header">
+            <div class="lab-file-header-left">
+              <span class="lab-lang">Python</span>
+              <span class="lab-label">New module</span>
+            </div>
+            <span class="lab-file-path">~/cc-labs/ucc-agent/trace_recorder.py</span>
+            <button class="lab-copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+          </div>
+          <pre><code class="language-python">"""Capture an Agent SDK message stream to structured JSONL for the viewer."""
+import json, time
+from pathlib import Path
+from dataclasses import asdict, is_dataclass
+
+TRACE_DIR = Path("traces")
+TRACE_DIR.mkdir(exist_ok=True)
+
+
+def _serialize(obj):
+    """Recursively convert SDK message objects to JSON-safe dicts."""
+    if is_dataclass(obj):
+        return _serialize(asdict(obj))
+    if hasattr(obj, "__dict__"):
+        return {k: _serialize(v) for k, v in vars(obj).items()
+                if not k.startswith("_")}
+    if isinstance(obj, list):
+        return [_serialize(x) for x in obj]
+    if isinstance(obj, dict):
+        return {k: _serialize(v) for k, v in obj.items()}
+    return obj  # primitives
+
+
+class TraceRecorder:
+    def __init__(self, label: str = "run"):
+        self.path = TRACE_DIR / f"{int(time.time())}-{label}.jsonl"
+        self._f = self.path.open("w", encoding="utf-8")
+
+    def record(self, msg):
+        entry = {
+            "ts": time.time(),
+            "type": type(msg).__name__,
+            "data": _serialize(msg),
+        }
+        self._f.write(json.dumps(entry, default=str) + "\n")
+        self._f.flush()  # so the viewer can tail live runs
+
+    def close(self):
+        self._f.close()
+        return self.path</code></pre>
+        </div>
+
+        <p>Now tap the loop in <code>ucc_agent.py</code>:</p>
+
+        <div class="lab-file">
+          <div class="lab-file-header">
+            <div class="lab-file-header-left">
+              <span class="lab-lang">Python</span>
+              <span class="lab-label">Modify driver</span>
+            </div>
+            <span class="lab-file-path">~/cc-labs/ucc-agent/ucc_agent.py</span>
+            <button class="lab-copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+          </div>
+          <pre><code class="language-python">from trace_recorder import TraceRecorder
+
+async def main():
+    recorder = TraceRecorder(label="ucc-tx-query")
+    try:
+        async for msg in query(
+            prompt="List the first 3 UCC filings in Texas with their debtors.",
+            options=options,
+        ):
+            recorder.record(msg)   # &lt;-- the only new line
+            # ... your existing print / stream logic stays the same ...
+    finally:
+        path = recorder.close()
+        print(f"\nTrace written: {path}")</code></pre>
+        </div>
+
+        <p>Re-run the agent. A new file appears under <code>traces/</code>:</p>
+
+        <div class="terminal-block">
+          <button class="lab-copy-btn" onclick="copyCode(this)" aria-label="Copy command">Copy</button><div class="terminal-cmd"><code>python ucc_agent.py &amp;&amp; ls traces/</code></div>
+        </div>
+
+        <div class="code-block-wrapper">
+          <div class="code-panel">
+            <pre><code class="language-text">1715520138-ucc-tx-query.jsonl</code></pre>
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">copy</button>
+          </div>
+        </div>
+
+        <div class="callout-why">
+          <span class="box-label">Why JSONL over a database?</span>
+          <p>Append-only, crash-safe, diffable in git, greppable from the terminal, and the viewer can <em>tail</em> the file during a live run instead of waiting for completion. Teams trade up to SQLite or DuckDB only when they need cross-run analytics &mdash; for &ldquo;what did my agent just do?&rdquo;, JSONL is the right shape.</p>
+        </div>
+
+        <h3 id="lab3-step2">Step 2 &mdash; Spin up the viewer (FastAPI + a single HTML page)</h3>
+
+        <p>Two endpoints (<code>/</code> for the UI, <code>/api/traces</code> + <code>/api/trace/&lt;name&gt;</code> for data), one templated page. The viewer reads <code>traces/</code> on every request &mdash; no DB, no build step.</p>
+
+        <div class="lab-file">
+          <div class="lab-file-header">
+            <div class="lab-file-header-left">
+              <span class="lab-lang">Python</span>
+              <span class="lab-label">Viewer server</span>
+            </div>
+            <span class="lab-file-path">~/cc-labs/ucc-agent/trace_viewer.py</span>
+            <button class="lab-copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+          </div>
+          <pre><code class="language-python">"""Render captured agent traces as an HTML timeline."""
+import json
+from pathlib import Path
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import HTMLResponse, JSONResponse
+
+app = FastAPI()
+TRACE_DIR = Path("traces")
+
+
+@app.get("/api/traces")
+def list_traces():
+    files = sorted(TRACE_DIR.glob("*.jsonl"), reverse=True)
+    return [{"name": f.name, "size": f.stat().st_size} for f in files]
+
+
+@app.get("/api/trace/{name}")
+def read_trace(name: str):
+    if ".." in name or "/" in name:
+        raise HTTPException(400, "invalid name")
+    p = TRACE_DIR / name
+    if not p.exists():
+        raise HTTPException(404)
+    entries = [json.loads(line) for line in p.read_text().splitlines() if line.strip()]
+    return JSONResponse(entries)
+
+
+@app.get("/", response_class=HTMLResponse)
+def index():
+    return Path(__file__).parent.joinpath("viewer.html").read_text()</code></pre>
+        </div>
+
+        <p>And the page that does the rendering &mdash; one self-contained file, zero build step:</p>
+
+        <div class="lab-file">
+          <div class="lab-file-header">
+            <div class="lab-file-header-left">
+              <span class="lab-lang">HTML</span>
+              <span class="lab-label">Viewer UI</span>
+            </div>
+            <span class="lab-file-path">~/cc-labs/ucc-agent/viewer.html</span>
+            <button class="lab-copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+          </div>
+          <pre><code class="language-html">&lt;!DOCTYPE html&gt;
+&lt;html&gt;&lt;head&gt;&lt;meta charset="utf-8"&gt;&lt;title&gt;Agent Trace Viewer&lt;/title&gt;
+&lt;style&gt;
+  body{font:14px/1.5 system-ui;background:#0f172a;color:#e2e8f0;margin:0;display:flex;}
+  aside{width:260px;background:#1e293b;height:100vh;overflow-y:auto;padding:1rem;}
+  aside a{display:block;padding:0.4rem;color:#94a3b8;text-decoration:none;border-radius:4px;font-size:0.82rem;}
+  aside a:hover, aside a.active{background:#334155;color:#fff;}
+  main{flex:1;padding:1.5rem 2rem;overflow-y:auto;height:100vh;}
+  .msg{border-left:3px solid #475569;padding:0.6rem 1rem;margin:0.5rem 0;background:#1e293b;border-radius:0 6px 6px 0;}
+  .msg.SystemMessage{border-color:#64748b;}
+  .msg.AssistantMessage{border-color:#60a5fa;}
+  .msg.UserMessage{border-color:#a78bfa;}
+  .msg.ResultMessage{border-color:#34d399;background:#022c22;}
+  .type{font-size:0.7rem;text-transform:uppercase;letter-spacing:0.08em;color:#94a3b8;font-weight:600;}
+  .ts{float:right;color:#64748b;font-size:0.75rem;}
+  pre{background:#0f172a;padding:0.6rem;border-radius:4px;overflow-x:auto;font-size:0.78rem;margin:0.4rem 0 0;color:#cbd5e1;}
+  .tool{color:#fbbf24;font-weight:600;}
+  .cost{color:#34d399;font-weight:600;}
+  .banner{padding:0.8rem 1rem;border-radius:6px;margin-bottom:1rem;}
+&lt;/style&gt;&lt;/head&gt;&lt;body&gt;
+&lt;aside id="list"&gt;&lt;h3 style="margin-top:0;font-size:0.85rem;color:#94a3b8;"&gt;Runs&lt;/h3&gt;&lt;/aside&gt;
+&lt;main id="trace"&gt;&lt;p style="color:#64748b"&gt;Pick a run on the left.&lt;/p&gt;&lt;/main&gt;
+&lt;script&gt;
+const esc = s =&gt; String(s).replace(/[&amp;&lt;&gt;]/g, c =&gt; ({'&amp;':'&amp;amp;','&lt;':'&amp;lt;','&gt;':'&amp;gt;'}[c]));
+async function loadList(){
+  const r = await fetch('/api/traces'); const files = await r.json();
+  document.getElementById('list').innerHTML +=
+    files.map(f =&gt; `&lt;a href="#" data-name="${esc(f.name)}"&gt;${esc(f.name)}&lt;/a&gt;`).join('');
+  document.querySelectorAll('aside a').forEach(a =&gt; a.onclick = ev =&gt; {
+    ev.preventDefault();
+    document.querySelectorAll('aside a').forEach(x =&gt; x.classList.remove('active'));
+    a.classList.add('active');
+    render(a.dataset.name);
+  });
+}
+function summarize(e){
+  const d = e.data;
+  if(e.type === 'AssistantMessage' &amp;&amp; d.content){
+    return d.content.map(c =&gt; {
+      if(c.type === 'text') return `&lt;div&gt;${esc(c.text || '')}&lt;/div&gt;`;
+      if(c.type === 'tool_use')
+        return `&lt;div class="tool"&gt;&#x1F527; ${esc(c.name)}&lt;/div&gt;&lt;pre&gt;${esc(JSON.stringify(c.input, null, 2))}&lt;/pre&gt;`;
+      if(c.type === 'thinking')
+        return `&lt;em style="color:#94a3b8"&gt;thinking: ${esc((c.thinking || '').slice(0,200))}...&lt;/em&gt;`;
+      return `&lt;pre&gt;${esc(JSON.stringify(c, null, 2))}&lt;/pre&gt;`;
+    }).join('');
+  }
+  if(e.type === 'UserMessage' &amp;&amp; d.content){
+    return d.content.map(c =&gt; c.type === 'tool_result'
+      ? `&lt;div class="tool"&gt;&#x21A9; tool_result&lt;/div&gt;&lt;pre&gt;${esc((typeof c.content === 'string' ? c.content : JSON.stringify(c.content, null, 2)).slice(0,400))}&lt;/pre&gt;`
+      : `&lt;pre&gt;${esc(JSON.stringify(c, null, 2))}&lt;/pre&gt;`
+    ).join('');
+  }
+  if(e.type === 'ResultMessage'){
+    return `&lt;div&gt;turns: ${d.num_turns || '?'} &middot; duration: ${((d.duration_ms || 0)/1000).toFixed(2)}s &middot; &lt;span class="cost"&gt;cost: $${(d.total_cost_usd || 0).toFixed(4)}&lt;/span&gt;&lt;/div&gt;`;
+  }
+  return `&lt;pre&gt;${esc(JSON.stringify(d, null, 2).slice(0,300))}&lt;/pre&gt;`;
+}
+async function render(name){
+  const r = await fetch('/api/trace/' + encodeURIComponent(name));
+  const entries = await r.json();
+  const result = entries.find(e =&gt; e.type === 'ResultMessage');
+  const banner = result
+    ? `&lt;div class="banner" style="background:#022c22"&gt;&#x2705; ${result.data.num_turns || '?'} turns &middot; ${((result.data.duration_ms || 0)/1000).toFixed(2)}s &middot; &lt;span class="cost"&gt;$${(result.data.total_cost_usd || 0).toFixed(4)}&lt;/span&gt;&lt;/div&gt;`
+    : `&lt;div class="banner" style="background:#451a03;color:#fbbf24"&gt;&#x23F3; Run in progress...&lt;/div&gt;`;
+  const body = entries.map(e =&gt; {
+    const t = new Date(e.ts * 1000).toLocaleTimeString();
+    return `&lt;div class="msg ${e.type}"&gt;&lt;span class="ts"&gt;${t}&lt;/span&gt;&lt;div class="type"&gt;${e.type}&lt;/div&gt;${summarize(e)}&lt;/div&gt;`;
+  }).join('');
+  document.getElementById('trace').innerHTML = banner + body;
+}
+loadList();
+// Live tail: re-render the active trace every 1.5s
+setInterval(() =&gt; { const a = document.querySelector('aside a.active'); if(a) render(a.dataset.name); }, 1500);
+&lt;/script&gt;&lt;/body&gt;&lt;/html&gt;</code></pre>
+        </div>
+
+        <h3 id="lab3-step3">Step 3 &mdash; Run it</h3>
+
+        <div class="terminal-block">
+          <button class="lab-copy-btn" onclick="copyCode(this)" aria-label="Copy command">Copy</button><div class="terminal-cmd"><code>uvicorn trace_viewer:app --reload --port 7000</code></div>
+        </div>
+
+        <p>Open <code>http://localhost:7000</code>. The sidebar lists every JSONL file under <code>traces/</code>; click one to render the timeline. Each message is color-coded by type:</p>
+
+        <ul>
+          <li><strong>Gray (SystemMessage)</strong> &mdash; init: model, MCP server load, available tools.</li>
+          <li><strong>Blue (AssistantMessage)</strong> &mdash; Claude's text + <code>tool_use</code> blocks. Tool calls render as &#x1F527; with their input args expanded.</li>
+          <li><strong>Purple (UserMessage)</strong> &mdash; <code>tool_result</code> blocks. The response your MCP tool returned, truncated to 400 chars.</li>
+          <li><strong>Green (ResultMessage)</strong> &mdash; turns, duration, total cost. The receipt at the end of the run, also rolled up into the banner at the top.</li>
+        </ul>
+
+        <h3 id="lab3-step4">Step 4 &mdash; Watch a live run</h3>
+
+        <p>Open the viewer in one window. In another terminal, re-run the agent against a different prompt:</p>
+
+        <div class="terminal-block">
+          <button class="lab-copy-btn" onclick="copyCode(this)" aria-label="Copy command">Copy</button><div class="terminal-cmd"><code>python ucc_agent.py</code></div>
+        </div>
+
+        <p>Refresh the viewer once &mdash; the new file appears in the sidebar. Click it; the viewer's <code>setInterval</code> polls every 1.5s and the recorder <code>flush()</code>es after every message, so the timeline streams in <em>during</em> the run. <strong>This is the inner-loop debug workflow:</strong> tweak prompt &rarr; re-run &rarr; watch tool selection in real time without scrolling stdout.</p>
+
+        <div class="what-just-happened">
+          <span class="what-happened-label">What Just Happened</span>
+          <p>You've replaced &ldquo;tail the stdout&rdquo; with &ldquo;watch a structured timeline.&rdquo; The same agent code runs unchanged &mdash; the recorder is a <em>passive</em> observer of the message stream. Anything the SDK emits, you can see. Anything Claude decided, you can trace.</p>
+        </div>
+
+        <h3 id="lab3-step5">Step 5 &mdash; Inspect a tool-selection bug end-to-end</h3>
+
+        <p>Try this prompt against your agent: <em>&ldquo;How many filings are there in TX?&rdquo;</em>. Watch the timeline.</p>
+
+        <ol>
+          <li>The first <strong>AssistantMessage</strong> shows Claude calling <code>mcp__ucc__lookup_filings</code> with <code>state=&quot;TX&quot;</code> &mdash; expand the <code>tool_use</code> block.</li>
+          <li>The <strong>UserMessage</strong> that follows is the <code>tool_result</code> &mdash; the actual JSON your MCP server returned. Look at the shape.</li>
+          <li>The next <strong>AssistantMessage</strong> is Claude reasoning over that result. Did it count correctly? Did it cite a filing ID it shouldn't have?</li>
+          <li>The <strong>ResultMessage</strong> shows total cost. If a single Texas query cost $0.04, you're paying for too many turns &mdash; tighten the system prompt or add a <code>count_filings</code> tool to skip the listing step.</li>
+        </ol>
+
+        <p>This is the debugging loop that text-streamed stdout makes painful and a UI makes obvious.</p>
+
+        <h3 id="lab3-step6">Step 6 &mdash; Extend: side-by-side run comparison</h3>
+
+        <p>Use case: you changed the system prompt and want to see whether tool selection changed. Add a URL parameter to render two runs in columns:</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-panel">
+            <pre><code class="language-text">http://localhost:7000/?a=1715520138-tx-query.jsonl&amp;b=1715520245-tx-query.jsonl</code></pre>
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">copy</button>
+          </div>
+        </div>
+
+        <p>This is left as an extension (the viewer is intentionally small). Reading <code>new URLSearchParams</code>, fetching both traces, and rendering into <code>display:grid</code> with two columns is ~25 lines of JS. The real payoff: catching prompt-change regressions <em>before</em> they reach your eval suite (CC11).</p>
+
+        <h3 id="lab3-step7">Step 7 &mdash; The production-grade path</h3>
+
+        <p>For teams beyond one developer, swap the local viewer for a hosted observability platform. The <code>TraceRecorder</code> abstraction stays &mdash; you change only the sink:</p>
+
+        <table>
+          <thead><tr><th>Tool</th><th>How you'd wire it</th><th>Pick when</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Langfuse</strong> (self-host or cloud)</td><td>Send each message as an <code>observation</code> via their Python SDK; one agent run = one trace.</td><td>You want hosted UI, multi-user access, eval scoring overlays.</td></tr>
+            <tr><td><strong>OpenTelemetry</strong> + Honeycomb / Datadog / Jaeger</td><td>Wrap the loop in a span; emit one child span per tool call with input/output as attributes.</td><td>You already have OTel in your stack and want one pane of glass for app + agent.</td></tr>
+            <tr><td><strong>This viewer + S3</strong></td><td>Upload JSONL to S3 on run completion; viewer reads from S3 instead of local disk.</td><td>You want zero vendor lock-in and team-wide trace history.</td></tr>
+          </tbody>
+        </table>
+
+        <p>For most teams the JSONL viewer is enough for months &mdash; ship it, learn what you actually need, then graduate.</p>
+
+        <div class="callout-warning">
+          <span class="box-label">Same security rules apply</span>
+          <p>Tool inputs may contain user PII; tool results often contain DB rows. Don't write trace files into directories that ship with logs to third parties without redaction. Apply the same masking rules the &ldquo;One thing not to do&rdquo; box in the Debug section called out &mdash; the viewer is convenient, which makes accidental PII exposure easier.</p>
+        </div>
+
+        <div class="checkpoint">
+          <div class="checkpoint-label">Lab complete &mdash; what you built</div>
+          <p>A self-hosted, zero-build, real-time visual debugger for Agent SDK runs. <strong>Recorder</strong> (~30 lines) hooks the message stream and writes structured JSONL. <strong>Viewer</strong> (1 FastAPI file + 1 HTML file, ~140 lines total) renders the JSONL as a color-coded timeline with tool-call inspection, cost roll-up, and a 1.5s live tail. The recorder works against any SDK agent; the viewer renders any trace. You've turned the opaque async iterator into a tool you can pair-debug agents with.</p>
         </div>
       </section>
 

@@ -39,6 +39,16 @@ This project generates the course "Building AI Agents with Claude: From Hello Wo
     - "Why It Matters": use concrete numbers and real scenarios, never abstract
     - Add conceptual bridges between major sections
     - Add "What Just Happened?" checkpoints after code blocks
+12. SDK TIER POLICY (read `prompts/19-sdk-tier-policy.md` before generating ANY lab/capstone):
+    - Tier 1 (M01–M11, M15, M18, M20, M21, M22, CAPSTONE-6): raw Messages API only
+    - Tier 2 (M12, M13, M14, M16, M17, M19): ship BOTH manual and SDK solutions, side-by-side
+    - Tier 3 (M15B, M22B, M25–M27B, CAPSTONE-1..5, 7): primary solution uses `claude-agent-sdk`; spec-driven where applicable
+    - Never simulate the SDK with `client.messages.create()` and call it "the SDK"
+    - Subagents → `.claude/agents/<name>.md`; hooks → `.claude/settings.json`
+13. SPEC-DRIVEN PATTERN (read `prompts/17-spec-driven-development.md`):
+    - All Tier 3 capstones and M15B ship `spec/agent-spec.md` describing the entire system
+    - The lab flow is: read spec → `claude` generates → student verifies → student iterates on spec
+    - The pre-built `solution/` is the reference, not the destination
 
 ## Domain Anchors (for capstone projects)
 Three industry domains are used across all capstones. Read `prompts/03-capstone-domains.md` for full specifications:
@@ -69,6 +79,7 @@ All slash commands are defined as markdown files in `.claude/commands/` and will
 | `/validate-capstone CAPSTONE-3 DOMAIN-A` | Validate capstone for accuracy and student executability |
 | `/generate-lab-repo ALL` | Generate Git-ready lab repo with starter code, solutions, mock data for all modules + capstones |
 | `/generate-mobile ALL` | Generate mobile-friendly condensed versions with pseudocode instead of real code |
+| `/generate-from-spec <path>` | Read an `agent-spec.md` and generate a complete Tier 3 agent project from it |
 
 ## Quality Checklist (applied automatically by /generate-module and /review-module)
 - [ ] File size < 200KB

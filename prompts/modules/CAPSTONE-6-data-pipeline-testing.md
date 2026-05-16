@@ -5,6 +5,7 @@
 **Skills Practiced**: M05 (Tools), M06 (Multi-Tool), M12 (ReAct), M13 (Planning), M14 (Multi-Agent), M15B (Build Agent), M16-M17 (Guardrails), M18 (Evaluation)
 **Estimated Time**: 4-6 hours across 2-3 sessions
 **Prerequisites**: M01-M15B recommended
+**SDK Tier**: 1 (raw API — intentional). This capstone is the "non-agent baseline" using LLMs as evaluators in a data pipeline. Keeping it on the raw API is a pedagogical contrast — the rest of the course uses the SDK; this one shows when you don't need it. See `prompts/19-sdk-tier-policy.md`.
 
 ---
 

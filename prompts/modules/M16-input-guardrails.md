@@ -4,6 +4,7 @@
 **Prerequisites**: M05, M12
 **Estimated Time**: 60-75 minutes
 **Track Color**: var(--track-guardrails) / #EF4444
+**SDK Tier**: 2 (dual-track). See `prompts/19-sdk-tier-policy.md`. Lab ships BOTH `solution/` (Python wrapper functions that intercept input before `client.messages.create()`) AND `solution-sdk/` (a `PreToolUse` hook in `.claude/settings.json` plus a `can_use_tool` callback passed to `ClaudeAgentOptions`). The HTML's "Why guardrails matter" section must show the same SSN-blocking guardrail implemented both ways.
 
 ## Concepts
 - Why guardrails matter (animated "guardrail failure" scenarios)
@@ -15,6 +16,10 @@
 
 ## Hands-On Lab
 Build an input validation pipeline for the UCC agent: PII detector (SSN, credit card), injection filter (prompt injection patterns), schema validator (filing number format, state code). Test with 10 adversarial inputs.
+
+**Two implementations**:
+1. `solution/` — Python wrapper functions that run before each `client.messages.create()` call. Manual but explicit.
+2. `solution-sdk/` — guardrails declared as a `PreToolUse` hook in `.claude/settings.json` (calls a Python script per tool invocation) plus a `can_use_tool` permission callback passed to `ClaudeAgentOptions`. The student sees that hooks fire automatically — no caller code change required when a new agent is added.
 
 ## Quiz Focus (5 questions)
 1. What is prompt injection? (crafted input that tricks the agent into ignoring instructions)

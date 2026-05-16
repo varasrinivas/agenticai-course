@@ -227,6 +227,8 @@
       <div class="sidebar-title">M24 Contents</div>
       <a href="#objectives">Learning Objectives</a>
       <a href="#agent-protocols">Agent-to-Agent Protocols</a>
+      <a href="#a2a-in-practice">A2A In Practice</a>
+      <a href="#agent-ecosystem-standards">Beyond A2A &mdash; AGNTCY, ANP</a>
       <a href="#evolving-capabilities">Evolving Capabilities</a>
       <a href="#responsible-building">Building Responsibly</a>
       <a href="#resources">Resources &amp; Communities</a>
@@ -266,49 +268,66 @@
           <p>Agents are at that same inflection point right now. Today, most agents are standalone bots &mdash; they do their one thing well but cannot discover or collaborate with other agents. Agent-to-agent protocols like MCP are the "API moment" for AI: the one universal plug that lets any agent discover, negotiate with, and delegate to any other agent.</p>
         </div>
 
-        <p>So what does agent-to-agent communication actually look like in practice? Below is a real capability manifest &mdash; the machine-readable "resume" that lets one agent decide whether to delegate to another. Think of it as the concrete artifact behind the analogy: this JSON is the "universal plug" that makes discovery possible.</p>
+        <p>By 2025, this is no longer hypothetical. Google's <strong>A2A specification</strong> (announced April 2025, governed under the Linux Foundation) defines the wire format that lets independently built agents discover each other and exchange work. The canonical artifact in A2A is the <strong>Agent Card</strong> &mdash; a JSON document published at a well-known URL (<code>/.well-known/agent.json</code>) that describes one agent's identity, capabilities, and authentication requirements:</p>
         <div class="code-block-wrapper">
           <div class="code-tabs">
-            <button class="code-tab active" onclick="switchTab(this, 'manifest-json')" aria-label="JSON example">JSON</button>
+            <button class="code-tab active" onclick="switchTab(this, 'agent-card-json')" aria-label="Agent Card JSON">Agent Card (A2A)</button>
           </div>
-          <div class="code-panel active" id="manifest-json">
+          <div class="code-panel active" id="agent-card-json">
             <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
-            <pre><code>{
-  "agent_id": "tax-specialist-v2",
-  "capabilities": ["tax_analysis", "deduction_calculation", "form_preparation"],
-  "input_schema": {
-    "type": "object",
-    "properties": {
-      "income": { "type": "number" },
-      "filing_status": { "type": "string", "enum": ["single", "married_joint", "married_separate"] },
-      "deductions": { "type": "array", "items": { "type": "object" } }
-    }
+            <pre><code class="language-json">{
+  "name": "tax-specialist",
+  "description": "US federal & state tax analysis with deduction optimization.",
+  "url": "https://agents.acme.com/tax-specialist",
+  "version": "2.1.0",
+  "provider": { "organization": "Acme Tax LLC" },
+  "capabilities": {
+    "streaming": true,
+    "pushNotifications": true,
+    "stateTransitionHistory": true
   },
-  "output_schema": {
-    "type": "object",
-    "properties": {
-      "total_deductions": { "type": "number" },
-      "estimated_savings": { "type": "number" },
-      "confidence": { "type": "number", "minimum": 0, "maximum": 1 }
+  "authentication": { "schemes": ["bearer", "oauth2"] },
+  "defaultInputModes":  ["text", "application/json"],
+  "defaultOutputModes": ["text", "application/json"],
+  "skills": [
+    {
+      "id": "deduction-analysis",
+      "name": "Analyze itemized deductions",
+      "description": "Given income + receipts, returns optimal deduction plan.",
+      "tags": ["tax", "deductions", "us-federal"],
+      "examples": ["Analyze deductions for $85K income, married filing jointly"]
     }
-  },
-  "constraints": {
-    "max_income": 500000,
-    "supported_years": [2023, 2024, 2025],
-    "requires_human_review_above": 100000
-  }
+  ]
 }</code></pre>
           </div>
         </div>
-        <p>The orchestrator reads this manifest and knows: "This agent handles tax analysis for incomes up to $500K, it needs income and filing status as input, and it flags anything over $100K for human review." That is the foundation of agent-to-agent delegation &mdash; structured, machine-readable capability descriptions.</p>
+        <p>An orchestrator agent fetches this card, sees that the tax-specialist supports streaming and OAuth, and knows exactly which skill to invoke. The same orchestrator can call ANY A2A-compliant specialist &mdash; the wire format is identical whether the specialist was built with the Claude Agent SDK, LangGraph, CrewAI, or someone's bespoke Go service.</p>
 
         <div class="tech-def-box">
-          <span class="box-label">Technical Definition</span>
-          <p><span class="term-tooltip" tabindex="0">Agent-to-agent communication<span class="tooltip-content" role="tooltip">Standardized protocols that allow independently built AI agents to discover each other's capabilities, negotiate task delegation, and exchange structured results &mdash; similar to how REST APIs let web services communicate.</span></span> is being standardized through several emerging patterns. Here are the three most important ones to understand:</p>
-          <p><strong>1. Agent Delegation:</strong> One agent recognizes a task outside its specialty and delegates to a specialist agent. This is like microservices for AI. Your orchestrator agent handles the user conversation, but when it encounters a tax question, it delegates to a specialist tax agent that has the right tools and domain knowledge.</p>
-          <p>The key technical challenge is the <span class="term-tooltip" tabindex="0">capability manifest<span class="tooltip-content" role="tooltip">A structured description of what an agent can do, what inputs it accepts, what outputs it produces, and what domains it covers. Think of it as a machine-readable resume for an agent &mdash; other agents read it to decide whether to delegate tasks.</span></span> &mdash; a machine-readable description of what an agent can do. The orchestrator reads the manifest and matches tasks to specialists. Without it, the orchestrator has no way to know which agent handles tax questions versus shipping questions.</p>
-          <p><strong>2. Agent Marketplaces:</strong> Platforms where developers publish agents with standardized capability descriptions. An orchestrator agent can search the marketplace at runtime and discover a specialist it has never seen before. Then it verifies that specialist's capabilities by reading its manifest. Finally, it delegates the task. This is already happening with <span class="term-tooltip" tabindex="0">MCP servers<span class="tooltip-content" role="tooltip">Model Context Protocol servers are programs that expose tools, resources, and prompts through a standardized protocol. Any MCP-compatible client (like Claude) can discover and use them without custom integration code.</span></span> &mdash; directories of MCP servers that Claude can connect to.</p>
-          <p><strong>3. Agent Composition:</strong> Building complex workflows by chaining simple, focused agents rather than building one monolithic super-agent. Each agent in the chain has its own tools, prompts, and guardrails. The composition framework handles three things: passing context between agents, managing failures when one agent breaks, and aggregating results at the end. This is the multi-agent architecture from M14, scaled up to an ecosystem level.</p>
+          <span class="box-label">Technical Definition &mdash; Two Protocols, Two Layers</span>
+          <p>By 2026 the agent-interop landscape has crystallized into <strong>two complementary protocols</strong>. Confusing them is the #1 mistake when people first talk about &ldquo;agent protocols.&rdquo;</p>
+          <p><strong>1. <span class="term-tooltip" tabindex="0">MCP<span class="tooltip-content" role="tooltip">Model Context Protocol &mdash; an open protocol from Anthropic (Nov 2024) that standardizes how an LLM connects to tools, resources, and prompts on a single server. It is the bottom layer: agent ↔ tool.</span></span> &mdash; agent &harr; tool.</strong> MCP (you learned this in M07) is how a single agent connects to its tools: filesystem, GitHub, Postgres, an internal Jira API. The agent is the client; the tool exposes itself as an MCP server. One agent, many tools.</p>
+          <p><strong>2. <span class="term-tooltip" tabindex="0">A2A<span class="tooltip-content" role="tooltip">Agent2Agent Protocol &mdash; an open spec announced by Google in April 2025 (now under the Linux Foundation) that standardizes how independent agents discover, authenticate, and delegate tasks to one another. It sits one layer above MCP: agent ↔ agent.</span></span> &mdash; agent &harr; agent.</strong> A2A is how one agent talks to another agent. Each A2A agent publishes an <strong>Agent Card</strong> (the JSON above), exposes a small HTTP surface (<code>tasks/send</code>, <code>tasks/get</code>, <code>tasks/cancel</code>, plus an SSE stream), and treats incoming work as <strong>Tasks</strong> with a defined lifecycle: <code>submitted</code> &rarr; <code>working</code> &rarr; <code>input-required</code> &rarr; <code>completed</code> (or <code>failed</code> / <code>canceled</code>).</p>
+          <p><strong>The stack:</strong> a production multi-agent system uses BOTH. An orchestrator agent uses A2A to discover and delegate to a tax-specialist agent. That tax-specialist, internally, uses MCP to talk to its accounting database, file storage, and IRS lookup API. Two protocols, two scopes &mdash; not competitors.</p>
+        </div>
+
+        <div class="callout-why" style="background:rgba(99,102,241,0.06); border-left-color:#6366F1;">
+          <span class="box-label" style="color:#6366F1;">&#9881;&#65039; Decision Guide &mdash; MCP vs A2A</span>
+          <table style="width:100%;border-collapse:collapse;font-size:0.85rem;margin-top:0.5rem;">
+            <thead>
+              <tr style="background:var(--bg-surface);">
+                <th style="padding:0.4rem 0.5rem;text-align:left;border-bottom:1px solid var(--code-border);">Scenario</th>
+                <th style="padding:0.4rem 0.5rem;text-align:left;border-bottom:1px solid var(--code-border);">Reach for</th>
+                <th style="padding:0.4rem 0.5rem;text-align:left;border-bottom:1px solid var(--code-border);">Why</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);">Expose a Postgres database to your agent</td><td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);"><strong>MCP</strong></td><td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Tool integration, no agent on the other side</td></tr>
+              <tr><td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);">Your travel agent needs to call a vendor&rsquo;s flight-pricing agent</td><td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);"><strong>A2A</strong></td><td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Cross-org, agent-to-agent delegation with auth</td></tr>
+              <tr><td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);">In-process subagent (M14) inside one process</td><td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);"><strong>Neither</strong></td><td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">A function call is fine; protocols add overhead</td></tr>
+              <tr><td style="padding:0.4rem 0.5rem;">Pluggable specialist marketplace inside your enterprise</td><td style="padding:0.4rem 0.5rem;"><strong>A2A</strong></td><td style="padding:0.4rem 0.5rem;color:var(--text-secondary);">Each team owns one agent; the registry is Agent Cards</td></tr>
+            </tbody>
+          </table>
         </div>
 
         <!-- AGENT HANDSHAKE ANIMATION -->
@@ -320,10 +339,10 @@
               <div class="hs-agent-role">coordinator</div>
             </div>
             <div class="hs-messages">
-              <div class="hs-msg" data-step="1"><span class="hs-msg-type query">QUERY</span> capability_query: "tax analysis"</div>
-              <div class="hs-msg right" data-step="2"><span class="hs-msg-type manifest">MANIFEST</span> tools: [tax_calc, deduction_check]</div>
-              <div class="hs-msg" data-step="3"><span class="hs-msg-type task">TASK</span> analyze_deductions({income: 85000})</div>
-              <div class="hs-msg right" data-step="4"><span class="hs-msg-type result">RESULT</span> {deductions: 12400, savings: 2728}</div>
+              <div class="hs-msg" data-step="1"><span class="hs-msg-type query">GET</span> /.well-known/agent.json &mdash; discover</div>
+              <div class="hs-msg right" data-step="2"><span class="hs-msg-type manifest">CARD</span> skills: [deduction-analysis, &hellip;]</div>
+              <div class="hs-msg" data-step="3"><span class="hs-msg-type task">POST tasks/send</span> {input: $85K income}</div>
+              <div class="hs-msg right" data-step="4"><span class="hs-msg-type result">task: completed</span> {savings: $2,728}</div>
             </div>
             <div class="hs-agent specialist" data-step="0">
               <div class="hs-agent-name">Tax Specialist</div>
@@ -347,12 +366,295 @@
 
         <div class="callout-warning">
           <span class="box-label">&#9888;&#65039; Common Misconceptions</span>
-          <p><strong>"Agent-to-agent protocols mean agents talk in natural language."</strong> &mdash; No. Agents communicate using structured data &mdash; JSON schemas, capability manifests, typed inputs and outputs. Natural language is for humans. Machine-to-machine communication needs precision, not prose.</p>
-          <p><strong>"Agent marketplaces will replace custom agent development."</strong> &mdash; Marketplaces provide general-purpose specialists, but your business logic, domain rules, and proprietary data still need custom agents. Think of it like npm: you use packages for common tasks, but you still write your own application code.</p>
-          <p><strong>"MCP already solves agent-to-agent communication."</strong> &mdash; MCP solves the tool discovery and invocation problem (connecting AI models to tools). Full agent-to-agent delegation &mdash; where one agent discovers another agent, negotiates capabilities, and delegates tasks &mdash; is still an emerging pattern built on top of MCP's foundation.</p>
+          <p><strong>&ldquo;MCP and A2A are competitors.&rdquo;</strong> &mdash; They aren&rsquo;t. MCP = <em>agent &harr; tool</em>; A2A = <em>agent &harr; agent</em>. Real systems use both: A2A on the outside, MCP on the inside.</p>
+          <p><strong>&ldquo;Agents will negotiate in natural language.&rdquo;</strong> &mdash; No. A2A is JSON over HTTP(S) with SSE / webhooks. Natural language goes <em>inside</em> a message&rsquo;s text part, not on the wire.</p>
+          <p><strong>&ldquo;Same-process subagents need a protocol.&rdquo;</strong> &mdash; They don&rsquo;t. M14 subagents are function calls. Reach for A2A only across process / org / trust boundaries.</p>
+          <p><strong>&ldquo;The Agent Card replaces an API contract.&rdquo;</strong> &mdash; It&rsquo;s the <em>discovery</em> contract, not the data contract. Each skill still needs JSON Schema for its input/output shape.</p>
         </div>
 
-        <div class="bridge">Agent protocols solve the communication problem between agents. But what can individual agents actually do? Claude's own capabilities are expanding rapidly &mdash; and each new capability unlocks entirely new categories of applications.</div>
+        <div class="bridge">Knowing the wire format is only half the story. Next, see what publishing and consuming an Agent Card looks like in real code &mdash; and where AGNTCY and ANP fit in the wider landscape.</div>
+      </section>
+
+      <!-- ===== A2A IN PRACTICE ===== -->
+      <section class="section" id="a2a-in-practice">
+        <h2 id="a2a-in-practice-heading">A2A In Practice &mdash; Publish &amp; Consume</h2>
+
+        <div class="analogy-box">
+          <span class="box-label">Everyday Analogy</span>
+          <p>Posting an Agent Card is like printing business cards. The card itself is cheap and tells anyone who picks it up exactly what you do, how to reach you, and what authentication you accept. Calling another agent is like dialing the number on someone else&rsquo;s card &mdash; you have to handle the dial tone, the busy signal, and the ringback.</p>
+          <p>The pain of skipping this step is that every cross-team agent integration becomes a snowflake. One team uses gRPC, another uses HTTP with a custom auth scheme, a third uses a message bus &mdash; and your orchestrator agent grows a different client per vendor. A2A collapses that to one client: speak the protocol, fetch the card, post the task.</p>
+          <p>The mental model: <strong>publish</strong> = expose <code>/.well-known/agent.json</code> + a small HTTP surface; <strong>consume</strong> = fetch card, post task, poll or stream for completion. Two halves of one protocol.</p>
+        </div>
+
+        <h3 id="a2a-publish">Publishing an Agent Card (Server Side)</h3>
+        <p>This is what your tax-specialist agent runs. The framework details vary &mdash; here it&rsquo;s FastAPI on Python and Fastify on Node &mdash; but the surface area is identical: a static card endpoint plus a task lifecycle. The internal &ldquo;do the work&rdquo; function (<code>run_claude_tax_skill</code>) is just your existing Claude agent loop wrapped in an A2A envelope.</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs">
+            <button class="code-tab active" onclick="switchTab(this, 'a2a-pub-py')" aria-label="Python publisher">Python (FastAPI)</button>
+            <button class="code-tab" onclick="switchTab(this, 'a2a-pub-ts')" aria-label="TypeScript publisher">Node.js (Fastify)</button>
+          </div>
+          <div class="code-panel active" id="a2a-pub-py">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code class="language-python">import uuid
+from fastapi import FastAPI, HTTPException, Header
+from pydantic import BaseModel
+
+app = FastAPI()
+TASKS: dict[str, dict] = {}   # in-memory; real deployments use Redis/Postgres
+
+AGENT_CARD = {
+    "name": "tax-specialist",
+    "description": "US federal &amp; state tax analysis with deduction optimization.",
+    "url": "https://agents.acme.com/tax-specialist",
+    "version": "2.1.0",
+    "capabilities": {"streaming": False, "pushNotifications": True},
+    "authentication": {"schemes": ["bearer"]},
+    "defaultInputModes":  ["text", "application/json"],
+    "defaultOutputModes": ["text", "application/json"],
+    "skills": [{
+        "id": "deduction-analysis",
+        "name": "Analyze itemized deductions",
+        "description": "Given income + receipts, returns optimal deduction plan.",
+        "tags": ["tax", "deductions", "us-federal"],
+    }],
+}
+
+@app.get("/.well-known/agent.json")
+def get_card():
+    return AGENT_CARD
+
+class TaskSend(BaseModel):
+    id: str | None = None
+    message: dict            # {"role": "user", "parts": [{"type": "text", "text": "..."}]}
+    skillId: str | None = None
+
+@app.post("/tasks/send")
+async def send_task(req: TaskSend, authorization: str | None = Header(None)):
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(401, "Bearer token required")
+
+    task_id = req.id or str(uuid.uuid4())
+    TASKS[task_id] = {"id": task_id, "state": "working", "messages": [req.message]}
+    try:
+        # YOUR existing Claude agent loop &mdash; M05/M12/M15B style.
+        result = run_claude_tax_skill(req.message, skill_id=req.skillId)
+        TASKS[task_id].update({
+            "state": "completed",
+            "artifacts": [{"name": "report", "parts": [{"type": "text", "text": result}]}],
+        })
+    except Exception as e:
+        TASKS[task_id].update({"state": "failed", "error": str(e)})
+    return TASKS[task_id]
+
+@app.get("/tasks/{task_id}")
+def get_task(task_id: str):
+    if task_id not in TASKS:
+        raise HTTPException(404, "Unknown task")
+    return TASKS[task_id]
+
+def run_claude_tax_skill(message: dict, skill_id: str | None) -&gt; str:
+    # Hand off to your existing Claude agent &mdash; this is the only line you write
+    # that&rsquo;s domain-specific. Everything around it is boilerplate A2A.
+    return "Estimated savings: $2,728 (itemize, claim home-office + 401k)"</code></pre>
+          </div>
+          <div class="code-panel" id="a2a-pub-ts">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code class="language-typescript">import Fastify from "fastify";
+import { randomUUID } from "node:crypto";
+
+const app = Fastify();
+const TASKS = new Map&lt;string, any&gt;();
+
+const AGENT_CARD = {
+  name: "tax-specialist",
+  description: "US federal &amp; state tax analysis with deduction optimization.",
+  url: "https://agents.acme.com/tax-specialist",
+  version: "2.1.0",
+  capabilities: { streaming: false, pushNotifications: true },
+  authentication: { schemes: ["bearer"] },
+  defaultInputModes:  ["text", "application/json"],
+  defaultOutputModes: ["text", "application/json"],
+  skills: [{
+    id: "deduction-analysis",
+    name: "Analyze itemized deductions",
+    description: "Given income + receipts, returns optimal deduction plan.",
+    tags: ["tax", "deductions", "us-federal"],
+  }],
+};
+
+app.get("/.well-known/agent.json", async () =&gt; AGENT_CARD);
+
+app.post("/tasks/send", async (req, reply) =&gt; {
+  const auth = req.headers.authorization;
+  if (!auth?.startsWith("Bearer ")) return reply.code(401).send({ error: "Bearer token required" });
+
+  const body = req.body as { id?: string; message: any; skillId?: string };
+  const taskId = body.id ?? randomUUID();
+  TASKS.set(taskId, { id: taskId, state: "working", messages: [body.message] });
+
+  try {
+    const result = await runClaudeTaxSkill(body.message, body.skillId);
+    TASKS.set(taskId, {
+      ...TASKS.get(taskId),
+      state: "completed",
+      artifacts: [{ name: "report", parts: [{ type: "text", text: result }] }],
+    });
+  } catch (e: any) {
+    TASKS.set(taskId, { ...TASKS.get(taskId), state: "failed", error: e.message });
+  }
+  return TASKS.get(taskId);
+});
+
+app.get("/tasks/:id", async (req, reply) =&gt; {
+  const t = TASKS.get((req.params as any).id);
+  return t ?? reply.code(404).send({ error: "Unknown task" });
+});
+
+async function runClaudeTaxSkill(message: any, skillId?: string): Promise&lt;string&gt; {
+  // Your existing Claude agent loop &mdash; same as the M15B style.
+  return "Estimated savings: $2,728 (itemize, claim home-office + 401k)";
+}
+
+app.listen({ port: 8080 });</code></pre>
+          </div>
+        </div>
+
+        <div class="checkpoint">
+          <div class="checkpoint-label">What Just Happened?</div>
+          <p>You exposed three endpoints: a static <strong>Agent Card</strong> at the well-known URL, a <strong>tasks/send</strong> endpoint that runs your existing Claude agent loop and stores the result, and a <strong>tasks/{id}</strong> endpoint for polling. The auth check is intentional &mdash; A2A requires explicit auth before any task is accepted. The skill-specific logic lives inside <code>run_claude_tax_skill</code> &mdash; everything else is plumbing the protocol gives you for free.</p>
+        </div>
+
+        <h3 id="a2a-consume">Consuming Another Agent (Client Side)</h3>
+        <p>This is what the orchestrator runs when it decides to delegate. The agent-locator URL would normally come from a registry or directory; here we pass it directly.</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs">
+            <button class="code-tab active" onclick="switchTab(this, 'a2a-cons-py')" aria-label="Python consumer">Python</button>
+            <button class="code-tab" onclick="switchTab(this, 'a2a-cons-ts')" aria-label="TypeScript consumer">Node.js</button>
+          </div>
+          <div class="code-panel active" id="a2a-cons-py">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code class="language-python">import httpx, time, uuid
+
+BASE  = "https://agents.acme.com/tax-specialist"
+TOKEN = "your-bearer-token"
+
+def delegate_to_agent(question: str, *, timeout_s: int = 30) -&gt; str:
+    # 1. Discover &mdash; fetch the Agent Card and verify the skill exists.
+    card = httpx.get(f"{BASE}/.well-known/agent.json", timeout=5).raise_for_status().json()
+    skill = next((s for s in card["skills"] if s["id"] == "deduction-analysis"), None)
+    if skill is None:
+        raise RuntimeError(f"Agent {card['name']} doesn&rsquo;t advertise deduction-analysis")
+    if "bearer" not in card["authentication"]["schemes"]:
+        raise RuntimeError("Agent doesn&rsquo;t accept bearer auth &mdash; refuse to call")
+
+    # 2. Send the task.
+    task_id = str(uuid.uuid4())
+    res = httpx.post(
+        f"{BASE}/tasks/send",
+        json={"id": task_id, "skillId": skill["id"],
+              "message": {"role": "user", "parts": [{"type": "text", "text": question}]}},
+        headers={"Authorization": f"Bearer {TOKEN}"},
+        timeout=10,
+    ).raise_for_status().json()
+
+    # 3. Poll until terminal state (or timeout). Real code uses SSE if the
+    #    card advertises capabilities.streaming.
+    deadline = time.monotonic() + timeout_s
+    while res["state"] in ("submitted", "working", "input-required"):
+        if time.monotonic() &gt; deadline:
+            httpx.post(f"{BASE}/tasks/{task_id}/cancel",
+                       headers={"Authorization": f"Bearer {TOKEN}"})
+            raise TimeoutError(f"Task {task_id} exceeded {timeout_s}s")
+        time.sleep(0.5)
+        res = httpx.get(f"{BASE}/tasks/{task_id}",
+                        headers={"Authorization": f"Bearer {TOKEN}"}).json()
+
+    if res["state"] != "completed":
+        raise RuntimeError(f"Task {task_id} {res['state']}: {res.get('error')}")
+    return res["artifacts"][0]["parts"][0]["text"]</code></pre>
+          </div>
+          <div class="code-panel" id="a2a-cons-ts">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code class="language-typescript">const BASE  = "https://agents.acme.com/tax-specialist";
+const TOKEN = "your-bearer-token";
+
+export async function delegateToAgent(question: string, timeoutMs = 30_000): Promise&lt;string&gt; {
+  // 1. Discover &mdash; fetch the Agent Card and verify the skill exists.
+  const cardRes = await fetch(`${BASE}/.well-known/agent.json`);
+  if (!cardRes.ok) throw new Error(`Card fetch failed: ${cardRes.status}`);
+  const card = await cardRes.json();
+  const skill = card.skills.find((s: any) =&gt; s.id === "deduction-analysis");
+  if (!skill) throw new Error(`${card.name} doesn&rsquo;t advertise deduction-analysis`);
+  if (!card.authentication.schemes.includes("bearer")) {
+    throw new Error("Agent doesn&rsquo;t accept bearer auth &mdash; refuse to call");
+  }
+
+  // 2. Send the task.
+  const taskId = crypto.randomUUID();
+  const sendRes = await fetch(`${BASE}/tasks/send`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", "Authorization": `Bearer ${TOKEN}` },
+    body: JSON.stringify({
+      id: taskId, skillId: skill.id,
+      message: { role: "user", parts: [{ type: "text", text: question }] },
+    }),
+  });
+  if (!sendRes.ok) throw new Error(`Task send failed: ${sendRes.status}`);
+  let task = await sendRes.json();
+
+  // 3. Poll until terminal state.
+  const deadline = Date.now() + timeoutMs;
+  while (["submitted", "working", "input-required"].includes(task.state)) {
+    if (Date.now() &gt; deadline) {
+      await fetch(`${BASE}/tasks/${taskId}/cancel`,
+        { method: "POST", headers: { Authorization: `Bearer ${TOKEN}` } });
+      throw new Error(`Task ${taskId} exceeded ${timeoutMs}ms`);
+    }
+    await new Promise((r) =&gt; setTimeout(r, 500));
+    const r = await fetch(`${BASE}/tasks/${taskId}`,
+      { headers: { Authorization: `Bearer ${TOKEN}` } });
+    task = await r.json();
+  }
+
+  if (task.state !== "completed") {
+    throw new Error(`Task ${taskId} ${task.state}: ${task.error ?? "unknown"}`);
+  }
+  return task.artifacts[0].parts[0].text;
+}</code></pre>
+          </div>
+        </div>
+
+        <div class="callout-cost">
+          <span class="box-label">Production Notes (the parts the demo skips)</span>
+          <ul style="margin-bottom:0;">
+            <li><strong>Streaming over polling:</strong> if the card sets <code>capabilities.streaming: true</code>, swap the poll loop for SSE on <code>/tasks/{id}/events</code>.</li>
+            <li><strong>Long tasks:</strong> use <code>pushNotifications</code> webhooks instead of polling; handle <code>input-required</code> state for mid-task questions.</li>
+            <li><strong>Auth:</strong> bearer is the floor &mdash; production uses OAuth 2.0 with audience-restricted tokens.</li>
+          </ul>
+        </div>
+
+        <div class="bridge">A2A is the most-adopted spec, but it isn&rsquo;t the only one. Two more standards are worth knowing about so you can read between the lines when a vendor or framework references them.</div>
+      </section>
+
+      <!-- ===== AGNTCY / ANP ===== -->
+      <section class="section" id="agent-ecosystem-standards">
+        <h2 id="agent-ecosystem-standards-heading">Beyond A2A &mdash; AGNTCY, ANP, and the Wider Landscape</h2>
+
+        <div class="tech-def-box">
+          <span class="box-label">The Three Specs You&rsquo;ll See Referenced</span>
+          <p><strong>1. <span class="term-tooltip" tabindex="0">A2A<span class="tooltip-content" role="tooltip">Agent2Agent Protocol &mdash; Google-led, Linux Foundation governed since 2025. Most widely adopted agent-to-agent wire spec; the one this section&rsquo;s code targets.</span></span> (Google &rarr; Linux Foundation, 2025).</strong> The widest adoption: Anthropic, Salesforce, SAP, Atlassian, MongoDB, JetBrains, and most of the agent-framework world ship A2A endpoints. This is the spec your code should target by default.</p>
+          <p><strong>2. <span class="term-tooltip" tabindex="0">AGNTCY<span class="tooltip-content" role="tooltip">Internet of Agents collective announced in 2025 by Cisco, Outshift, LangChain, Galileo, and others. Defines a full stack (discovery, identity, orchestration, observability) on top of an A2A-compatible wire format.</span></span> (Internet of Agents).</strong> Cisco-led, open-source. AGNTCY is broader than A2A: it covers identity (W3C DIDs for agents), a global agent directory, observability, and orchestration &mdash; not just the wire format. Think of AGNTCY as a <em>stack</em> with A2A-compatible interop at the wire layer.</p>
+          <p><strong>3. <span class="term-tooltip" tabindex="0">ANP<span class="tooltip-content" role="tooltip">Agent Network Protocol &mdash; a more research-oriented spec proposing a decentralized agent network with DID-based identity and a meta-protocol layer. Less production adoption than A2A.</span></span> (Agent Network Protocol).</strong> A research-flavored, more decentralized take &mdash; DIDs for identity, peer-to-peer discovery, no required central registry. Less production adoption than A2A but worth tracking if your architecture needs to avoid any central directory.</p>
+        </div>
+
+        <div class="callout-why">
+          <span class="box-label">Why It Matters</span>
+          <p>Practical answer: build to A2A today, watch AGNTCY for the broader stack story, and read ANP if you&rsquo;re designing for a fully decentralized scenario. The good news: all three converge on the same shape &mdash; agents have cards, tasks have lifecycles, auth is mandatory. If your code follows the A2A surface above, porting to AGNTCY or ANP later is mostly a redirect &mdash; not a rewrite.</p>
+        </div>
+
+        <div class="bridge">Agent protocols solve the communication problem between agents. But what can individual agents actually do? Claude&rsquo;s own capabilities are expanding rapidly &mdash; and each new capability unlocks entirely new categories of applications.</div>
       </section>
 
       <!-- EVOLVING CAPABILITIES -->
@@ -469,8 +771,8 @@ const response = await client.messages.create({
               </div>
               <div class="timeline-node" data-step="5">
                 <div class="timeline-dot"></div>
-                <div class="timeline-label">???</div>
-                <div class="timeline-usecase">Your Agent</div>
+                <div class="timeline-label">Skills</div>
+                <div class="timeline-usecase">Reusable Specialist</div>
               </div>
             </div>
           </div>
@@ -479,6 +781,142 @@ const response = await client.messages.create({
             <button class="anim-btn" onclick="timelineAnim.restart()" aria-label="Restart animation">&#8635;</button>
           </div>
         </div>
+
+        <h3 id="skills-as-bundles">Skills &mdash; Capability Bundles</h3>
+        <p>You have shipped agents in this course three ways: raw tools (M05), MCP servers (M07), and subagents (M14). <strong>Skills</strong> (Anthropic, late 2025) are a fourth way &mdash; and they sit between &ldquo;a single tool&rdquo; and &ldquo;a whole subagent.&rdquo; A Skill is a folder containing instructions, supporting files, and (optionally) executable scripts that the agent loads on demand when its task matches the skill&rsquo;s description.</p>
+
+        <div class="analogy-box">
+          <span class="box-label">Everyday Analogy</span>
+          <p>A tool is a single kitchen utensil &mdash; a paring knife. An MCP server is the whole appliance &mdash; the oven, plumbed in once for any meal. A subagent is hiring a sous-chef. A Skill is a <strong>recipe card</strong>: short instructions plus references to ingredients and techniques, pulled from a binder only when tonight&rsquo;s dish needs it.</p>
+          <p>The pain Skills solve: stuffing every domain rule into the system prompt makes the prompt huge, expensive to cache, and noisy for tasks that don&rsquo;t need it. The pain MCP/subagents solve is different &mdash; <em>integration</em> and <em>parallelism</em>. Skills are about <em>just-in-time instructions</em>: the agent reads the skill folder only when it&rsquo;s relevant.</p>
+          <p>Mental model: <strong>tools</strong> = verbs, <strong>MCP</strong> = wiring to systems, <strong>subagents</strong> = workers, <strong>Skills</strong> = on-demand playbooks. All four compose &mdash; a Skill can call tools, hit MCP servers, and spawn subagents.</p>
+        </div>
+
+        <p>A skill lives in a folder under <code>.claude/skills/</code> with a <code>SKILL.md</code> at the root. The frontmatter is what the agent sees during &ldquo;skill discovery&rdquo; &mdash; like an Agent Card for in-process capabilities. The body is the playbook itself, loaded only after the agent decides to use this skill:</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs">
+            <button class="code-tab active" onclick="switchTab(this, 'skill-md')" aria-label="SKILL.md example">SKILL.md</button>
+          </div>
+          <div class="code-panel active" id="skill-md">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code class="language-markdown">---
+name: pdf-extraction
+description: Extract structured data (tables, key/value pairs, headings) from PDF
+  files. Use this when the user uploads a PDF and asks for fields, columns,
+  totals, or any structured content. Returns JSON.
+allowed-tools: ["Read", "Bash"]
+---
+
+# PDF Extraction Skill
+
+## When to use
+- User uploads a PDF (.pdf in the conversation or in `./inputs/`).
+- User asks for any structured field, table, or total.
+- Source-of-truth answer needs to be grounded in the PDF, not Claude's guess.
+
+## Procedure
+1. Run `python scripts/extract.py path/to/file.pdf` (see reference/).
+2. The script writes `out/extracted.json` with `pages[]`, `tables[]`, `kv[]`.
+3. Validate against `reference/expected-schema.json`.
+4. If validation fails, retry once with `--ocr` flag.
+5. Return ONLY the requested fields &mdash; don't dump the whole JSON.
+
+## Gotchas
+- Scanned PDFs need `--ocr`. Detect: page text length &lt; 50 chars =&gt; OCR.
+- Multi-column layouts: pass `--layout=two-column`.
+- Tables with merged cells: see `reference/merged-cells.md` for workaround.</code></pre>
+          </div>
+        </div>
+
+        <p>Three things to notice. First, the <strong>description</strong> is the only part loaded into the agent&rsquo;s base prompt &mdash; it&rsquo;s how the agent decides whether the skill is relevant. Write it like a search-engine snippet, not like documentation. Second, <strong>allowed-tools</strong> scopes which tools this skill is permitted to use, even if the broader agent has more. Third, the body (the procedure, gotchas, referenced files) is only loaded when the skill activates &mdash; so the cost stays out of every turn.</p>
+
+        <p>Here&rsquo;s the agent-side surface when you use the Claude Agent SDK to register and invoke skills:</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs">
+            <button class="code-tab active" onclick="switchTab(this, 'skill-py')" aria-label="Python Skills">Python</button>
+            <button class="code-tab" onclick="switchTab(this, 'skill-ts')" aria-label="TypeScript Skills">Node.js</button>
+          </div>
+          <div class="code-panel active" id="skill-py">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code class="language-python">from claude_agent_sdk import ClaudeAgentClient, AgentOptions
+
+# 1. Point the agent at a skills directory. The SDK walks the tree,
+#    reads each SKILL.md frontmatter, and exposes the descriptions
+#    to Claude as choosable capabilities.
+agent = ClaudeAgentClient(
+    options=AgentOptions(
+        model="claude-opus-4-7",
+        skill_dirs=["./.claude/skills"],   # one or many folders
+        allowed_tools=["Read", "Write", "Bash"],
+    ),
+)
+
+# 2. Run a task &mdash; the agent will autonomously decide whether to
+#    load `pdf-extraction` based on the user&rsquo;s request.
+async for event in agent.run("Extract the totals table from invoice.pdf"):
+    if event.type == "skill_loaded":
+        print(f"&rarr; loaded skill: {event.skill_name}")   # observability hook
+    elif event.type == "text":
+        print(event.text, end="")
+    elif event.type == "error":
+        # M16-style guardrail: surface failures, don&rsquo;t silently fall back.
+        raise RuntimeError(f"agent error: {event.message}")</code></pre>
+          </div>
+          <div class="code-panel" id="skill-ts">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code class="language-typescript">import { ClaudeAgentClient } from "@anthropic-ai/claude-agent-sdk";
+
+const agent = new ClaudeAgentClient({
+  model: "claude-opus-4-7",
+  skillDirs: ["./.claude/skills"],         // one or many folders
+  allowedTools: ["Read", "Write", "Bash"],
+});
+
+for await (const event of agent.run("Extract the totals table from invoice.pdf")) {
+  switch (event.type) {
+    case "skill_loaded":
+      console.log(`&rarr; loaded skill: ${event.skillName}`);
+      break;
+    case "text":
+      process.stdout.write(event.text);
+      break;
+    case "error":
+      // M16-style guardrail: surface failures, don&rsquo;t silently fall back.
+      throw new Error(`agent error: ${event.message}`);
+  }
+}</code></pre>
+          </div>
+        </div>
+
+        <div class="checkpoint">
+          <div class="checkpoint-label">What Just Happened?</div>
+          <p>You pointed the SDK at a folder of <code>SKILL.md</code> files. The agent now sees those skills as named capabilities it can choose to load. The crucial property: <strong>only the frontmatter (the description) is in the base context.</strong> If the request never mentions a PDF, the pdf-extraction body is never read &mdash; you pay for nothing. When the request does match, the agent loads the procedure, executes it, and the skill instructions leave the context after the task is done.</p>
+        </div>
+
+        <div class="callout-cost">
+          <span class="box-label">Skills vs Tools vs MCP vs Subagents &mdash; the Honest Picker</span>
+          <table style="width:100%;border-collapse:collapse;font-size:0.85rem;margin-top:0.5rem;">
+            <thead>
+              <tr style="background:var(--bg-surface);">
+                <th style="padding:0.4rem 0.5rem;text-align:left;border-bottom:1px solid var(--code-border);">Need</th>
+                <th style="padding:0.4rem 0.5rem;text-align:left;border-bottom:1px solid var(--code-border);">Reach for</th>
+                <th style="padding:0.4rem 0.5rem;text-align:left;border-bottom:1px solid var(--code-border);">Why</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);">Single function call (one verb)</td><td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);"><strong>Tool</strong> (M05)</td><td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Schema in, schema out, no instructions needed</td></tr>
+              <tr><td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);">Connect to a system (Postgres, GitHub, Jira)</td><td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);"><strong>MCP</strong> (M07)</td><td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">One server, many tools, swap clients freely</td></tr>
+              <tr><td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);">Procedure with branches + gotchas, used occasionally</td><td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);"><strong>Skill</strong></td><td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Loaded only when the description matches &mdash; cheap in steady state</td></tr>
+              <tr><td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);">Parallel specialist with its own context window</td><td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);"><strong>Subagent</strong> (M14)</td><td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Separate context budget; can run concurrently</td></tr>
+              <tr><td style="padding:0.4rem 0.5rem;">Capability owned by a different team / org</td><td style="padding:0.4rem 0.5rem;"><strong>A2A</strong> (above)</td><td style="padding:0.4rem 0.5rem;color:var(--text-secondary);">Wire format + auth across trust boundaries</td></tr>
+            </tbody>
+          </table>
+          <p style="margin-top:0.75rem;margin-bottom:0;"><strong>Rule of thumb:</strong> if you find yourself prepending the same 200-line preamble to a prompt only when a specific kind of file shows up &mdash; you wanted a Skill.</p>
+        </div>
+
+        <div class="bridge">Skills are the &ldquo;just-in-time playbook&rdquo; capability. The capability further along the timeline &mdash; Computer Use &mdash; gives agents direct GUI access. Below is what an actual Computer Use loop looks like end-to-end.</div>
 
         <h3 id="computer-use-in-practice">Computer Use in Practice: A Working Example</h3>
         <p>Computer Use is a <em>pre-built</em> tool that ships with the Claude API &mdash; you don&rsquo;t define a JSON schema for it, you just enable it and provide an execution sandbox. Claude receives a screenshot, decides on an action (click, type, scroll, key), and your code executes that action and returns the next screenshot. The loop continues until Claude reports it&rsquo;s done.</p>
@@ -659,10 +1097,9 @@ while (true) {
 
         <div class="callout-warning">
           <span class="box-label">Common Misconceptions</span>
-          <p><strong>"Agents will replace developers."</strong> &mdash; Agents amplify developers, they do not replace them. Someone still needs to define the problem, design the architecture, set the guardrails, evaluate output quality, and handle the edge cases agents cannot. The demand for developers who can build and manage agents is growing, not shrinking.</p>
-          <p><strong>"We are close to fully autonomous agents that need no human oversight."</strong> &mdash; Current agents are excellent at well-defined, bounded tasks with clear success criteria. Open-ended autonomy with no human checkpoint is still unreliable for high-stakes domains. The most successful production agents today use human-in-the-loop patterns (M17), not full autonomy.</p>
-          <p><strong>"Bigger models automatically mean better agents."</strong> &mdash; Model size is one factor, but agent quality depends far more on prompt design (M03), tool definitions (M05), guardrails (M16-M17), and evaluation (M18). A well-designed agent on a smaller model often outperforms a poorly designed agent on a larger one.</p>
-          <p><strong>"You need to wait for AGI before agents are useful."</strong> &mdash; Agents are useful right now. The tools you learned in this course &mdash; tool use, RAG, multi-agent orchestration, guardrails &mdash; solve real problems today. Waiting for a hypothetical future capability means missing years of practical value.</p>
+          <p><strong>&ldquo;Agents will replace developers.&rdquo;</strong> &mdash; They amplify, not replace. Someone still defines the problem, sets guardrails, evaluates quality, and handles the edges agents can&rsquo;t. Demand for developers who manage agents is growing.</p>
+          <p><strong>&ldquo;Full autonomy is right around the corner.&rdquo;</strong> &mdash; Current agents excel at well-defined bounded tasks. Open-ended autonomy in high-stakes domains is still unreliable; successful production agents use HITL (M17), not blind autonomy.</p>
+          <p><strong>&ldquo;Bigger model = better agent.&rdquo;</strong> &mdash; Far less than prompt design (M03), tool definitions (M05), guardrails (M16-M17), evaluation (M18). A well-designed small-model agent beats a sloppy big-model one routinely.</p>
         </div>
 
         <div class="bridge">More capability means more power &mdash; and more power demands more responsibility. The next section covers the ethical and safety principles that separate capable agents from trustworthy ones.</div>
@@ -802,9 +1239,64 @@ while (true) {
           </div>
         </div>
 
+        <h3 id="frontier-layer-2026" style="margin-top:2rem;">The 2026 Layer &mdash; What&rsquo;s New Since the Course Was Recorded</h3>
+        <p>The clusters above are foundational. Three categories have crystallized in 2025&ndash;2026 that didn&rsquo;t exist when most agent courses were written. Track these even if you don&rsquo;t adopt them yet &mdash; they show up in every &ldquo;state of agents&rdquo; post for a reason.</p>
+
+        <div class="tech-def-box">
+          <span class="box-label">&#129504; Agentic Memory Frameworks</span>
+          <p>Beyond &ldquo;stuff the conversation in a list&rdquo; (M08) and basic vector RAG (M09). Agentic memory frameworks model memory as a first-class subsystem with reads, writes, evictions, and consolidation &mdash; closer to how a human assistant remembers facts about you across sessions.</p>
+          <table style="width:100%;border-collapse:collapse;font-size:0.85rem;margin-top:0.5rem;">
+            <thead><tr style="background:var(--bg-surface);">
+              <th style="padding:0.4rem 0.5rem;text-align:left;border-bottom:1px solid var(--code-border);">Project</th>
+              <th style="padding:0.4rem 0.5rem;text-align:left;border-bottom:1px solid var(--code-border);">What it adds</th>
+              <th style="padding:0.4rem 0.5rem;text-align:left;border-bottom:1px solid var(--code-border);">When to reach for it</th>
+            </tr></thead>
+            <tbody>
+              <tr><td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);"><strong><a href="https://www.letta.com/" target="_blank" rel="noopener noreferrer">Letta</a></strong> (formerly MemGPT)</td><td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Tiered memory (core, recall, archival) + memory blocks the agent can edit itself</td><td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Long-lived personal assistant; agent that learns user preferences</td></tr>
+              <tr><td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);"><strong><a href="https://mem0.ai/" target="_blank" rel="noopener noreferrer">mem0</a></strong></td><td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Drop-in memory layer; LLM-driven fact extraction + relevance scoring</td><td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Add memory to an existing agent without redesigning storage</td></tr>
+              <tr><td style="padding:0.4rem 0.5rem;"><strong>Claude SDK memory blocks</strong></td><td style="padding:0.4rem 0.5rem;color:var(--text-secondary);">Native, file-backed memory that the agent edits via tool use</td><td style="padding:0.4rem 0.5rem;color:var(--text-secondary);">Stay on the SDK; lighter than a separate memory service</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="tech-def-box">
+          <span class="box-label">&#128279; MCP Ecosystem (Past the Basics)</span>
+          <p>M07 / CC9 cover what MCP <em>is</em>. By 2026 the production stack around MCP looks like this:</p>
+          <table style="width:100%;border-collapse:collapse;font-size:0.85rem;margin-top:0.5rem;">
+            <thead><tr style="background:var(--bg-surface);">
+              <th style="padding:0.4rem 0.5rem;text-align:left;border-bottom:1px solid var(--code-border);">Topic</th>
+              <th style="padding:0.4rem 0.5rem;text-align:left;border-bottom:1px solid var(--code-border);">What to read / try</th>
+              <th style="padding:0.4rem 0.5rem;text-align:left;border-bottom:1px solid var(--code-border);">Why it matters</th>
+            </tr></thead>
+            <tbody>
+              <tr><td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);"><strong>MCP Auth (OAuth 2.1 + PKCE)</strong></td><td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);"><a href="https://modelcontextprotocol.io/specification/draft/basic/authorization" target="_blank" rel="noopener noreferrer">MCP authorization spec</a></td><td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Bearer tokens are dead for production; remote MCP servers need real OAuth</td></tr>
+              <tr><td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);"><strong>MCP UI</strong></td><td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);"><a href="https://mcpui.dev/" target="_blank" rel="noopener noreferrer">mcpui.dev</a> + Anthropic Apps SDK</td><td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Tools can return rich UI (cards, forms), not just text; agents that can show, not just tell</td></tr>
+              <tr><td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);"><strong>MCP Inspector</strong></td><td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);"><code>npx @modelcontextprotocol/inspector</code></td><td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Test-drives a server interactively; standard debugging tool</td></tr>
+              <tr><td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);"><strong>Sampling-as-protocol</strong></td><td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">MCP &ldquo;sampling&rdquo; capability</td><td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Servers can ask the client to call its LLM &mdash; nested reasoning without server-side keys</td></tr>
+              <tr><td style="padding:0.4rem 0.5rem;"><strong>Public server registries</strong></td><td style="padding:0.4rem 0.5rem;color:var(--text-secondary);"><a href="https://github.com/modelcontextprotocol/servers" target="_blank" rel="noopener noreferrer">MCP server catalog</a></td><td style="padding:0.4rem 0.5rem;color:var(--text-secondary);">Hundreds of vetted servers (GitHub, Slack, Postgres&hellip;) &mdash; stop building your own first</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="tech-def-box">
+          <span class="box-label">&#127760; Agentic Browsers &amp; Workspaces</span>
+          <p>A different kind of frontier &mdash; not protocols but new <em>surfaces</em> where users meet agents. Worth tracking because your agent may end up running inside one of these instead of behind a web app.</p>
+          <ul style="margin-bottom:0;">
+            <li><strong><a href="https://comet.perplexity.ai/" target="_blank" rel="noopener noreferrer">Perplexity Comet</a></strong> &mdash; AI-first browser; the page itself is an agent surface (summarize, ask, automate).</li>
+            <li><strong><a href="https://www.diabrowser.com/" target="_blank" rel="noopener noreferrer">Dia</a></strong> (Browser Company) &mdash; same idea, deeper task automation; commands live alongside the address bar.</li>
+            <li><strong><a href="https://arc.net/" target="_blank" rel="noopener noreferrer">Arc</a> + Arc Max</strong> &mdash; mature AI features layered into a conventional browser; pragmatic baseline.</li>
+            <li><strong>Cursor / Windsurf / VS Code agentic modes</strong> &mdash; the IDE-as-agent surface; where your developer-facing agents will likely live.</li>
+          </ul>
+        </div>
+
+        <div class="tech-def-box">
+          <span class="box-label">&#128270; Agentic RAG (covered in depth in M10)</span>
+          <p>Retrieval where the agent itself decides which corpus to query, how to phrase the query, and when it has enough &mdash; the M12 ReAct loop applied to search. Replaces &ldquo;one-shot top-k&rdquo; with a multi-step retrieve-read-refine pattern for multi-hop or multi-corpus questions. <a href="M10-advanced-rag-patterns.html#agentic-rag" style="color:var(--accent-primary);">See M10 &rarr; Agentic RAG</a> for the full pattern with Python + TS code and a decision guide.</p>
+        </div>
+
         <div class="callout-why">
           <span class="box-label">Why It Matters</span>
-          <p>The agent development field is evolving faster than any course can track. In 2024 alone, MCP went from proposal to widespread adoption in under 6 months. Extended thinking moved from research to production in 3 months. Developers who follow even one community (30 minutes per week) stay 6&ndash;12 months ahead of developers who learn only from courses and documentation. Your most valuable skill is not what you learned here &mdash; it is the ability to evaluate and adopt new tools, patterns, and capabilities as they emerge.</p>
+          <p>The agent development field is evolving faster than any course can track. In 2024, MCP went from proposal to widespread adoption in under 6 months. In 2025, A2A landed and the agentic-memory market crystallized into Letta + mem0 + SDK-native. Developers who follow even one community (30 minutes per week) stay 6&ndash;12 months ahead of developers who learn only from courses and documentation. Your most valuable skill is not what you learned here &mdash; it is the ability to evaluate and adopt new tools, patterns, and capabilities as they emerge.</p>
         </div>
 
         <div class="bridge">Communities, papers, and frameworks give you a map of the territory. But the framework list above raises an immediate question every new agent developer asks: do I actually <em>need</em> one of these? The next section is the honest answer.</div>
@@ -880,6 +1372,12 @@ while (true) {
                 <td style="padding:0.5rem 0.6rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Less focused on agents, more on retrieval</td>
               </tr>
               <tr>
+                <td style="padding:0.5rem 0.6rem;border-bottom:1px solid var(--code-border);"><strong>Long-horizon coding agents</strong><br><span style="font-size:0.78rem;color:var(--text-muted);">Claude Code, Aider, Cline, Codex CLI, Devin</span></td>
+                <td style="padding:0.5rem 0.6rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Repository-scoped agents that plan, edit files, run tests, iterate</td>
+                <td style="padding:0.5rem 0.6rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Off-the-shelf for codebase work; integrates with git, your IDE, your CI</td>
+                <td style="padding:0.5rem 0.6rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Not a framework you build on top of &mdash; you use it; less flexibility for non-code domains</td>
+              </tr>
+              <tr>
                 <td style="padding:0.5rem 0.6rem;"><strong>No framework (raw SDK)</strong></td>
                 <td style="padding:0.5rem 0.6rem;color:var(--text-secondary);">Just the Anthropic Python/Node SDK</td>
                 <td style="padding:0.5rem 0.6rem;color:var(--text-secondary);">Maximum control, minimum dependencies, easiest to debug</td>
@@ -887,6 +1385,150 @@ while (true) {
               </tr>
             </tbody>
           </table>
+        </div>
+
+        <h3 id="vendor-sdks" style="margin-top:2rem;">Vendor-Native Agent SDKs</h3>
+        <p>The table above mixes <em>cross-provider frameworks</em> (LangChain, CrewAI) with <em>one vendor SDK</em> (Anthropic). By 2026 each major model vendor ships their own first-party agent SDK &mdash; with hooks, sessions, hosted sandboxes, and built-in A2A interop. If you&rsquo;ve committed to a primary model, the vendor SDK usually beats a cross-provider framework on developer ergonomics, latency, and feature coverage.</p>
+
+        <div class="animation-container" aria-label="Vendor-native agent SDK comparison" style="padding:1.1rem;">
+          <table style="width:100%;border-collapse:collapse;font-size:0.82rem;font-family:Source Sans 3,sans-serif;">
+            <thead>
+              <tr style="background:var(--bg-surface);">
+                <th style="padding:0.4rem 0.5rem;text-align:left;border-bottom:1px solid var(--code-border);font-family:'Bricolage Grotesque',sans-serif;font-size:0.75rem;color:var(--text-secondary);">Vendor SDK</th>
+                <th style="padding:0.4rem 0.5rem;text-align:left;border-bottom:1px solid var(--code-border);font-family:'Bricolage Grotesque',sans-serif;font-size:0.75rem;color:var(--text-secondary);">Primary models</th>
+                <th style="padding:0.4rem 0.5rem;text-align:left;border-bottom:1px solid var(--code-border);font-family:'Bricolage Grotesque',sans-serif;font-size:0.75rem;color:var(--text-secondary);">Hosted sandbox?</th>
+                <th style="padding:0.4rem 0.5rem;text-align:left;border-bottom:1px solid var(--code-border);font-family:'Bricolage Grotesque',sans-serif;font-size:0.75rem;color:var(--text-secondary);">A2A native?</th>
+                <th style="padding:0.4rem 0.5rem;text-align:left;border-bottom:1px solid var(--code-border);font-family:'Bricolage Grotesque',sans-serif;font-size:0.75rem;color:var(--text-secondary);">Languages</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);"><strong>Anthropic</strong><br><code style="font-size:0.72rem;">claude-agent-sdk</code></td>
+                <td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Claude Opus/Sonnet/Haiku 4.x</td>
+                <td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">BYO (Bash/Edit tools); pair with Docker/Modal/E2B</td>
+                <td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Via wrapper; SDK ships A2A adapter</td>
+                <td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Python, TypeScript</td>
+              </tr>
+              <tr>
+                <td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);"><strong>OpenAI</strong><br><code style="font-size:0.72rem;">openai-agents</code></td>
+                <td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">GPT-5 / GPT-4.x / o-series</td>
+                <td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);"><strong>Yes &mdash; hosted</strong> Code Interpreter sandbox + browser tool</td>
+                <td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Yes (Responses API + A2A bridge)</td>
+                <td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Python, TypeScript</td>
+              </tr>
+              <tr>
+                <td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);"><strong>Google</strong><br><code style="font-size:0.72rem;">google-adk</code> (Agent Development Kit)</td>
+                <td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Gemini 2.x / 3.x</td>
+                <td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Vertex AI hosted code-exec; isolated VMs</td>
+                <td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Yes &mdash; Google authored A2A; first-class</td>
+                <td style="padding:0.4rem 0.5rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Python, Java (Go preview)</td>
+              </tr>
+              <tr>
+                <td style="padding:0.4rem 0.5rem;"><strong>Microsoft</strong><br><code style="font-size:0.72rem;">semantic-kernel</code> / AutoGen</td>
+                <td style="padding:0.4rem 0.5rem;color:var(--text-secondary);">Azure OpenAI + any (provider-agnostic)</td>
+                <td style="padding:0.4rem 0.5rem;color:var(--text-secondary);">Azure Container Apps dynamic sessions</td>
+                <td style="padding:0.4rem 0.5rem;color:var(--text-secondary);">Yes &mdash; adopted A2A in 2025</td>
+                <td style="padding:0.4rem 0.5rem;color:var(--text-secondary);">Python, C#, Java</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="callout-cost">
+          <span class="box-label">&#9889; What&rsquo;s New: OpenAI&rsquo;s Hosted Sandbox</span>
+          <p>The most consequential 2025 add from OpenAI is the <strong>hosted Code Interpreter sandbox</strong> baked into the Agents SDK &mdash; an ephemeral, network-isolated Python container that the agent can run code in without you provisioning anything. It&rsquo;s closer to Anthropic&rsquo;s &ldquo;just enable the tool&rdquo; ergonomics for Computer Use, but for arbitrary Python: matplotlib plots, pandas analyses, file-uploads-then-process, scientific computing.</p>
+          <p style="margin-bottom:0;"><strong>The tradeoff:</strong> ergonomics win is real (no Docker, no Xvfb, no infra) but you pay per-second of sandbox time on top of LLM tokens, and you give up control of the container image. For sensitive data the hosted sandbox is a non-starter &mdash; egress is to OpenAI&rsquo;s VPC; for hobby/research/most app builders it&rsquo;s the right default. <em>Anthropic&rsquo;s equivalent</em> is the Computer Use bash/text-editor tools (covered above) + your own Docker; <em>Google&rsquo;s</em> is Vertex AI&rsquo;s code-execution tool.</p>
+        </div>
+
+        <p>To make the trade-offs concrete, here&rsquo;s the same simple agent &mdash; &ldquo;answer a question using a single search tool&rdquo; &mdash; in both the Claude and OpenAI SDKs. The shapes are remarkably similar; the differences are what we just discussed.</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs">
+            <button class="code-tab active" onclick="switchTab(this, 'sdk-claude')" aria-label="Claude SDK">Claude Agent SDK</button>
+            <button class="code-tab" onclick="switchTab(this, 'sdk-openai')" aria-label="OpenAI SDK">OpenAI Agents SDK</button>
+            <button class="code-tab" onclick="switchTab(this, 'sdk-google')" aria-label="Google ADK">Google ADK</button>
+          </div>
+          <div class="code-panel active" id="sdk-claude">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code class="language-python"># pip install claude-agent-sdk
+from claude_agent_sdk import ClaudeAgentClient, AgentOptions, tool
+
+@tool
+def search_filings(state: str, name: str) -&gt; list[dict]:
+    """Search UCC filings by state and debtor name."""
+    return mock_db.query(state=state, name=name)
+
+agent = ClaudeAgentClient(
+    options=AgentOptions(
+        model="claude-opus-4-7",
+        tools=[search_filings],
+        allowed_tools=["search_filings"],
+    ),
+)
+
+async for event in agent.run("Active filings for Acme Corp in CA"):
+    if event.type == "text":
+        print(event.text, end="")
+    elif event.type == "error":
+        raise RuntimeError(event.message)</code></pre>
+          </div>
+          <div class="code-panel" id="sdk-openai">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code class="language-python"># pip install openai-agents
+from agents import Agent, Runner, function_tool, CodeInterpreterTool
+
+@function_tool
+def search_filings(state: str, name: str) -&gt; list[dict]:
+    """Search UCC filings by state and debtor name."""
+    return mock_db.query(state=state, name=name)
+
+agent = Agent(
+    name="filings-agent",
+    model="gpt-5",
+    tools=[
+        search_filings,
+        CodeInterpreterTool(),   # &lt;-- hosted sandbox, the new piece
+    ],
+)
+
+result = Runner.run_sync(agent, "Active filings for Acme Corp in CA")
+print(result.final_output)
+# Anything the agent computes in the sandbox (plots, files) is in result.artifacts</code></pre>
+          </div>
+          <div class="code-panel" id="sdk-google">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code class="language-python"># pip install google-adk
+from google.adk.agents import Agent
+from google.adk.tools import FunctionTool, BuiltInCodeExecutionTool
+
+def search_filings(state: str, name: str) -&gt; list[dict]:
+    """Search UCC filings by state and debtor name."""
+    return mock_db.query(state=state, name=name)
+
+agent = Agent(
+    name="filings-agent",
+    model="gemini-3.0-pro",
+    tools=[
+        FunctionTool(func=search_filings),
+        BuiltInCodeExecutionTool(),   # &lt;-- Vertex AI hosted code-exec
+    ],
+)
+
+response = agent.run("Active filings for Acme Corp in CA")
+for chunk in response:
+    print(chunk.text, end="")</code></pre>
+          </div>
+        </div>
+
+        <p>Same pattern (model + tools + loop), same author intent. Where they diverge is in the <em>built-in</em> tools: OpenAI ships <code>CodeInterpreterTool</code> with a hosted Python sandbox, Google ships <code>BuiltInCodeExecutionTool</code> backed by Vertex VMs, Anthropic favors a &ldquo;BYO sandbox + open primitives&rdquo; design (Bash, Edit, Computer Use). All three speak A2A on the outside &mdash; so an orchestrator agent doesn&rsquo;t care which one is on the other end of a task.</p>
+
+        <div class="tech-def-box">
+          <span class="box-label">Decision Guide &mdash; Picking a Vendor SDK</span>
+          <p><strong>Anthropic Claude Agent SDK</strong> when: you&rsquo;ve standardized on Claude; you want primitives over magic (BYO sandbox); your sandbox needs are unusual (GPU, GUI, custom OS); production-first patterns (hooks, sessions, subagents).</p>
+          <p><strong>OpenAI Agents SDK</strong> when: you&rsquo;ve standardized on GPT/o-series; you need an ephemeral Python sandbox <em>now</em> without infra work (plots, pandas, scientific compute); you&rsquo;re fine with OpenAI&rsquo;s container image and egress rules.</p>
+          <p><strong>Google ADK</strong> when: you&rsquo;re on Vertex AI / Gemini; A2A is central (Google authored the spec); you need enterprise IAM integration; Java is in your stack.</p>
+          <p><strong>Microsoft Semantic Kernel / AutoGen</strong> when: you&rsquo;re a C#/Java shop; you want a provider-agnostic SDK that can swap models behind the same agent code; you&rsquo;re already on Azure.</p>
+          <p style="margin-bottom:0;"><strong>Cross-vendor:</strong> use LangChain/LangGraph only if you genuinely need to swap models routinely and the per-vendor SDK ergonomics aren&rsquo;t worth the lock-in. For most teams, a vendor SDK + an A2A boundary at trust edges beats a cross-provider abstraction in both performance and maintenance cost.</p>
         </div>
 
         <h3 id="when-to-use-what" style="margin-top:2rem;">When to Use What</h3>
@@ -947,7 +1589,153 @@ while (true) {
 
         <p style="color:var(--text-muted);font-size:0.9rem;font-style:italic;margin-top:0.75rem;">This is <strong>not</strong> required &mdash; it is a &ldquo;Going Further&rdquo; exercise for students whose teams use LangChain.</p>
 
-        <div class="bridge">You now know the full landscape: what this course taught you, what other frameworks exist, and when to reach for each one. Knowledge without action is trivia &mdash; the next section gives you a concrete plan to turn everything you have learned into real projects, real deployments, and real impact.</div>
+        <h3 id="long-horizon-agents" style="margin-top:2rem;">Long-Horizon Coding Agents &mdash; A Different Shape Entirely</h3>
+        <p>Most of this course taught you the <em>one-shot</em> agent shape: receive a question, loop through tools for seconds-to-a-minute, return an answer. The 2025&ndash;2026 wave of <strong>long-horizon coding agents</strong> &mdash; Claude Code, Aider, Cline, OpenAI Codex CLI, Devin, Cursor&rsquo;s background agent &mdash; runs on a different clock. They live inside a repository, plan across dozens of files, run tests, fix what they broke, and check work back in &mdash; minutes to hours per task. Worth a section because the design tradeoffs flip.</p>
+
+        <div class="analogy-box">
+          <span class="box-label">Everyday Analogy</span>
+          <p>A one-shot agent is a barista &mdash; you order, they make it, you leave. A long-horizon coding agent is a contractor &mdash; you describe the renovation, they spend days demolishing, framing, plumbing, and fixing what they broke.</p>
+          <p>One-shot agents (M15B-style) exhaust the context window long before a real codebase task completes. The contractor pattern survives by planning to disk, summarizing turns, and working in checkable steps. You&rsquo;ll likely <em>use</em> one of these (or buy one) rather than build from scratch &mdash; but the patterns leak into the agents you do build.</p>
+        </div>
+
+        <div class="animation-container" aria-label="One-shot agent vs long-horizon coding agent comparison" style="padding:1rem;">
+          <div class="animation-title">One-Shot Agent vs Long-Horizon Coding Agent</div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem; font-size:0.85rem;">
+            <div style="background:var(--bg-surface); border:1px solid var(--code-border); border-radius:8px; padding:0.85rem;">
+              <div style="font-family:'Bricolage Grotesque',sans-serif; font-weight:700; color:var(--text-secondary); margin-bottom:0.5rem;">One-Shot Agent (M15B-style)</div>
+              <ol style="margin:0 0 0 1rem; padding:0; color:var(--text-secondary);">
+                <li>Receive question</li>
+                <li>Loop: think &rarr; tool &rarr; observe</li>
+                <li>Stop on <code>end_turn</code></li>
+                <li>Return answer</li>
+              </ol>
+              <p style="margin:0.6rem 0 0; font-size:0.78rem; color:var(--text-muted);">Horizon: seconds &ndash; minutes. Context: single window. State: in-memory list.</p>
+            </div>
+            <div style="background:rgba(184,134,11,0.08); border:1px solid var(--accent-primary); border-radius:8px; padding:0.85rem;">
+              <div style="font-family:'Bricolage Grotesque',sans-serif; font-weight:700; color:var(--accent-primary); margin-bottom:0.5rem;">Long-Horizon Coding Agent</div>
+              <ol style="margin:0 0 0 1rem; padding:0; color:var(--text-secondary);">
+                <li>Read repo: layout, conventions, CLAUDE.md</li>
+                <li>Plan: write a TODO/checklist to disk</li>
+                <li>For each step: read &rarr; edit &rarr; test &rarr; commit (or rollback)</li>
+                <li>Compact context: summarize finished steps, evict raw turns</li>
+                <li>Re-plan if blocked; surface to human if stuck</li>
+                <li>Hand back a branch / PR, not just text</li>
+              </ol>
+              <p style="margin:0.6rem 0 0; font-size:0.78rem; color:var(--text-muted);">Horizon: minutes &ndash; hours. Context: managed with summarization. State: git + disk.</p>
+            </div>
+          </div>
+        </div>
+
+        <p>If you want to drive one of these from your own code &mdash; for nightly maintenance, automated PRs, or red-team scans &mdash; the integration surface is usually a CLI plus a config file. Here&rsquo;s the same task launched two ways: the Claude Agent SDK&rsquo;s long-running mode (programmatic) and the Claude Code CLI (process-spawned). Pick whichever fits your runtime.</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs">
+            <button class="code-tab active" onclick="switchTab(this, 'lh-py')" aria-label="Python long-horizon">Python (SDK)</button>
+            <button class="code-tab" onclick="switchTab(this, 'lh-ts')" aria-label="TypeScript long-horizon">Node.js (CLI)</button>
+          </div>
+          <div class="code-panel active" id="lh-py">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code class="language-python">import asyncio
+from claude_agent_sdk import ClaudeAgentClient, AgentOptions
+
+# A long-horizon coding agent driven by the SDK. The key differences vs
+# the M15B-style loop: workspace_dir scopes file access, max_turns is the
+# safety budget, and persist_session_id lets us resume if the run is
+# interrupted (e.g. nightly cron that picks up where it left off).
+async def run_codebase_task(task: str, *, workspace: str, session_id: str):
+    agent = ClaudeAgentClient(
+        options=AgentOptions(
+            model="claude-opus-4-7",
+            workspace_dir=workspace,
+            allowed_tools=["Read", "Write", "Edit", "Bash", "Grep", "Glob"],
+            max_turns=200,                          # hard ceiling
+            persist_session_id=session_id,          # resume on next run
+            extended_thinking={"budget_tokens": 8000},  # planning compute
+        ),
+    )
+
+    try:
+        async for event in agent.run(task):
+            if event.type == "plan_updated":
+                print(f"[plan] {event.summary}")     # observability
+            elif event.type == "tool_call":
+                print(f"  &rarr; {event.tool}({event.args_preview})")
+            elif event.type == "text":
+                print(event.text, end="")
+            elif event.type == "stuck":
+                # Long-horizon agents must escalate, not silently spin.
+                raise RuntimeError(f"Agent stuck after {event.turn} turns: {event.reason}")
+    finally:
+        # The agent writes a branch; we leave it for human review (HITL, M17).
+        print(f"\nFinished &mdash; review branch: claude/{session_id}")
+
+if __name__ == "__main__":
+    asyncio.run(run_codebase_task(
+        task="Fix all flaky tests in tests/integration/, one PR per root cause.",
+        workspace="/srv/repos/payments",
+        session_id="nightly-flake-sweep",
+    ))</code></pre>
+          </div>
+          <div class="code-panel" id="lh-ts">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code class="language-typescript">import { spawn } from "node:child_process";
+import { mkdir } from "node:fs/promises";
+
+// Process-spawn pattern: drive the Claude Code CLI from a Node service.
+// You get the same long-horizon agent as the SDK example, but you don&rsquo;t
+// host the loop &mdash; the CLI does. Good for fire-and-forget CI jobs.
+async function runCodebaseTask(task: string, workspace: string, sessionId: string) {
+  await mkdir(`${workspace}/.claude/sessions`, { recursive: true });
+
+  const child = spawn(
+    "claude",
+    [
+      "--print",                       // non-interactive
+      "--cwd", workspace,
+      "--allowed-tools", "Read,Write,Edit,Bash,Grep,Glob",
+      "--max-turns", "200",            // hard ceiling
+      "--session-id", sessionId,       // resume on next run
+      task,
+    ],
+    { stdio: ["ignore", "pipe", "pipe"] },
+  );
+
+  child.stdout.on("data", (b) =&gt; process.stdout.write(b));
+  child.stderr.on("data", (b) =&gt; process.stderr.write(b));   // plan/tool events
+
+  const code: number = await new Promise((res) =&gt; child.on("close", res));
+  if (code !== 0) {
+    // Long-horizon agents must escalate, not silently spin.
+    throw new Error(`claude exited ${code} for session ${sessionId}`);
+  }
+  console.log(`\nFinished &mdash; review branch: claude/${sessionId}`);
+}
+
+await runCodebaseTask(
+  "Fix all flaky tests in tests/integration/, one PR per root cause.",
+  "/srv/repos/payments",
+  "nightly-flake-sweep",
+);</code></pre>
+          </div>
+        </div>
+
+        <div class="callout-cost">
+          <span class="box-label">When to Buy vs Build</span>
+          <p><strong>Buy</strong> (Claude Code, Aider, Cline, Codex CLI, Devin) for repository-scoped work that looks like a senior engineer&rsquo;s day &mdash; bug fixes, test sweeps, refactors, dep upgrades, PR review. The planning + summarization + rollback machinery in these tools is engineer-years of work you won&rsquo;t match on a weekend.</p>
+          <p><strong>Build</strong> when the domain isn&rsquo;t code &mdash; multi-hour data-pipeline triage, legal-review on 400-page filings, clinical chart review. Patterns transfer (plan-to-disk, summarize-and-evict, escalate-when-stuck) but no shipping tool covers your domain.</p>
+          <p style="margin-bottom:0;"><strong>Compose:</strong> drive a long-horizon coding agent <em>from</em> your domain agent &mdash; your insurance-claims agent decides &ldquo;needs a rule-engine fix&rdquo; and spawns Claude Code to ship the patch.</p>
+        </div>
+
+        <div class="callout-warning">
+          <span class="box-label">Gotchas Specific to Long-Horizon Agents</span>
+          <ul style="margin-bottom:0;">
+            <li><strong>Context bloat is the silent killer</strong> &mdash; even 1M-token windows die if every turn is preserved; summarize completed steps, evict raw tool output.</li>
+            <li><strong>Sandbox FS + network</strong> &mdash; disposable container + egress allow-list, same threat model as Computer Use.</li>
+            <li><strong>No auto-merge without an evaluator</strong> &mdash; plug M18 evaluation in front of any auto-merge; code has to compile, pass tests, not regress prod.</li>
+          </ul>
+        </div>
+
+        <div class="bridge">You now know the full landscape: what this course taught you, what other frameworks exist, and when to reach for each one &mdash; including the long-horizon agents you&rsquo;ll likely buy rather than build. Knowledge without action is trivia &mdash; the next section gives you a concrete plan to turn everything you have learned into real projects, real deployments, and real impact.</div>
       </section>
 
       <!-- ROADMAP -->
@@ -1632,10 +2420,54 @@ Action to strengthen it: ___
             <div class="quiz-feedback incorrect-fb">Not quite. While coding skills and API knowledge are useful, they become outdated. The most important skill is the ability to evaluate and adopt new tools and patterns as they emerge &mdash; the meta-skill of learning and adapting in a fast-moving field.</div>
           </div>
 
+          <div class="quiz-question" data-correct="2">
+            <h4>Q6: A travel-booking agent built by your team needs to call a flight-pricing agent owned by an external vendor. Which protocol is the right fit?</h4>
+            <div class="quiz-option" data-idx="0" onclick="checkAnswer(this)" role="button" tabindex="0" aria-label="Answer option A">
+              <span class="quiz-marker">A</span>
+              <span>MCP &mdash; expose the vendor&rsquo;s pricing engine as an MCP server</span>
+            </div>
+            <div class="quiz-option" data-idx="1" onclick="checkAnswer(this)" role="button" tabindex="0" aria-label="Answer option B">
+              <span class="quiz-marker">B</span>
+              <span>An in-process subagent &mdash; spawn the vendor agent as a thread</span>
+            </div>
+            <div class="quiz-option" data-idx="2" onclick="checkAnswer(this)" role="button" tabindex="0" aria-label="Answer option C">
+              <span class="quiz-marker">C</span>
+              <span>A2A &mdash; fetch the vendor&rsquo;s Agent Card and post tasks to its endpoint</span>
+            </div>
+            <div class="quiz-option" data-idx="3" onclick="checkAnswer(this)" role="button" tabindex="0" aria-label="Answer option D">
+              <span class="quiz-marker">D</span>
+              <span>A custom REST API negotiated bilaterally with the vendor</span>
+            </div>
+            <div class="quiz-feedback correct-fb">Correct! A2A standardizes agent-to-agent communication across organizational boundaries. The vendor publishes an Agent Card describing their capabilities and auth scheme; your orchestrator fetches the card, sends a task to <code>/tasks/send</code>, and polls or streams until completion. MCP is for agent-to-tool inside your own process; subagents are for in-process specialists; a custom REST API is what A2A is designed to replace.</div>
+            <div class="quiz-feedback incorrect-fb">Not quite. The defining property of this scenario is that the vendor agent lives in a different organization with its own auth and trust boundary &mdash; that is exactly what A2A (Agent2Agent Protocol) standardizes. MCP is for agent-to-tool, subagents are in-process, and bespoke REST APIs are what A2A replaces.</div>
+          </div>
+
+          <div class="quiz-question" data-correct="1">
+            <h4>Q7: You find yourself prepending the same 150-line preamble to a prompt only when the user uploads a CSV. What feature is designed for exactly this?</h4>
+            <div class="quiz-option" data-idx="0" onclick="checkAnswer(this)" role="button" tabindex="0" aria-label="Answer option A">
+              <span class="quiz-marker">A</span>
+              <span>Add it as a system prompt section &mdash; always paid for, always present</span>
+            </div>
+            <div class="quiz-option" data-idx="1" onclick="checkAnswer(this)" role="button" tabindex="0" aria-label="Answer option B">
+              <span class="quiz-marker">B</span>
+              <span>A Skill &mdash; the description is loaded into context, but the procedure body is only loaded when the agent decides the task matches</span>
+            </div>
+            <div class="quiz-option" data-idx="2" onclick="checkAnswer(this)" role="button" tabindex="0" aria-label="Answer option C">
+              <span class="quiz-marker">C</span>
+              <span>A new MCP server &mdash; expose CSV parsing as a tool</span>
+            </div>
+            <div class="quiz-option" data-idx="3" onclick="checkAnswer(this)" role="button" tabindex="0" aria-label="Answer option D">
+              <span class="quiz-marker">D</span>
+              <span>A subagent &mdash; spin one up per CSV upload</span>
+            </div>
+            <div class="quiz-feedback correct-fb">Correct! That repeated preamble is exactly what a Skill solves. The frontmatter description sits in the base context so the agent knows the skill exists; the actual procedure body is only loaded when the request matches. You stop paying for the preamble on every turn. MCP would solve <em>integration</em> (parsing CSV), not <em>just-in-time instructions</em>; a subagent would add a whole context window for what is really a playbook.</div>
+            <div class="quiz-feedback incorrect-fb">Not quite. The pattern &mdash; the same long instructions only when a specific input appears &mdash; is the Skill use case. Frontmatter advertises the skill cheaply; the body is paged in only when it matches.</div>
+          </div>
+
         </div>
         <div class="quiz-score" id="quiz-score">
           <div>Your Score</div>
-          <div class="score-num" id="score-display">0 / 5</div>
+          <div class="score-num" id="score-display">0 / 7</div>
           <p id="score-msg" style="color:var(--text-secondary);margin-top:0.5rem;"></p>
         </div>
       </section>
@@ -1645,10 +2477,11 @@ Action to strengthen it: ___
         <h2 id="summary-heading">Module Summary &mdash; Course Complete</h2>
         <p>You have reached the end of the course curriculum. Here is what you explored in this final module:</p>
         <ul>
-          <li><strong>Agent-to-Agent Protocols:</strong> MCP, capability manifests, agent marketplaces, and agent composition &mdash; the ecosystem your agents will operate in.</li>
-          <li><strong>Evolving Capabilities:</strong> Computer use, extended thinking, improved tool use, and larger context windows &mdash; each unlocking new categories of agent applications.</li>
+          <li><strong>Agent-to-Agent Protocols:</strong> MCP for agent &harr; tool, A2A for agent &harr; agent. Agent Cards, task lifecycles, and a working publish/consume example. AGNTCY and ANP positioned in the wider landscape.</li>
+          <li><strong>Evolving Capabilities:</strong> Computer use, extended thinking, larger context windows, and <strong>Skills</strong> &mdash; capability bundles that page in just-in-time instructions. The decision table for tools vs MCP vs Skills vs subagents vs A2A.</li>
           <li><strong>Responsible Building:</strong> Human-in-the-loop design, transparency, bias awareness, scope limitation, and fail-safe defaults &mdash; the principles that make capable agents trustworthy.</li>
-          <li><strong>Resources:</strong> Communities, papers, frameworks, and benchmarks &mdash; your map to continued growth beyond this course.</li>
+          <li><strong>Resources &amp; the 2026 Layer:</strong> Communities, papers, benchmarks &mdash; plus agentic memory frameworks (Letta, mem0), the production MCP stack (auth, UI, Inspector, registries), and agentic browsers (Comet, Dia, Arc).</li>
+          <li><strong>Frameworks &amp; Long-Horizon Coding Agents:</strong> When to use SDK vs LangChain vs CrewAI &mdash; and the buy-vs-build calculus for Claude Code, Aider, Cline, Codex CLI, Devin.</li>
           <li><strong>Your Roadmap:</strong> A concrete 90-day plan from capstone completion through production deployment to community contribution.</li>
         </ul>
         <p style="font-size:1.1rem; margin-top:1.5rem;"><strong>You started this course knowing basic programming. You now know how to build, deploy, secure, monitor, and optimize production AI agents.</strong> The foundation is laid. What you build next is up to you.</p>
@@ -1658,13 +2491,42 @@ Action to strengthen it: ___
       <!-- REFERENCES -->
       <section class="section" id="references">
         <h2 id="references-heading">References &amp; Resources</h2>
+        <h3 style="margin-top:0.25rem;">Anthropic &amp; Core Docs</h3>
         <ul>
           <li><a href="https://docs.anthropic.com/en/docs/build-with-claude/tool-use" target="_blank" rel="noopener noreferrer">Claude Tool Use Documentation</a> &mdash; Official guide to function calling</li>
           <li><a href="https://docs.anthropic.com/en/docs/build-with-claude/computer-use" target="_blank" rel="noopener noreferrer">Computer Use Documentation</a> &mdash; Guide to Claude's computer use capability</li>
           <li><a href="https://docs.anthropic.com/en/docs/build-with-claude/extended-thinking" target="_blank" rel="noopener noreferrer">Extended Thinking Documentation</a> &mdash; Guide to using extended thinking</li>
-          <li><a href="https://modelcontextprotocol.io/" target="_blank" rel="noopener noreferrer">Model Context Protocol</a> &mdash; MCP specification and server directory</li>
+          <li><a href="https://docs.anthropic.com/en/docs/agents/skills" target="_blank" rel="noopener noreferrer">Claude Skills Documentation</a> &mdash; SKILL.md format and skill discovery</li>
+          <li><a href="https://docs.anthropic.com/en/agent-sdk" target="_blank" rel="noopener noreferrer">Claude Agent SDK</a> &mdash; Python and Node SDKs for production agents</li>
           <li><a href="https://github.com/anthropics/anthropic-cookbook" target="_blank" rel="noopener noreferrer">Anthropic Cookbook</a> &mdash; Production-ready code examples</li>
           <li><a href="https://docs.anthropic.com/en/docs/about-claude/models" target="_blank" rel="noopener noreferrer">Claude Model Overview</a> &mdash; Current models, capabilities, and pricing</li>
+        </ul>
+
+        <h3 style="margin-top:1rem;">Agent Interop Standards</h3>
+        <ul>
+          <li><a href="https://modelcontextprotocol.io/" target="_blank" rel="noopener noreferrer">Model Context Protocol</a> &mdash; MCP specification and public server directory</li>
+          <li><a href="https://modelcontextprotocol.io/specification/draft/basic/authorization" target="_blank" rel="noopener noreferrer">MCP Authorization Spec</a> &mdash; OAuth 2.1 + PKCE for remote MCP servers</li>
+          <li><a href="https://github.com/modelcontextprotocol/inspector" target="_blank" rel="noopener noreferrer">MCP Inspector</a> &mdash; Interactive debugger for MCP servers</li>
+          <li><a href="https://mcpui.dev/" target="_blank" rel="noopener noreferrer">MCP UI</a> &mdash; Rich UI payloads from MCP tool results</li>
+          <li><a href="https://a2aproject.io/" target="_blank" rel="noopener noreferrer">A2A Specification</a> &mdash; Agent2Agent Protocol (Linux Foundation)</li>
+          <li><a href="https://github.com/a2aproject/A2A" target="_blank" rel="noopener noreferrer">A2A Reference Implementations</a> &mdash; Sample agents in Python and TypeScript</li>
+          <li><a href="https://agntcy.org/" target="_blank" rel="noopener noreferrer">AGNTCY (Internet of Agents)</a> &mdash; Cisco-led open agent stack: identity, discovery, observability</li>
+          <li><a href="https://github.com/agent-network-protocol/AgentNetworkProtocol" target="_blank" rel="noopener noreferrer">Agent Network Protocol (ANP)</a> &mdash; Decentralized DID-based agent network spec</li>
+        </ul>
+
+        <h3 style="margin-top:1rem;">Agentic Memory Frameworks</h3>
+        <ul>
+          <li><a href="https://www.letta.com/" target="_blank" rel="noopener noreferrer">Letta</a> (formerly MemGPT) &mdash; Tiered memory + self-editable memory blocks</li>
+          <li><a href="https://mem0.ai/" target="_blank" rel="noopener noreferrer">mem0</a> &mdash; Drop-in memory layer with LLM-driven fact extraction</li>
+          <li><a href="https://memgpt.readme.io/docs/concepts" target="_blank" rel="noopener noreferrer">MemGPT Original Paper</a> &mdash; The OS-inspired memory model that started this category</li>
+        </ul>
+
+        <h3 style="margin-top:1rem;">Long-Horizon Coding Agents</h3>
+        <ul>
+          <li><a href="https://docs.anthropic.com/en/docs/claude-code" target="_blank" rel="noopener noreferrer">Claude Code</a> &mdash; Anthropic's official long-horizon coding agent (this course covers it in M25&ndash;M26)</li>
+          <li><a href="https://aider.chat/" target="_blank" rel="noopener noreferrer">Aider</a> &mdash; Open-source pair-programming agent with git integration</li>
+          <li><a href="https://github.com/cline/cline" target="_blank" rel="noopener noreferrer">Cline</a> &mdash; VS Code long-horizon agent</li>
+          <li><a href="https://github.com/openai/codex" target="_blank" rel="noopener noreferrer">OpenAI Codex CLI</a> &mdash; Cross-model coding agent</li>
         </ul>
       </section>
 

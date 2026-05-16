@@ -4,7 +4,14 @@
 
 In this lab you build a **UCC Filing Customer Support Agent** using the Agent SDK patterns: the agentic loop with `stop_reason`, pre/post tool use hooks, session management with fork, and subagent orchestration. Each exercise adds a layer, and the final exercise composes everything into a production-grade support agent.
 
-All exercises use **mock API responses** so you can run them without an Anthropic API key. The patterns are identical to what you would use in production with the real Agent SDK.
+## Two solution paths in this directory
+
+| Files | What they show | When to use |
+|---|---|---|
+| `solution/agent_loop.py`, `hooks.py`, `session_manager.py`, ... | **Simulated SDK** — recreates the SDK's behavior with a mock client and an in-process `HookEngine`. Lets you read the lab without an API key. Useful for understanding the abstractions. | Read first to build a mental model. |
+| `solution/agent_loop_sdk.py`, `hooks_sdk.py`, `session_manager_sdk.py` + `solution/.claude/agents/*.md` | **Real `claude-agent-sdk`** — the canonical M26 surface (`query()`, `@tool`, `HookMatcher`, `can_use_tool`, declarative subagents). This is what the cert exam tests and what production agents actually look like. | Run after you've read the simulation. Requires `pip install claude-agent-sdk` and an API key. |
+
+Per `prompts/19-sdk-tier-policy.md`, M26 is **Tier 3 SDK-default** — the `*_sdk.py` files are the canonical solutions. The original simulated files remain for offline exploration only.
 
 ## Prerequisites
 
