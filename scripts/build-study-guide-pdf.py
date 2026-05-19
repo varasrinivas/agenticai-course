@@ -253,14 +253,13 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     --code-border: #6366F1;
   }
 
-  /* 2-column body flow */
+  /* Single-column body; each module gets its own 2-column page */
   html, body {
     margin: 0; padding: 0;
     background: #fff; color: var(--text-primary);
     font-family: 'Source Sans 3', -apple-system, sans-serif;
     font-size: 7pt; line-height: 1.28;
     -webkit-print-color-adjust: exact; print-color-adjust: exact;
-    columns: 2; column-gap: 4mm;
   }
   h1, h2, h3, h4 { font-family: 'Bricolage Grotesque', sans-serif; color: #0A1628; }
   h1 { font-size: 11pt; line-height: 1.18; margin: 0.3rem 0 0.15rem; }
@@ -278,9 +277,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   }
   em { color: var(--text-secondary); font-style: italic; }
 
-  /* === Cover: compact banner spanning both columns === */
+  /* === Cover: compact banner, full width === */
   .cover {
-    column-span: all;
     text-align: center;
     padding: 2.5mm 0 2mm;
     border-bottom: 1.5px solid #d4a843;
@@ -298,9 +296,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   .cover ul.coverage { display: none; }
   .cover .meta { font-size: 6pt; color: #718096; }
 
-  /* === TOC: spans both columns, 3-column list, no separate page === */
+  /* === TOC: full-width index, then page break before modules === */
   .toc {
-    column-span: all;
     padding: 1.5mm 0 2mm;
     border-bottom: 1px solid #e2e8f0;
     margin-bottom: 2mm;
@@ -318,14 +315,21 @@ HTML_TEMPLATE = """<!DOCTYPE html>
                line-height: 1.2; min-width: 0; }
   .toc-track { display: none; }
 
-  /* === Module — anchor, flows within 2-column layout === */
+  /* === Module — each on its own page, 2-column content inside === */
   .module {
-    border-top: 2px solid var(--track-color);
-    padding-top: 0.28rem;
-    margin-top: 0.45rem;
-    break-inside: avoid;
+    border-top: 3px solid var(--track-color);
+    padding-top: 0.3rem;
+    margin-top: 0;
+    break-before: always;
   }
-  .module:first-of-type { margin-top: 0; }
+  .module.first-module { break-before: auto; }
+
+  /* 2-column layout scoped to each module's card content */
+  .module-body-cols {
+    columns: 2;
+    column-gap: 5mm;
+    margin-top: 0.3rem;
+  }
   .module-head {
     display: flex; justify-content: space-between; align-items: baseline;
     gap: 0.3rem; margin-bottom: 0.12rem;
@@ -588,6 +592,7 @@ def section_anchor(mod: dict, index: int) -> str:
 
 def render_module(mod: dict, index: int) -> str:
     anchor = section_anchor(mod, index)
+    extra_class = " first-module" if index == 1 else ""
     head = (
         f'<header class="module-head">'
         f'<span class="num">{mod["module_num"] or "Module"}</span>'
@@ -597,7 +602,8 @@ def render_module(mod: dict, index: int) -> str:
     )
     if mod["subtitle"]:
         head += f'<p class="module-sub">{mod["subtitle"]}</p>'
-    return f'<section class="module {mod["klass"]}" id="{anchor}">{head}{mod["body"]}</section>'
+    body_cols = f'<div class="module-body-cols">{mod["body"]}</div>'
+    return f'<section class="module {mod["klass"]}{extra_class}" id="{anchor}">{head}{body_cols}</section>'
 
 
 def render_toc(modules: list[dict]) -> str:
