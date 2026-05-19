@@ -238,12 +238,11 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 <title>AI Agent Engineering — Interview Study Guide</title>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700;800&family=Source+Sans+3:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>
-  /* === Tight page === */
-  @page { size: A4; margin: 8mm 8mm 8mm 8mm; }
+  /* === Ultra-compact 2-column layout === */
+  @page { size: A4; margin: 5mm 5mm 5mm 5mm; }
   * { box-sizing: border-box; }
 
   :root {
-    --bg-card: #fafbfc;
     --bg-surface: #f5f7fa;
     --text-primary: #1a1f2e;
     --text-secondary: #4a5568;
@@ -254,169 +253,158 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     --code-border: #6366F1;
   }
 
-  /* === Type scale (compact, 5 sizes + monospace) ===
-       15 pt    module title (h1)
-       10 pt    card heading (h2)
-      8.5 pt    section-label / cluster context (eyebrow chip)
-        8 pt    body text + analogy + misconception + takeaway
-      7.5 pt    h3, sub-heading, table cells
-        7 pt    pseudocode / inline code
-  */
+  /* 2-column body flow */
   html, body {
     margin: 0; padding: 0;
     background: #fff; color: var(--text-primary);
     font-family: 'Source Sans 3', -apple-system, sans-serif;
-    font-size: 8pt; line-height: 1.36;
+    font-size: 7pt; line-height: 1.28;
     -webkit-print-color-adjust: exact; print-color-adjust: exact;
+    columns: 2; column-gap: 4mm;
   }
   h1, h2, h3, h4 { font-family: 'Bricolage Grotesque', sans-serif; color: #0A1628; }
-  h1 { font-size: 15pt; line-height: 1.18; margin: 0.5rem 0 0.3rem; }
-  h2 { font-size: 10pt; line-height: 1.22; margin: 0.35rem 0 0.18rem; }
-  h3 { font-size: 8.4pt; line-height: 1.28; margin: 0.3rem 0 0.15rem; }
-  p  { margin: 0 0 0.3rem; }
-  ul, ol { margin: 0.25rem 0 0.35rem 1rem; padding: 0; }
-  li { margin-bottom: 0.15rem; }
+  h1 { font-size: 11pt; line-height: 1.18; margin: 0.3rem 0 0.15rem; }
+  h2 { font-size: 8.5pt; line-height: 1.2; margin: 0.22rem 0 0.1rem; }
+  h3 { font-size: 7pt; line-height: 1.24; margin: 0.18rem 0 0.08rem; }
+  p  { margin: 0 0 0.18rem; }
+  ul, ol { margin: 0.12rem 0 0.2rem 0.75rem; padding: 0; }
+  li { margin-bottom: 0.08rem; }
   strong { font-weight: 700; }
   a { color: #2563eb; text-decoration: none; }
   code {
-    font-family: 'JetBrains Mono', monospace; font-size: 7pt;
-    background: rgba(99,102,241,0.07); padding: 0.04rem 0.26rem;
-    border-radius: 3px; border: 1px solid rgba(99,102,241,0.16);
+    font-family: 'JetBrains Mono', monospace; font-size: 6pt;
+    background: rgba(99,102,241,0.07); padding: 0.02rem 0.2rem;
+    border-radius: 2px; border: 1px solid rgba(99,102,241,0.15);
   }
   em { color: var(--text-secondary); font-style: italic; }
-  .small, .muted { font-size: 7pt; color: var(--text-muted); }
 
-  /* === Cover (compact, half a page) === */
-  .cover { page-break-after: always; text-align: center; padding-top: 18vh; }
-  .cover .eyebrow {
-    font-size: 9pt; letter-spacing: 0.22em; text-transform: uppercase;
-    color: #8a6a1a; font-weight: 700; margin-bottom: 0.9rem;
+  /* === Cover: compact banner spanning both columns === */
+  .cover {
+    column-span: all;
+    text-align: center;
+    padding: 2.5mm 0 2mm;
+    border-bottom: 1.5px solid #d4a843;
+    margin-bottom: 2mm;
   }
-  .cover h1 { font-size: 26pt; margin: 0 0 0.5rem; color: #0A1628; }
-  .cover .sub { font-size: 11pt; color: #4a5568; max-width: 500px; margin: 0 auto; line-height: 1.45; }
-  .cover .meta { margin-top: 1.8rem; font-size: 9pt; color: #718096; }
-  .cover ul.coverage { list-style: none; padding: 0; margin: 1.5rem auto 0; max-width: 520px;
-                       display: grid; grid-template-columns: 1fr 1fr; gap: 0.25rem 1.5rem; text-align: left; font-size: 9pt; }
-  .cover ul.coverage li::before { content: "▸ "; color: var(--accent-primary); }
+  .cover .eyebrow {
+    font-size: 6pt; letter-spacing: 0.2em; text-transform: uppercase;
+    color: #8a6a1a; font-weight: 700;
+  }
+  .cover h1 {
+    font-size: 14pt; margin: 0.8mm 0 0.5mm; color: #0A1628;
+    font-family: 'Bricolage Grotesque', sans-serif;
+  }
+  .cover .sub { display: none; }
+  .cover ul.coverage { display: none; }
+  .cover .meta { font-size: 6pt; color: #718096; }
 
-  /* === TOC (compact, multi-line items still small) === */
-  .toc { page-break-before: always; page-break-after: always; padding-top: 0; }
-  .toc h1 { font-size: 18pt; margin: 0 0 0.25rem; }
-  .toc .toc-hint { font-size: 8pt; color: #718096; font-style: italic; margin: 0 0 0.6rem; }
-  .toc-list { list-style: none; margin: 0; padding: 0; column-count: 2; column-gap: 1rem; }
-  .toc-item { border-bottom: 1px dotted #cbd5e0; page-break-inside: avoid; break-inside: avoid; }
-  .toc-item a { display: flex; align-items: baseline; gap: 0.5rem; padding: 0.18rem 0.15rem; color: #1a1f2e; }
-  .toc-num { flex: 0 0 auto; width: 2.6em; font-family: 'Bricolage Grotesque', sans-serif;
-             font-size: 8.2pt; font-weight: 700; color: var(--track-color);
-             letter-spacing: 0.04em; white-space: nowrap; }
-  .toc-title { flex: 1 1 auto; font-size: 8.6pt; font-weight: 600; color: #0A1628;
+  /* === TOC: spans both columns, 3-column list, no separate page === */
+  .toc {
+    column-span: all;
+    padding: 1.5mm 0 2mm;
+    border-bottom: 1px solid #e2e8f0;
+    margin-bottom: 2mm;
+    break-after: always;
+  }
+  .toc h1 { font-size: 9pt; margin: 0 0 1mm; }
+  .toc .toc-hint { display: none; }
+  .toc-list { list-style: none; margin: 0; padding: 0; column-count: 3; column-gap: 3mm; }
+  .toc-item { border-bottom: none; break-inside: avoid; }
+  .toc-item a { display: flex; align-items: baseline; gap: 0.3rem; padding: 0.1rem 0; color: #1a1f2e; }
+  .toc-num { flex: 0 0 auto; width: 2.1em;
+             font-family: 'Bricolage Grotesque', sans-serif;
+             font-size: 6.5pt; font-weight: 700; color: var(--track-color); white-space: nowrap; }
+  .toc-title { flex: 1 1 auto; font-size: 6.5pt; font-weight: 600; color: #0A1628;
                line-height: 1.2; min-width: 0; }
-  .toc-track { display: none; }   /* save horizontal space in the 2-col TOC */
+  .toc-track { display: none; }
 
-  /* === Module — strong visual anchor, compact === */
+  /* === Module — anchor, flows within 2-column layout === */
   .module {
-    border-top: 3px solid var(--track-color);
-    padding-top: 0.4rem;
-    margin-top: 0.7rem;
-    page-break-after: avoid;
+    border-top: 2px solid var(--track-color);
+    padding-top: 0.28rem;
+    margin-top: 0.45rem;
+    break-inside: avoid;
   }
   .module:first-of-type { margin-top: 0; }
   .module-head {
     display: flex; justify-content: space-between; align-items: baseline;
-    gap: 0.5rem; margin-bottom: 0.25rem;
+    gap: 0.3rem; margin-bottom: 0.12rem;
   }
   .module-head .num {
-    font-family: 'Bricolage Grotesque', sans-serif; font-size: 8.4pt; font-weight: 800;
-    color: var(--track-color); letter-spacing: 0.08em; text-transform: uppercase;
+    font-family: 'Bricolage Grotesque', sans-serif; font-size: 7pt; font-weight: 800;
+    color: var(--track-color); letter-spacing: 0.06em; text-transform: uppercase;
     white-space: nowrap;
   }
   .module-head .track {
-    font-size: 7.4pt; color: #4a5568; font-weight: 600; text-align: right;
-    background: var(--bg-surface); padding: 0.06rem 0.36rem; border-radius: 3px;
+    font-size: 5.8pt; color: #4a5568; font-weight: 600;
+    background: var(--bg-surface); padding: 0.04rem 0.28rem; border-radius: 2px;
   }
   .module h1.module-title {
-    font-size: 15pt; line-height: 1.18; font-weight: 800;
-    margin: 0 0 0.15rem; color: #0A1628;
-    page-break-after: avoid;
+    font-size: 11pt; line-height: 1.18; font-weight: 800;
+    margin: 0 0 0.1rem; color: #0A1628;
   }
   .module .module-sub {
-    font-size: 8.2pt; color: #4a5568; font-style: italic;
-    margin: 0 0 0.4rem; line-height: 1.34;
-    padding-bottom: 0.3rem; border-bottom: 1px dotted #cbd5e0;
+    font-size: 6.5pt; color: #4a5568; font-style: italic;
+    margin: 0 0 0.22rem; line-height: 1.28;
+    padding-bottom: 0.18rem; border-bottom: 1px dotted #d1d5db;
   }
 
-  /* === Cards: tight but readable === */
+  /* === Cards: ultra-tight === */
   .mobile-card {
     background: transparent; border: 0;
-    padding: 0.35rem 0 0;
-    margin: 0.45rem 0 0.35rem;
-    page-break-inside: avoid;
+    padding: 0.2rem 0 0;
+    margin: 0.28rem 0 0.2rem;
+    break-inside: avoid;
     border-top: 1px solid #e8edf3;
   }
-  .mobile-card:first-child { border-top: 0; padding-top: 0; margin-top: 0.25rem; }
+  .mobile-card:first-child { border-top: 0; padding-top: 0; margin-top: 0.15rem; }
   .mobile-card h2 {
-    font-size: 10pt; line-height: 1.22;
-    margin: 0.18rem 0 0.18rem;
-    color: #0A1628;
-    page-break-after: avoid;
+    font-size: 8.5pt; line-height: 1.2;
+    margin: 0.1rem 0 0.1rem; color: #0A1628;
   }
-  .mobile-card h3 { font-size: 8.4pt; line-height: 1.25; margin: 0.25rem 0 0.12rem; }
+  .mobile-card h3 { font-size: 7pt; line-height: 1.22; margin: 0.15rem 0 0.08rem; }
 
-  /* === Card header chip: CLUSTER · SECTION-TYPE ===
-     The section-label is rewritten by inject_cluster_context() to include
-     the cluster name (parsed from each card's aria-label). It is THE most
-     important wayfinding element after the module title. */
+  /* === Card header chip === */
   .card-label, .section-label, .analogy-label {
     display: inline-block;
     font-family: 'Bricolage Grotesque', sans-serif;
-    font-size: 8.5pt; font-weight: 700;
-    letter-spacing: 0.06em; text-transform: uppercase;
+    font-size: 7pt; font-weight: 700;
+    letter-spacing: 0.04em; text-transform: uppercase;
     color: var(--track-color);
     background: rgba(99, 102, 241, 0.06);
-    padding: 0.18rem 0.55rem 0.18rem 0.5rem;
-    border-radius: 3px;
-    border-left: 3px solid var(--track-color);
-    margin: 0;
-    line-height: 1.3;
+    padding: 0.1rem 0.38rem 0.1rem 0.32rem;
+    border-radius: 2px;
+    border-left: 2px solid var(--track-color);
+    line-height: 1.28;
   }
-  /* Cluster name part — darker, slightly more weight than the section type */
   .section-label .cl-cluster,
   .card-label .cl-cluster,
-  .analogy-label .cl-cluster {
-    color: #0A1628; font-weight: 800;
-  }
+  .analogy-label .cl-cluster { color: #0A1628; font-weight: 800; }
   .section-label .cl-sep,
   .card-label .cl-sep,
-  .analogy-label .cl-sep {
-    color: var(--track-color); opacity: 0.5;
-    margin: 0 0.15rem;
-  }
+  .analogy-label .cl-sep { color: var(--track-color); opacity: 0.5; margin: 0 0.1rem; }
   .section-label .cl-type,
   .card-label .cl-type,
-  .analogy-label .cl-type {
-    color: var(--track-color); font-weight: 600;
-  }
+  .analogy-label .cl-type { color: var(--track-color); font-weight: 600; }
 
   .concept-chip {
     display: inline-block;
     font-family: 'Bricolage Grotesque', sans-serif;
-    font-size: 7pt; font-weight: 700;
-    letter-spacing: 0.05em; text-transform: uppercase;
-    color: #6a4f0e;
-    background: rgba(212, 168, 67, 0.13);
-    padding: 0.12rem 0.4rem; border-radius: 3px;
-    margin: 0 0 0 0.4rem;
-    vertical-align: middle;
+    font-size: 6pt; font-weight: 700;
+    letter-spacing: 0.04em; text-transform: uppercase;
+    color: #6a4f0e; background: rgba(212, 168, 67, 0.13);
+    padding: 0.08rem 0.3rem; border-radius: 2px;
+    margin: 0 0 0 0.3rem; vertical-align: middle;
   }
 
   /* === Pseudocode === */
   .pseudocode {
     background: var(--code-bg);
-    border-left: 2.5px solid var(--code-border);
-    border-radius: 0 3px 3px 0;
+    border-left: 2px solid var(--code-border);
+    border-radius: 0 2px 2px 0;
     font-family: 'JetBrains Mono', monospace;
-    font-size: 7pt; line-height: 1.42;
-    padding: 0.35rem 0.55rem; margin: 0.28rem 0;
+    font-size: 6pt; line-height: 1.35;
+    padding: 0.22rem 0.4rem; margin: 0.18rem 0;
     white-space: pre-wrap; word-break: break-word;
     color: #1a1f2e; overflow: visible;
   }
@@ -428,172 +416,134 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   /* === Takeaway === */
   .takeaway {
     background: rgba(212, 168, 67, 0.08);
-    border-left: 2.5px solid #b8860b;
-    border-radius: 0 3px 3px 0;
-    padding: 0.35rem 0.55rem; margin: 0.3rem 0;
-    font-size: 8pt;          /* matches body */
+    border-left: 2px solid #b8860b;
+    border-radius: 0 2px 2px 0;
+    padding: 0.2rem 0.38rem; margin: 0.18rem 0;
+    font-size: 7pt;
   }
   .takeaway::before {
     content: "Takeaway"; display: block;
     font-family: 'Bricolage Grotesque', sans-serif;
-    font-size: 7pt; font-weight: 800; letter-spacing: 0.1em;
+    font-size: 6pt; font-weight: 800; letter-spacing: 0.1em;
     text-transform: uppercase; color: #8a6a1a;
-    margin-bottom: 0.15rem;
+    margin-bottom: 0.08rem;
   }
   .takeaway h3 { display: none; }
-  .takeaway p { margin: 0 0 0.2rem; }
+  .takeaway p { margin: 0 0 0.12rem; }
   .takeaway p:last-child { margin-bottom: 0; }
 
-  /* === Misconceptions: stacked tightly === */
+  /* === Misconceptions === */
   .misconception {
     background: rgba(244, 63, 94, 0.04);
-    border-left: 2.5px solid #be123c;
-    border-radius: 0 3px 3px 0;
-    padding: 0.3rem 0.5rem; margin: 0 0 0.28rem;
+    border-left: 2px solid #be123c;
+    border-radius: 0 2px 2px 0;
+    padding: 0.18rem 0.35rem; margin: 0 0 0.18rem;
   }
   .misconception .icon { display: none; }
   .misconception .wrong, .misconception .myth {
-    display: block; font-weight: 700; color: #be123c; font-size: 8pt;
-    margin-bottom: 0.12rem;
+    display: block; font-weight: 700; color: #be123c; font-size: 7pt;
+    margin-bottom: 0.08rem;
   }
   .misconception .right, .misconception .reality {
-    color: #2d3748; font-size: 8pt; line-height: 1.36;
+    color: #2d3748; font-size: 7pt; line-height: 1.3;
   }
 
   /* === Analogy box === */
   .analogy-box {
     background: rgba(212, 168, 67, 0.06);
-    border-left: 2.5px solid #b8860b;
-    border-radius: 0 3px 3px 0;
-    padding: 0.35rem 0.55rem; margin: 0.3rem 0;
+    border-left: 2px solid #b8860b;
+    border-radius: 0 2px 2px 0;
+    padding: 0.2rem 0.38rem; margin: 0.18rem 0;
   }
-  .analogy-box p { margin: 0 0 0.25rem; font-size: 8pt; }
+  .analogy-box p { margin: 0 0 0.15rem; font-size: 7pt; }
   .analogy-box p:last-child { margin-bottom: 0; }
 
   /* === Step list === */
   .step-list, .steps-list {
-    list-style: none; counter-reset: step; margin: 0.25rem 0; padding: 0;
+    list-style: none; counter-reset: step; margin: 0.15rem 0; padding: 0;
   }
   .step-list li, .steps-list li {
     counter-increment: step; position: relative;
-    padding: 0.28rem 0.35rem 0.28rem 1.6rem;
-    margin-bottom: 0.22rem;
+    padding: 0.18rem 0.25rem 0.18rem 1.3rem;
+    margin-bottom: 0.14rem;
     background: rgba(99, 102, 241, 0.04);
-    border-left: 2px solid var(--track-color);
-    border-radius: 0 3px 3px 0;
-    font-size: 8pt; color: #2d3748;
+    border-left: 1.5px solid var(--track-color);
+    border-radius: 0 2px 2px 0;
+    font-size: 7pt; color: #2d3748;
   }
   .step-list li::before, .steps-list li::before {
-    content: counter(step); position: absolute; left: 0.3rem; top: 0.32rem;
-    width: 0.95rem; height: 0.95rem; border-radius: 50%;
+    content: counter(step); position: absolute; left: 0.22rem; top: 0.22rem;
+    width: 0.78rem; height: 0.78rem; border-radius: 50%;
     background: var(--track-color); color: #fff;
-    font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 6.6pt;
+    font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 5.5pt;
     display: flex; align-items: center; justify-content: center; line-height: 1;
   }
   .step-list li strong, .steps-list li strong {
-    display: block; margin-bottom: 0.08rem; color: #0A1628;
+    display: block; margin-bottom: 0.06rem; color: #0A1628;
     font-family: 'Bricolage Grotesque', sans-serif;
   }
 
-  /* === Tables (real <table> markup) === */
+  /* === Tables === */
   table, .compare-table, .framework-table, .decision-table, .domain-table {
-    display: table !important;
-    border-collapse: collapse;
-    font-size: 7.5pt; width: 100%;
-    margin: 0.28rem 0; page-break-inside: avoid;
+    display: table !important; border-collapse: collapse;
+    font-size: 6.5pt; width: 100%; margin: 0.18rem 0; break-inside: avoid;
   }
   thead { display: table-header-group; }
   tbody { display: table-row-group; }
   tr { display: table-row; }
-  th, td { display: table-cell; padding: 0.25rem 0.4rem; border-bottom: 1px solid #e2e8f0; vertical-align: top; }
+  th, td { display: table-cell; padding: 0.18rem 0.3rem; border-bottom: 1px solid #e2e8f0; vertical-align: top; }
   th { background: var(--bg-surface); font-family: 'Bricolage Grotesque', sans-serif;
-       font-weight: 700; font-size: 7.2pt; text-align: left; color: var(--text-secondary);
-       text-transform: uppercase; letter-spacing: 0.04em; }
+       font-weight: 700; font-size: 6.2pt; text-align: left; color: var(--text-secondary);
+       text-transform: uppercase; letter-spacing: 0.03em; }
 
-  /* === Grid-based "tables" built out of <div>s ===
-     Mobile content uses CSS-Grid patterns that look tabular on screen but
-     fall back to stacked divs in print. Re-style them as compact tables. */
-
-  /* M12 — pattern-grid: 8 agent design patterns, 2-col rows (badge, text) */
-  .pattern-grid {
-    display: block; margin: 0.25rem 0;
-    border-top: 1px solid #e2e8f0;
-  }
+  /* === Grid "tables" === */
+  .pattern-grid { display: block; margin: 0.18rem 0; border-top: 1px solid #e2e8f0; }
   .pattern-row {
-    display: grid; grid-template-columns: 2.4rem 1fr; gap: 0.45rem;
-    padding: 0.26rem 0.3rem;
-    border-bottom: 1px solid #e2e8f0;
-    page-break-inside: avoid;
-    font-size: 8pt;
+    display: grid; grid-template-columns: 2.1rem 1fr; gap: 0.3rem;
+    padding: 0.18rem 0.22rem; border-bottom: 1px solid #e2e8f0;
+    break-inside: avoid; font-size: 7pt;
   }
   .pattern-row .pn {
     font-family: 'JetBrains Mono', monospace; font-weight: 700;
-    color: var(--track-color); font-size: 7.6pt;
-    align-self: center;
+    color: var(--track-color); font-size: 6.5pt; align-self: center;
   }
   .pattern-row .pname {
     display: block; font-weight: 700; color: #0A1628;
-    font-family: 'Bricolage Grotesque', sans-serif;
-    font-size: 8.4pt;
+    font-family: 'Bricolage Grotesque', sans-serif; font-size: 7pt;
   }
-  .pattern-row .psub {
-    display: block; font-size: 7.6pt; color: #4a5568;
-    margin-top: 0.08rem; line-height: 1.36;
-  }
+  .pattern-row .psub { display: block; font-size: 6.5pt; color: #4a5568; margin-top: 0.05rem; }
 
-  /* M22B — compare-grid: side-by-side deployment-target cards */
-  .compare-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-    gap: 0.4rem; margin: 0.3rem 0;
-  }
+  .compare-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.3rem; margin: 0.2rem 0; }
   .compare-card {
-    background: var(--bg-surface);
-    border: 1px solid #e2e8f0; border-radius: 4px;
-    padding: 0.4rem 0.5rem;
-    page-break-inside: avoid;
-    font-size: 7.6pt;
+    background: var(--bg-surface); border: 1px solid #e2e8f0; border-radius: 3px;
+    padding: 0.28rem 0.38rem; break-inside: avoid; font-size: 6.5pt;
   }
   .compare-card .ttl {
-    font-family: 'Bricolage Grotesque', sans-serif;
-    font-weight: 700; font-size: 8.4pt;
-    margin-bottom: 0.22rem;
-    padding-bottom: 0.15rem;
-    border-bottom: 1px solid #e2e8f0;
+    font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 7pt;
+    margin-bottom: 0.15rem; padding-bottom: 0.12rem; border-bottom: 1px solid #e2e8f0;
   }
   .compare-card .row {
-    display: flex; justify-content: space-between; gap: 0.4rem;
-    padding: 0.14rem 0; border-bottom: 1px dotted #e2e8f0;
+    display: flex; justify-content: space-between; gap: 0.3rem;
+    padding: 0.1rem 0; border-bottom: 1px dotted #e2e8f0;
   }
   .compare-card .row:last-child { border-bottom: 0; }
   .compare-card .row > span:first-child { color: #4a5568; }
   .compare-card .row > span:last-child { color: #0A1628; font-weight: 600; text-align: right; }
 
-  /* M00B — col-raw / col-sdk / col-spec: inline span coloring */
   .col-raw  { color: #6366F1; font-weight: 700; }
   .col-sdk  { color: #10B981; font-weight: 700; }
   .col-spec { color: #B45309; font-weight: 700; }
 
-  /* M00 — track-row: pill row inside title cards (filtered out, but defensive) */
-  .track-row { display: flex; flex-wrap: wrap; gap: 0.3rem; margin: 0.2rem 0; font-size: 7.2pt; }
-  .track-row .pill {
-    background: var(--bg-surface); border: 1px solid #e2e8f0;
-    padding: 0.05rem 0.4rem; border-radius: 999px; color: #4a5568;
-  }
+  .track-row { display: flex; flex-wrap: wrap; gap: 0.25rem; margin: 0.15rem 0; font-size: 6.5pt; }
+  .track-row .pill { background: var(--bg-surface); border: 1px solid #e2e8f0; padding: 0.04rem 0.3rem; border-radius: 999px; color: #4a5568; }
 
   /* === SVG diagrams === */
   .diagram-container, .agent-diagram, .analogy-svg-wrap {
     background: transparent; border: 1px solid #e2e8f0;
-    border-radius: 3px; padding: 0.4rem;
-    margin: 0.3rem 0; text-align: center;
-    page-break-inside: avoid;
+    border-radius: 2px; padding: 0.3rem;
+    margin: 0.2rem 0; text-align: center; break-inside: avoid;
   }
-  svg {
-    max-width: 100%;
-    max-height: 80mm;     /* cap diagrams so a single SVG can't eat a page */
-    height: auto;
-    display: block; margin: 0 auto;
-  }
+  svg { max-width: 100%; max-height: 50mm; height: auto; display: block; margin: 0 auto; }
   svg [fill="#0A1628" i], svg [fill="#162033" i],
   svg [fill="#111D33" i], svg [fill="#1A2740" i] { fill: transparent; }
 
@@ -608,11 +558,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   .track-8 { --track-color: #be185d; }
   .track-9 { --track-color: #8a6a1a; }
 
-  /* Inline span fallbacks */
   .myth { color: #be123c; font-weight: 700; }
   .reality { color: #4a5568; }
 
-  /* Drop scroll-snap / fixed-position artifacts */
   .card-container { display: block !important; overflow: visible !important; height: auto !important; }
   .swipe-hint, .read-time, .nav-links, .desktop-btn { display: none !important; }
   .progress-dots, .progress-bar, .module-nav, .hamburger-btn { display: none !important; }
@@ -620,20 +568,9 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 </head>
 <body>
 <section class="cover">
-  <div class="eyebrow">Interview Study Guide</div>
-  <h1>AI Agent Engineering</h1>
-  <div class="sub">Distilled from the mobile course. Every module&rsquo;s big idea, mechanics, pseudocode, misconceptions, and takeaway &mdash; sized for the night before a phone screen.</div>
-  <ul class="coverage">
-    <li>LLM mental model &amp; inference</li>
-    <li>Tokens, context, prompting</li>
-    <li>Tool use, MCP, multi-tool orchestration</li>
-    <li>Conversation memory, RAG, advanced RAG</li>
-    <li>ReAct loop, planning, multi-agent</li>
-    <li>Guardrails, evaluation, observability</li>
-    <li>APIs, cost optimization, reasoning models</li>
-    <li>Agent frontier: A2A, Skills, long-horizon</li>
-  </ul>
-  <div class="meta">__MODULE_COUNT__ modules &middot; compact print edition</div>
+  <div class="eyebrow">Interview Study Guide &mdash; AI Agent Engineering</div>
+  <h1>Building AI Agents with Claude</h1>
+  <div class="meta">__MODULE_COUNT__ modules &middot; 2-column compact edition</div>
 </section>
 __MODULES__
 </body>
