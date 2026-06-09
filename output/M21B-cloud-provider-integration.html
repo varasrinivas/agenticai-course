@@ -1,0 +1,1475 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>M21B: Cloud Provider Deep Dive — Bedrock, Vertex AI &amp; Azure AI | Building AI Agents with Claude</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;700;800&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg-primary:#0A1628;--bg-secondary:#111D33;--bg-card:#162033;--bg-surface:#1A2740;
+  --text-primary:#E8ECF1;--text-secondary:#94A3B8;--text-muted:#64748B;
+  --accent-primary:#D4A843;--accent-hover:#E5BC5A;--accent-muted:rgba(212,168,67,.15);
+  --success:#10B981;--success-bg:rgba(16,185,129,.1);
+  --warning:#F59E0B;--warning-bg:rgba(245,158,11,.1);
+  --error:#F43F5E;--error-bg:rgba(244,63,94,.1);
+  --info:#3B82F6;--info-bg:rgba(59,130,246,.1);
+  --track-deployment:#3B82F6;
+  --code-bg:#0D1117;--code-border:#21262D;--code-text:#C9D1D9;
+  --aws:#FF9900;--gcp:#4285F4;--azure:#0078D4;
+  --transition-fast:150ms;--transition-normal:300ms;
+}
+html{scroll-behavior:smooth}
+body{background:var(--bg-primary);color:var(--text-primary);font-family:'Source Sans 3',sans-serif;font-size:1.05rem;line-height:1.7;min-height:100vh}
+
+/* ── Layout ── */
+.course-header{background:var(--bg-secondary);border-bottom:1px solid var(--code-border);padding:1rem 2rem;display:flex;align-items:center;gap:1rem;flex-wrap:wrap;position:sticky;top:0;z-index:50}
+.track-badge{background:var(--track-deployment);color:#fff;padding:.25rem .75rem;border-radius:99px;font-family:'Bricolage Grotesque',sans-serif;font-size:.75rem;font-weight:700;white-space:nowrap}
+.course-title{font-family:'Bricolage Grotesque',sans-serif;font-size:.85rem;color:var(--text-muted)}
+.module-title{font-family:'Bricolage Grotesque',sans-serif;font-size:1rem;font-weight:700;color:var(--text-primary)}
+.progress-area{margin-left:auto;text-align:right}
+.progress-label{font-size:.75rem;color:var(--text-muted);margin-bottom:.25rem}
+.progress-bar{width:180px;height:4px;background:var(--bg-surface);border-radius:2px;overflow:hidden}
+.progress-fill{height:100%;width:70%;background:linear-gradient(90deg,var(--track-deployment),var(--accent-primary));border-radius:2px}
+
+.page-wrap{max-width:1200px;margin:0 auto;padding:2rem;display:grid;grid-template-columns:220px 1fr;gap:3rem}
+@media(max-width:900px){.page-wrap{grid-template-columns:1fr}.sidebar-nav{display:none}}
+
+/* ── Sidebar ── */
+.sidebar-nav{position:sticky;top:4.5rem;height:calc(100vh - 5rem);overflow-y:auto;padding-right:.5rem}
+.sidebar-nav::-webkit-scrollbar{width:4px}.sidebar-nav::-webkit-scrollbar-thumb{background:var(--code-border);border-radius:2px}
+.sidebar-title{font-family:'Bricolage Grotesque',sans-serif;font-size:.7rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:.1em;margin-bottom:.75rem}
+.sidebar-nav a{display:block;font-family:'Bricolage Grotesque',sans-serif;font-size:.82rem;color:var(--text-secondary);text-decoration:none;padding:.3rem .5rem;border-radius:6px;transition:all var(--transition-fast);border-left:2px solid transparent}
+.sidebar-nav a:hover,.sidebar-nav a.active{color:var(--accent-primary);background:var(--accent-muted);border-left-color:var(--accent-primary)}
+.sidebar-nav a.sub{padding-left:1.25rem;font-size:.78rem}
+.sidebar-divider{border:none;border-top:1px solid var(--code-border);margin:.5rem 0}
+
+/* ── Content ── */
+.content{max-width:800px}
+.section{margin-bottom:4rem}
+h1{font-family:'Bricolage Grotesque',sans-serif;font-size:2rem;font-weight:700;margin-bottom:.5rem;line-height:1.2}
+h2{font-family:'Bricolage Grotesque',sans-serif;font-size:1.5rem;font-weight:700;margin-bottom:1rem;color:var(--text-primary)}
+h3{font-family:'Bricolage Grotesque',sans-serif;font-size:1.15rem;font-weight:600;margin-bottom:.75rem;color:var(--text-primary)}
+p{margin-bottom:1rem}
+ul,ol{margin-left:1.5rem;margin-bottom:1rem}
+li{margin-bottom:.3rem}
+code{font-family:'JetBrains Mono',monospace;font-size:.88rem;background:var(--bg-surface);padding:.1em .35em;border-radius:4px;color:var(--accent-primary)}
+strong{font-weight:600}
+
+/* ── Boxes ── */
+.analogy-box{background:var(--accent-muted);border-left:4px solid var(--accent-primary);border-radius:0 8px 8px 0;padding:1.5rem;margin:1.5rem 0}
+.box-label{display:block;font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:.82rem;margin-bottom:.5rem}
+.analogy-box .box-label{color:var(--accent-primary)}
+.tech-def-box{background:var(--info-bg);border-left:4px solid var(--info);border-radius:0 8px 8px 0;padding:1.5rem;margin:1.5rem 0}
+.tech-def-box .box-label{color:var(--info)}
+.callout-why{background:var(--success-bg);border-left:4px solid var(--success);border-radius:0 8px 8px 0;padding:1.25rem 1.5rem;margin:1.5rem 0}
+.callout-why .box-label{color:var(--success)}
+.callout-warning{background:var(--warning-bg);border-left:4px solid var(--warning);border-radius:0 8px 8px 0;padding:1.25rem 1.5rem;margin:1.5rem 0}
+.callout-warning .box-label{color:var(--warning)}
+.callout-cost{background:rgba(212,168,67,.06);border-left:4px solid var(--accent-primary);border-radius:0 8px 8px 0;padding:1.25rem 1.5rem;margin:1.5rem 0}
+.callout-cost .box-label{color:var(--accent-primary)}
+.bridge{background:var(--bg-card);border:1px solid var(--code-border);border-radius:8px;padding:1rem 1.25rem;margin:2rem 0;color:var(--text-secondary);font-style:italic;font-size:.95rem}
+.checkpoint{background:rgba(16,185,129,.06);border-left:3px solid var(--success);padding:1rem 1.25rem;margin:1rem 0;border-radius:0 6px 6px 0}
+
+/* ── Code ── */
+.code-block-wrapper{background:var(--code-bg);border:1px solid var(--code-border);border-radius:12px;overflow:hidden;margin:1.5rem 0;position:relative}
+.code-tabs{display:flex;border-bottom:1px solid var(--code-border)}
+.code-tab{padding:.5rem 1.25rem;font-family:'JetBrains Mono',monospace;font-size:.78rem;cursor:pointer;border:none;background:transparent;color:var(--text-muted);border-bottom:2px solid transparent;margin-bottom:-1px;transition:all var(--transition-fast)}
+.code-tab:hover{color:var(--text-primary)}
+.code-tab.active{color:var(--accent-primary);border-bottom-color:var(--accent-primary)}
+.code-panel{display:none;position:relative}
+.code-panel.active{display:block}
+.code-panel pre{margin:0!important;border-radius:0!important;background:var(--code-bg)!important;font-family:'JetBrains Mono',monospace!important;font-size:.82rem!important;line-height:1.6!important;padding:1.25rem!important;overflow-x:auto}
+.copy-btn{position:absolute;top:.75rem;right:.75rem;background:var(--bg-surface);border:1px solid var(--code-border);color:var(--text-muted);font-size:.72rem;padding:.3rem .6rem;border-radius:6px;cursor:pointer;z-index:5;transition:all var(--transition-fast);font-family:'JetBrains Mono',monospace}
+.copy-btn:hover{color:var(--accent-primary);border-color:var(--accent-primary)}
+.code-annotation{background:rgba(59,130,246,.08);border-left:3px solid var(--info);padding:.75rem 1rem;margin:.5rem 0;border-radius:0 6px 6px 0;font-size:.9rem;color:var(--text-secondary)}
+.code-annotation strong{color:var(--info)}
+.code-single{background:var(--code-bg);border:1px solid var(--code-border);border-radius:8px;overflow:hidden;margin:1rem 0;position:relative}
+.code-single pre{margin:0;padding:1rem;font-family:'JetBrains Mono',monospace;font-size:.82rem;line-height:1.6;overflow-x:auto}
+
+/* ── Animation ── */
+.animation-container{background:var(--bg-secondary);border:1px solid var(--code-border);border-radius:12px;padding:2rem;margin:2rem 0;position:relative;min-height:240px;overflow:hidden}
+.animation-controls{display:flex;gap:.5rem;margin-top:1rem;justify-content:center}
+.animation-controls button{background:var(--bg-card);border:1px solid var(--code-border);color:var(--text-primary);padding:.4rem .9rem;border-radius:8px;cursor:pointer;font-size:.85rem;transition:all var(--transition-fast)}
+.animation-controls button:hover{border-color:var(--accent-primary);color:var(--accent-primary)}
+@media(prefers-reduced-motion:reduce){.anim-node,.anim-packet{animation:none!important;transition:none!important}}
+
+/* ── Table ── */
+.data-table{width:100%;border-collapse:collapse;font-size:.9rem;margin:1.5rem 0}
+.data-table th{text-align:left;padding:.6rem .75rem;color:var(--text-muted);font-family:'Bricolage Grotesque',sans-serif;font-size:.78rem;border-bottom:2px solid var(--code-border)}
+.data-table td{padding:.55rem .75rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);vertical-align:top}
+.data-table tr:last-child td{border-bottom:none}
+.data-table tr:hover td{background:rgba(255,255,255,.02)}
+
+/* ── Provider badges ── */
+.provider-aws{color:var(--aws);font-weight:700}
+.provider-gcp{color:var(--gcp);font-weight:700}
+.provider-azure{color:var(--azure);font-weight:700}
+.provider-direct{color:var(--accent-primary);font-weight:700}
+
+/* ── Tooltip ── */
+.term-tooltip{color:var(--accent-primary);cursor:help;border-bottom:1px dashed var(--accent-primary);position:relative;display:inline-block}
+.term-tooltip .tooltip-content{position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:var(--bg-card);border:1px solid var(--accent-primary);border-radius:8px;padding:.75rem 1rem;font-size:.83rem;color:var(--text-primary);width:270px;opacity:0;pointer-events:none;transition:opacity var(--transition-fast);z-index:20;line-height:1.5}
+.term-tooltip:hover .tooltip-content{opacity:1}
+
+/* ── Quiz ── */
+.quiz-question{background:var(--bg-card);border-radius:12px;padding:1.5rem;margin-bottom:1.5rem;border:1px solid var(--code-border)}
+.quiz-question h4{margin-bottom:1rem;color:var(--text-primary);font-family:'Bricolage Grotesque',sans-serif;font-size:1rem;font-weight:600}
+.quiz-option{padding:.7rem 1rem;margin:.4rem 0;border:1px solid var(--code-border);border-radius:8px;cursor:pointer;transition:all var(--transition-fast);font-size:.92rem;color:var(--text-secondary)}
+.quiz-option:hover{border-color:var(--accent-primary);color:var(--text-primary)}
+.quiz-option.correct{border-color:var(--success);background:var(--success-bg);color:var(--success)}
+.quiz-option.incorrect{border-color:var(--error);background:var(--error-bg);color:var(--error)}
+.quiz-feedback{margin-top:.75rem;padding:.75rem 1rem;border-radius:8px;font-size:.88rem;display:none}
+.quiz-feedback.show{display:block}
+.correct-fb{background:var(--success-bg);color:var(--success)}
+.incorrect-fb{background:var(--error-bg);color:var(--error)}
+.quiz-score{background:var(--bg-card);border-radius:12px;padding:1.5rem;text-align:center;border:1px solid var(--code-border);margin-top:1.5rem}
+
+/* ── Navigation ── */
+.module-nav{display:flex;gap:1rem;justify-content:space-between;margin-top:4rem;padding-top:2rem;border-top:1px solid var(--code-border)}
+.nav-btn{display:flex;flex-direction:column;padding:1rem 1.5rem;background:var(--bg-card);border:1px solid var(--code-border);border-radius:12px;text-decoration:none;transition:all var(--transition-normal);flex:1;max-width:280px}
+.nav-btn:hover{border-color:var(--accent-primary)}
+.nav-btn-label{font-size:.75rem;color:var(--text-muted);margin-bottom:.25rem}
+.nav-btn-title{font-family:'Bricolage Grotesque',sans-serif;font-size:.95rem;font-weight:600;color:var(--text-primary)}
+.nav-btn.next{text-align:right;margin-left:auto}
+
+/* ── Objectives ── */
+.objectives-list{list-style:none;margin:0}
+.objectives-list li{display:flex;gap:.75rem;align-items:flex-start;padding:.5rem 0;border-bottom:1px solid rgba(255,255,255,.05)}
+.objectives-list li:last-child{border-bottom:none}
+.obj-check{color:var(--success);font-size:1.1rem;flex-shrink:0;margin-top:.1rem}
+
+/* ── Decision flowchart ── */
+.flow-box{display:inline-block;padding:.5rem 1rem;border-radius:8px;font-size:.85rem;text-align:center;font-family:'Bricolage Grotesque',sans-serif;font-weight:600}
+.flow-question{background:rgba(59,130,246,.15);border:1px solid var(--info);color:var(--info)}
+.flow-yes{background:var(--success-bg);border:1px solid var(--success);color:var(--success)}
+.flow-row{display:flex;align-items:center;gap:1rem;margin:.75rem 0;flex-wrap:wrap}
+.flow-arrow{color:var(--text-muted);font-size:1.2rem}
+
+details summary{cursor:pointer;font-weight:600;padding:.5rem 0;color:var(--text-secondary)}
+details summary:hover{color:var(--text-primary)}
+</style>
+</head>
+<body>
+
+<!-- ── Course Header ── -->
+<header class="course-header">
+  <span class="track-badge">Track 7 — Production Deployment</span>
+  <div>
+    <div class="course-title">Building AI Agents with Claude</div>
+    <div class="module-title">M21B: Cloud Provider Deep Dive — Bedrock, Vertex AI &amp; Azure AI</div>
+  </div>
+  <div class="progress-area">
+    <div class="progress-label">Module 21B of 30+ &bull; 75–90 min</div>
+    <div class="progress-bar"><div class="progress-fill"></div></div>
+  </div>
+</header>
+
+<div class="page-wrap">
+
+<!-- ── Sidebar ── -->
+<nav class="sidebar-nav" aria-label="Page sections">
+  <div class="sidebar-title">On this page</div>
+  <a href="#objectives">Learning Objectives</a>
+  <a href="#four-ways">The Four Ways to Call Claude</a>
+  <a href="#bedrock">AWS Bedrock Deep Dive</a>
+  <a href="#bedrock-setup" class="sub">Setup &amp; Auth</a>
+  <a href="#bedrock-code" class="sub">Code Walkthrough</a>
+  <a href="#bedrock-advanced" class="sub">Guardrails &amp; RAG</a>
+  <a href="#vertex">Google Vertex AI Deep Dive</a>
+  <a href="#vertex-setup" class="sub">Setup &amp; Auth</a>
+  <a href="#vertex-code" class="sub">Code Walkthrough</a>
+  <a href="#azure">Microsoft Azure AI Deep Dive</a>
+  <a href="#azure-setup" class="sub">Setup &amp; Auth</a>
+  <a href="#azure-code" class="sub">Code Walkthrough</a>
+  <a href="#azure-identity" class="sub">Managed Identity</a>
+  <a href="#wrapper">Provider-Agnostic Wrapper</a>
+  <a href="#decision">Decision Framework</a>
+  <a href="#hands-on">Hands-On Lab</a>
+  <a href="#quiz">Knowledge Check</a>
+  <a href="#summary">Summary</a>
+</nav>
+
+<!-- ── Main Content ── -->
+<main class="content">
+
+<!-- ══════════════ OBJECTIVES ══════════════ -->
+<section class="section" id="objectives">
+  <h1>Cloud Provider Deep Dive</h1>
+  <p style="color:var(--text-secondary);margin-bottom:1.5rem;">Bedrock, Vertex AI &amp; Azure AI — one Claude model, three enterprise on-ramps.</p>
+
+  <h2 id="objectives-heading">Learning Objectives</h2>
+  <ul class="objectives-list">
+    <li><span class="obj-check">✓</span><span>Set up and authenticate with AWS Bedrock, Google Vertex AI, and Microsoft Azure AI Foundry using provider-native credential patterns</span></li>
+    <li><span class="obj-check">✓</span><span>Switch between all four Claude access paths (direct API, Bedrock, Vertex, Azure) with a constructor-level change and no other code modifications</span></li>
+    <li><span class="obj-check">✓</span><span>Use Bedrock Guardrails, Bedrock Knowledge Bases, Vertex Agent Engine, and Azure AI Foundry Agent Service for managed safety and RAG</span></li>
+    <li><span class="obj-check">✓</span><span>Build a provider-agnostic wrapper class driven by an environment variable so your agent code never hard-codes a cloud</span></li>
+    <li><span class="obj-check">✓</span><span>Apply the decision framework to choose the right cloud for a given team, compliance requirement, and cost profile</span></li>
+  </ul>
+
+  <div style="display:flex;gap:1rem;flex-wrap:wrap;margin-top:1rem">
+    <div style="background:var(--bg-card);border-radius:8px;padding:.75rem 1.25rem;border:1px solid var(--code-border)">
+      <span style="font-size:.75rem;color:var(--text-muted)">Level</span><br><strong>Intermediate → Advanced</strong>
+    </div>
+    <div style="background:var(--bg-card);border-radius:8px;padding:.75rem 1.25rem;border:1px solid var(--code-border)">
+      <span style="font-size:.75rem;color:var(--text-muted)">Prerequisites</span><br><strong>M21 (API Design &amp; Deployment)</strong>
+    </div>
+    <div style="background:var(--bg-card);border-radius:8px;padding:.75rem 1.25rem;border:1px solid var(--code-border)">
+      <span style="font-size:.75rem;color:var(--text-muted)">Cloud accounts needed</span><br><strong>AWS, GCP, or Azure (one is enough for the lab)</strong>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ SECTION 1: FOUR WAYS ══════════════ -->
+<section class="section" id="four-ways">
+  <h2 id="four-ways-heading">The Four Ways to Call Claude</h2>
+
+  <div class="analogy-box">
+    <span class="box-label">💡 Everyday Analogy — The Hospital Network</span>
+    <p><strong>BEFORE:</strong> Imagine a specialist doctor — let's call her Dr. Claude — who can be seen at four different hospital networks: her own private clinic, General Hospital (AWS), City Medical (GCP), and Metro Health (Azure). The same doctor. The same expertise. The same consultation quality.</p>
+    <p><strong>PAIN:</strong> Before this existed, your company's insurance (procurement contract) only covered City Medical. Every time you needed Dr. Claude, you had to file out-of-network paperwork, get a special exception, and pay the premium yourself. Legal reviewed every appointment. That's what it felt like before Claude was available on GCP's Vertex AI.</p>
+    <p><strong>MAPPING:</strong> Now Dr. Claude operates in all four networks. If your company's existing GCP contract covers City Medical, you book through City Medical — no new vendor, no new legal review, bills go to the existing account. The consultation is identical either way. Picking your cloud provider is picking which hospital network handles the paperwork, not which doctor you see.</p>
+  </div>
+
+  <div class="tech-def-box">
+    <span class="box-label">📐 Technical Definition</span>
+    <p>Claude runs on Anthropic's own infrastructure. When you call Claude through AWS Bedrock, GCP Vertex AI, or Azure AI, Anthropic is still running the actual model — what changes is the <strong>API gateway, authentication, billing integration, and data plane</strong> through which your request reaches Claude.</p>
+    <p>Each cloud provider signs a reseller agreement with Anthropic, provisions capacity in specific regions, and exposes Claude through their own SDKs and identity systems. Your requests hit the cloud provider's endpoint first, credentials are validated against their IAM, then the request is forwarded to Anthropic's inference fleet. The response comes back through the same path.</p>
+    <p>From a code perspective, you swap one constructor for another. The <code>messages.create()</code> call shape, tool-use format, and response structure are identical on Bedrock and Vertex (they use the Anthropic SDK natively). Azure AI uses the <span class="term-tooltip">chat completions format<span class="tooltip-content">A JSON request structure popularized by OpenAI and adopted by many cloud providers. Fields like <code>messages</code>, <code>model</code>, and <code>max_tokens</code> map directly to the Anthropic format, but the SDK and endpoint URL differ.</span></span> via the <code>azure-ai-inference</code> SDK.</p>
+  </div>
+
+  <!-- ── Animation: Four Paths ── -->
+  <div class="animation-container" id="anim-four-paths" aria-label="Animation showing four paths routing to Claude">
+    <svg id="paths-svg" viewBox="0 0 700 260" style="width:100%;height:auto" aria-hidden="true">
+      <!-- Labels left -->
+      <rect x="10" y="30" width="130" height="36" rx="8" fill="rgba(212,168,67,0.15)" stroke="#D4A843" stroke-width="1.5"/>
+      <text x="75" y="52" text-anchor="middle" fill="#D4A843" font-family="JetBrains Mono" font-size="11" font-weight="600">Direct API</text>
+
+      <rect x="10" y="90" width="130" height="36" rx="8" fill="rgba(255,153,0,0.12)" stroke="#FF9900" stroke-width="1.5"/>
+      <text x="75" y="112" text-anchor="middle" fill="#FF9900" font-family="JetBrains Mono" font-size="11" font-weight="600">AWS Bedrock</text>
+
+      <rect x="10" y="150" width="130" height="36" rx="8" fill="rgba(66,133,244,0.12)" stroke="#4285F4" stroke-width="1.5"/>
+      <text x="75" y="172" text-anchor="middle" fill="#4285F4" font-family="JetBrains Mono" font-size="11" font-weight="600">Google Vertex</text>
+
+      <rect x="10" y="210" width="130" height="36" rx="8" fill="rgba(0,120,212,0.12)" stroke="#0078D4" stroke-width="1.5"/>
+      <text x="75" y="232" text-anchor="middle" fill="#0078D4" font-family="JetBrains Mono" font-size="11" font-weight="600">Azure AI</text>
+
+      <!-- Paths (animated) -->
+      <path id="p1" d="M140 48 Q310 48 380 128" fill="none" stroke="#D4A843" stroke-width="2" stroke-dasharray="8,4" opacity="0.7"/>
+      <path id="p2" d="M140 108 Q310 108 380 128" fill="none" stroke="#FF9900" stroke-width="2" stroke-dasharray="8,4" opacity="0.7"/>
+      <path id="p3" d="M140 168 Q310 168 380 128" fill="none" stroke="#4285F4" stroke-width="2" stroke-dasharray="8,4" opacity="0.7"/>
+      <path id="p4" d="M140 228 Q310 228 380 128" fill="none" stroke="#0078D4" stroke-width="2" stroke-dasharray="8,4" opacity="0.7"/>
+
+      <!-- Claude hub -->
+      <circle cx="430" cy="128" r="48" fill="rgba(212,168,67,0.1)" stroke="#D4A843" stroke-width="2"/>
+      <text x="430" y="122" text-anchor="middle" fill="#D4A843" font-family="Bricolage Grotesque,sans-serif" font-size="14" font-weight="700">Claude</text>
+      <text x="430" y="140" text-anchor="middle" fill="#94A3B8" font-family="JetBrains Mono,monospace" font-size="9">claude-sonnet-4-6</text>
+
+      <!-- Output arrow -->
+      <line x1="478" y1="128" x2="560" y2="128" stroke="#94A3B8" stroke-width="1.5" marker-end="url(#arr)"/>
+      <rect x="562" y="108" width="100" height="40" rx="8" fill="var(--bg-card)" stroke="var(--code-border)" stroke-width="1"/>
+      <text x="612" y="132" text-anchor="middle" fill="#94A3B8" font-family="JetBrains Mono,monospace" font-size="10">response</text>
+
+      <!-- Animated packets -->
+      <circle id="pk1" r="5" fill="#D4A843" opacity="0"><animateMotion id="am1" dur="2s" begin="indefinite" fill="freeze"><mpath href="#p1"/></animateMotion></circle>
+      <circle id="pk2" r="5" fill="#FF9900" opacity="0"><animateMotion id="am2" dur="2s" begin="indefinite" fill="freeze"><mpath href="#p2"/></animateMotion></circle>
+      <circle id="pk3" r="5" fill="#4285F4" opacity="0"><animateMotion id="am3" dur="2s" begin="indefinite" fill="freeze"><mpath href="#p3"/></animateMotion></circle>
+      <circle id="pk4" r="5" fill="#0078D4" opacity="0"><animateMotion id="am4" dur="2s" begin="indefinite" fill="freeze"><mpath href="#p4"/></animateMotion></circle>
+
+      <defs>
+        <marker id="arr" viewBox="0 0 10 6" refX="10" refY="3" markerWidth="8" markerHeight="6" orient="auto">
+          <path d="M0,0 L10,3 L0,6" fill="#64748B"/>
+        </marker>
+      </defs>
+    </svg>
+
+    <div class="animation-controls">
+      <button onclick="runPathsAnim()" aria-label="Play animation">▶ Animate</button>
+    </div>
+  </div>
+
+  <p>The table below summarises what actually changes between the four access paths. All four reach the same Claude model; only the plumbing differs.</p>
+
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>Dimension</th>
+        <th class="provider-direct">Direct API</th>
+        <th class="provider-aws">Bedrock</th>
+        <th class="provider-gcp">Vertex AI</th>
+        <th class="provider-azure">Azure AI</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr><td>SDK class</td><td><code>Anthropic()</code></td><td><code>AnthropicBedrock()</code></td><td><code>AnthropicVertex()</code></td><td><code>ChatCompletionsClient()</code></td></tr>
+      <tr><td>Auth</td><td>API key</td><td>AWS IAM / SigV4</td><td>Google ADC</td><td>API key / Entra ID</td></tr>
+      <tr><td>Billing</td><td>Anthropic invoice</td><td>AWS bill</td><td>GCP bill</td><td>Azure bill</td></tr>
+      <tr><td>Model ID format</td><td><code>claude-sonnet-4-6</code></td><td><code>anthropic.claude-*-v1:0</code></td><td><code>claude-*@YYYYMMDD</code></td><td>Deployment name</td></tr>
+      <tr><td>New model lag</td><td style="color:var(--success)">Day 0</td><td style="color:var(--warning)">Days–weeks</td><td style="color:var(--warning)">Days–weeks</td><td style="color:var(--warning)">Days–weeks</td></tr>
+      <tr><td>Data never leaves</td><td>Anthropic infra</td><td>Your AWS account</td><td>Your GCP project</td><td>Your Azure subscription</td></tr>
+    </tbody>
+  </table>
+
+  <div class="callout-why">
+    <span class="box-label">Why This Matters in the Real World</span>
+    <p>At a mid-size healthcare company, procurement has already signed an AWS Enterprise Agreement and negotiated a Business Associate Agreement (BAA) covering all AWS services. Adding a new vendor — even Anthropic — would require a 3–6 month legal review plus a new BAA. Using Claude on Bedrock costs zero additional vendor reviews: it's just another AWS service under the existing contract. The savings aren't in token pricing (which is the same). The savings are in <em>organizational velocity</em>.</p>
+  </div>
+</section>
+
+<!-- ══════════════ SECTION 2: BEDROCK ══════════════ -->
+<section class="section" id="bedrock">
+  <h2 id="bedrock-heading">AWS Bedrock Deep Dive</h2>
+
+  <p><span class="term-tooltip">AWS Bedrock<span class="tooltip-content">Amazon Bedrock is a fully managed service that provides access to foundation models (including Claude) via the AWS API. You do not run any servers — AWS handles all infrastructure. You pay per token.</span></span> is not a hosting layer for your agent code. It is a <em>managed inference gateway</em> that sits in front of Claude. Your application code runs wherever you put it — EC2, Lambda, your laptop — and sends API calls to Bedrock's regional endpoints. Bedrock validates your IAM credentials, logs the request to CloudTrail, applies any Guardrails you've configured, forwards the payload to Claude, and streams the response back to you.</p>
+
+  <p>Think of Bedrock as AWS's "API gateway for AI." Just as AWS API Gateway manages HTTP traffic to your Lambda functions, Bedrock manages LLM traffic to foundation models. You benefit from AWS's global infrastructure, compliance certifications (SOC 2, HIPAA BAA, FedRAMP), and the ability to keep data in a specific AWS region — all without running any new servers.</p>
+
+  <h3 id="bedrock-setup">One-Time Setup</h3>
+
+  <p>Bedrock requires two one-time steps before you can make your first call:</p>
+
+  <ol>
+    <li><strong>Request model access</strong> — In the AWS Console, go to <em>Amazon Bedrock → Model access</em>, find Claude under Anthropic, and click "Request access." Approval is usually instant for Claude Haiku and Sonnet; enterprise tiers may take a few hours.</li>
+    <li><strong>Create an IAM policy</strong> — Your code's IAM identity (the role attached to your Lambda, EC2 instance, or dev user) needs permission to call <code>bedrock:InvokeModel</code>. The minimal policy:</li>
+  </ol>
+
+  <div class="code-single">
+    <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy">Copy</button>
+    <pre><code class="language-json">{
+  "Version": "2012-10-17",
+  "Statement": [{
+    "Effect": "Allow",
+    "Action": [
+      "bedrock:InvokeModel",
+      "bedrock:InvokeModelWithResponseStream"
+    ],
+    "Resource": "arn:aws:bedrock:us-west-2::foundation-model/anthropic.claude-*"
+  }]
+}</code></pre>
+  </div>
+
+  <p>For cross-region inference profiles (which give higher throughput by routing across AWS regions), also add the <code>arn:aws:bedrock:us-*::foundation-model/*</code> resource pattern. In development, the easiest setup is to configure your AWS CLI with <code>aws configure</code> and the SDK will automatically find credentials.</p>
+
+  <div class="callout-warning">
+    <span class="box-label">⚠️ Common Misconception: Bedrock Model IDs</span>
+    <p>The model ID format on Bedrock is <strong>not</strong> the same as the direct API. <code>claude-sonnet-4-6</code> on the direct API becomes <code>anthropic.claude-sonnet-4-6-v1:0</code> on Bedrock (single region) or <code>us.anthropic.claude-sonnet-4-6-20250514-v1:0</code> for cross-region inference profiles. Using the direct API model ID against Bedrock's endpoint will return a <code>ValidationException: Unknown model ID</code> — one of the most common beginner errors.</p>
+  </div>
+
+  <h3 id="bedrock-code">Code Walkthrough</h3>
+  <p>Install the Bedrock-enabled Anthropic SDK — it adds <code>boto3</code> and SigV4 request signing transparently:</p>
+
+  <div class="code-block-wrapper">
+    <div class="code-tabs">
+      <button class="code-tab active" onclick="switchTab(this,'bedrock-install')" aria-label="Python">Python</button>
+      <button class="code-tab" onclick="switchTab(this,'bedrock-install')" aria-label="Node.js">Node.js</button>
+    </div>
+    <div class="code-panel active" id="bedrock-install-python">
+      <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy">Copy</button>
+      <pre><code class="language-bash">pip install "anthropic[bedrock]"   # adds boto3 automatically</code></pre>
+    </div>
+    <div class="code-panel" id="bedrock-install-nodejs">
+      <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy">Copy</button>
+      <pre><code class="language-bash">npm install @anthropic-ai/bedrock-sdk</code></pre>
+    </div>
+  </div>
+
+  <p>Here is a complete production-ready Bedrock client with cross-region inference and error handling:</p>
+
+  <div class="code-annotation"><strong>WHAT</strong> — Import and configure the Bedrock client. The only new line vs. the direct API is <code>AnthropicBedrock</code> instead of <code>Anthropic</code> and an <code>aws_region</code> argument. Everything else is identical.</div>
+
+  <div class="code-block-wrapper">
+    <div class="code-tabs">
+      <button class="code-tab active" onclick="switchTab(this,'bedrock-full')" aria-label="Python">Python</button>
+      <button class="code-tab" onclick="switchTab(this,'bedrock-full')" aria-label="Node.js">Node.js</button>
+    </div>
+    <div class="code-panel active" id="bedrock-full-python">
+      <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy">Copy</button>
+      <pre><code class="language-python">from anthropic import AnthropicBedrock
+import anthropic
+
+# ── Chunk 1: Build the client ─────────────────────────────────────
+# AnthropicBedrock reads AWS credentials from the standard chain:
+#   1. AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY env vars (dev)
+#   2. ~/.aws/credentials file (CLI / SSO)
+#   3. EC2/ECS/Lambda instance role (production — no keys in code)
+client = AnthropicBedrock(
+    aws_region="us-west-2",   # must match the region where you requested model access
+)
+
+# ── Chunk 2: Cross-region inference profile model ID ─────────────
+# The "us." prefix means Bedrock may route to any US region for
+# higher throughput. Without it, you're locked to one region and
+# may hit tighter rate limits.
+BEDROCK_MODEL = "us.anthropic.claude-sonnet-4-6-20250514-v1:0"
+
+# ── Chunk 3: Make the call ────────────────────────────────────────
+# GOTCHA: max_tokens is REQUIRED on Bedrock — the default (None)
+# that works on the direct API raises a ValidationException here.
+try:
+    response = client.messages.create(
+        model=BEDROCK_MODEL,
+        max_tokens=1024,
+        messages=[{"role": "user", "content": "Explain AWS Bedrock in one sentence."}],
+    )
+    print(response.content[0].text)
+    print(f"Tokens: {response.usage.input_tokens} in / {response.usage.output_tokens} out")
+
+except anthropic.APIStatusError as e:
+    # Common errors:
+    # 403 AccessDeniedException  → IAM policy missing bedrock:InvokeModel
+    # 404 ResourceNotFoundException → wrong model ID format or model not enabled
+    # 429 ThrottlingException    → rate limit hit; add exponential backoff
+    print(f"Bedrock error {e.status_code}: {e.message}")</code></pre>
+    </div>
+    <div class="code-panel" id="bedrock-full-nodejs">
+      <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy">Copy</button>
+      <pre><code class="language-typescript">import { AnthropicBedrock } from "@anthropic-ai/bedrock-sdk";
+
+// ── Chunk 1: Build the client ─────────────────────────────────────
+// Reads credentials from AWS SDK credential chain (env vars,
+// ~/.aws/credentials, or instance profile — same as boto3).
+const client = new AnthropicBedrock({ awsRegion: "us-west-2" });
+
+const BEDROCK_MODEL = "us.anthropic.claude-sonnet-4-6-20250514-v1:0";
+
+// ── Chunk 2: Make the call ────────────────────────────────────────
+try {
+  const response = await client.messages.create({
+    model: BEDROCK_MODEL,
+    max_tokens: 1024,
+    messages: [{ role: "user", content: "Explain AWS Bedrock in one sentence." }],
+  });
+  console.log(response.content[0].text);
+  console.log(`Tokens: ${response.usage.input_tokens} in / ${response.usage.output_tokens} out`);
+
+} catch (err: any) {
+  // status 403 → IAM permission missing
+  // status 404 → wrong model ID or model not enabled in console
+  console.error(`Bedrock error ${err.status}: ${err.message}`);
+}</code></pre>
+    </div>
+  </div>
+
+  <div class="checkpoint"><strong>✅ What Just Happened?</strong> The <code>AnthropicBedrock</code> client intercepted your <code>messages.create()</code> call, signed the request with your AWS credentials using SigV4 (AWS's request-signing protocol), sent it to <code>bedrock-runtime.us-west-2.amazonaws.com</code>, and returned a response in exactly the same format as the direct API. From your application code's perspective, almost nothing changed.</div>
+
+  <h3 id="bedrock-advanced">Bedrock Guardrails &amp; Knowledge Bases</h3>
+  <p>Bedrock adds two managed safety and retrieval features that sit <em>outside</em> your agent code — which means they apply even if someone bypasses your application layer and calls the Bedrock endpoint directly.</p>
+
+  <div class="code-annotation"><strong>WHAT</strong> — Bedrock Guardrails attach a content policy to every request. You configure the guardrail once in the console (blocked topics, PII detection, word filters), then pass its ID with every call. <strong>GOTCHA:</strong> Guardrails add ~50–200ms latency. Don't enable them on every call if only a subset of calls need safety filtering.</div>
+
+  <div class="code-block-wrapper">
+    <div class="code-tabs">
+      <button class="code-tab active" onclick="switchTab(this,'bedrock-adv')" aria-label="Python">Python</button>
+      <button class="code-tab" onclick="switchTab(this,'bedrock-adv')" aria-label="Node.js">Node.js</button>
+    </div>
+    <div class="code-panel active" id="bedrock-adv-python">
+      <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy">Copy</button>
+      <pre><code class="language-python">import boto3, os
+
+# ── Bedrock Guardrails via boto3 (raw Bedrock client) ─────────────
+# Use when you need guardrails but prefer boto3 over the Anthropic SDK
+bedrock_rt = boto3.client("bedrock-runtime", region_name="us-west-2")
+
+body = {
+    "anthropic_version": "bedrock-2023-05-31",
+    "max_tokens": 512,
+    "messages": [{"role": "user", "content": "List medications for diabetes."}],
+}
+response = bedrock_rt.invoke_model(
+    modelId="us.anthropic.claude-sonnet-4-6-20250514-v1:0",
+    body=__import__("json").dumps(body),
+    # Attach guardrail — created in Bedrock console
+    guardrailIdentifier=os.environ["BEDROCK_GUARDRAIL_ID"],
+    guardrailVersion="DRAFT",   # or a published version number
+)
+result = __import__("json").loads(response["body"].read())
+print(result["content"][0]["text"])
+
+# ── Bedrock Knowledge Bases — built-in RAG ────────────────────────
+# retrieve_and_generate does: embed query → search KB → augment prompt
+# → generate response.  No vector DB code on your side.
+agent_rt = boto3.client("bedrock-agent-runtime", region_name="us-west-2")
+
+kb_response = agent_rt.retrieve_and_generate(
+    input={"text": "What are the Q4 revenue figures?"},
+    retrieveAndGenerateConfiguration={
+        "type": "KNOWLEDGE_BASE",
+        "knowledgeBaseConfiguration": {
+            "knowledgeBaseId": os.environ["BEDROCK_KB_ID"],
+            "modelArn": "arn:aws:bedrock:us-west-2::foundation-model/anthropic.claude-sonnet-4-6-v1:0",
+        },
+    },
+)
+print(kb_response["output"]["text"])
+print("Sources:", [r["location"] for r in kb_response.get("citations", [])])</code></pre>
+    </div>
+    <div class="code-panel" id="bedrock-adv-nodejs">
+      <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy">Copy</button>
+      <pre><code class="language-typescript">import { BedrockAgentRuntimeClient, RetrieveAndGenerateCommand }
+  from "@aws-sdk/client-bedrock-agent-runtime";
+
+// ── Bedrock Knowledge Bases — built-in RAG ────────────────────────
+const agentRt = new BedrockAgentRuntimeClient({ region: "us-west-2" });
+
+const cmd = new RetrieveAndGenerateCommand({
+  input: { text: "What are the Q4 revenue figures?" },
+  retrieveAndGenerateConfiguration: {
+    type: "KNOWLEDGE_BASE",
+    knowledgeBaseConfiguration: {
+      knowledgeBaseId: process.env.BEDROCK_KB_ID!,
+      modelArn: "arn:aws:bedrock:us-west-2::foundation-model/anthropic.claude-sonnet-4-6-v1:0",
+    },
+  },
+});
+const res = await agentRt.send(cmd);
+console.log(res.output?.text);
+console.log("Sources:", res.citations?.map(c => c.retrievedReferences?.map(r => r.location)));</code></pre>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════════ SECTION 3: VERTEX ══════════════ -->
+<section class="section" id="vertex">
+  <h2 id="vertex-heading">Google Vertex AI Deep Dive</h2>
+
+  <p>Google's <span class="term-tooltip">Vertex AI Model Garden<span class="tooltip-content">A catalog of foundation models available on Google Cloud's Vertex AI platform. Models from Anthropic, Meta, Mistral, and others are listed here alongside Google's own Gemini family. You browse, accept terms, and deploy from the Garden.</span></span> is the GCP marketplace for foundation models including Claude. When you deploy Claude from Model Garden, Google provisions a <span class="term-tooltip">managed endpoint<span class="tooltip-content">A serverless HTTPS endpoint that accepts inference requests. You don't configure servers — Google auto-scales the underlying compute. You pay per token, not per hour.</span></span> — a serverless URL that accepts Anthropic-format API calls. Your code uses the <code>AnthropicVertex</code> client from the Anthropic SDK, which handles GCP credential signing transparently using <span class="term-tooltip">Application Default Credentials<span class="tooltip-content">GCP's standard mechanism for discovering credentials. The SDK checks: (1) GOOGLE_APPLICATION_CREDENTIALS env var pointing to a service account JSON file, (2) gcloud CLI credentials from `gcloud auth application-default login`, (3) compute metadata server (for GKE/Cloud Run/GCE). Your code doesn't change between environments.</span></span> (ADC).</p>
+
+  <h3 id="vertex-setup">One-Time Setup</h3>
+
+  <ol>
+    <li><strong>Enable the Vertex AI API</strong> in your GCP project: <code>gcloud services enable aiplatform.googleapis.com</code></li>
+    <li><strong>Accept Claude's terms</strong> — go to Vertex AI → Model Garden → find "Claude" → click "Enable" and accept Anthropic's terms of service. You must do this once per GCP project, not per user.</li>
+    <li><strong>Set up credentials</strong> — for local development: <code>gcloud auth application-default login</code>. For production (Cloud Run, GKE), attach a service account with <code>roles/aiplatform.user</code> to the compute resource — no JSON file needed in the container.</li>
+  </ol>
+
+  <div class="callout-warning">
+    <span class="box-label">⚠️ Common Misconceptions</span>
+    <p><strong>"Claude on Vertex uses Gemini pricing."</strong> — No. Claude on Vertex is priced at the same per-token rates as the direct Anthropic API. Vertex just rolls the bill into your GCP invoice. GCP committed-use discounts and credits do apply, which can make it cheaper if your organization has a GCP commitment.</p>
+    <p><strong>"Any GCP region works."</strong> — Claude is only available in specific Vertex regions. As of mid-2025, the primary regions are <code>us-east5</code> (Ohio) and <code>europe-west1</code> (Belgium). Specifying an unsupported region returns a model-not-found error.</p>
+    <p><strong>"I can omit the date in the Vertex model ID."</strong> — Unlike the direct API where <code>claude-sonnet-4-6</code> resolves to the latest compatible version, on Vertex you should pin a date-stamped ID like <code>claude-sonnet-4-6@20250514</code>. This prevents unexpected behavior when Anthropic updates the model.</p>
+  </div>
+
+  <h3 id="vertex-code">Code Walkthrough</h3>
+
+  <div class="code-block-wrapper">
+    <div class="code-tabs">
+      <button class="code-tab active" onclick="switchTab(this,'vertex-full')" aria-label="Python">Python</button>
+      <button class="code-tab" onclick="switchTab(this,'vertex-full')" aria-label="Node.js">Node.js</button>
+    </div>
+    <div class="code-panel active" id="vertex-full-python">
+      <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy">Copy</button>
+      <pre><code class="language-python">from anthropic import AnthropicVertex
+import anthropic, os
+
+# ── Chunk 1: Install ──────────────────────────────────────────────
+# pip install "anthropic[vertex]"
+# This adds the google-auth library for ADC credential resolution.
+
+# ── Chunk 2: Build the client ─────────────────────────────────────
+# project_id: your GCP project ID (not number, not name — the slug)
+# region: must be a region where Claude is available on Vertex
+# Credentials are resolved automatically via ADC — no key in code.
+client = AnthropicVertex(
+    project_id=os.environ["GCP_PROJECT"],   # e.g. "my-project-123"
+    region=os.environ.get("GCP_REGION", "us-east5"),
+)
+
+# ── Chunk 3: Vertex model ID format ──────────────────────────────
+# The date stamp (@20250514) pins to a specific model checkpoint.
+# Vertex exposes both "claude-sonnet-4-6" (resolves to latest) and
+# "claude-sonnet-4-6@20250514" (pinned). Use pinned in production.
+VERTEX_MODEL = "claude-sonnet-4-6@20250514"
+
+# ── Chunk 4: Make the call ────────────────────────────────────────
+# GOTCHA: system prompts on Vertex are passed the same way as the
+# direct API — as a separate `system` parameter, NOT as a message
+# with role "system". This is identical to the direct API behavior.
+try:
+    response = client.messages.create(
+        model=VERTEX_MODEL,
+        max_tokens=1024,
+        system="You are a concise assistant.",
+        messages=[{"role": "user", "content": "What is Vertex AI?"}],
+    )
+    print(response.content[0].text)
+
+except anthropic.APIStatusError as e:
+    # 403 → service account missing aiplatform.user role
+    # 404 → model not enabled in Model Garden for this project/region
+    print(f"Vertex error {e.status_code}: {e.message}")</code></pre>
+    </div>
+    <div class="code-panel" id="vertex-full-nodejs">
+      <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy">Copy</button>
+      <pre><code class="language-typescript">// npm install @anthropic-ai/vertex-sdk
+import { AnthropicVertex } from "@anthropic-ai/vertex-sdk";
+
+const client = new AnthropicVertex({
+  projectId: process.env.GCP_PROJECT!,
+  region: process.env.GCP_REGION ?? "us-east5",
+});
+
+const VERTEX_MODEL = "claude-sonnet-4-6@20250514";
+
+try {
+  const response = await client.messages.create({
+    model: VERTEX_MODEL,
+    max_tokens: 1024,
+    system: "You are a concise assistant.",
+    messages: [{ role: "user", content: "What is Vertex AI?" }],
+  });
+  console.log(response.content[0].text);
+} catch (err: any) {
+  console.error(`Vertex error ${err.status}: ${err.message}`);
+}</code></pre>
+    </div>
+  </div>
+
+  <div class="checkpoint"><strong>✅ What Just Happened?</strong> The <code>AnthropicVertex</code> client fetched a short-lived OAuth token from GCP's metadata server (or your gcloud CLI cache), signed the request with it, and sent it to <code>aiplatform.googleapis.com</code>. GCP verified the token, checked that your project has Claude enabled in Model Garden, and forwarded the payload to Anthropic's inference fleet. You got back the same <code>Message</code> object format as the direct API.</div>
+
+  <p>For production deployments on Cloud Run or GKE, skip <code>gcloud auth application-default login</code>. Instead, attach a service account to your Cloud Run service with the <code>roles/aiplatform.user</code> IAM role, and ADC will discover credentials from the GCP metadata server automatically — no key file, no environment variable.</p>
+</section>
+
+<!-- ══════════════ SECTION 4: AZURE ══════════════ -->
+<section class="section" id="azure">
+  <h2 id="azure-heading">Microsoft Azure AI Deep Dive</h2>
+
+  <p><span class="term-tooltip">Azure AI Foundry<span class="tooltip-content">Microsoft's unified AI development platform (formerly Azure AI Studio). It provides a model catalog, deployment management, evaluation tools, and a hosted agent runtime — all accessible from the Azure portal or the Azure AI Python SDK.</span></span> is Microsoft's unified AI platform. Claude models from Anthropic are available in the Azure AI Foundry model catalog as <em>serverless deployments</em> — you create a deployment, get a unique endpoint URL and API key, and call it from your application. Unlike Bedrock and Vertex (which use the Anthropic SDK natively), Azure AI uses the <code>azure-ai-inference</code> package, which implements the <span class="term-tooltip">Azure AI inference protocol<span class="tooltip-content">A standardized chat completions API format maintained by Microsoft and used across all models in Azure AI Foundry. Compatible with OpenAI's Chat Completions API shape, but accessed through Azure's credential and endpoint system rather than OpenAI's.</span></span> — a format compatible with the OpenAI Chat Completions API.</p>
+
+  <p>The key difference from Bedrock and Vertex: <strong>you don't use the Anthropic SDK</strong> for Azure. You use Microsoft's <code>azure-ai-inference</code> SDK. The request fields (<code>messages</code>, <code>model</code>, <code>max_tokens</code>) are similar but the client, endpoint, and credential classes are all Azure-specific.</p>
+
+  <h3 id="azure-setup">One-Time Setup</h3>
+
+  <ol>
+    <li><strong>Create an Azure AI resource</strong> — In the Azure portal, create a new "Azure AI Foundry" resource (search "Azure AI Foundry" in the marketplace).</li>
+    <li><strong>Deploy Claude</strong> — Inside your Azure AI Foundry resource, go to <em>Model catalog</em> → search "Claude" → select a Claude model → click "Deploy" → choose "Serverless API." Azure provisions the endpoint in minutes.</li>
+    <li><strong>Copy your endpoint and key</strong> — After deployment, the Azure portal shows your <code>AZURE_AI_ENDPOINT</code> (e.g., <code>https://your-resource.services.ai.azure.com/models</code>) and a primary key. Store these in environment variables — never in code.</li>
+    <li><strong>Install the SDK</strong>: <code>pip install azure-ai-inference azure-core</code></li>
+  </ol>
+
+  <h3 id="azure-code">Code Walkthrough</h3>
+
+  <div class="code-annotation"><strong>WHAT</strong> — The Azure AI client uses the <code>azure-ai-inference</code> package. Instead of <code>messages.create()</code>, you call <code>complete()</code>. The response structure differs: choices are in <code>response.choices[0].message.content</code> rather than <code>response.content[0].text</code>. <strong>WHY</strong> — Azure AI Foundry standardized on the OpenAI Chat Completions response shape across all models. <strong>GOTCHA</strong> — Anthropic SDK features like <code>tool_use</code> in the native format are NOT available through azure-ai-inference. You must use the Azure AI tool calling format (similar to OpenAI's function calling) instead.</div>
+
+  <div class="code-block-wrapper">
+    <div class="code-tabs">
+      <button class="code-tab active" onclick="switchTab(this,'azure-full')" aria-label="Python">Python</button>
+      <button class="code-tab" onclick="switchTab(this,'azure-full')" aria-label="Node.js">Node.js</button>
+    </div>
+    <div class="code-panel active" id="azure-full-python">
+      <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy">Copy</button>
+      <pre><code class="language-python">from azure.ai.inference import ChatCompletionsClient
+from azure.ai.inference.models import SystemMessage, UserMessage, AssistantMessage
+from azure.core.credentials import AzureKeyCredential
+from azure.core.exceptions import HttpResponseError
+import os
+
+# ── Chunk 1: Build the client (API key auth — dev/testing) ────────
+# endpoint: the URL from your Azure AI Foundry deployment
+# credential: wraps the API key from the Azure portal
+# For production, replace AzureKeyCredential with ManagedIdentityCredential
+# (see the "Managed Identity" section below)
+client = ChatCompletionsClient(
+    endpoint=os.environ["AZURE_AI_ENDPOINT"],
+    credential=AzureKeyCredential(os.environ["AZURE_AI_KEY"]),
+)
+
+# ── Chunk 2: Make a call ──────────────────────────────────────────
+# model: the DEPLOYMENT NAME you chose in Azure AI Foundry
+# (not the Anthropic model ID — you named it during deployment)
+# Messages use Azure's typed message classes or plain dicts — both work.
+try:
+    response = client.complete(
+        model=os.environ.get("AZURE_DEPLOYMENT_NAME", "claude-sonnet-4-6"),
+        messages=[
+            SystemMessage(content="You are a concise assistant."),
+            UserMessage(content="What is Azure AI Foundry?"),
+        ],
+        max_tokens=512,
+    )
+    # GOTCHA: response structure differs from Anthropic SDK
+    # Not response.content[0].text — it's response.choices[0].message.content
+    print(response.choices[0].message.content)
+    print(f"Finish reason: {response.choices[0].finish_reason}")
+    print(f"Tokens: {response.usage.prompt_tokens} in / {response.usage.completion_tokens} out")
+
+except HttpResponseError as e:
+    # 401 → wrong API key
+    # 404 → deployment name doesn't match what you created
+    # 429 → rate limit; Azure returns Retry-After header
+    print(f"Azure error {e.status_code}: {e.message}")</code></pre>
+    </div>
+    <div class="code-panel" id="azure-full-nodejs">
+      <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy">Copy</button>
+      <pre><code class="language-typescript">// npm install @azure-rest/ai-inference @azure/core-auth
+import ModelClient, { isUnexpected } from "@azure-rest/ai-inference";
+import { AzureKeyCredential } from "@azure/core-auth";
+
+// ── Chunk 1: Build the client ─────────────────────────────────────
+const client = ModelClient(
+  process.env.AZURE_AI_ENDPOINT!,
+  new AzureKeyCredential(process.env.AZURE_AI_KEY!)
+);
+
+// ── Chunk 2: Make a call ──────────────────────────────────────────
+const response = await client.path("/chat/completions").post({
+  body: {
+    model: process.env.AZURE_DEPLOYMENT_NAME ?? "claude-sonnet-4-6",
+    messages: [
+      { role: "system", content: "You are a concise assistant." },
+      { role: "user", content: "What is Azure AI Foundry?" },
+    ],
+    max_tokens: 512,
+  },
+});
+
+// isUnexpected() is Azure's way of checking for HTTP errors in the REST client
+if (isUnexpected(response)) {
+  throw new Error(`Azure error ${response.status}: ${response.body.error.message}`);
+}
+
+// Response is in OpenAI Chat Completions format
+console.log(response.body.choices[0].message.content);
+console.log(`Tokens: ${response.body.usage?.prompt_tokens} in / ${response.body.usage?.completion_tokens} out`);</code></pre>
+    </div>
+  </div>
+
+  <h3 id="azure-identity">Production Pattern: Entra ID Managed Identity</h3>
+
+  <p>API keys in environment variables are fine for development. In production on Azure (App Service, Container Apps, AKS), the recommended pattern is <span class="term-tooltip">Entra ID Managed Identity<span class="tooltip-content">A feature of Azure Active Directory (now called Microsoft Entra ID) that automatically provisions a machine identity for Azure compute resources. Your App Service or Container App gets an identity without any credentials — Azure rotates the underlying tokens automatically. Your code just calls DefaultAzureCredential() and the runtime handles the rest.</span></span> — no keys in code, no rotation required.</p>
+
+  <div class="code-block-wrapper">
+    <div class="code-tabs">
+      <button class="code-tab active" onclick="switchTab(this,'azure-identity')" aria-label="Python">Python</button>
+      <button class="code-tab" onclick="switchTab(this,'azure-identity')" aria-label="Node.js">Node.js</button>
+    </div>
+    <div class="code-panel active" id="azure-identity-python">
+      <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy">Copy</button>
+      <pre><code class="language-python"># pip install azure-identity
+from azure.ai.inference import ChatCompletionsClient
+from azure.identity import DefaultAzureCredential
+import os
+
+# DefaultAzureCredential tries (in order):
+#   1. AZURE_CLIENT_ID / SECRET / TENANT env vars (CI/CD)
+#   2. Azure CLI (local dev: `az login`)
+#   3. Managed Identity (Azure App Service / Container Apps / AKS)
+# No key in code — zero secrets to rotate or accidentally commit.
+credential = DefaultAzureCredential()
+
+client = ChatCompletionsClient(
+    endpoint=os.environ["AZURE_AI_ENDPOINT"],
+    credential=credential,
+)
+# The rest of the code is identical to the API-key example above</code></pre>
+    </div>
+    <div class="code-panel" id="azure-identity-nodejs">
+      <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy">Copy</button>
+      <pre><code class="language-typescript">// npm install @azure/identity
+import { DefaultAzureCredential } from "@azure/identity";
+import ModelClient from "@azure-rest/ai-inference";
+
+const credential = new DefaultAzureCredential();
+const client = ModelClient(process.env.AZURE_AI_ENDPOINT!, credential);
+// Use exactly as before — credential resolution is transparent</code></pre>
+    </div>
+  </div>
+
+  <div class="callout-cost">
+    <span class="box-label">Azure AI Foundry Agent Service</span>
+    <p>Beyond calling Claude directly, Azure AI Foundry offers a managed <strong>Agent Service</strong> — analogous to Bedrock's AgentCore. You configure your agent in the Foundry portal (system prompt, tools, knowledge connections), and Azure runs the agent loop. Built-in tools include code interpreter, file search via Azure AI Search, and custom tools backed by Azure Functions. Sessions are persisted on Azure's side, and billing rolls into your subscription.</p>
+    <p>The trade-off vs. self-hosted is the same as with Bedrock: you give up the ability to intercept individual tool calls or inject custom middleware between reasoning steps, but you gain a fully managed runtime with Azure Monitor integration and zero server management.</p>
+  </div>
+</section>
+
+<!-- ══════════════ SECTION 5: WRAPPER ══════════════ -->
+<section class="section" id="wrapper">
+  <h2 id="wrapper-heading">Building a Provider-Agnostic Wrapper</h2>
+
+  <div class="bridge">You now know the constructor and response-format differences between all four providers. Before writing application code that ties itself to one, let's build a wrapper that hides those differences — so your agent logic never knows or cares which cloud it's running on.</div>
+
+  <p>The <span class="term-tooltip">adapter pattern<span class="tooltip-content">A software design pattern that converts the interface of one class into an interface another class expects. The adapter sits between the caller and the provider, translating calls from the caller's format into each provider's specific format. The caller never sees the translation.</span></span> is perfect here: create a single class whose <code>chat()</code> method always returns a string. Internally, the class holds whichever cloud client is configured by environment variable. Swap the environment variable, and your entire agent switches clouds with zero code changes.</p>
+
+  <div class="code-annotation"><strong>WHAT</strong> — A <code>ClaudeClient</code> class that reads <code>CLAUDE_PROVIDER</code> from the environment, builds the right backend client, and exposes a uniform <code>chat()</code> method. <strong>WHY</strong> — This is the only place in your codebase that knows which cloud you're on. Every other file just calls <code>client.chat(message)</code>. <strong>GOTCHA</strong> — The Azure response path is different (<code>.choices[0].message.content</code> vs. <code>.content[0].text</code>), so the adapter must normalize it.</div>
+
+  <div class="code-block-wrapper">
+    <div class="code-tabs">
+      <button class="code-tab active" onclick="switchTab(this,'wrapper')" aria-label="Python">Python</button>
+      <button class="code-tab" onclick="switchTab(this,'wrapper')" aria-label="Node.js">Node.js</button>
+    </div>
+    <div class="code-panel active" id="wrapper-python">
+      <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy">Copy</button>
+      <pre><code class="language-python">"""
+claude_client.py — provider-agnostic Claude wrapper
+Switch providers by setting CLAUDE_PROVIDER=direct|bedrock|vertex|azure
+"""
+from __future__ import annotations
+import os
+from enum import Enum
+from typing import Any
+
+
+class Provider(str, Enum):
+    DIRECT  = "direct"
+    BEDROCK = "bedrock"
+    VERTEX  = "vertex"
+    AZURE   = "azure"
+
+
+class ClaudeClient:
+    """
+    Uniform interface to Claude regardless of which cloud hosts it.
+    Usage:
+        client = ClaudeClient()              # reads CLAUDE_PROVIDER from env
+        client = ClaudeClient(Provider.BEDROCK)  # explicit
+        answer = client.chat("Hello!")
+    """
+
+    def __init__(self, provider: Provider | None = None):
+        if provider is None:
+            raw = os.environ.get("CLAUDE_PROVIDER", "direct").lower()
+            provider = Provider(raw)
+        self.provider = provider
+        self._backend: Any = self._build_backend()
+
+    # ── Private: build the right backend client ───────────────────
+    def _build_backend(self) -> Any:
+        if self.provider == Provider.DIRECT:
+            from anthropic import Anthropic
+            return Anthropic()
+
+        elif self.provider == Provider.BEDROCK:
+            from anthropic import AnthropicBedrock
+            return AnthropicBedrock(
+                aws_region=os.environ.get("AWS_REGION", "us-west-2")
+            )
+
+        elif self.provider == Provider.VERTEX:
+            from anthropic import AnthropicVertex
+            return AnthropicVertex(
+                project_id=os.environ["GCP_PROJECT"],
+                region=os.environ.get("GCP_REGION", "us-east5"),
+            )
+
+        elif self.provider == Provider.AZURE:
+            from azure.ai.inference import ChatCompletionsClient
+            from azure.core.credentials import AzureKeyCredential
+            return ChatCompletionsClient(
+                endpoint=os.environ["AZURE_AI_ENDPOINT"],
+                credential=AzureKeyCredential(os.environ["AZURE_AI_KEY"]),
+            )
+
+        raise ValueError(f"Unknown provider: {self.provider}")
+
+    # ── Private: resolve the right model ID for this provider ─────
+    def _model_id(self) -> str:
+        if self.provider == Provider.DIRECT:
+            return os.environ.get("CLAUDE_MODEL", "claude-sonnet-4-6")
+        elif self.provider == Provider.BEDROCK:
+            return os.environ.get(
+                "BEDROCK_MODEL_ID",
+                "us.anthropic.claude-sonnet-4-6-20250514-v1:0"
+            )
+        elif self.provider == Provider.VERTEX:
+            return os.environ.get("VERTEX_MODEL_ID", "claude-sonnet-4-6@20250514")
+        elif self.provider == Provider.AZURE:
+            return os.environ.get("AZURE_DEPLOYMENT_NAME", "claude-sonnet-4-6")
+        return "claude-sonnet-4-6"
+
+    # ── Public: the only method your application code calls ───────
+    def chat(self, message: str, system: str | None = None, max_tokens: int = 1024) -> str:
+        model = self._model_id()
+
+        if self.provider == Provider.AZURE:
+            from azure.ai.inference.models import SystemMessage, UserMessage
+            msgs = []
+            if system:
+                msgs.append(SystemMessage(content=system))
+            msgs.append(UserMessage(content=message))
+            resp = self._backend.complete(model=model, messages=msgs, max_tokens=max_tokens)
+            return resp.choices[0].message.content
+
+        else:  # direct, bedrock, vertex — all use Anthropic SDK format
+            kwargs: dict = dict(model=model, max_tokens=max_tokens,
+                                messages=[{"role": "user", "content": message}])
+            if system:
+                kwargs["system"] = system
+            resp = self._backend.messages.create(**kwargs)
+            return resp.content[0].text
+
+
+# ── Usage ─────────────────────────────────────────────────────────
+if __name__ == "__main__":
+    import sys
+    provider_name = sys.argv[1] if len(sys.argv) > 1 else None
+    p = Provider(provider_name) if provider_name else None
+    client = ClaudeClient(p)
+    print(f"Provider: {client.provider.value}")
+    answer = client.chat(
+        "In one sentence, what is the main benefit of using Claude through a cloud provider?",
+        system="You are concise."
+    )
+    print(f"Answer: {answer}")</code></pre>
+    </div>
+    <div class="code-panel" id="wrapper-nodejs">
+      <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy">Copy</button>
+      <pre><code class="language-typescript">/**
+ * claude-client.ts — provider-agnostic Claude wrapper
+ * Set CLAUDE_PROVIDER=direct|bedrock|vertex|azure
+ */
+
+type Provider = "direct" | "bedrock" | "vertex" | "azure";
+
+interface ChatOptions {
+  system?: string;
+  maxTokens?: number;
+}
+
+export class ClaudeClient {
+  private provider: Provider;
+  private backend: any;
+
+  constructor(provider?: Provider) {
+    this.provider = provider ?? (process.env.CLAUDE_PROVIDER as Provider) ?? "direct";
+    this.backend = this.buildBackend();
+  }
+
+  private buildBackend() {
+    switch (this.provider) {
+      case "direct": {
+        const { default: Anthropic } = await import("@anthropic-ai/sdk");
+        // Note: top-level await needs ESM; use dynamic import pattern in CJS
+        return new (require("@anthropic-ai/sdk"))();
+      }
+      case "bedrock":
+        return new (require("@anthropic-ai/bedrock-sdk").AnthropicBedrock)({
+          awsRegion: process.env.AWS_REGION ?? "us-west-2",
+        });
+      case "vertex":
+        return new (require("@anthropic-ai/vertex-sdk").AnthropicVertex)({
+          projectId: process.env.GCP_PROJECT!,
+          region: process.env.GCP_REGION ?? "us-east5",
+        });
+      case "azure": {
+        const ModelClient = require("@azure-rest/ai-inference").default;
+        const { AzureKeyCredential } = require("@azure/core-auth");
+        return ModelClient(
+          process.env.AZURE_AI_ENDPOINT!,
+          new AzureKeyCredential(process.env.AZURE_AI_KEY!)
+        );
+      }
+    }
+  }
+
+  private modelId(): string {
+    const envMap: Record<Provider, [string, string]> = {
+      direct:  ["CLAUDE_MODEL",          "claude-sonnet-4-6"],
+      bedrock: ["BEDROCK_MODEL_ID",      "us.anthropic.claude-sonnet-4-6-20250514-v1:0"],
+      vertex:  ["VERTEX_MODEL_ID",       "claude-sonnet-4-6@20250514"],
+      azure:   ["AZURE_DEPLOYMENT_NAME", "claude-sonnet-4-6"],
+    };
+    const [envKey, fallback] = envMap[this.provider];
+    return process.env[envKey] ?? fallback;
+  }
+
+  async chat(message: string, opts: ChatOptions = {}): Promise<string> {
+    const model = this.modelId();
+    const maxTokens = opts.maxTokens ?? 1024;
+
+    if (this.provider === "azure") {
+      const { isUnexpected } = require("@azure-rest/ai-inference");
+      const msgs: any[] = [];
+      if (opts.system) msgs.push({ role: "system", content: opts.system });
+      msgs.push({ role: "user", content: message });
+      const res = await this.backend.path("/chat/completions").post({
+        body: { model, messages: msgs, max_tokens: maxTokens },
+      });
+      if (isUnexpected(res)) throw new Error(res.body.error.message);
+      return res.body.choices[0].message.content;
+    }
+
+    // direct / bedrock / vertex — Anthropic SDK format
+    const kwargs: any = {
+      model, max_tokens: maxTokens,
+      messages: [{ role: "user", content: message }],
+    };
+    if (opts.system) kwargs.system = opts.system;
+    const resp = await this.backend.messages.create(kwargs);
+    return resp.content[0].text;
+  }
+}
+
+// ── Usage ─────────────────────────────────────────────────────────
+const client = new ClaudeClient();
+const answer = await client.chat(
+  "In one sentence, what is the benefit of using a provider-agnostic wrapper?"
+);
+console.log(answer);</code></pre>
+    </div>
+  </div>
+
+  <div class="checkpoint"><strong>✅ What Just Happened?</strong> You built a single-file adapter that lets your entire agent codebase remain cloud-agnostic. Switching from the direct API to Bedrock is now one environment variable change: <code>CLAUDE_PROVIDER=bedrock</code>. No application code changes. This is the pattern used by teams that start on the direct API for speed and migrate to Bedrock or Vertex when procurement requires it.</div>
+</section>
+
+<!-- ══════════════ SECTION 6: DECISION ══════════════ -->
+<section class="section" id="decision">
+  <h2 id="decision-heading">Decision Framework: Which Provider to Use?</h2>
+
+  <!-- ── Animation: Auth flows ── -->
+  <div class="animation-container" id="anim-decision" aria-label="Animated decision flowchart for choosing a cloud provider" style="min-height:320px">
+    <div id="flow-container" style="padding:1rem">
+      <p style="text-align:center;color:var(--text-secondary);font-size:.9rem;margin-bottom:1.5rem">Click each question to reveal the recommendation</p>
+
+      <div style="display:flex;flex-direction:column;gap:1rem">
+        <details>
+          <summary style="color:var(--info);font-family:'Bricolage Grotesque',sans-serif">&#9654; Do you need the newest Claude model on day of release?</summary>
+          <div style="padding:.75rem 1.25rem;color:var(--success)">→ <strong>Direct Anthropic API.</strong> New models land on the direct API first. Bedrock, Vertex, and Azure receive them days to weeks later. For startups racing to ship new capabilities, this matters.</div>
+        </details>
+
+        <details>
+          <summary style="color:var(--aws);font-family:'Bricolage Grotesque',sans-serif">&#9654; Is your team fully AWS-native (existing EA/BAA, data in S3, compute in EC2/ECS)?</summary>
+          <div style="padding:.75rem 1.25rem;color:var(--success)">→ <strong>AWS Bedrock.</strong> No new vendor contract. Data stays in your VPC. Compliance teams don't need to review a new data processor. Bedrock Guardrails and Knowledge Bases add enterprise safety and RAG without new infrastructure.</div>
+        </details>
+
+        <details>
+          <summary style="color:var(--gcp);font-family:'Bricolage Grotesque',sans-serif">&#9654; Are you on GCP (BigQuery, Cloud Run, Vertex Pipelines, GKE)?</summary>
+          <div style="padding:.75rem 1.25rem;color:var(--success)">→ <strong>Google Vertex AI.</strong> ADC makes auth invisible across local dev and GKE workloads. GCP committed-use credits and discounts apply to Claude calls. Vertex Agent Engine deploys your Python agent without containerizing.</div>
+        </details>
+
+        <details>
+          <summary style="color:var(--azure);font-family:'Bricolage Grotesque',sans-serif">&#9654; Is your organization Microsoft-heavy (Azure AD/Entra, M365, existing Azure commitment)?</summary>
+          <div style="padding:.75rem 1.25rem;color:var(--success)">→ <strong>Azure AI Foundry.</strong> Managed Identity means no API keys in any environment. Bills go to existing Azure credits. Azure AI Foundry Agent Service integrates with Azure AI Search, Azure Functions, and the broader Microsoft ecosystem.</div>
+        </details>
+
+        <details>
+          <summary style="color:var(--text-muted);font-family:'Bricolage Grotesque',sans-serif">&#9654; None of the above — what's the simplest place to start?</summary>
+          <div style="padding:.75rem 1.25rem;color:var(--success)">→ <strong>Direct Anthropic API.</strong> One API key, one SDK, no cloud setup. Graduate to a cloud provider when procurement requires it. Use the provider-agnostic wrapper from this module so the migration is a one-line environment variable change.</div>
+        </details>
+      </div>
+    </div>
+  </div>
+
+  <h3>Migration Path</h3>
+  <p>The typical journey for a growing team looks like this:</p>
+  <ol>
+    <li><strong>Stage 1 (prototype):</strong> Direct API → fastest to ship, zero cloud setup.</li>
+    <li><strong>Stage 2 (scaling startup):</strong> Direct API with the provider-agnostic wrapper → same speed, but the migration is one environment variable away.</li>
+    <li><strong>Stage 3 (enterprise adoption):</strong> Bedrock, Vertex, or Azure → procurement unlocks, data residency requirements are met, cloud-native tooling (Guardrails, Knowledge Bases, Agent Engine) replaces custom code.</li>
+  </ol>
+
+  <p>The provider-agnostic wrapper you built in the previous section means Stage 3 is a configuration change, not a rewrite.</p>
+</section>
+
+<!-- ══════════════ SECTION 7: HANDS-ON ══════════════ -->
+<section class="section" id="hands-on">
+  <h2 id="hands-on-heading">Hands-On Lab: Call Claude on All Four Providers</h2>
+
+  <div style="background:var(--bg-card);border-radius:12px;padding:1.25rem 1.5rem;margin-bottom:1.5rem;border:1px solid var(--code-border)">
+    <h3 style="margin-top:0;color:var(--accent-primary)">What You'll Build</h3>
+    <p style="margin-bottom:.5rem">A provider-agnostic CLI tool that calls Claude through whichever cloud provider you configure, using the wrapper from this module. By the end you'll have connected to at least one cloud provider beyond the direct API and seen that your application code requires zero changes.</p>
+    <p style="margin-bottom:0"><strong>Time:</strong> 30–60 min (depending on how many providers you set up) &bull; <strong>Minimum:</strong> direct API + one cloud provider</p>
+  </div>
+
+  <h3>Prerequisites</h3>
+  <ul>
+    <li>Python 3.9+ or Node.js 18+</li>
+    <li><code>ANTHROPIC_API_KEY</code> set (for Step 1)</li>
+    <li><em>For Step 2:</em> AWS account with Claude access enabled in Bedrock</li>
+    <li><em>For Step 3:</em> GCP project with Vertex AI API enabled and Claude in Model Garden</li>
+    <li><em>For Step 4:</em> Azure subscription with Claude deployed in Azure AI Foundry</li>
+  </ul>
+
+  <h3>Files You'll Create</h3>
+  <ul>
+    <li><code>claude_client.py</code> — provider-agnostic wrapper (from Section 5)</li>
+    <li><code>chat_cli.py</code> — simple CLI that uses the wrapper</li>
+    <li><code>.env</code> — your credentials (never commit this)</li>
+  </ul>
+
+  <h3>Environment Setup</h3>
+
+  <div class="code-block-wrapper">
+    <div class="code-tabs">
+      <button class="code-tab active" onclick="switchTab(this,'lab-setup')" aria-label="Python">Python</button>
+      <button class="code-tab" onclick="switchTab(this,'lab-setup')" aria-label="Node.js">Node.js</button>
+    </div>
+    <div class="code-panel active" id="lab-setup-python">
+      <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy">Copy</button>
+      <pre><code class="language-bash">mkdir cloud-provider-lab && cd cloud-provider-lab
+python -m venv venv
+# macOS/Linux:
+source venv/bin/activate
+# Windows:
+# venv\Scripts\activate
+
+# Install all providers — only the ones you configure will be used
+pip install "anthropic[bedrock,vertex]" azure-ai-inference azure-core azure-identity python-dotenv</code></pre>
+    </div>
+    <div class="code-panel" id="lab-setup-nodejs">
+      <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy">Copy</button>
+      <pre><code class="language-bash">mkdir cloud-provider-lab && cd cloud-provider-lab
+npm init -y
+npm install @anthropic-ai/sdk @anthropic-ai/bedrock-sdk @anthropic-ai/vertex-sdk \
+  @azure-rest/ai-inference @azure/core-auth @azure/identity dotenv</code></pre>
+    </div>
+  </div>
+
+  <h3 id="step1-lab">Step 1: Call Claude via the Direct API (Baseline)</h3>
+  <p>This step verifies your base setup. You're using the wrapper from Section 5 here, so even the "direct" mode goes through the same code path that will later switch to Bedrock/Vertex/Azure.</p>
+
+  <p>Create <code>claude_client.py</code> by copying the full solution from Section 5. Then create <code>chat_cli.py</code>:</p>
+
+  <div class="code-single">
+    <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy">Copy</button>
+    <pre><code class="language-python">"""chat_cli.py — run with: python chat_cli.py"""
+from claude_client import ClaudeClient, Provider
+import sys
+
+provider_arg = sys.argv[1] if len(sys.argv) > 1 else None
+p = Provider(provider_arg) if provider_arg else None
+
+client = ClaudeClient(p)
+print(f"[Provider: {client.provider.value}]")
+answer = client.chat(
+    "Name one advantage of using Claude through a managed cloud provider. One sentence.",
+    system="Be concise."
+)
+print(answer)</code></pre>
+  </div>
+
+  <p>Run it:</p>
+  <div class="code-single">
+    <pre><code class="language-bash">ANTHROPIC_API_KEY=your-key python chat_cli.py direct</code></pre>
+  </div>
+
+  <p><strong>Expected output:</strong></p>
+  <div class="code-single" style="background:rgba(16,185,129,.05);border-color:var(--success)">
+    <pre style="color:var(--success)">[Provider: direct]
+One advantage is that managed cloud providers consolidate billing, IAM, and compliance under your existing cloud contract, removing the need for a separate vendor relationship with Anthropic.</pre>
+  </div>
+
+  <div class="checkpoint"><strong>✅ Step 1 Checkpoint:</strong> You should see <code>[Provider: direct]</code> followed by a one-sentence answer. If you see <code>AuthenticationError</code>, check that <code>ANTHROPIC_API_KEY</code> is exported in your shell.</div>
+
+  <h3 id="step2-lab">Step 2: Call Claude via AWS Bedrock</h3>
+  <p>This step uses the same <code>chat_cli.py</code> from Step 1 — only the provider flag and AWS credentials change. <em>Skip to Step 3 if you don't have an AWS account.</em></p>
+
+  <p>Configure AWS credentials (one of these three methods):</p>
+  <div class="code-single">
+    <pre><code class="language-bash"># Method A: environment variables (fastest for dev)
+export AWS_ACCESS_KEY_ID=AKIA...
+export AWS_SECRET_ACCESS_KEY=your-secret
+export AWS_REGION=us-west-2
+
+# Method B: AWS CLI (recommended for dev)
+aws configure   # enter key, secret, region=us-west-2, output=json
+
+# Method C: AWS SSO (enterprise)
+aws sso login --profile my-profile
+export AWS_PROFILE=my-profile</code></pre>
+  </div>
+
+  <div class="code-single">
+    <pre><code class="language-bash">python chat_cli.py bedrock</code></pre>
+  </div>
+
+  <p><strong>Expected output:</strong></p>
+  <div class="code-single" style="background:rgba(16,185,129,.05);border-color:var(--success)">
+    <pre style="color:var(--success)">[Provider: bedrock]
+One advantage is that AWS Bedrock integrates Claude billing into your existing AWS account, enabling enterprises to use their existing contract and compliance approvals.</pre>
+  </div>
+
+  <div class="checkpoint"><strong>✅ Step 2 Checkpoint:</strong> Same code, same <code>chat_cli.py</code>, new provider. If you see <code>AccessDeniedException</code>, your IAM user/role is missing <code>bedrock:InvokeModel</code>. If you see <code>ResourceNotFoundException</code>, the model ID in the wrapper doesn't match what's enabled in your Bedrock console region — check that you requested model access for Claude Sonnet in <code>us-west-2</code>.</div>
+
+  <details style="margin:.5rem 0">
+    <summary>Troubleshooting — Bedrock</summary>
+    <ul style="margin-top:.5rem;color:var(--text-secondary)">
+      <li><code>ValidationException: Unknown model ID</code> → Wrong model ID format. Bedrock needs <code>anthropic.claude-*</code> not <code>claude-*</code>.</li>
+      <li><code>AccessDeniedException</code> → Add <code>bedrock:InvokeModel</code> to your IAM policy.</li>
+      <li><code>botocore.exceptions.NoCredentialsError</code> → Run <code>aws configure</code> or set <code>AWS_ACCESS_KEY_ID</code> env var.</li>
+    </ul>
+  </details>
+
+  <h3 id="step3-lab">Step 3: Call Claude via Google Vertex AI</h3>
+  <p>This step requires a GCP project with Vertex AI enabled and Claude deployed from Model Garden. <em>Free-tier GCP accounts get $300 in credits — enough to complete this lab.</em></p>
+
+  <div class="code-single">
+    <pre><code class="language-bash"># Set up ADC — opens a browser window to authenticate
+gcloud auth application-default login
+
+# Set env vars
+export GCP_PROJECT=your-project-id
+export GCP_REGION=us-east5
+
+python chat_cli.py vertex</code></pre>
+  </div>
+
+  <div class="checkpoint"><strong>✅ Step 3 Checkpoint:</strong> <code>[Provider: vertex]</code> followed by a response. If you see <code>403 PermissionDenied</code>, your GCP user account (or service account) is missing <code>roles/aiplatform.user</code> on the project. If you see <code>404 Not Found</code>, Claude has not been enabled in Model Garden for your project — go to Vertex AI → Model Garden → Claude → Enable.</div>
+
+  <h3 id="step4-lab">Step 4: Call Claude via Azure AI</h3>
+  <p>This step requires an Azure AI Foundry resource with Claude deployed as a serverless endpoint.</p>
+
+  <div class="code-single">
+    <pre><code class="language-bash">export AZURE_AI_ENDPOINT=https://your-resource.services.ai.azure.com/models
+export AZURE_AI_KEY=your-azure-key
+export AZURE_DEPLOYMENT_NAME=claude-sonnet-4-6   # your deployment name
+
+python chat_cli.py azure</code></pre>
+  </div>
+
+  <div class="checkpoint"><strong>✅ Step 4 Checkpoint:</strong> <code>[Provider: azure]</code> followed by a response. If you see <code>401 Unauthorized</code>, double-check the API key. If you see <code>404 Not Found</code>, the deployment name in <code>AZURE_DEPLOYMENT_NAME</code> doesn't match the name you gave it in Azure AI Foundry.</div>
+
+  <h3 id="step5-lab">Step 5: Run All Four with One Script</h3>
+  <p>This final step confirms that the same application logic runs identically on all four providers — exactly what the wrapper was designed to achieve.</p>
+
+  <div class="code-single">
+    <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy">Copy</button>
+    <pre><code class="language-python">"""all_providers.py — test all configured providers"""
+from claude_client import ClaudeClient, Provider
+
+QUESTION = "Name the cloud you're running on. One sentence."
+
+for p in Provider:
+    try:
+        client = ClaudeClient(p)
+        answer = client.chat(QUESTION)
+        print(f"[{p.value:8}] {answer}")
+    except Exception as e:
+        print(f"[{p.value:8}] SKIPPED — {type(e).__name__}: {e}")</code></pre>
+  </div>
+
+  <div class="code-single">
+    <pre><code class="language-bash">python all_providers.py</code></pre>
+  </div>
+
+  <p><strong>Expected output (with all four configured):</strong></p>
+  <div class="code-single" style="background:rgba(16,185,129,.05);border-color:var(--success)">
+    <pre style="color:var(--success)">[direct  ] I'm running on Anthropic's direct API, not a managed cloud provider.
+[bedrock ] I'm running on AWS Bedrock, Amazon's managed AI inference service.
+[vertex  ] I'm running on Google Cloud Vertex AI, Google's managed AI platform.
+[azure   ] I'm running on Microsoft Azure AI Foundry, Microsoft's managed AI platform.</pre>
+  </div>
+
+  <div style="background:rgba(16,185,129,.06);border-left:3px solid var(--success);padding:1rem 1.25rem;margin:1rem 0;border-radius:0 6px 6px 0">
+    <strong>🎉 Congratulations!</strong> You've completed M21B. Your <code>ClaudeClient</code> wrapper lets you switch between all four Claude access paths with one environment variable. The same agent logic, the same code, four different enterprise on-ramps. Onward to M22: Cost Optimization.
+  </div>
+</section>
+
+<!-- ══════════════ QUIZ ══════════════ -->
+<section class="section" id="quiz">
+  <h2 id="quiz-heading">Knowledge Check</h2>
+  <p style="color:var(--text-secondary);margin-bottom:1.5rem">Test your understanding. Select the best answer for each question.</p>
+
+  <!-- Q1 -->
+  <div class="quiz-question" data-correct="b">
+    <h4>Q1: You want to call Claude on AWS Bedrock using the cross-region inference profile for Claude Sonnet 4.6. Which model ID format is correct?</h4>
+    <div class="quiz-option" onclick="answerQuiz(this,'a')">a) <code>claude-sonnet-4-6</code></div>
+    <div class="quiz-option" onclick="answerQuiz(this,'b')">b) <code>us.anthropic.claude-sonnet-4-6-20250514-v1:0</code></div>
+    <div class="quiz-option" onclick="answerQuiz(this,'c')">c) <code>anthropic/claude-sonnet-4-6@latest</code></div>
+    <div class="quiz-option" onclick="answerQuiz(this,'d')">d) <code>claude-sonnet-4-6-v1:0</code></div>
+    <div class="quiz-feedback correct-fb">✅ Correct! Bedrock cross-region inference profiles use the <code>us.</code> (or <code>eu.</code>) regional prefix followed by the full date-stamped model identifier. The simple <code>claude-sonnet-4-6</code> format works on the direct API and Vertex, not Bedrock.</div>
+    <div class="quiz-feedback incorrect-fb">❌ Not quite. Cross-region inference profile IDs start with a regional prefix (<code>us.</code>) and include a date stamp. <code>us.anthropic.claude-sonnet-4-6-20250514-v1:0</code> is the correct format.</div>
+  </div>
+
+  <!-- Q2 -->
+  <div class="quiz-question" data-correct="c">
+    <h4>Q2: What does ADC stand for in the Google Cloud context, and how do you initialize it for local development?</h4>
+    <div class="quiz-option" onclick="answerQuiz(this,'a')">a) Azure Directory Credentials — <code>az login</code></div>
+    <div class="quiz-option" onclick="answerQuiz(this,'b')">b) Anthropic Default Client — automatically set by <code>anthropic[vertex]</code></div>
+    <div class="quiz-option" onclick="answerQuiz(this,'c')">c) Application Default Credentials — <code>gcloud auth application-default login</code></div>
+    <div class="quiz-option" onclick="answerQuiz(this,'d')">d) Adaptive Data Compression — configured in the Vertex AI console</div>
+    <div class="quiz-feedback correct-fb">✅ Correct! ADC (Application Default Credentials) is GCP's standard credential discovery chain. On local dev you run <code>gcloud auth application-default login</code>. On GKE/Cloud Run, the runtime metadata server provides credentials automatically — no CLI command needed.</div>
+    <div class="quiz-feedback incorrect-fb">❌ ADC stands for Application Default Credentials — GCP's mechanism for discovering credentials automatically across dev, CI, and production. Initialize it locally with <code>gcloud auth application-default login</code>.</div>
+  </div>
+
+  <!-- Q3 -->
+  <div class="quiz-question" data-correct="b">
+    <h4>Q3: When calling Claude through Azure AI Foundry, which Python package do you use instead of the Anthropic SDK?</h4>
+    <div class="quiz-option" onclick="answerQuiz(this,'a')">a) <code>anthropic[azure]</code></div>
+    <div class="quiz-option" onclick="answerQuiz(this,'b')">b) <code>azure-ai-inference</code></div>
+    <div class="quiz-option" onclick="answerQuiz(this,'c')">c) <code>openai</code> with an Azure endpoint</div>
+    <div class="quiz-option" onclick="answerQuiz(this,'d')">d) <code>msrest</code> / <code>azure-mgmt-cognitiveservices</code></div>
+    <div class="quiz-feedback correct-fb">✅ Correct! Unlike Bedrock and Vertex (which have native Anthropic SDK clients), Azure AI Foundry uses Microsoft's own <code>azure-ai-inference</code> package. The request format is similar to OpenAI's Chat Completions API, and the response uses <code>choices[0].message.content</code> rather than Anthropic's <code>content[0].text</code>.</div>
+    <div class="quiz-feedback incorrect-fb">❌ Azure AI Foundry uses Microsoft's <code>azure-ai-inference</code> package — not the Anthropic SDK. There is no <code>anthropic[azure]</code> extra. The Anthropic SDK only has native clients for Bedrock (<code>AnthropicBedrock</code>) and Vertex (<code>AnthropicVertex</code>).</div>
+  </div>
+
+  <!-- Q4 -->
+  <div class="quiz-question" data-correct="a">
+    <h4>Q4: Your startup wants to ship a feature using the newest Claude model the day it is released. Which access method gives you Day-0 access?</h4>
+    <div class="quiz-option" onclick="answerQuiz(this,'a')">a) Direct Anthropic API (<code>api.anthropic.com</code>)</div>
+    <div class="quiz-option" onclick="answerQuiz(this,'b')">b) AWS Bedrock — it mirrors Anthropic's release schedule</div>
+    <div class="quiz-option" onclick="answerQuiz(this,'c')">c) Google Vertex AI — Google has first-party access to all models</div>
+    <div class="quiz-option" onclick="answerQuiz(this,'d')">d) Azure AI Foundry — Microsoft's partnership with Anthropic ensures simultaneous launch</div>
+    <div class="quiz-feedback correct-fb">✅ Correct! New Claude models are always available on the direct Anthropic API first. Bedrock, Vertex, and Azure typically receive them days to weeks later, after the cloud providers complete their own validation and compliance processes. For startups shipping on the cutting edge, this matters.</div>
+    <div class="quiz-feedback incorrect-fb">❌ Only the direct Anthropic API provides Day-0 access. Cloud providers (Bedrock, Vertex, Azure) receive new Claude models days to weeks after the direct API launch, because each provider runs its own validation process before making models available to customers.</div>
+  </div>
+
+  <!-- Q5 -->
+  <div class="quiz-question" data-correct="c">
+    <h4>Q5: What is the main purpose of a cross-region inference profile in AWS Bedrock?</h4>
+    <div class="quiz-option" onclick="answerQuiz(this,'a')">a) To encrypt inference traffic between AWS regions for HIPAA compliance</div>
+    <div class="quiz-option" onclick="answerQuiz(this,'b')">b) To replicate your fine-tuned model across multiple AWS regions for disaster recovery</div>
+    <div class="quiz-option" onclick="answerQuiz(this,'c')">c) To route inference requests across multiple AWS regions to achieve higher throughput and availability</div>
+    <div class="quiz-option" onclick="answerQuiz(this,'d')">d) To synchronize rate limits between your Anthropic account and your Bedrock account</div>
+    <div class="quiz-feedback correct-fb">✅ Correct! Cross-region inference profiles (identified by the <code>us.</code> or <code>eu.</code> prefix) allow Bedrock to route your request to whichever US (or EU) region has available capacity at that moment. This gives higher effective throughput than a single-region endpoint, especially at scale.</div>
+    <div class="quiz-feedback incorrect-fb">❌ Cross-region inference profiles route requests across multiple AWS regions to achieve higher throughput by load-balancing across available capacity. The <code>us.</code> prefix in the model ID signals to Bedrock that it may use any US region for this request.</div>
+  </div>
+
+  <!-- Q6 -->
+  <div class="quiz-question" data-correct="d">
+    <h4>Q6: A healthcare company already has an AWS Enterprise Agreement and BAA. They want to use Claude for clinical decision support. What is the PRIMARY reason to use Bedrock over the direct Anthropic API?</h4>
+    <div class="quiz-option" onclick="answerQuiz(this,'a')">a) Bedrock tokens are cheaper than the direct API</div>
+    <div class="quiz-option" onclick="answerQuiz(this,'b')">b) Bedrock provides better model quality for medical use cases</div>
+    <div class="quiz-option" onclick="answerQuiz(this,'c')">c) Bedrock automatically anonymizes PHI before sending it to Claude</div>
+    <div class="quiz-option" onclick="answerQuiz(this,'d')">d) Bedrock is covered under their existing AWS BAA — no new vendor legal review required</div>
+    <div class="quiz-feedback correct-fb">✅ Correct! The primary driver for enterprise cloud-provider adoption is organizational procurement, not pricing or model quality. Bedrock, as an AWS service, is covered by the company's existing Business Associate Agreement. Adding the direct Anthropic API would require legal to review a new data processing agreement — a process that can take months.</div>
+    <div class="quiz-feedback incorrect-fb">❌ Bedrock token pricing is the same as the direct API, and the model quality is identical (it's the same Claude). The primary driver is that Bedrock is already covered by the company's existing AWS BAA, eliminating the need for a new vendor legal review.</div>
+  </div>
+
+  <div class="quiz-score" id="quiz-score">
+    <p style="color:var(--text-secondary);margin-bottom:.5rem">Answer all questions to see your score</p>
+  </div>
+</section>
+
+<!-- ══════════════ SUMMARY ══════════════ -->
+<section class="section" id="summary">
+  <h2 id="summary-heading">Module Summary</h2>
+
+  <div style="background:var(--bg-card);border-radius:12px;padding:1.5rem;margin-bottom:1.5rem;border:1px solid var(--code-border)">
+    <h3 style="margin-top:0;color:var(--accent-primary)">Key Takeaways</h3>
+    <ul>
+      <li><strong>One Claude, four on-ramps:</strong> The model quality and API protocol are identical across direct API, Bedrock, Vertex, and Azure AI. What changes is authentication, billing, and the SDK client constructor.</li>
+      <li><strong>Bedrock = AWS-native:</strong> <code>AnthropicBedrock(aws_region=...)</code> — uses IAM credentials. Model IDs use <code>anthropic.claude-*-v1:0</code> or <code>us.anthropic.claude-*</code> for cross-region. Adds Guardrails and Knowledge Bases.</li>
+      <li><strong>Vertex AI = GCP-native:</strong> <code>AnthropicVertex(project_id=..., region=...)</code> — uses ADC. Model IDs use date stamps: <code>claude-*@YYYYMMDD</code>. Use <code>us-east5</code> or <code>europe-west1</code>.</li>
+      <li><strong>Azure AI = Microsoft-native:</strong> Uses <code>azure-ai-inference</code> SDK, not the Anthropic SDK. Response shape is OpenAI-compatible (<code>choices[0].message.content</code>). Managed Identity removes API keys from production.</li>
+      <li><strong>Provider-agnostic wrapper:</strong> One class, one <code>CLAUDE_PROVIDER</code> env var, all four providers. Migrate clouds with zero application code changes.</li>
+      <li><strong>Decision rule:</strong> Start direct for speed. Graduate to the cloud that already holds your data and your procurement contract.</li>
+    </ul>
+  </div>
+
+  <div style="background:var(--bg-card);border-radius:12px;padding:1.5rem;border:1px solid var(--code-border)">
+    <h3 style="margin-top:0;color:var(--accent-primary)">Next: M22 — Cost Optimization</h3>
+    <p>Now that you can call Claude from any cloud, M22 explores how to make those calls cheaper: prompt caching (up to 90% cost reduction on repeated context), model routing (use Claude Haiku for simple tasks, Sonnet for complex ones), the Message Batches API (50% off for async workloads), and token optimization techniques. The provider-agnostic wrapper you built here will be extended with a cost-aware routing layer.</p>
+  </div>
+</section>
+
+<!-- ── Module Navigation ── -->
+<div class="module-nav">
+  <a class="nav-btn" href="M21-api-design-deployment.html">
+    <span class="nav-btn-label">← Previous</span>
+    <span class="nav-btn-title">M21: API Design &amp; Deployment</span>
+  </a>
+  <a class="nav-btn next" href="M22-cost-optimization.html">
+    <span class="nav-btn-label">Next →</span>
+    <span class="nav-btn-title">M22: Cost Optimization</span>
+  </a>
+</div>
+
+</main>
+</div><!-- /page-wrap -->
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
+
+<script>
+// ── Tab switching ──────────────────────────────────────────────────
+function switchTab(btn, groupId) {
+  const wrapper = btn.closest('.code-block-wrapper');
+  const lang = btn.textContent.trim().toLowerCase().replace('.', '').replace('/', '');
+  // Deactivate all tabs
+  wrapper.querySelectorAll('.code-tab').forEach(t => t.classList.remove('active'));
+  wrapper.querySelectorAll('.code-panel').forEach(p => p.classList.remove('active'));
+  // Activate clicked
+  btn.classList.add('active');
+  // Find matching panel
+  const panels = wrapper.querySelectorAll('.code-panel');
+  const idx = Array.from(btn.parentElement.children).indexOf(btn);
+  if (panels[idx]) panels[idx].classList.add('active');
+}
+
+// ── Copy to clipboard ──────────────────────────────────────────────
+function copyCode(btn) {
+  const pre = btn.parentElement.querySelector('pre') || btn.closest('.code-single').querySelector('pre');
+  if (!pre) return;
+  navigator.clipboard.writeText(pre.innerText).then(() => {
+    const orig = btn.textContent;
+    btn.textContent = 'Copied!';
+    setTimeout(() => btn.textContent = orig, 1500);
+  });
+}
+
+// ── Quiz ───────────────────────────────────────────────────────────
+let answered = 0;
+let correct = 0;
+const total = document.querySelectorAll('.quiz-question').length;
+
+function answerQuiz(option, selected) {
+  const q = option.closest('.quiz-question');
+  if (q.dataset.answered) return;
+  q.dataset.answered = '1';
+  answered++;
+
+  const isCorrect = selected === q.dataset.correct;
+  if (isCorrect) correct++;
+
+  q.querySelectorAll('.quiz-option').forEach(o => {
+    o.style.pointerEvents = 'none';
+    if (o.textContent.trim().startsWith(q.dataset.correct)) o.classList.add('correct');
+  });
+  option.classList.add(isCorrect ? 'correct' : 'incorrect');
+
+  const fb = q.querySelector(isCorrect ? '.correct-fb' : '.incorrect-fb');
+  if (fb) fb.classList.add('show');
+
+  if (answered === total) {
+    const score = document.getElementById('quiz-score');
+    const pct = Math.round(correct / total * 100);
+    const color = pct >= 80 ? 'var(--success)' : pct >= 60 ? 'var(--warning)' : 'var(--error)';
+    score.innerHTML = `<div style="font-size:2.5rem;font-weight:700;color:${color};font-family:'Bricolage Grotesque',sans-serif">${correct}/${total}</div><p style="color:var(--text-secondary);margin-top:.5rem">${pct >= 80 ? '🎉 Excellent! You understand cloud provider integration deeply.' : pct >= 60 ? '👍 Good effort. Review the sections on model ID formats and Azure\'s SDK differences.' : '📚 Revisit the Bedrock, Vertex, and Azure deep-dive sections before moving on.'}</p>`;
+  }
+}
+
+// ── Paths animation ────────────────────────────────────────────────
+function runPathsAnim() {
+  const colors = ['#D4A843','#FF9900','#4285F4','#0078D4'];
+  [1,2,3,4].forEach((i, idx) => {
+    const pk = document.getElementById(`pk${i}`);
+    if (!pk) return;
+    pk.setAttribute('opacity','1');
+    // Simple CSS transition fallback: move along path manually
+    const path = document.getElementById(`p${i}`);
+    if (!path) return;
+    const len = path.getTotalLength();
+    let t = 0;
+    function step() {
+      t += 0.016;
+      if (t > 1) { pk.setAttribute('opacity','0'); return; }
+      const pt = path.getPointAtLength(len * t);
+      pk.setAttribute('cx', pt.x);
+      pk.setAttribute('cy', pt.y);
+      requestAnimationFrame(step);
+    }
+    setTimeout(() => requestAnimationFrame(step), idx * 300);
+  });
+}
+
+// ── Sidebar active state ───────────────────────────────────────────
+const sections = document.querySelectorAll('.section,[id]');
+const navLinks = document.querySelectorAll('.sidebar-nav a');
+const io = new IntersectionObserver(entries => {
+  entries.forEach(e => {
+    if (e.isIntersecting) {
+      navLinks.forEach(l => l.classList.remove('active'));
+      const link = document.querySelector(`.sidebar-nav a[href="#${e.target.id}"]`);
+      if (link) link.classList.add('active');
+    }
+  });
+}, { rootMargin: '-20% 0px -70% 0px' });
+document.querySelectorAll('section[id]').forEach(s => io.observe(s));
+</script>
+</body>
+</html>

@@ -647,6 +647,7 @@ Service URL: https://agent-api-xxxx-uc.a.run.app</div>
               <th style="text-align:center;padding:0.5rem;color:var(--accent-primary);font-family:'Bricolage Grotesque',sans-serif;font-size:0.8rem;">Direct Anthropic API</th>
               <th style="text-align:center;padding:0.5rem;color:var(--warning);font-family:'Bricolage Grotesque',sans-serif;font-size:0.8rem;">AWS Bedrock</th>
               <th style="text-align:center;padding:0.5rem;color:var(--info);font-family:'Bricolage Grotesque',sans-serif;font-size:0.8rem;">Google Vertex AI</th>
+              <th style="text-align:center;padding:0.5rem;color:#0078D4;font-family:'Bricolage Grotesque',sans-serif;font-size:0.8rem;">Microsoft Azure AI</th>
             </tr>
           </thead>
           <tbody style="color:var(--text-secondary);">
@@ -655,22 +656,26 @@ Service URL: https://agent-api-xxxx-uc.a.run.app</div>
               <td style="text-align:center;padding:0.5rem;">API key</td>
               <td style="text-align:center;padding:0.5rem;">AWS IAM / SigV4</td>
               <td style="text-align:center;padding:0.5rem;">Google IAM / ADC</td>
+              <td style="text-align:center;padding:0.5rem;">Azure API key / Entra ID</td>
             </tr>
             <tr style="border-bottom:1px solid var(--code-border);">
               <td style="padding:0.5rem;">Billing</td>
               <td style="text-align:center;padding:0.5rem;">Anthropic invoice</td>
               <td style="text-align:center;padding:0.5rem;">Rolls into AWS bill</td>
               <td style="text-align:center;padding:0.5rem;">Rolls into GCP bill</td>
+              <td style="text-align:center;padding:0.5rem;">Rolls into Azure bill</td>
             </tr>
             <tr style="border-bottom:1px solid var(--code-border);">
               <td style="padding:0.5rem;">Data residency</td>
               <td style="text-align:center;padding:0.5rem;">US / EU regions</td>
               <td style="text-align:center;padding:0.5rem;">Any AWS region with Claude</td>
               <td style="text-align:center;padding:0.5rem;">Any GCP region with Claude</td>
+              <td style="text-align:center;padding:0.5rem;">Any Azure region with Claude</td>
             </tr>
             <tr style="border-bottom:1px solid var(--code-border);">
               <td style="padding:0.5rem;">Newest model lag</td>
               <td style="text-align:center;padding:0.5rem;color:var(--success);">Day 0</td>
+              <td style="text-align:center;padding:0.5rem;color:var(--warning);">Days to weeks</td>
               <td style="text-align:center;padding:0.5rem;color:var(--warning);">Days to weeks</td>
               <td style="text-align:center;padding:0.5rem;color:var(--warning);">Days to weeks</td>
             </tr>
@@ -679,17 +684,26 @@ Service URL: https://agent-api-xxxx-uc.a.run.app</div>
               <td style="text-align:center;padding:0.5rem;">New vendor</td>
               <td style="text-align:center;padding:0.5rem;color:var(--success);">Existing AWS contract</td>
               <td style="text-align:center;padding:0.5rem;color:var(--success);">Existing GCP contract</td>
+              <td style="text-align:center;padding:0.5rem;color:var(--success);">Existing Azure contract</td>
+            </tr>
+            <tr style="border-bottom:1px solid var(--code-border);">
+              <td style="padding:0.5rem;">SDK / package</td>
+              <td style="text-align:center;padding:0.5rem;"><code>anthropic</code></td>
+              <td style="text-align:center;padding:0.5rem;"><code>anthropic[bedrock]</code></td>
+              <td style="text-align:center;padding:0.5rem;"><code>anthropic[vertex]</code></td>
+              <td style="text-align:center;padding:0.5rem;"><code>azure-ai-inference</code></td>
             </tr>
             <tr>
               <td style="padding:0.5rem;">Best for</td>
               <td style="text-align:center;padding:0.5rem;font-size:0.8rem;">Fastest model access, simplest auth</td>
               <td style="text-align:center;padding:0.5rem;font-size:0.8rem;">AWS-native shops, VPC-only data</td>
               <td style="text-align:center;padding:0.5rem;font-size:0.8rem;">GCP-native shops, Vertex pipelines</td>
+              <td style="text-align:center;padding:0.5rem;font-size:0.8rem;">Azure-native shops, Microsoft 365 ecosystem</td>
             </tr>
           </tbody>
         </table>
 
-        <p>Code-wise, switching hosts is usually a constructor change &mdash; the message-shape and tool-use protocol are identical across all three:</p>
+        <p>Code-wise, switching hosts is usually a constructor change &mdash; the message-shape and tool-use protocol are identical across Anthropic, Bedrock, and Vertex. Azure AI uses the <code>azure-ai-inference</code> package (compatible chat completions format):</p>
 
         <div class="code-block-wrapper">
           <div class="code-tabs">
@@ -698,68 +712,114 @@ Service URL: https://agent-api-xxxx-uc.a.run.app</div>
           </div>
           <div class="code-panel active" id="host-py">
             <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
-            <pre><code class="language-python"># Direct Anthropic API &mdash; uses ANTHROPIC_API_KEY from env
+            <pre><code class="language-python"># ── Direct Anthropic API ──────────────────────────────────────────
+# pip install anthropic
 from anthropic import Anthropic
-client = Anthropic()
+client = Anthropic()   # reads ANTHROPIC_API_KEY from env
 msg = client.messages.create(
-    model="claude-opus-4-7",
+    model="claude-sonnet-4-6",
     max_tokens=1024,
     messages=[{"role": "user", "content": "Hello"}],
 )
 
-# AWS Bedrock &mdash; uses your AWS IAM credentials, no API key
+# ── AWS Bedrock ───────────────────────────────────────────────────
+# pip install "anthropic[bedrock]"    (adds boto3 + SigV4 signing)
 from anthropic import AnthropicBedrock
-bedrock = AnthropicBedrock(aws_region="us-west-2")
+bedrock = AnthropicBedrock(aws_region="us-west-2")   # uses AWS_* env vars / ~/.aws
 msg = bedrock.messages.create(
-    model="anthropic.claude-opus-4-7-v1:0",  # Bedrock model ID
+    model="anthropic.claude-sonnet-4-6-v1:0",   # Bedrock cross-region model ID
     max_tokens=1024,
     messages=[{"role": "user", "content": "Hello"}],
 )
 
-# Google Vertex AI &mdash; uses Application Default Credentials
+# ── Google Vertex AI ──────────────────────────────────────────────
+# pip install "anthropic[vertex]"     (adds google-auth)
 from anthropic import AnthropicVertex
-vertex = AnthropicVertex(project_id="my-gcp-project", region="us-east5")
+vertex = AnthropicVertex(project_id="my-gcp-project", region="us-east5")  # uses ADC
 msg = vertex.messages.create(
-    model="claude-opus-4-7@20260101",  # Vertex publisher model ID
+    model="claude-sonnet-4-6@20250514",   # Vertex publisher model ID (date-stamped)
     max_tokens=1024,
     messages=[{"role": "user", "content": "Hello"}],
-)</code></pre>
+)
+
+# ── Microsoft Azure AI ────────────────────────────────────────────
+# pip install azure-ai-inference azure-core
+# Deploy Claude in Azure AI Foundry → get endpoint + key
+from azure.ai.inference import ChatCompletionsClient
+from azure.ai.inference.models import UserMessage
+from azure.core.credentials import AzureKeyCredential
+import os
+
+azure = ChatCompletionsClient(
+    endpoint=os.environ["AZURE_AI_ENDPOINT"],   # e.g. https://&lt;resource&gt;.services.ai.azure.com/models
+    credential=AzureKeyCredential(os.environ["AZURE_AI_KEY"]),
+)
+msg = azure.complete(
+    model="claude-sonnet-4-6",   # your Azure AI Foundry deployment name
+    messages=[UserMessage(content="Hello")],
+    max_tokens=1024,
+)
+print(msg.choices[0].message.content)</code></pre>
           </div>
           <div class="code-panel" id="host-ts">
             <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
-            <pre><code class="language-typescript">// Direct Anthropic API
+            <pre><code class="language-typescript">// ── Direct Anthropic API ──────────────────────────────────────────
+// npm install @anthropic-ai/sdk
 import Anthropic from "@anthropic-ai/sdk";
-const client = new Anthropic();
+const client = new Anthropic();   // reads ANTHROPIC_API_KEY from env
 const msg = await client.messages.create({
-  model: "claude-opus-4-7",
+  model: "claude-sonnet-4-6",
   max_tokens: 1024,
   messages: [{ role: "user", content: "Hello" }],
 });
 
-// AWS Bedrock
+// ── AWS Bedrock ───────────────────────────────────────────────────
+// npm install @anthropic-ai/bedrock-sdk
 import { AnthropicBedrock } from "@anthropic-ai/bedrock-sdk";
 const bedrock = new AnthropicBedrock({ awsRegion: "us-west-2" });
 const msg2 = await bedrock.messages.create({
-  model: "anthropic.claude-opus-4-7-v1:0",
+  model: "anthropic.claude-sonnet-4-6-v1:0",
   max_tokens: 1024,
   messages: [{ role: "user", content: "Hello" }],
 });
 
-// Google Vertex AI
+// ── Google Vertex AI ──────────────────────────────────────────────
+// npm install @anthropic-ai/vertex-sdk
 import { AnthropicVertex } from "@anthropic-ai/vertex-sdk";
 const vertex = new AnthropicVertex({ projectId: "my-gcp-project", region: "us-east5" });
 const msg3 = await vertex.messages.create({
-  model: "claude-opus-4-7@20260101",
+  model: "claude-sonnet-4-6@20250514",
   max_tokens: 1024,
   messages: [{ role: "user", content: "Hello" }],
-});</code></pre>
+});
+
+// ── Microsoft Azure AI ────────────────────────────────────────────
+// npm install @azure-rest/ai-inference @azure/core-auth
+// Deploy Claude in Azure AI Foundry → get endpoint + key
+import ModelClient, { isUnexpected } from "@azure-rest/ai-inference";
+import { AzureKeyCredential } from "@azure/core-auth";
+
+const azure = ModelClient(
+  process.env.AZURE_AI_ENDPOINT!,   // e.g. https://&lt;resource&gt;.services.ai.azure.com/models
+  new AzureKeyCredential(process.env.AZURE_AI_KEY!)
+);
+const res = await azure.path("/chat/completions").post({
+  body: {
+    model: "claude-sonnet-4-6",   // your Azure AI Foundry deployment name
+    messages: [{ role: "user", content: "Hello" }],
+    max_tokens: 1024,
+  },
+});
+if (isUnexpected(res)) throw new Error(res.body.error.message);
+console.log(res.body.choices[0].message.content);</code></pre>
           </div>
         </div>
 
         <div class="callout-why">
           <span class="box-label">Why This Matters in the Real World</span>
-          <p><strong>Healthcare and finance teams</strong> often cannot use the direct Anthropic API at all &mdash; their compliance teams have already approved AWS or GCP under a BAA / DPA, and adding a fourth-party data processor restarts that review. Bedrock and Vertex AI are the same Claude model, but invoked through an already-approved cloud account. The data never leaves your AWS or GCP perimeter.</p>
-          <p><strong>Startups</strong> usually go direct &mdash; new models land on the Anthropic API days to weeks before they appear on Bedrock or Vertex, and shipping on the latest model is often a competitive edge.</p>
+          <p><strong>Healthcare and finance teams</strong> often cannot use the direct Anthropic API at all &mdash; their compliance teams have already approved AWS, GCP, or Azure under a BAA / DPA, and adding a fourth-party data processor restarts that review. Bedrock, Vertex AI, and Azure AI are the same Claude model, invoked through an already-approved cloud account. The data never leaves your cloud perimeter.</p>
+          <p><strong>Microsoft-heavy enterprises</strong> (government, financial services, retail) are often all-in on Azure &mdash; Active Directory / Entra ID for identity, Azure Monitor for observability, and existing Azure commitment spend. Using Claude on Azure AI Foundry means zero new vendor relationships and the inference cost rolls into existing Azure credits.</p>
+          <p><strong>Startups</strong> usually go direct &mdash; new models land on the Anthropic API days to weeks before they appear on any cloud marketplace, and shipping on the latest model is often a competitive edge.</p>
         </div>
 
         <h3 id="managed-platforms">Managed Agent Platforms (Skip the Container Entirely)</h3>
@@ -783,6 +843,11 @@ const msg3 = await vertex.messages.create({
               <td style="padding:0.5rem;vertical-align:top;"><strong style="color:var(--info);">Vertex AI Agent Engine</strong></td>
               <td style="padding:0.5rem;vertical-align:top;">Managed runtime for LangChain / LangGraph / CrewAI / Agent Development Kit agents. Handles deployment, autoscaling, sessions, and Cloud Trace integration.</td>
               <td style="padding:0.5rem;vertical-align:top;">You wrote your agent in a Python framework and want to deploy without containerizing or running infrastructure.</td>
+            </tr>
+            <tr style="border-bottom:1px solid var(--code-border);">
+              <td style="padding:0.5rem;vertical-align:top;"><strong style="color:#0078D4;">Azure AI Foundry Agent Service</strong></td>
+              <td style="padding:0.5rem;vertical-align:top;">Managed agent runtime in Azure AI Foundry. Supports Claude and other models, built-in code interpreter, file search, Azure AI Search for RAG, and Azure Functions as custom tools. Billed to your Azure subscription.</td>
+              <td style="padding:0.5rem;vertical-align:top;">You are Azure-native with existing Microsoft 365 / Entra ID infrastructure and want managed agent execution without building or operating servers.</td>
             </tr>
             <tr>
               <td style="padding:0.5rem;vertical-align:top;"><strong style="color:var(--accent-primary);">Anthropic Agent SDK</strong></td>
