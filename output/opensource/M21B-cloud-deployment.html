@@ -1,0 +1,2023 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>M21B: Cloud Deployment — Ollama on GPU VMs &amp; Managed APIs | Building AI Agents with Open Source Models</title>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;700;800&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg-primary: #0A1628; --bg-secondary: #111D33; --bg-card: #162033; --bg-surface: #1A2740;
+      --text-primary: #E8ECF1; --text-secondary: #94A3B8; --text-muted: #64748B;
+      --accent-primary: #D4A843; --accent-hover: #E5BC5A; --accent-muted: rgba(212, 168, 67, 0.15);
+      --success: #10B981; --success-bg: rgba(16, 185, 129, 0.1);
+      --warning: #F59E0B; --warning-bg: rgba(245, 158, 11, 0.1);
+      --error: #F43F5E; --error-bg: rgba(244, 63, 94, 0.1);
+      --info: #3B82F6; --info-bg: rgba(59, 130, 246, 0.1);
+      --os-orange: #F97316; --os-orange-bg: rgba(249, 115, 22, 0.1);
+      --track-color: #F97316;
+      --code-bg: #0D1117; --code-border: #21262D; --code-text: #C9D1D9;
+      --transition-fast: 150ms; --transition-normal: 300ms; --transition-slow: 500ms;
+      --gcp: #4285F4; --aws: #FF9900; --azure: #0078D4;
+    }
+    html { scroll-behavior: smooth; }
+    body { background: var(--bg-primary); color: var(--text-primary); font-family: 'Source Sans 3', sans-serif; font-size: 1.05rem; line-height: 1.7; min-height: 100vh; }
+
+    /* Top progress bar */
+    .top-progress { position: fixed; top: 0; left: 0; right: 0; height: 4px; background: var(--bg-surface); z-index: 200; }
+    .top-progress .fill { height: 100%; background: linear-gradient(90deg, var(--os-orange), var(--accent-primary)); width: 95.8%; border-radius: 0 2px 2px 0; }
+
+    /* Course header */
+    .course-header { background: var(--bg-secondary); border-bottom: 1px solid var(--code-border); padding: 1.25rem 2rem; margin-top: 4px; }
+    .course-header-inner { max-width: 1200px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; }
+    .course-title { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.95rem; font-weight: 600; color: var(--text-secondary); }
+    .track-badge { display: inline-flex; align-items: center; gap: 0.5rem; background: var(--os-orange-bg); border: 1px solid var(--os-orange); border-radius: 20px; padding: 0.25rem 0.75rem; font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.8rem; font-weight: 600; color: var(--os-orange); }
+    .track-badge .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--os-orange); }
+    .header-meta { display: flex; gap: 1.5rem; font-size: 0.85rem; color: var(--text-muted); }
+
+    /* Layout */
+    .page-container { max-width: 1200px; margin: 0 auto; padding: 2rem; display: grid; grid-template-columns: 240px 1fr; gap: 3rem; }
+    @media (max-width: 900px) {
+      .page-container { grid-template-columns: 1fr; }
+      .sidebar-nav { position: fixed; bottom: 0; left: 0; right: 0; height: auto; z-index: 100; background: var(--bg-secondary); border-top: 1px solid var(--code-border); padding: 0.5rem; display: flex; gap: 0.25rem; overflow-x: auto; }
+      .sidebar-title { display: none; }
+      .sidebar-nav a { white-space: nowrap; font-size: 0.75rem; }
+    }
+
+    /* Sidebar */
+    .sidebar-nav { position: sticky; top: 2rem; height: calc(100vh - 4rem); overflow-y: auto; padding-right: 1rem; }
+    .sidebar-nav::-webkit-scrollbar { width: 3px; }
+    .sidebar-nav::-webkit-scrollbar-thumb { background: var(--bg-surface); border-radius: 3px; }
+    .sidebar-title { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); margin-bottom: 1rem; }
+    .sidebar-nav a { display: block; padding: 0.4rem 0.75rem; margin-bottom: 0.15rem; font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.82rem; font-weight: 600; color: var(--text-muted); text-decoration: none; border-left: 2px solid transparent; border-radius: 0 4px 4px 0; transition: all var(--transition-fast); }
+    .sidebar-nav a:hover { color: var(--text-primary); background: var(--bg-surface); }
+    .sidebar-nav a.active { color: var(--os-orange); border-left-color: var(--os-orange); background: var(--os-orange-bg); }
+    .sidebar-nav a.sub { padding-left: 1.5rem; font-size: 0.78rem; font-weight: 400; }
+
+    /* Content */
+    .content { max-width: 800px; }
+    .section { margin-bottom: 4rem; }
+    h1 { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 2.25rem; line-height: 1.2; margin-bottom: 0.75rem; }
+    h2 { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 1.5rem; color: var(--text-primary); margin: 2.5rem 0 1rem; padding-top: 1rem; border-top: 1px solid var(--code-border); }
+    h2:first-of-type { border-top: none; }
+    h3 { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 600; font-size: 1.25rem; color: var(--text-primary); margin: 2rem 0 0.75rem; }
+    p { margin-bottom: 1rem; }
+    ul, ol { margin: 0.5rem 0 1rem 1.5rem; }
+    li { margin-bottom: 0.4rem; }
+    strong { font-weight: 600; }
+    a { color: var(--accent-primary); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    code { font-family: 'JetBrains Mono', monospace; font-size: 0.88em; background: var(--bg-surface); padding: 0.1em 0.35em; border-radius: 4px; color: var(--accent-primary); }
+
+    /* Callout boxes */
+    .analogy-box, .tech-def-box, .callout-why, .callout-warning, .callout-security, .callout-os, .callout-cost { border-left: 4px solid; border-radius: 0 8px 8px 0; padding: 1.25rem 1.5rem; margin: 1.5rem 0; }
+    .analogy-box { background: var(--accent-muted); border-left-color: var(--accent-primary); }
+    .tech-def-box { background: var(--info-bg); border-left-color: var(--info); }
+    .callout-why { background: var(--success-bg); border-left-color: var(--success); }
+    .callout-warning { background: var(--warning-bg); border-left-color: var(--warning); }
+    .callout-security { background: var(--error-bg); border-left-color: var(--error); }
+    .callout-os { background: var(--os-orange-bg); border-left-color: var(--os-orange); }
+    .callout-cost { background: var(--warning-bg); border-left-color: var(--accent-primary); }
+    .box-label { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 0.9rem; display: block; margin-bottom: 0.5rem; }
+    .analogy-box .box-label { color: var(--accent-primary); }
+    .tech-def-box .box-label { color: var(--info); }
+    .callout-why .box-label { color: var(--success); }
+    .callout-warning .box-label { color: var(--warning); }
+    .callout-security .box-label { color: var(--error); }
+    .callout-os .box-label { color: var(--os-orange); }
+    .callout-cost .box-label { color: var(--accent-primary); }
+
+    /* Tooltips */
+    .term-tooltip { position: relative; color: var(--accent-primary); cursor: help; border-bottom: 1px dashed var(--accent-primary); display: inline; }
+    .term-tooltip .tooltip-content { position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); background: var(--bg-card); border: 1px solid var(--accent-primary); border-radius: 8px; padding: 0.75rem 1rem; font-size: 0.83rem; color: var(--text-primary); width: 280px; opacity: 0; pointer-events: none; transition: opacity var(--transition-fast); z-index: 50; line-height: 1.5; box-shadow: 0 4px 20px rgba(0,0,0,0.4); }
+    .term-tooltip:hover .tooltip-content, .term-tooltip:focus .tooltip-content { opacity: 1; pointer-events: auto; }
+
+    /* Code blocks */
+    .code-block-wrapper { background: var(--code-bg); border: 1px solid var(--code-border); border-radius: 12px; margin: 1.5rem 0; overflow: hidden; }
+    .code-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--code-border); background: var(--bg-surface); }
+    .code-tab { padding: 0.5rem 1.25rem; background: none; border: none; font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; color: var(--text-muted); transition: all var(--transition-fast); }
+    .code-tab:hover { color: var(--text-primary); }
+    .code-tab.active { color: var(--os-orange); border-bottom-color: var(--os-orange); }
+    .code-panel { display: none; position: relative; }
+    .code-panel.active { display: block; }
+    .code-panel pre { margin: 0; padding: 1.25rem; overflow-x: auto; font-family: 'JetBrains Mono', monospace; font-size: 0.82rem; line-height: 1.6; background: var(--code-bg) !important; }
+    .code-panel pre code { background: none; font-size: inherit; color: var(--code-text); padding: 0; border-radius: 0; }
+    .copy-btn { position: absolute; top: 0.75rem; right: 0.75rem; background: var(--bg-surface); border: 1px solid var(--code-border); color: var(--text-muted); padding: 0.3rem 0.6rem; border-radius: 6px; font-size: 0.72rem; cursor: pointer; font-family: 'JetBrains Mono', monospace; transition: all var(--transition-fast); z-index: 5; }
+    .copy-btn:hover { color: var(--os-orange); border-color: var(--os-orange); }
+    .code-annotation { background: var(--bg-surface); border-left: 3px solid var(--os-orange); padding: 0.65rem 1rem; font-size: 0.85rem; color: var(--text-secondary); font-family: 'Source Sans 3', sans-serif; }
+    .code-annotation strong { color: var(--os-orange); font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.8rem; }
+    .code-single { background: var(--code-bg); border: 1px solid var(--code-border); border-radius: 8px; overflow: hidden; margin: 1rem 0; position: relative; }
+    .code-single pre { margin: 0; padding: 1rem 1.25rem; font-family: 'JetBrains Mono', monospace; font-size: 0.82rem; line-height: 1.6; overflow-x: auto; }
+    .code-single pre code { background: none; color: var(--code-text); padding: 0; border-radius: 0; }
+    .output-block { background: var(--code-bg); border: 1px solid var(--code-border); border-radius: 8px; padding: 1rem 1.25rem; margin: 0.75rem 0 1.5rem; font-family: 'JetBrains Mono', monospace; font-size: 0.83rem; color: var(--success); line-height: 1.5; white-space: pre-wrap; }
+    .output-label { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.78rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.25rem; }
+
+    /* Animation container */
+    .animation-container { background: var(--bg-secondary); border: 1px solid var(--code-border); border-radius: 12px; padding: 2rem; margin: 2rem 0; position: relative; overflow: hidden; }
+    .animation-title { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.85rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 1.25rem; }
+    .animation-controls { display: flex; gap: 0.5rem; position: absolute; bottom: 1rem; right: 1rem; }
+    .anim-btn { background: var(--bg-card); border: 1px solid var(--code-border); color: var(--text-primary); width: 36px; height: 36px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 1rem; transition: all var(--transition-fast); }
+    .anim-btn:hover { border-color: var(--os-orange); color: var(--os-orange); }
+
+    /* Tables */
+    .data-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; margin: 1.5rem 0; }
+    .data-table th { text-align: left; padding: 0.65rem 0.8rem; color: var(--text-muted); font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.78rem; font-weight: 700; border-bottom: 2px solid var(--code-border); white-space: nowrap; }
+    .data-table td { padding: 0.55rem 0.8rem; border-bottom: 1px solid var(--code-border); color: var(--text-secondary); vertical-align: top; font-size: 0.88rem; }
+    .data-table tr:last-child td { border-bottom: none; }
+    .data-table tr:hover td { background: rgba(255,255,255,0.02); }
+    .data-table td strong { color: var(--text-primary); }
+    .badge-fast { background: var(--success-bg); color: var(--success); border-radius: 4px; padding: 0.1em 0.4em; font-size: 0.75rem; font-family: 'JetBrains Mono', monospace; }
+    .badge-med { background: var(--warning-bg); color: var(--warning); border-radius: 4px; padding: 0.1em 0.4em; font-size: 0.75rem; font-family: 'JetBrains Mono', monospace; }
+    .badge-slow { background: var(--error-bg); color: var(--error); border-radius: 4px; padding: 0.1em 0.4em; font-size: 0.75rem; font-family: 'JetBrains Mono', monospace; }
+
+    /* Objectives list */
+    .objectives-list { list-style: none; margin-left: 0; }
+    .objectives-list li { padding: 0.5rem 0 0.5rem 2rem; position: relative; }
+    .objectives-list li::before { content: ''; position: absolute; left: 0; top: 0.85rem; width: 16px; height: 16px; border-radius: 4px; border: 2px solid var(--os-orange); background: var(--os-orange-bg); }
+
+    /* Step cards */
+    .steps-container { counter-reset: steps; }
+    .step-card { background: var(--bg-card); border: 1px solid var(--code-border); border-radius: 10px; padding: 1.25rem 1.5rem 1.25rem 3.5rem; margin-bottom: 1rem; counter-increment: steps; position: relative; }
+    .step-card::before { content: counter(steps); position: absolute; left: 1rem; top: 1.1rem; width: 28px; height: 28px; border-radius: 50%; background: var(--os-orange); color: white; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 0.85rem; display: flex; align-items: center; justify-content: center; }
+    .step-title { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; color: var(--text-primary); margin-bottom: 0.4rem; font-size: 1rem; }
+
+    /* Checkpoint + bridge */
+    .checkpoint { background: var(--bg-card); border: 1px solid var(--os-orange); border-radius: 8px; padding: 1rem 1.25rem; margin: 1.5rem 0; }
+    .checkpoint-label { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 0.85rem; color: var(--os-orange); margin-bottom: 0.4rem; }
+    .bridge { background: var(--bg-surface); border-radius: 8px; padding: 1rem 1.25rem; margin: 2rem 0; font-style: italic; color: var(--text-secondary); border-left: 3px solid var(--text-muted); }
+
+    /* Metric cards */
+    .metric-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin: 1.5rem 0; }
+    .metric-card { background: var(--bg-card); border: 1px solid var(--code-border); border-radius: 10px; padding: 1rem 1.25rem; text-align: center; }
+    .metric-num { font-family: 'Bricolage Grotesque', sans-serif; font-size: 1.75rem; font-weight: 800; color: var(--os-orange); }
+    .metric-label { font-size: 0.8rem; color: var(--text-muted); margin-top: 0.2rem; line-height: 1.3; }
+    @media (max-width: 600px) { .metric-row { grid-template-columns: 1fr 1fr; } }
+
+    /* Provider tag badges */
+    .tag-gcp { background: rgba(66,133,244,0.12); border: 1px solid var(--gcp); border-radius: 4px; color: var(--gcp); padding: 0.1em 0.4em; font-size: 0.75rem; font-family: 'JetBrains Mono', monospace; }
+    .tag-aws { background: rgba(255,153,0,0.12); border: 1px solid var(--aws); border-radius: 4px; color: var(--aws); padding: 0.1em 0.4em; font-size: 0.75rem; font-family: 'JetBrains Mono', monospace; }
+    .tag-groq { background: rgba(249,115,22,0.12); border: 1px solid var(--os-orange); border-radius: 4px; color: var(--os-orange); padding: 0.1em 0.4em; font-size: 0.75rem; font-family: 'JetBrains Mono', monospace; }
+    .tag-free { background: var(--success-bg); border: 1px solid var(--success); border-radius: 4px; color: var(--success); padding: 0.1em 0.4em; font-size: 0.75rem; font-family: 'JetBrains Mono', monospace; }
+
+    /* Quiz */
+    .quiz-question { background: var(--bg-card); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; border: 1px solid var(--code-border); }
+    .quiz-question h4 { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 600; margin-bottom: 1rem; font-size: 1rem; }
+    .quiz-option { padding: 0.75rem 1rem; margin: 0.5rem 0; border: 1px solid var(--code-border); border-radius: 8px; cursor: pointer; transition: all var(--transition-fast); display: flex; align-items: flex-start; gap: 0.75rem; font-size: 0.92rem; color: var(--text-secondary); }
+    .quiz-option:hover { border-color: var(--os-orange); color: var(--text-primary); }
+    .quiz-option.correct { border-color: var(--success); background: var(--success-bg); color: var(--success); }
+    .quiz-option.incorrect { border-color: var(--error); background: var(--error-bg); color: var(--error); }
+    .quiz-option.disabled { pointer-events: none; }
+    .quiz-marker { width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--code-border); flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 700; margin-top: 2px; }
+    .quiz-option.correct .quiz-marker { border-color: var(--success); color: var(--success); }
+    .quiz-option.incorrect .quiz-marker { border-color: var(--error); color: var(--error); }
+    .quiz-feedback { margin-top: 0.75rem; padding: 0.75rem; border-radius: 8px; font-size: 0.88rem; display: none; }
+    .quiz-feedback.show { display: block; }
+    .quiz-feedback.correct-fb { background: var(--success-bg); color: var(--success); }
+    .quiz-feedback.incorrect-fb { background: var(--error-bg); color: var(--error); }
+    .quiz-score { background: var(--bg-card); border-radius: 12px; padding: 1.5rem; text-align: center; margin-top: 2rem; display: none; border: 1px solid var(--code-border); }
+    .quiz-score .score-num { font-family: 'Bricolage Grotesque', sans-serif; font-size: 2.5rem; font-weight: 800; color: var(--os-orange); }
+
+    /* Module nav */
+    .module-nav { display: flex; justify-content: space-between; align-items: center; padding: 1.5rem 0; margin: 2rem 0; border-top: 1px solid var(--code-border); gap: 1rem; }
+    .nav-btn { display: flex; flex-direction: column; padding: 1rem 1.5rem; background: var(--bg-card); border: 1px solid var(--code-border); border-radius: 12px; text-decoration: none; transition: all var(--transition-normal); max-width: 280px; }
+    .nav-btn:hover { border-color: var(--os-orange); text-decoration: none; }
+    .nav-btn-label { font-size: 0.75rem; color: var(--text-muted); margin-bottom: 0.25rem; }
+    .nav-btn-title { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.95rem; font-weight: 600; color: var(--text-primary); }
+    .nav-btn.next { text-align: right; margin-left: auto; }
+
+    /* ── Animation 1: Cost vs Speed Bar Chart ── */
+    .bar-chart-wrap { padding-bottom: 3rem; }
+    .bar-chart-grid { display: flex; align-items: flex-end; gap: 1rem; height: 200px; padding: 0 0.5rem; justify-content: space-around; }
+    .bar-group { display: flex; flex-direction: column; align-items: center; gap: 0.4rem; flex: 1; min-width: 0; }
+    .bar-label { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.72rem; font-weight: 600; color: var(--text-secondary); text-align: center; white-space: nowrap; }
+    .bar-pair { display: flex; gap: 3px; align-items: flex-end; height: 180px; }
+    .bar-col { border-radius: 4px 4px 0 0; transition: height 0.8s cubic-bezier(.25,.8,.25,1); width: 18px; }
+    .bar-speed { background: linear-gradient(180deg, #10B981, #059669); }
+    .bar-cost { background: linear-gradient(180deg, #F59E0B, #D97706); opacity: 0.75; }
+    .bar-val { font-family: 'JetBrains Mono', monospace; font-size: 0.6rem; color: var(--text-muted); text-align: center; }
+    .bar-legend { display: flex; gap: 1.5rem; justify-content: center; margin-top: 0.75rem; flex-wrap: wrap; }
+    .bleg { display: flex; align-items: center; gap: 0.5rem; font-size: 0.78rem; color: var(--text-secondary); }
+    .bleg-dot { width: 12px; height: 12px; border-radius: 3px; }
+
+    /* ── Animation 2: Provider Decision Tree ── */
+    .dtree-wrap { padding: 0.5rem 0 3rem; }
+    .dtree-node { display: inline-flex; padding: 0.45rem 0.9rem; border-radius: 8px; font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.78rem; font-weight: 600; text-align: center; white-space: nowrap; opacity: 0; transition: opacity 0.5s; }
+    .dtree-node.show { opacity: 1; }
+    .dtree-q { background: var(--info-bg); border: 1px solid var(--info); color: var(--info); }
+    .dtree-yes { background: var(--success-bg); border: 1px solid var(--success); color: var(--success); }
+    .dtree-provider { background: var(--os-orange-bg); border: 1px solid var(--os-orange); color: var(--os-orange); font-size: 0.85rem; }
+    .dtree-row { display: flex; align-items: center; gap: 0.75rem; margin: 0.4rem 0; flex-wrap: wrap; }
+    .dtree-arrow { color: var(--text-muted); font-size: 1.1rem; opacity: 0; transition: opacity 0.4s; }
+    .dtree-arrow.show { opacity: 1; }
+    .dtree-indent { margin-left: 2rem; }
+
+    /* ── Animation 3: SSH Tunnel Diagram ── */
+    .tunnel-wrap { padding: 0 0 3rem; }
+    .tunnel-nodes { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; }
+    .tunnel-box { background: var(--bg-card); border: 1px solid var(--code-border); border-radius: 10px; padding: 0.75rem 1rem; text-align: center; min-width: 110px; opacity: 0; transition: opacity 0.5s; }
+    .tunnel-box.show { opacity: 1; }
+    .tunnel-box.local { border-color: var(--info); }
+    .tunnel-box.cloud { border-color: var(--os-orange); }
+    .tunnel-box.ollama-node { border-color: var(--success); }
+    .tunnel-box-icon { font-size: 1.5rem; margin-bottom: 0.25rem; }
+    .tunnel-box-name { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.75rem; font-weight: 700; }
+    .tunnel-box.local .tunnel-box-name { color: var(--info); }
+    .tunnel-box.cloud .tunnel-box-name { color: var(--os-orange); }
+    .tunnel-box.ollama-node .tunnel-box-name { color: var(--success); }
+    .tunnel-box-detail { font-family: 'JetBrains Mono', monospace; font-size: 0.6rem; color: var(--text-muted); margin-top: 0.15rem; }
+    .tunnel-line { flex: 1; height: 2px; min-width: 30px; position: relative; opacity: 0; transition: opacity 0.5s; }
+    .tunnel-line.show { opacity: 1; }
+    .tunnel-line.encrypted { background: linear-gradient(90deg, var(--info), var(--success)); }
+    .tunnel-line.local-line { background: var(--success); }
+    .tunnel-line-label { position: absolute; top: -1.2rem; left: 50%; transform: translateX(-50%); font-family: 'JetBrains Mono', monospace; font-size: 0.62rem; color: var(--text-muted); white-space: nowrap; }
+    .tunnel-packet { width: 10px; height: 10px; border-radius: 50%; position: absolute; top: -4px; opacity: 0; }
+    .tunnel-packet.active { opacity: 1; animation: slidePacket 1.5s linear infinite; }
+    @keyframes slidePacket { 0% { left: 0%; } 100% { left: 100%; } }
+
+    /* Reduced motion */
+    .anim-static-fallback { display: none; padding: 1rem; font-size: 0.9rem; color: var(--text-secondary); }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+      .animation-controls { display: none; }
+      .anim-static-fallback { display: block; }
+      .bar-col { transition: none !important; }
+      .dtree-node, .dtree-arrow, .tunnel-box, .tunnel-line { opacity: 1 !important; }
+      .tunnel-packet { display: none; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="top-progress" role="progressbar" aria-valuenow="23" aria-valuemin="1" aria-valuemax="24" aria-label="OS Track progress: Module 23 of 24">
+  <div class="fill"></div>
+</div>
+
+<header class="course-header">
+  <div class="course-header-inner">
+    <div>
+      <div class="course-title">Building AI Agents with Open Source Models</div>
+      <div style="display:flex;align-items:center;gap:1rem;margin-top:0.5rem;flex-wrap:wrap;">
+        <span class="track-badge"><span class="dot"></span> Track 7: Production &amp; Deployment</span>
+        <span style="font-size:0.85rem;color:var(--text-muted);">OS Track &middot; Module 23 of 24</span>
+      </div>
+    </div>
+    <div class="header-meta">
+      <span>&#9201; 85 min</span>
+      <span>&#128202; Intermediate</span>
+    </div>
+  </div>
+</header>
+
+<div class="page-container">
+  <nav class="sidebar-nav" aria-label="Module sections">
+    <div class="sidebar-title">On This Page</div>
+    <a href="#objectives">Learning Objectives</a>
+    <a href="#why-cloud">Why Move to Cloud?</a>
+    <a href="#provider-comparison">Provider Comparison</a>
+    <a href="#gcp-deployment">Lab 1: GCP + T4 GPU</a>
+    <a href="#gcp-vm" class="sub">Create VM</a>
+    <a href="#gcp-systemd" class="sub">systemd Service</a>
+    <a href="#gcp-connect" class="sub">Connection Test</a>
+    <a href="#aws-deployment">Lab 2: AWS EC2 + T4</a>
+    <a href="#aws-launch" class="sub">Launch Instance</a>
+    <a href="#aws-connect" class="sub">SSH Tunnel</a>
+    <a href="#managed-alternatives">Managed Alternatives</a>
+    <a href="#provider-agnostic-wrapper">Provider-Agnostic Wrapper</a>
+    <a href="#cost-estimator">Cost Estimator</a>
+    <a href="#quiz">Knowledge Check</a>
+  </nav>
+
+  <main class="content">
+
+    <!-- OS Track Banner -->
+    <div style="background:var(--os-orange-bg);border:1px solid var(--os-orange);border-radius:12px;padding:1rem 1.5rem;margin-bottom:2rem;display:flex;align-items:flex-start;gap:1rem;">
+      <span style="font-size:1.5rem;flex-shrink:0">&#9729;</span>
+      <div>
+        <strong style="color:var(--os-orange);font-family:'Bricolage Grotesque',sans-serif;display:block;margin-bottom:0.25rem">Open Source Track &mdash; M21B</strong>
+        <span style="font-size:0.9rem;color:var(--text-secondary);">All code uses <code>OpenAI(base_url=&quot;http://...&quot;, api_key=&quot;ollama&quot;)</code> &mdash; the same SDK you&rsquo;ve used since M01. The only thing that changes is the hostname: <strong style="color:var(--text-primary)">localhost</strong> becomes your cloud VM&rsquo;s IP address. One env var swap, infinite scale.</span>
+      </div>
+    </div>
+
+    <h1>M21B: Cloud Deployment</h1>
+    <p style="color:var(--text-secondary);font-size:1.1rem;margin-bottom:2rem;">Your Ollama agent runs brilliantly on your laptop. Now let&rsquo;s move it to a cloud GPU VM so it runs 24&thinsp;/&thinsp;7, serves your whole team, and delivers 5&ndash;10&times; faster inference &mdash; with the exact same code.</p>
+
+    <!-- OBJECTIVES -->
+    <section class="section" id="objectives">
+      <h2>Learning Objectives</h2>
+      <ul class="objectives-list">
+        <li>Explain why a cloud GPU VM is the right next step after local development</li>
+        <li>Compare GPU cloud providers by cost, speed, and operational simplicity</li>
+        <li>Provision a GCP Compute Engine VM with a T4 GPU and Ollama running as a <span class="term-tooltip" tabindex="0">systemd<span class="tooltip-content">systemd: the Linux process manager. A systemd service runs automatically at boot, restarts on crash, and exposes logs via journalctl. It is the standard way to run long-lived server processes on modern Ubuntu/Debian VMs.</span></span> service</li>
+        <li>Provision an AWS EC2 g4dn.xlarge with the Deep Learning AMI and secure SSH access</li>
+        <li>Connect your existing agent code to a cloud Ollama instance via an <span class="term-tooltip" tabindex="0">SSH tunnel<span class="tooltip-content">SSH tunnel: an encrypted network connection that forwards a local port (e.g. 11434 on your laptop) to a port on a remote server. Traffic travels through the encrypted SSH channel — no firewall rule or public port is needed on the server.</span></span></li>
+        <li>Use managed OpenAI-compatible APIs (Groq, Together AI, Fireworks) as drop-in Ollama replacements</li>
+        <li>Build a <code>LocalModelClient</code> provider-agnostic wrapper driven by an env var</li>
+        <li>Estimate monthly inference cost across providers from a tokens/day budget</li>
+      </ul>
+    </section>
+
+    <!-- WHY CLOUD -->
+    <section class="section" id="why-cloud">
+      <h2>Why Move From Local to Cloud?</h2>
+
+      <div class="analogy-box">
+        <span class="box-label">Analogy — The Sleeping Analyst</span>
+        <p><strong>BEFORE:</strong> You have a research agent running on your laptop. It uses Mistral 7B via Ollama, you have full control, and it works great during your workday. Eight tokens per second on the M2 Pro feels perfectly fast when you are the only user.</p>
+        <p><strong>PAIN:</strong> Your laptop sleeps when you close the lid. Your teammate in a different time zone cannot access it. A scheduled job that runs at 3&thinsp;am finds nothing listening on port 11434. And when three people try to run queries simultaneously, they all share the same four CPU threads — latency spikes to 30+ seconds per request.</p>
+        <p><strong>MAPPING:</strong> A cloud GPU VM is that same analyst, but now living in an office that never closes. The VM runs 24&thinsp;/&thinsp;7, exposes Ollama on a port only reachable via SSH, and a T4&rsquo;s dedicated 16&thinsp;GB <span class="term-tooltip" tabindex="0">VRAM<span class="tooltip-content">VRAM (Video RAM): the dedicated memory on a GPU. For LLM inference, VRAM determines which model sizes you can run and how much you can batch. A 16 GB T4 can run Mistral 7B with room to spare; a 24 GB RTX 3090 can run Mixtral 8x7B in 4-bit.</span></span> delivers 40+ tokens per second — five times faster than your laptop. The code change is one line: swap <code>localhost</code> for the VM&rsquo;s IP.</p>
+      </div>
+
+      <div class="callout-why">
+        <span class="box-label">Why It Matters — Real Numbers</span>
+        <p>A production agent handling 10 concurrent users needs at minimum 200 tokens/sec sustained throughput. An M2 Pro MacBook delivers ~8 tok/s on Mistral 7B-Q4 (CPU-only) — that is <strong>25 users serialised into a single queue</strong>. A GCP T4 VM delivers ~40 tok/s (5&times;), a RTX 3090 on Vast.ai delivers ~80 tok/s (10&times;), and an A100 on Lambda Labs delivers ~200 tok/s (25&times;). For the cost of one Starbucks latte per day (~$0.20/hr on a 3090), you can serve a small team in real time.</p>
+      </div>
+
+      <div class="metric-row">
+        <div class="metric-card">
+          <div class="metric-num">8</div>
+          <div class="metric-label">tok/s on M2 Pro<br>(CPU, Mistral 7B-Q4)</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-num">40</div>
+          <div class="metric-label">tok/s on T4 GPU<br>(GCP, $0.35/hr)</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-num">80</div>
+          <div class="metric-label">tok/s on RTX 3090<br>(Vast.ai, $0.20/hr)</div>
+        </div>
+      </div>
+
+      <div class="tech-def-box">
+        <span class="box-label">The One-Env-Var Promise</span>
+        <p>Every code example you have written in this course uses <code>OpenAI(base_url=&quot;http://localhost:11434/v1&quot;, api_key=&quot;ollama&quot;)</code>. To point the same code at a cloud VM, change exactly one value: the hostname. Everything else &mdash; model name, request format, streaming API, tool-call schema &mdash; stays identical. This is not a migration; it is a config change.</p>
+        <p>The cleanest pattern: read <code>base_url</code> from an env var <code>OLLAMA_BASE_URL</code> that defaults to <code>http://localhost:11434/v1</code> in development and is set to the VM IP in production. No code path changes, no if-branches, no adapter layers.</p>
+      </div>
+    </section>
+
+    <!-- PROVIDER COMPARISON -->
+    <section class="section" id="provider-comparison">
+      <h2>Provider Comparison</h2>
+
+      <p>Not all GPU clouds are equal. The table below shows the realistic choices for running Ollama in production, ordered from the cheapest to the most enterprise-grade. Note: prices are approximate and change frequently &mdash; always check the provider&rsquo;s current pricing page.</p>
+
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Provider</th>
+            <th>Instance</th>
+            <th>GPU</th>
+            <th>VRAM</th>
+            <th>~Cost/hr</th>
+            <th>Mistral 7B Speed</th>
+            <th>Best For</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong>Vast.ai</strong></td>
+            <td>RTX 3090 spot</td>
+            <td>3090</td>
+            <td>24 GB</td>
+            <td>~$0.20</td>
+            <td><span class="badge-fast">~80 tok/s</span></td>
+            <td>Dev / experiments</td>
+          </tr>
+          <tr>
+            <td><strong>RunPod</strong></td>
+            <td>RTX 3090 pod</td>
+            <td>3090</td>
+            <td>24 GB</td>
+            <td>~$0.22</td>
+            <td><span class="badge-fast">~80 tok/s</span></td>
+            <td>Side projects, startups</td>
+          </tr>
+          <tr>
+            <td><strong>GCP</strong></td>
+            <td>n1-standard-4 + T4</td>
+            <td>T4</td>
+            <td>16 GB</td>
+            <td>~$0.35</td>
+            <td><span class="badge-med">~40 tok/s</span></td>
+            <td>GCP-native teams</td>
+          </tr>
+          <tr>
+            <td><strong>AWS</strong></td>
+            <td>g4dn.xlarge</td>
+            <td>T4</td>
+            <td>16 GB</td>
+            <td>~$0.53</td>
+            <td><span class="badge-med">~40 tok/s</span></td>
+            <td>AWS-native teams</td>
+          </tr>
+          <tr>
+            <td><strong>Azure</strong></td>
+            <td>NC4as_T4_v3</td>
+            <td>T4</td>
+            <td>16 GB</td>
+            <td>~$0.53</td>
+            <td><span class="badge-med">~40 tok/s</span></td>
+            <td>Enterprise / Azure AD</td>
+          </tr>
+          <tr>
+            <td><strong>Lambda Labs</strong></td>
+            <td>1x A10 instance</td>
+            <td>A10</td>
+            <td>24 GB</td>
+            <td>~$0.60</td>
+            <td><span class="badge-fast">~100 tok/s</span></td>
+            <td>Production workloads</td>
+          </tr>
+          <tr>
+            <td><strong>CoreWeave</strong></td>
+            <td>A100 80GB</td>
+            <td>A100</td>
+            <td>80 GB</td>
+            <td>~$2.21</td>
+            <td><span class="badge-fast">~200 tok/s</span></td>
+            <td>High-throughput prod</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <!-- Animation 1: Cost vs Speed Bar Chart -->
+      <div class="animation-container" aria-label="Animated bar chart comparing cost per hour and inference speed across GPU cloud providers">
+        <div class="animation-title">Cost vs. Speed &mdash; Provider Comparison</div>
+        <div class="bar-chart-wrap">
+          <div class="bar-chart-grid" id="bar-chart-grid">
+            <!-- Bars populated by JS -->
+          </div>
+          <div class="bar-legend">
+            <div class="bleg"><div class="bleg-dot" style="background:#10B981;"></div>Speed (tok/s, scaled)</div>
+            <div class="bleg"><div class="bleg-dot" style="background:#F59E0B;opacity:0.75;"></div>Cost ($/hr, scaled)</div>
+          </div>
+        </div>
+        <div class="anim-static-fallback">Bar chart: Vast.ai 80 tok/s $0.20/hr, RunPod 80 tok/s $0.22/hr, GCP 40 tok/s $0.35/hr, AWS 40 tok/s $0.53/hr, Lambda 100 tok/s $0.60/hr, CoreWeave 200 tok/s $2.21/hr</div>
+        <div class="animation-controls">
+          <button class="anim-btn" onclick="barChart.toggle()" id="bar-play-btn" aria-label="Play or pause bar chart animation">&#9654;</button>
+          <button class="anim-btn" onclick="barChart.restart()" aria-label="Restart bar chart animation">&#8635;</button>
+        </div>
+      </div>
+
+      <div class="callout-cost">
+        <span class="box-label">Cost Framing</span>
+        <p>A T4 VM running 8 hours a day (typical dev workday) costs <strong>$2.80/day on GCP</strong> — less than a coffee. If you stop the VM when not in use, a month of heavy development runs ~$56. Lambda Labs A10 at 8 hr/day is $144/month. Compare that to OpenAI API costs at scale: 1M tokens/day at $3/MTok = <strong>$90/month</strong>, with no GPU to manage. The crossover point depends on your token volume and privacy requirements.</p>
+      </div>
+    </section>
+
+    <div class="bridge">The comparison gives you the map. Now let&rsquo;s walk through the actual steps for the two most common cloud providers: GCP and AWS. Each lab produces a running Ollama instance reachable from your dev machine via an SSH tunnel &mdash; no firewall rules, no public ports, no exposure.</div>
+
+    <!-- GCP DEPLOYMENT -->
+    <section class="section" id="gcp-deployment">
+      <h2>Lab 1: GCP Compute Engine with T4 GPU</h2>
+
+      <p>Google Cloud Platform Compute Engine lets you attach a <span class="term-tooltip" tabindex="0">GPU<span class="tooltip-content">GPU (Graphics Processing Unit): a processor with thousands of small parallel cores optimised for matrix math. Because transformer inference is essentially batched matrix multiplication, a GPU can run LLM inference 10–50x faster than a CPU for the same model size.</span></span> accelerator to a standard VM. The T4 is the cheapest NVIDIA GPU available on GCP and comfortably runs Mistral 7B and Mixtral 8x7B in 4-bit quantisation.</p>
+
+      <div class="callout-warning">
+        <span class="box-label">Prerequisites</span>
+        <p>You need a GCP project with billing enabled and GPU quota in <code>us-central1-a</code>. New GCP accounts have 0 GPU quota by default — request it at <strong>IAM &amp; Admin &rarr; Quotas &rarr; search "NVIDIA T4 GPUs"</strong>. Approval is usually instant for &le;1 GPU. Install the <code>gcloud</code> CLI and run <code>gcloud auth login</code> before the steps below.</p>
+      </div>
+
+      <h3 id="gcp-vm">Step 1 — Create the VM</h3>
+
+      <div class="code-single">
+        <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code to clipboard">Copy</button>
+        <pre><code class="language-bash"># Create VM with T4 GPU, Ubuntu 22.04, 50 GB SSD
+# --maintenance-policy=TERMINATE is required for GPU VMs (no live migration)
+gcloud compute instances create ollama-server \
+  --zone=us-central1-a \
+  --machine-type=n1-standard-4 \
+  --accelerator=type=nvidia-tesla-t4,count=1 \
+  --image-family=ubuntu-2204-lts \
+  --image-project=ubuntu-os-cloud \
+  --boot-disk-size=50GB \
+  --boot-disk-type=pd-ssd \
+  --maintenance-policy=TERMINATE \
+  --metadata=startup-script='#!/bin/bash
+    # Install CUDA drivers (required for T4 GPU access)
+    apt-get install -y linux-headers-$(uname -r)
+    curl -fsSL https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.1-1_all.deb -o /tmp/cuda-keyring.deb
+    dpkg -i /tmp/cuda-keyring.deb
+    apt-get update -y && apt-get install -y cuda-drivers
+    # Install Ollama
+    curl -fsSL https://ollama.com/install.sh | sh
+    # Pull Mistral (4-bit, fits in T4 16 GB VRAM)
+    sudo -u ubuntu ollama pull mistral
+  '
+
+# Verify the instance is running
+gcloud compute instances describe ollama-server --zone=us-central1-a \
+  --format="value(status)"
+# Expected: RUNNING</code></pre>
+      </div>
+
+      <div class="code-annotation">
+        <strong>WHAT:</strong> Creates a 4-vCPU VM with a T4 GPU, starts the CUDA driver installation via startup-script, and pulls Mistral 7B<br>
+        <strong>WHY:</strong> The startup-script runs as root at first boot — this is idiomatic GCP and avoids a manual SSH session for one-time setup<br>
+        <strong>GOTCHA:</strong> The startup-script can take 5–10 minutes. SSH in and run <code>journalctl -f -u google-startup-scripts</code> to watch progress
+      </div>
+
+      <h3 id="gcp-systemd">Step 2 — Configure Ollama as a systemd Service</h3>
+
+      <p>By default, Ollama starts when you first SSH in and stops when you log out. Registering it as a <span class="term-tooltip" tabindex="0">systemd<span class="tooltip-content">systemd is the init system on modern Linux (Ubuntu, Debian, Fedora). You register a program as a "service" with a unit file, then systemd manages starting it at boot, restarting on crash, and collecting logs. It is the standard production pattern for any long-running server process.</span></span> service makes it start on boot and restart automatically on crash.</p>
+
+      <div class="code-single">
+        <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code to clipboard">Copy</button>
+        <pre><code class="language-bash"># SSH into the VM
+gcloud compute ssh ollama-server --zone=us-central1-a
+
+# Inside the VM: write a systemd unit file for Ollama
+sudo tee /etc/systemd/system/ollama.service &gt; /dev/null &lt;&lt;'EOF'
+[Unit]
+Description=Ollama LLM Server
+After=network.target
+
+[Service]
+# Run as the ubuntu user so model cache goes to /home/ubuntu/.ollama
+User=ubuntu
+ExecStart=/usr/local/bin/ollama serve
+# Only bind to localhost — the SSH tunnel handles external access
+Environment="OLLAMA_HOST=127.0.0.1:11434"
+Restart=always
+RestartSec=5
+# Give the GPU time to initialise at startup
+TimeoutStartSec=60
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+# Enable and start the service
+sudo systemctl daemon-reload
+sudo systemctl enable ollama
+sudo systemctl start ollama
+
+# Verify it is running
+sudo systemctl status ollama
+# Expected: Active: active (running)</code></pre>
+      </div>
+
+      <div class="code-annotation">
+        <strong>WHAT:</strong> Writes a systemd unit file that runs <code>ollama serve</code> bound to 127.0.0.1 (not 0.0.0.0)<br>
+        <strong>WHY:</strong> Binding to 127.0.0.1 means Ollama is never reachable from the public internet — only via SSH tunnel. This is the secure default.<br>
+        <strong>GOTCHA:</strong> If you forget <code>OLLAMA_HOST=127.0.0.1:11434</code>, Ollama listens on 0.0.0.0 and anyone who guesses your VM IP can run inference on your bill
+      </div>
+
+      <h3 id="gcp-connect">Step 3 — Connect via SSH Tunnel</h3>
+
+      <p>An <span class="term-tooltip" tabindex="0">SSH tunnel<span class="tooltip-content">An SSH tunnel (-L local:remote) tells your SSH client to forward any connection to a local port through the encrypted SSH channel to a port on the remote host. Your local process thinks it is connecting to localhost; the traffic actually travels over SSH to the remote server.</span></span> forwards local port 11434 through the encrypted SSH channel to the VM&rsquo;s 127.0.0.1:11434. Your agent code never sees the internet — it only ever connects to localhost.</p>
+
+      <div class="code-single">
+        <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code to clipboard">Copy</button>
+        <pre><code class="language-bash"># Open SSH tunnel in background (-N = no remote command, -f = background)
+# -L 11434:localhost:11434 = forward local :11434 → VM's localhost:11434
+gcloud compute ssh ollama-server --zone=us-central1-a \
+  -- -L 11434:localhost:11434 -N -f
+
+# Now test it — your local port 11434 is forwarded to the cloud VM
+curl http://localhost:11434/api/tags
+# Expected: {"models": [{"name": "mistral:latest", ...}]}</code></pre>
+      </div>
+
+      <!-- Animation 3: SSH Tunnel Diagram -->
+      <div class="animation-container" id="tunnel-anim" aria-label="Animated diagram showing an SSH tunnel from local machine to cloud VM to Ollama server">
+        <div class="animation-title">SSH Tunnel — Traffic Flow</div>
+        <div class="tunnel-wrap">
+          <div class="tunnel-nodes" id="tunnel-nodes">
+            <div class="tunnel-box local" id="tn-local">
+              <div class="tunnel-box-icon">&#128187;</div>
+              <div class="tunnel-box-name">Your Laptop</div>
+              <div class="tunnel-box-detail">localhost:11434</div>
+            </div>
+            <div class="tunnel-line encrypted" id="tn-line1">
+              <span class="tunnel-line-label">Encrypted SSH</span>
+              <div class="tunnel-packet" id="tn-pkt1" style="background:var(--info);"></div>
+            </div>
+            <div class="tunnel-box cloud" id="tn-cloud">
+              <div class="tunnel-box-icon">&#9729;</div>
+              <div class="tunnel-box-name">GCP VM</div>
+              <div class="tunnel-box-detail">SSH daemon</div>
+            </div>
+            <div class="tunnel-line local-line" id="tn-line2">
+              <span class="tunnel-line-label">loopback only</span>
+              <div class="tunnel-packet" id="tn-pkt2" style="background:var(--success);"></div>
+            </div>
+            <div class="tunnel-box ollama-node" id="tn-ollama">
+              <div class="tunnel-box-icon">&#129422;</div>
+              <div class="tunnel-box-name">Ollama</div>
+              <div class="tunnel-box-detail">127.0.0.1:11434</div>
+            </div>
+          </div>
+          <p style="margin-top:1.25rem;font-size:0.85rem;color:var(--text-secondary);">Your agent code at <code>http://localhost:11434/v1</code> travels through the encrypted SSH channel to the VM, then over the loopback interface to Ollama. No firewall rule needed. No public port exposed.</p>
+        </div>
+        <div class="anim-static-fallback">Laptop :11434 → Encrypted SSH → GCP VM SSH daemon → loopback → Ollama 127.0.0.1:11434. No public port exposed.</div>
+        <div class="animation-controls">
+          <button class="anim-btn" onclick="tunnelAnim.toggle()" id="tunnel-play-btn" aria-label="Play or pause SSH tunnel animation">&#9654;</button>
+          <button class="anim-btn" onclick="tunnelAnim.restart()" aria-label="Restart SSH tunnel animation">&#8635;</button>
+        </div>
+      </div>
+
+      <p>With the tunnel open, your existing agent code works unchanged. The only difference from local development is the tunnel process running in the background.</p>
+
+      <div class="code-block-wrapper">
+        <div class="code-tabs">
+          <button class="code-tab active" onclick="switchTab(this,'gcp-connect-py')" aria-controls="gcp-connect-py">Python</button>
+          <button class="code-tab" onclick="switchTab(this,'gcp-connect-ts')" aria-controls="gcp-connect-ts">TypeScript</button>
+        </div>
+        <div class="code-annotation"><strong>WHAT:</strong> Verify the cloud Ollama connection works with the same code used in M01<br><strong>WHY:</strong> If the SSH tunnel is up and Ollama is running, this code is byte-for-byte identical to local development<br><strong>GOTCHA:</strong> If you get a connection refused error, the tunnel is not open — run the gcloud ssh tunnel command first</div>
+        <div class="code-panel active" id="gcp-connect-py">
+          <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code to clipboard">Copy</button>
+          <pre><code class="language-python"># verify_cloud_connection.py
+# WHAT: Test that the SSH-tunnelled cloud Ollama responds correctly
+# WHY:  The base_url is identical to local development — this is the point
+# GOTCHA: OLLAMA_BASE_URL defaults to localhost; set it to test without tunnel
+
+import os
+from openai import OpenAI
+
+def verify_connection(base_url: str | None = None) -> None:
+    """Verify Ollama is reachable and the model is loaded."""
+    url = base_url or os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1")
+
+    client = OpenAI(base_url=url, api_key="ollama")
+
+    try:
+        # Quick ping — ask for a one-word reply to minimise latency
+        response = client.chat.completions.create(
+            model="mistral",
+            messages=[{"role": "user", "content": "Reply with the single word: connected"}],
+            max_tokens=10,
+        )
+        reply = response.choices[0].message.content.strip()
+        print(f"[OK] Ollama at {url} responded: {reply!r}")
+        print(f"     Model: {response.model}")
+        print(f"     Tokens used: {response.usage.total_tokens}")
+    except Exception as exc:
+        print(f"[FAIL] Cannot reach Ollama at {url}: {exc}")
+        print("       Is the SSH tunnel running?")
+        print("       Command: gcloud compute ssh ollama-server -- -L 11434:localhost:11434 -N -f")
+        raise SystemExit(1)
+
+if __name__ == "__main__":
+    verify_connection()</code></pre>
+        </div>
+        <div class="code-panel" id="gcp-connect-ts">
+          <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code to clipboard">Copy</button>
+          <pre><code class="language-typescript">// verifyCloudConnection.ts
+// WHAT: Verify the SSH-tunnelled Ollama instance responds
+// WHY:  Identical base_url pattern to local development
+// GOTCHA: Set OLLAMA_BASE_URL env var if not using the default SSH tunnel port
+
+import OpenAI from "openai";
+
+async function verifyConnection(baseUrl?: string): Promise&lt;void&gt; {
+  const url =
+    baseUrl ?? process.env.OLLAMA_BASE_URL ?? "http://localhost:11434/v1";
+
+  const client = new OpenAI({ baseURL: url, apiKey: "ollama" });
+
+  try {
+    const response = await client.chat.completions.create({
+      model: "mistral",
+      messages: [
+        { role: "user", content: "Reply with the single word: connected" },
+      ],
+      max_tokens: 10,
+    });
+
+    const reply = response.choices[0].message.content?.trim();
+    console.log(`[OK] Ollama at ${url} responded: ${JSON.stringify(reply)}`);
+    console.log(`     Model: ${response.model}`);
+    console.log(`     Tokens used: ${response.usage?.total_tokens}`);
+  } catch (err) {
+    console.error(`[FAIL] Cannot reach Ollama at ${url}: ${err}`);
+    console.error("       Is the SSH tunnel running?");
+    console.error(
+      "       Command: gcloud compute ssh ollama-server -- -L 11434:localhost:11434 -N -f"
+    );
+    process.exit(1);
+  }
+}
+
+verifyConnection();</code></pre>
+        </div>
+      </div>
+
+      <div class="checkpoint">
+        <div class="checkpoint-label">What Just Happened?</div>
+        <p>You created a GCP VM with a T4 GPU, installed Ollama as a systemd service that starts on boot, and forwarded port 11434 through an SSH tunnel to your laptop. Your agent code saw zero changes — <code>http://localhost:11434/v1</code> now resolves to a cloud GPU. The tunnel encrypts all traffic and leaves no public ports open on the VM.</p>
+      </div>
+    </section>
+
+    <!-- AWS DEPLOYMENT -->
+    <section class="section" id="aws-deployment">
+      <h2>Lab 2: AWS EC2 with T4 GPU</h2>
+
+      <p>AWS provides the g4dn.xlarge instance with a T4 GPU and 16 GB VRAM — the same GPU as the GCP approach above. The <span class="term-tooltip" tabindex="0">Deep Learning AMI<span class="tooltip-content">AWS Deep Learning AMI: an EC2 machine image pre-loaded with CUDA drivers, cuDNN, PyTorch, and other ML frameworks. Using it skips the manual CUDA driver installation step, saving 10–15 minutes at launch.</span></span> (Ubuntu) pre-installs CUDA drivers, saving setup time.</p>
+
+      <div class="callout-warning">
+        <span class="box-label">Prerequisites</span>
+        <p>You need an AWS account with EC2 access, a key pair (create at <strong>EC2 &rarr; Key Pairs</strong> if you do not have one), and the <code>aws</code> CLI configured with <code>aws configure</code>. The <code>g4dn.xlarge</code> is not available in every region — <code>us-east-1</code> and <code>us-west-2</code> always have it.</p>
+      </div>
+
+      <h3 id="aws-launch">Step 1 — Launch the Instance</h3>
+
+      <div class="code-single">
+        <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code to clipboard">Copy</button>
+        <pre><code class="language-bash"># Step 1a: Create a security group that allows SSH only (no inbound 11434)
+aws ec2 create-security-group \
+  --group-name ollama-sg \
+  --description "SSH-only access for Ollama VM"
+
+# Allow SSH from your current IP only (replace with your IP or use 0.0.0.0/0 for any)
+MY_IP=$(curl -s https://checkip.amazonaws.com)
+aws ec2 authorize-security-group-ingress \
+  --group-name ollama-sg \
+  --protocol tcp --port 22 --cidr "${MY_IP}/32"
+
+# Step 1b: Launch g4dn.xlarge with Deep Learning AMI (Ubuntu 20.04)
+# ami-0c2d0b2d77ffd5a16 is the DL AMI in us-east-1 — check AWS Marketplace for your region
+INSTANCE_ID=$(aws ec2 run-instances \
+  --image-id ami-0c2d0b2d77ffd5a16 \
+  --instance-type g4dn.xlarge \
+  --key-name my-key \
+  --security-groups ollama-sg \
+  --block-device-mappings '[{"DeviceName":"/dev/sda1","Ebs":{"VolumeSize":50,"VolumeType":"gp3"}}]' \
+  --query 'Instances[0].InstanceId' --output text)
+
+echo "Instance ID: $INSTANCE_ID"
+
+# Wait until running
+aws ec2 wait instance-running --instance-ids "$INSTANCE_ID"
+
+# Get the public IP
+VM_IP=$(aws ec2 describe-instances --instance-ids "$INSTANCE_ID" \
+  --query 'Reservations[0].Instances[0].PublicIpAddress' --output text)
+
+echo "VM IP: $VM_IP"</code></pre>
+      </div>
+
+      <div class="code-annotation">
+        <strong>WHAT:</strong> Creates an SSH-only security group, then launches a g4dn.xlarge with 50 GB gp3 SSD<br>
+        <strong>WHY:</strong> Restricting SSH to your current IP prevents brute-force attempts; no port 11434 in the security group means Ollama is never internet-accessible<br>
+        <strong>GOTCHA:</strong> The Deep Learning AMI ID changes with each update — check the <a href="https://aws.amazon.com/relatedlinks/dlami/" target="_blank" rel="noopener">AWS DL AMI page</a> for the current ID in your region
+      </div>
+
+      <h3>Step 2 — Install Ollama and Pull Model</h3>
+
+      <div class="code-single">
+        <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code to clipboard">Copy</button>
+        <pre><code class="language-bash"># SSH and install Ollama (CUDA is already on the DL AMI)
+ssh -i my-key.pem ubuntu@${VM_IP} \
+  "curl -fsSL https://ollama.com/install.sh | sh && ollama pull mistral"
+
+# Set up systemd service (same unit file as GCP lab)
+ssh -i my-key.pem ubuntu@${VM_IP} 'sudo tee /etc/systemd/system/ollama.service > /dev/null' &lt;&lt;'EOF'
+[Unit]
+Description=Ollama LLM Server
+After=network.target
+
+[Service]
+User=ubuntu
+ExecStart=/usr/local/bin/ollama serve
+Environment="OLLAMA_HOST=127.0.0.1:11434"
+Restart=always
+RestartSec=5
+TimeoutStartSec=60
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+ssh -i my-key.pem ubuntu@${VM_IP} \
+  "sudo systemctl daemon-reload && sudo systemctl enable ollama && sudo systemctl start ollama"</code></pre>
+      </div>
+
+      <h3 id="aws-connect">Step 3 — Open SSH Tunnel</h3>
+
+      <div class="code-single">
+        <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code to clipboard">Copy</button>
+        <pre><code class="language-bash"># Open SSH tunnel — same pattern as GCP, different SSH invocation
+ssh -i my-key.pem -L 11434:localhost:11434 -N -f ubuntu@${VM_IP}
+
+# Verify
+curl http://localhost:11434/api/tags
+# Expected: {"models":[{"name":"mistral:latest",...}]}</code></pre>
+      </div>
+
+      <div class="code-block-wrapper">
+        <div class="code-tabs">
+          <button class="code-tab active" onclick="switchTab(this,'aws-connect-py')" aria-controls="aws-connect-py">Python</button>
+          <button class="code-tab" onclick="switchTab(this,'aws-connect-ts')" aria-controls="aws-connect-ts">TypeScript</button>
+        </div>
+        <div class="code-annotation"><strong>WHAT:</strong> Connection test — byte-for-byte identical to the GCP test<br><strong>WHY:</strong> The whole point: changing from GCP to AWS requires changing the tunnel command, not the application code<br><strong>GOTCHA:</strong> Kill any existing tunnel on :11434 before opening a new one (lsof -ti:11434 | xargs kill -9)</div>
+        <div class="code-panel active" id="aws-connect-py">
+          <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code to clipboard">Copy</button>
+          <pre><code class="language-python"># verify_cloud_connection.py — identical to GCP version
+# WHAT: Same connection test; only the tunnel command above changes
+# WHY:  Provider abstraction works at the infrastructure level, not the code level
+
+import os
+from openai import OpenAI
+
+client = OpenAI(
+    base_url=os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1"),
+    api_key="ollama",
+)
+
+response = client.chat.completions.create(
+    model="mistral",
+    messages=[{"role": "user", "content": "Say 'AWS GPU ready' and nothing else."}],
+    max_tokens=10,
+)
+print(response.choices[0].message.content)
+# Expected: AWS GPU ready</code></pre>
+        </div>
+        <div class="code-panel" id="aws-connect-ts">
+          <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code to clipboard">Copy</button>
+          <pre><code class="language-typescript">// verifyConnection.ts — identical to GCP version
+import OpenAI from "openai";
+
+const client = new OpenAI({
+  baseURL: process.env.OLLAMA_BASE_URL ?? "http://localhost:11434/v1",
+  apiKey: "ollama",
+});
+
+const response = await client.chat.completions.create({
+  model: "mistral",
+  messages: [{ role: "user", content: "Say 'AWS GPU ready' and nothing else." }],
+  max_tokens: 10,
+});
+console.log(response.choices[0].message.content);
+// Expected: AWS GPU ready</code></pre>
+        </div>
+      </div>
+
+      <div class="callout-security">
+        <span class="box-label">Security: Never Open Port 11434 to the Internet</span>
+        <p>Ollama has no authentication by default. If you open port 11434 in the security group (AWS) or firewall rules (GCP), anyone who finds your VM IP can pull models and run inference at your expense. The SSH tunnel pattern in this lab is the correct approach: Ollama binds to 127.0.0.1, the security group allows SSH only, and all access goes through the encrypted tunnel. If you need multiple teammates to access the VM, either share the SSH key or put an authenticated proxy (like the FastAPI service from M21) in front of Ollama.</p>
+      </div>
+    </section>
+
+    <div class="bridge">Managing your own VM is powerful but comes with operational overhead: you patch the OS, monitor disk space, and restart Ollama after crashes. For teams that want the open-source model advantage without the DevOps work, managed OpenAI-compatible APIs are the answer.</div>
+
+    <!-- MANAGED ALTERNATIVES -->
+    <section class="section" id="managed-alternatives">
+      <h2>Managed Open Source Alternatives</h2>
+
+      <p>Several providers host open source models and expose them via an OpenAI-compatible API. The same <code>OpenAI(base_url=...)</code> SDK pattern works &mdash; you just swap the URL and provide a real API key instead of <code>&quot;ollama&quot;</code>.</p>
+
+      <div class="code-block-wrapper">
+        <div class="code-tabs">
+          <button class="code-tab active" onclick="switchTab(this,'managed-py')" aria-controls="managed-py">Python</button>
+          <button class="code-tab" onclick="switchTab(this,'managed-ts')" aria-controls="managed-ts">TypeScript</button>
+        </div>
+        <div class="code-annotation"><strong>WHAT:</strong> Four managed providers that accept OpenAI SDK requests, each with different strengths<br><strong>WHY:</strong> Zero infra to manage; free tiers for development; some offer sub-100ms latency via custom inference kernels<br><strong>GOTCHA:</strong> Model names differ between providers — check each provider's docs for the exact model ID string</div>
+        <div class="code-panel active" id="managed-py">
+          <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code to clipboard">Copy</button>
+          <pre><code class="language-python"># managed_providers.py
+# WHAT: Drop-in replacements for local Ollama using managed hosted APIs
+# WHY:  No VM to manage; free tiers work for dev; fastest inference on earth (Groq)
+# GOTCHA: Each provider uses different model name strings — see their docs
+
+import os
+from openai import OpenAI
+
+# ── Groq: fastest free tier, custom LPU hardware ──────────────────────────
+# Free: 14,400 requests/day, 6,000 tokens/min
+# Models: llama-3.3-70b-versatile, mixtral-8x7b-32768, gemma2-9b-it
+groq_client = OpenAI(
+    base_url="https://api.groq.com/openai/v1",
+    api_key=os.environ["GROQ_API_KEY"],
+)
+
+# ── Together AI: large model catalogue, competitive pricing ───────────────
+# Free: $1 credit on signup
+# Models: mistralai/Mistral-7B-Instruct-v0.2, meta-llama/Llama-3-8b-chat-hf
+together_client = OpenAI(
+    base_url="https://api.together.xyz/v1",
+    api_key=os.environ["TOGETHER_API_KEY"],
+)
+
+# ── Fireworks AI: fastest fine-tuned model serving ────────────────────────
+# Free: $1 credit on signup
+# Models: accounts/fireworks/models/mistral-7b-instruct, llama-v3-8b-instruct
+fireworks_client = OpenAI(
+    base_url="https://api.fireworks.ai/inference/v1",
+    api_key=os.environ["FIREWORKS_API_KEY"],
+)
+
+# ── Amazon Bedrock via OpenAI-compat gateway ──────────────────────────────
+# Requires bedrock-access-gateway: github.com/aws-samples/bedrock-access-gateway
+# Exposes Llama 3.1, Mistral, and other Bedrock models via OpenAI format
+bedrock_client = OpenAI(
+    base_url=(
+        f"https://{os.environ['BEDROCK_GATEWAY_ID']}"
+        ".execute-api.us-east-1.amazonaws.com/prod/v1"
+    ),
+    api_key=os.environ["BEDROCK_API_KEY"],
+)
+
+def call_provider(client: OpenAI, model: str, prompt: str) -> str:
+    """Call any managed provider with the standard OpenAI chat format."""
+    response = client.chat.completions.create(
+        model=model,
+        messages=[{"role": "user", "content": prompt}],
+        max_tokens=256,
+    )
+    return response.choices[0].message.content
+
+# Example: Groq for ultra-fast dev/test queries
+reply = call_provider(
+    groq_client,
+    model="llama-3.3-70b-versatile",
+    prompt="What is the capital of France? One word.",
+)
+print(f"Groq says: {reply}")  # Paris</code></pre>
+        </div>
+        <div class="code-panel" id="managed-ts">
+          <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code to clipboard">Copy</button>
+          <pre><code class="language-typescript">// managedProviders.ts
+// WHAT: Drop-in managed API clients using the OpenAI SDK
+// WHY:  Same SDK, different base_url — zero code divergence between providers
+// GOTCHA: Never commit API keys — load from env
+
+import OpenAI from "openai";
+
+// ── Groq: custom LPU hardware, fastest on the market ─────────────────────
+const groqClient = new OpenAI({
+  baseURL: "https://api.groq.com/openai/v1",
+  apiKey: process.env.GROQ_API_KEY!,
+});
+
+// ── Together AI ──────────────────────────────────────────────────────────
+const togetherClient = new OpenAI({
+  baseURL: "https://api.together.xyz/v1",
+  apiKey: process.env.TOGETHER_API_KEY!,
+});
+
+// ── Fireworks AI ─────────────────────────────────────────────────────────
+const fireworksClient = new OpenAI({
+  baseURL: "https://api.fireworks.ai/inference/v1",
+  apiKey: process.env.FIREWORKS_API_KEY!,
+});
+
+// ── Amazon Bedrock via OpenAI-compat gateway ─────────────────────────────
+const bedrockClient = new OpenAI({
+  baseURL: `https://${process.env.BEDROCK_GATEWAY_ID}.execute-api.us-east-1.amazonaws.com/prod/v1`,
+  apiKey: process.env.BEDROCK_API_KEY!,
+});
+
+async function callProvider(
+  client: OpenAI,
+  model: string,
+  prompt: string
+): Promise&lt;string&gt; {
+  const response = await client.chat.completions.create({
+    model,
+    messages: [{ role: "user", content: prompt }],
+    max_tokens: 256,
+  });
+  return response.choices[0].message.content ?? "";
+}
+
+// Example usage
+const reply = await callProvider(
+  groqClient,
+  "llama-3.3-70b-versatile",
+  "What is the capital of France? One word."
+);
+console.log(`Groq says: ${reply}`); // Paris</code></pre>
+        </div>
+      </div>
+
+      <h3>Managed Provider Comparison</h3>
+
+      <table class="data-table">
+        <thead>
+          <tr>
+            <th>Provider</th>
+            <th>Free Tier</th>
+            <th>Rate Limits (free)</th>
+            <th>Best Open Models</th>
+            <th>Avg Latency</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td><strong><span class="tag-groq">Groq</span></strong></td>
+            <td><span class="tag-free">Free forever</span></td>
+            <td>14,400 req/day · 6K tok/min</td>
+            <td>Llama 3.3 70B, Mixtral 8x7B, Gemma2 9B</td>
+            <td>~50 ms TTFT</td>
+          </tr>
+          <tr>
+            <td><strong>Together AI</strong></td>
+            <td>$1 credit</td>
+            <td>60 req/min on free</td>
+            <td>Mistral 7B, Llama 3 8B/70B, Qwen 2.5</td>
+            <td>~200 ms TTFT</td>
+          </tr>
+          <tr>
+            <td><strong>Fireworks AI</strong></td>
+            <td>$1 credit</td>
+            <td>60 req/min on free</td>
+            <td>Mistral 7B, Llama 3.1, Gemma 2</td>
+            <td>~150 ms TTFT</td>
+          </tr>
+          <tr>
+            <td><strong>OpenRouter</strong></td>
+            <td>Some free models</td>
+            <td>20 req/min free</td>
+            <td>Routes to best provider per model</td>
+            <td>Varies by model</td>
+          </tr>
+          <tr>
+            <td><strong>Bedrock Gateway</strong></td>
+            <td>AWS free tier</td>
+            <td>AWS throttling applies</td>
+            <td>Llama 3.1, Mistral Large, Nova</td>
+            <td>~300 ms TTFT</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="callout-os">
+        <span class="box-label">When to Use Managed vs. Self-Hosted</span>
+        <p><strong>Use managed APIs</strong> when: you are in early development, you want zero infra overhead, your usage is bursty (billing per token is efficient), or you need the largest models (70B+) that require expensive multi-GPU setups.<br><br>
+        <strong>Use self-hosted Ollama</strong> when: data cannot leave your infrastructure (HIPAA, GDPR, financial), you need consistent latency without rate limits, token volume is high enough that per-token billing exceeds VM cost, or you need a specific fine-tuned model not offered by managed providers.</p>
+      </div>
+
+      <!-- Animation 2: Provider Decision Tree -->
+      <div class="animation-container" aria-label="Animated decision tree for choosing a model provider">
+        <div class="animation-title">Provider Selection &mdash; Decision Tree</div>
+        <div class="dtree-wrap" id="dtree-wrap">
+          <div class="dtree-row">
+            <div class="dtree-node dtree-q" id="dt0">Can data leave your infra?</div>
+          </div>
+          <div class="dtree-row dtree-indent">
+            <div class="dtree-arrow" id="dt-a0">NO →</div>
+            <div class="dtree-node dtree-yes" id="dt1">Self-host only</div>
+            <div class="dtree-arrow" id="dt-a1">→</div>
+            <div class="dtree-node dtree-provider" id="dt2">Ollama on VM (GCP / AWS)</div>
+          </div>
+          <div class="dtree-row" style="margin-top:0.75rem">
+            <div class="dtree-node dtree-q" id="dt3" style="opacity:0;">Yes. Need &gt;70B model?</div>
+          </div>
+          <div class="dtree-row dtree-indent">
+            <div class="dtree-arrow" id="dt-a3" style="opacity:0;">YES →</div>
+            <div class="dtree-node dtree-provider" id="dt4" style="opacity:0;">Together AI / Fireworks</div>
+          </div>
+          <div class="dtree-row" style="margin-top:0.75rem">
+            <div class="dtree-node dtree-q" id="dt5" style="opacity:0;">Speed or cost priority?</div>
+          </div>
+          <div class="dtree-row dtree-indent">
+            <div class="dtree-arrow" id="dt-a5" style="opacity:0;">SPEED →</div>
+            <div class="dtree-node dtree-provider" id="dt6" style="opacity:0;">Groq (free tier)</div>
+            <div class="dtree-arrow" id="dt-a6" style="opacity:0;margin-left:1rem;">COST →</div>
+            <div class="dtree-node dtree-provider" id="dt7" style="opacity:0;">Vast.ai / RunPod</div>
+          </div>
+        </div>
+        <div class="anim-static-fallback">Decision: Data must stay in-house → Ollama on VM. Data can leave → Need 70B+ → Together/Fireworks. Speed priority → Groq. Cost priority → Vast.ai/RunPod.</div>
+        <div class="animation-controls">
+          <button class="anim-btn" onclick="dtreeAnim.toggle()" id="dtree-play-btn" aria-label="Play or pause decision tree animation">&#9654;</button>
+          <button class="anim-btn" onclick="dtreeAnim.restart()" aria-label="Restart decision tree animation">&#8635;</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- PROVIDER-AGNOSTIC WRAPPER -->
+    <section class="section" id="provider-agnostic-wrapper">
+      <h2>Provider-Agnostic Wrapper</h2>
+
+      <p>Rather than scattering <code>base_url</code> and <code>api_key</code> lookups throughout your codebase, centralise provider selection in a single factory class. The <code>LOCAL_MODEL_PROVIDER</code> env var becomes the single dial that controls which backend every agent in your application uses.</p>
+
+      <div class="code-block-wrapper">
+        <div class="code-tabs">
+          <button class="code-tab active" onclick="switchTab(this,'wrapper-py')" aria-controls="wrapper-py">Python</button>
+          <button class="code-tab" onclick="switchTab(this,'wrapper-ts')" aria-controls="wrapper-ts">TypeScript</button>
+        </div>
+        <div class="code-annotation"><strong>WHAT:</strong> A factory class that reads LOCAL_MODEL_PROVIDER and returns a configured OpenAI client<br><strong>WHY:</strong> Centralising provider config means you can switch all agents from Ollama to Groq by changing one env var<br><strong>GOTCHA:</strong> The model name is provider-specific (e.g. "mistral" on Ollama, "mistralai/Mistral-7B-Instruct-v0.2" on Together)</div>
+        <div class="code-panel active" id="wrapper-py">
+          <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code to clipboard">Copy</button>
+          <pre><code class="language-python"># local_model_client.py
+# WHAT: Factory that returns a configured OpenAI client for any supported provider
+# WHY:  One env var (LOCAL_MODEL_PROVIDER) controls all agents in the app
+# GOTCHA: Model names are provider-specific — use get_default_model() to stay portable
+
+import os
+from dataclasses import dataclass
+from openai import OpenAI
+
+@dataclass
+class ProviderConfig:
+    """Hold provider-specific settings returned alongside the client."""
+    name: str
+    default_model: str
+    max_context_tokens: int
+
+class LocalModelClient:
+    """
+    Factory for OpenAI-compatible clients across Ollama and managed providers.
+
+    Usage:
+        client, cfg = LocalModelClient.create()
+        response = client.chat.completions.create(
+            model=cfg.default_model, messages=[...], max_tokens=512
+        )
+
+    Environment variables:
+        LOCAL_MODEL_PROVIDER: ollama | groq | together | fireworks (default: ollama)
+        OLLAMA_BASE_URL:      Ollama endpoint (default: http://localhost:11434/v1)
+        GROQ_API_KEY:         Groq API key
+        TOGETHER_API_KEY:     Together AI API key
+        FIREWORKS_API_KEY:    Fireworks AI API key
+    """
+
+    CONFIGS: dict[str, ProviderConfig] = {
+        "ollama":    ProviderConfig("ollama",    "mistral",                          32768),
+        "groq":      ProviderConfig("groq",      "llama-3.3-70b-versatile",          131072),
+        "together":  ProviderConfig("together",  "mistralai/Mistral-7B-Instruct-v0.2", 32768),
+        "fireworks": ProviderConfig("fireworks", "accounts/fireworks/models/mistral-7b-instruct", 32768),
+    }
+
+    @classmethod
+    def create(
+        cls,
+        provider: str | None = None,
+    ) -> tuple[OpenAI, ProviderConfig]:
+        """
+        Return a (client, config) tuple for the requested provider.
+
+        Args:
+            provider: One of "ollama", "groq", "together", "fireworks".
+                      Defaults to LOCAL_MODEL_PROVIDER env var, then "ollama".
+        """
+        name = (provider or os.getenv("LOCAL_MODEL_PROVIDER", "ollama")).lower()
+
+        if name not in cls.CONFIGS:
+            supported = ", ".join(cls.CONFIGS.keys())
+            raise ValueError(
+                f"Unknown provider '{name}'. Supported: {supported}"
+            )
+
+        cfg = cls.CONFIGS[name]
+
+        if name == "ollama":
+            base_url = os.getenv("OLLAMA_BASE_URL", "http://localhost:11434/v1")
+            client = OpenAI(base_url=base_url, api_key="ollama")
+
+        elif name == "groq":
+            api_key = os.environ.get("GROQ_API_KEY")
+            if not api_key:
+                raise EnvironmentError("GROQ_API_KEY is not set")
+            client = OpenAI(
+                base_url="https://api.groq.com/openai/v1",
+                api_key=api_key,
+            )
+
+        elif name == "together":
+            api_key = os.environ.get("TOGETHER_API_KEY")
+            if not api_key:
+                raise EnvironmentError("TOGETHER_API_KEY is not set")
+            client = OpenAI(
+                base_url="https://api.together.xyz/v1",
+                api_key=api_key,
+            )
+
+        elif name == "fireworks":
+            api_key = os.environ.get("FIREWORKS_API_KEY")
+            if not api_key:
+                raise EnvironmentError("FIREWORKS_API_KEY is not set")
+            client = OpenAI(
+                base_url="https://api.fireworks.ai/inference/v1",
+                api_key=api_key,
+            )
+
+        else:
+            # Unreachable given the check above, but satisfies type checkers
+            raise ValueError(f"Unhandled provider: {name}")
+
+        return client, cfg
+
+
+# ── Example usage ─────────────────────────────────────────────────────────
+
+def run_agent_query(question: str) -> str:
+    """Run a simple query against whichever provider is configured."""
+    client, cfg = LocalModelClient.create()
+
+    response = client.chat.completions.create(
+        model=cfg.default_model,
+        messages=[
+            {"role": "system", "content": "You are a helpful assistant. Be concise."},
+            {"role": "user",   "content": question},
+        ],
+        max_tokens=512,
+    )
+    return response.choices[0].message.content
+
+
+if __name__ == "__main__":
+    # Switch provider with: LOCAL_MODEL_PROVIDER=groq python local_model_client.py
+    answer = run_agent_query("What is 17 * 23?")
+    print(answer)  # 391</code></pre>
+        </div>
+        <div class="code-panel" id="wrapper-ts">
+          <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code to clipboard">Copy</button>
+          <pre><code class="language-typescript">// localModelClient.ts
+// WHAT: Factory for OpenAI-compatible clients across all supported providers
+// WHY:  One env var switch replaces local Ollama with Groq, Together, or Fireworks
+// GOTCHA: Model names differ by provider — use defaultModel from the config
+
+import OpenAI from "openai";
+
+interface ProviderConfig {
+  name: string;
+  defaultModel: string;
+  maxContextTokens: number;
+}
+
+interface ClientBundle {
+  client: OpenAI;
+  config: ProviderConfig;
+}
+
+const PROVIDER_CONFIGS: Record&lt;string, ProviderConfig&gt; = {
+  ollama: {
+    name: "ollama",
+    defaultModel: "mistral",
+    maxContextTokens: 32768,
+  },
+  groq: {
+    name: "groq",
+    defaultModel: "llama-3.3-70b-versatile",
+    maxContextTokens: 131072,
+  },
+  together: {
+    name: "together",
+    defaultModel: "mistralai/Mistral-7B-Instruct-v0.2",
+    maxContextTokens: 32768,
+  },
+  fireworks: {
+    name: "fireworks",
+    defaultModel: "accounts/fireworks/models/mistral-7b-instruct",
+    maxContextTokens: 32768,
+  },
+};
+
+function requireEnv(key: string): string {
+  const val = process.env[key];
+  if (!val) throw new Error(`Environment variable ${key} is not set`);
+  return val;
+}
+
+export function createLocalModelClient(provider?: string): ClientBundle {
+  const name = (
+    provider ??
+    process.env.LOCAL_MODEL_PROVIDER ??
+    "ollama"
+  ).toLowerCase();
+
+  const config = PROVIDER_CONFIGS[name];
+  if (!config) {
+    const supported = Object.keys(PROVIDER_CONFIGS).join(", ");
+    throw new Error(`Unknown provider '${name}'. Supported: ${supported}`);
+  }
+
+  let client: OpenAI;
+
+  switch (name) {
+    case "ollama":
+      client = new OpenAI({
+        baseURL:
+          process.env.OLLAMA_BASE_URL ?? "http://localhost:11434/v1",
+        apiKey: "ollama",
+      });
+      break;
+
+    case "groq":
+      client = new OpenAI({
+        baseURL: "https://api.groq.com/openai/v1",
+        apiKey: requireEnv("GROQ_API_KEY"),
+      });
+      break;
+
+    case "together":
+      client = new OpenAI({
+        baseURL: "https://api.together.xyz/v1",
+        apiKey: requireEnv("TOGETHER_API_KEY"),
+      });
+      break;
+
+    case "fireworks":
+      client = new OpenAI({
+        baseURL: "https://api.fireworks.ai/inference/v1",
+        apiKey: requireEnv("FIREWORKS_API_KEY"),
+      });
+      break;
+
+    default:
+      throw new Error(`Unhandled provider: ${name}`);
+  }
+
+  return { client, config };
+}
+
+// ── Example usage ────────────────────────────────────────────────────────
+
+async function runAgentQuery(question: string): Promise&lt;string&gt; {
+  const { client, config } = createLocalModelClient();
+
+  const response = await client.chat.completions.create({
+    model: config.defaultModel,
+    messages: [
+      { role: "system", content: "You are a helpful assistant. Be concise." },
+      { role: "user",   content: question },
+    ],
+    max_tokens: 512,
+  });
+  return response.choices[0].message.content ?? "";
+}
+
+// Run with: LOCAL_MODEL_PROVIDER=groq npx ts-node localModelClient.ts
+const answer = await runAgentQuery("What is 17 * 23?");
+console.log(answer); // 391</code></pre>
+        </div>
+      </div>
+
+      <div class="checkpoint">
+        <div class="checkpoint-label">What Just Happened?</div>
+        <p>The <code>LocalModelClient.create()</code> factory reads <code>LOCAL_MODEL_PROVIDER</code> from the environment and returns the matching pre-configured <code>OpenAI</code> client plus a <code>ProviderConfig</code> with the right default model name. Your agent code calls <code>create()</code> once at startup and never touches provider-specific logic again. To switch from local Ollama to Groq in CI, set <code>LOCAL_MODEL_PROVIDER=groq</code> in your CI environment — zero code changes.</p>
+      </div>
+    </section>
+
+    <!-- COST ESTIMATOR -->
+    <section class="section" id="cost-estimator">
+      <h2>Cost Estimator</h2>
+
+      <p>Before committing to a provider, estimate what your inference load actually costs per month. The <code>CostEstimator</code> class takes tokens/day and uptime requirements, then computes monthly cost across each provider with a recommendation.</p>
+
+      <div class="code-single">
+        <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code to clipboard">Copy</button>
+        <pre><code class="language-python"># cost_estimator.py
+# WHAT: Estimate monthly inference cost across cloud providers
+# WHY:  "Just use Groq" sounds right until you model your actual token volume
+# GOTCHA: VM costs assume the VM runs continuously; use hours_per_day to model
+#         cost for dev environments that only run during business hours
+
+from dataclasses import dataclass, field
+from typing import Optional
+
+@dataclass
+class ProviderCost:
+    name: str
+    # For managed APIs: cost per 1 million input tokens
+    input_cost_per_mtok: Optional[float] = None
+    # For managed APIs: cost per 1 million output tokens
+    output_cost_per_mtok: Optional[float] = None
+    # For self-hosted VMs: cost per hour (compute only, no per-token fee)
+    hourly_rate: Optional[float] = None
+    notes: str = ""
+
+PROVIDER_COSTS = [
+    ProviderCost("Ollama/Localhost", hourly_rate=0.0,   notes="Existing hardware, electricity not counted"),
+    ProviderCost("GCP T4 VM",        hourly_rate=0.35,  notes="n1-standard-4 + T4; no per-token cost"),
+    ProviderCost("AWS g4dn.xlarge",  hourly_rate=0.53,  notes="On-demand; no per-token cost"),
+    ProviderCost("Vast.ai 3090",     hourly_rate=0.20,  notes="Spot price; availability varies"),
+    ProviderCost("Lambda Labs A10",  hourly_rate=0.60,  notes="Reserved; guaranteed availability"),
+    ProviderCost("Groq (free)",      input_cost_per_mtok=0.0,   output_cost_per_mtok=0.0,  notes="14,400 req/day limit"),
+    ProviderCost("Groq (paid)",      input_cost_per_mtok=0.05,  output_cost_per_mtok=0.08, notes="Llama 3.3 70B pricing"),
+    ProviderCost("Together AI",      input_cost_per_mtok=0.10,  output_cost_per_mtok=0.10, notes="Mistral 7B pricing"),
+    ProviderCost("Fireworks AI",     input_cost_per_mtok=0.10,  output_cost_per_mtok=0.10, notes="Mistral 7B pricing"),
+]
+
+@dataclass
+class EstimateResult:
+    provider: str
+    monthly_cost_usd: float
+    notes: str
+    recommended: bool = False
+
+def estimate_monthly_costs(
+    tokens_per_day: int,
+    output_ratio: float = 0.3,   # fraction of tokens that are output
+    hours_per_day: float = 24.0, # for VM-based providers: hours VM runs per day
+) -> list[EstimateResult]:
+    """
+    Estimate monthly costs across all providers.
+
+    Args:
+        tokens_per_day:  Total tokens processed per day (input + output combined).
+        output_ratio:    Fraction of tokens_per_day that are output tokens (0.0–1.0).
+                         Defaults to 0.3 (typical for RAG / summarisation workloads).
+        hours_per_day:   How many hours per day VM-based providers are running.
+                         Use 8.0 for a dev machine, 24.0 for production.
+
+    Returns:
+        List of EstimateResult sorted by monthly cost.
+    """
+    input_tokens_per_day  = tokens_per_day * (1 - output_ratio)
+    output_tokens_per_day = tokens_per_day * output_ratio
+    days_per_month = 30.4  # average
+
+    results: list[EstimateResult] = []
+
+    for p in PROVIDER_COSTS:
+        if p.hourly_rate is not None:
+            # VM cost: hourly rate × hours/day × days/month
+            monthly = p.hourly_rate * hours_per_day * days_per_month
+        else:
+            # Managed API: per-token billing
+            input_mtok_per_month  = (input_tokens_per_day  * days_per_month) / 1_000_000
+            output_mtok_per_month = (output_tokens_per_day * days_per_month) / 1_000_000
+            monthly = (
+                (p.input_cost_per_mtok  or 0) * input_mtok_per_month +
+                (p.output_cost_per_mtok or 0) * output_mtok_per_month
+            )
+
+        results.append(EstimateResult(
+            provider=p.name,
+            monthly_cost_usd=round(monthly, 2),
+            notes=p.notes,
+        ))
+
+    results.sort(key=lambda r: r.monthly_cost_usd)
+
+    # Mark the lowest non-zero cost option as recommended
+    for r in results:
+        if r.monthly_cost_usd > 0:
+            r.recommended = True
+            break
+
+    return results
+
+
+def print_estimate(tokens_per_day: int, hours_per_day: float = 24.0) -> None:
+    """Print a formatted cost comparison table."""
+    results = estimate_monthly_costs(tokens_per_day, hours_per_day=hours_per_day)
+    total_mtok_month = tokens_per_day * 30.4 / 1_000_000
+
+    print(f"\nMonthly cost estimate for {tokens_per_day:,} tokens/day")
+    print(f"({total_mtok_month:.1f}M tokens/month, VM uptime: {hours_per_day:.0f} hr/day)")
+    print(f"{'Provider':<22} {'$/month':>9}  {'Notes'}")
+    print("-" * 70)
+    for r in results:
+        tag = " ← recommended" if r.recommended else ""
+        print(f"  {r.provider:<20} ${r.monthly_cost_usd:>8.2f}  {r.notes}{tag}")
+
+
+if __name__ == "__main__":
+    # Dev workload: 100K tokens/day, VM only 8 hours/day
+    print_estimate(tokens_per_day=100_000, hours_per_day=8)
+
+    # Production workload: 1M tokens/day, VM runs 24/7
+    print_estimate(tokens_per_day=1_000_000, hours_per_day=24)</code></pre>
+      </div>
+
+      <div class="output-label">Sample output (100K tokens/day, 8 hr/day VM):</div>
+      <div class="output-block">Monthly cost estimate for 100,000 tokens/day
+(3.0M tokens/month, VM uptime: 8 hr/day)
+----------------------------------------------------------------------
+  Provider               $/month  Notes
+  Ollama/Localhost         $0.00  Existing hardware, electricity not counted
+  Groq (free)              $0.00  14,400 req/day limit ← recommended
+  Groq (paid)              $0.12  Llama 3.3 70B pricing
+  Together AI              $0.30  Mistral 7B pricing
+  Fireworks AI             $0.30  Mistral 7B pricing
+  Vast.ai 3090            $48.64  Spot price; availability varies
+  GCP T4 VM               $85.12  n1-standard-4 + T4; no per-token cost
+  AWS g4dn.xlarge        $128.93  On-demand; no per-token cost
+  Lambda Labs A10        $145.92  Reserved; guaranteed availability</div>
+
+      <div class="callout-cost">
+        <span class="box-label">Reading the Numbers</span>
+        <p>At 100K tokens/day, managed APIs beat VMs on cost by 100x — use Groq free tier for dev. But at 10M tokens/day, the per-token fees on paid managed APIs reach $1,200/month while a single A10 VM costs $146/month regardless of token volume. The <strong>crossover point</strong> is typically around 2–5M tokens/month where self-hosted VMs become the cheaper option. The estimator above helps you find your exact crossover.</p>
+      </div>
+    </section>
+
+    <!-- QUIZ -->
+    <section class="section" id="quiz">
+      <h2>Knowledge Check</h2>
+
+      <div id="quiz-container">
+
+        <div class="quiz-question" id="q1">
+          <h4>1. You open an SSH tunnel with <code>ssh -L 11434:localhost:11434 -N -f ubuntu@&lt;VM_IP&gt;</code>. Your agent code uses <code>base_url="http://localhost:11434/v1"</code>. What changes?</h4>
+          <div class="quiz-option" onclick="checkAnswer(this,'q1',false)" role="button" tabindex="0" aria-label="Option A">
+            <div class="quiz-marker">A</div>
+            <div>Your agent code must be updated to use the VM's IP address as the base_url.</div>
+          </div>
+          <div class="quiz-option" onclick="checkAnswer(this,'q1',true)" role="button" tabindex="0" aria-label="Option B">
+            <div class="quiz-marker">B</div>
+            <div>Nothing changes in the agent code — requests to localhost:11434 are transparently forwarded to the VM's Ollama through the SSH channel.</div>
+          </div>
+          <div class="quiz-option" onclick="checkAnswer(this,'q1',false)" role="button" tabindex="0" aria-label="Option C">
+            <div class="quiz-marker">C</div>
+            <div>You must open port 11434 in the VM's firewall for the tunnel to work.</div>
+          </div>
+          <div class="quiz-option" onclick="checkAnswer(this,'q1',false)" role="button" tabindex="0" aria-label="Option D">
+            <div class="quiz-marker">D</div>
+            <div>The SSH tunnel only works when Ollama is bound to 0.0.0.0, not 127.0.0.1.</div>
+          </div>
+          <div class="quiz-feedback" id="q1-fb"></div>
+        </div>
+
+        <div class="quiz-question" id="q2">
+          <h4>2. Why must you add <code>--maintenance-policy=TERMINATE</code> when creating a GCP VM with a GPU?</h4>
+          <div class="quiz-option" onclick="checkAnswer(this,'q2',false)" role="button" tabindex="0" aria-label="Option A">
+            <div class="quiz-marker">A</div>
+            <div>It makes the VM terminate automatically after 24 hours to save costs.</div>
+          </div>
+          <div class="quiz-option" onclick="checkAnswer(this,'q2',false)" role="button" tabindex="0" aria-label="Option B">
+            <div class="quiz-marker">B</div>
+            <div>It enables the CUDA drivers to install correctly during first boot.</div>
+          </div>
+          <div class="quiz-option" onclick="checkAnswer(this,'q2',true)" role="button" tabindex="0" aria-label="Option C">
+            <div class="quiz-marker">C</div>
+            <div>GCP VMs with attached GPUs do not support live migration — TERMINATE tells GCP to stop the VM instead of trying to migrate it during host maintenance.</div>
+          </div>
+          <div class="quiz-option" onclick="checkAnswer(this,'q2',false)" role="button" tabindex="0" aria-label="Option D">
+            <div class="quiz-marker">D</div>
+            <div>It is required to access GPU instances in the us-central1-a zone.</div>
+          </div>
+          <div class="quiz-feedback" id="q2-fb"></div>
+        </div>
+
+        <div class="quiz-question" id="q3">
+          <h4>3. You set <code>OLLAMA_HOST=127.0.0.1:11434</code> in the systemd unit file. What is the security benefit?</h4>
+          <div class="quiz-option" onclick="checkAnswer(this,'q3',false)" role="button" tabindex="0" aria-label="Option A">
+            <div class="quiz-marker">A</div>
+            <div>Ollama runs faster when bound to the loopback interface.</div>
+          </div>
+          <div class="quiz-option" onclick="checkAnswer(this,'q3',true)" role="button" tabindex="0" aria-label="Option B">
+            <div class="quiz-marker">B</div>
+            <div>Ollama is only reachable from within the VM itself — not from the internet, even if a firewall rule is misconfigured — because the loopback interface is not routable.</div>
+          </div>
+          <div class="quiz-option" onclick="checkAnswer(this,'q3',false)" role="button" tabindex="0" aria-label="Option C">
+            <div class="quiz-marker">C</div>
+            <div>It encrypts traffic between the SSH tunnel and Ollama.</div>
+          </div>
+          <div class="quiz-option" onclick="checkAnswer(this,'q3',false)" role="button" tabindex="0" aria-label="Option D">
+            <div class="quiz-marker">D</div>
+            <div>The SSH tunnel requires Ollama to be on 127.0.0.1 to function.</div>
+          </div>
+          <div class="quiz-feedback" id="q3-fb"></div>
+        </div>
+
+        <div class="quiz-question" id="q4">
+          <h4>4. Your app uses <code>LocalModelClient.create()</code>. You want all CI runs to use Groq instead of Ollama. What is the minimal change?</h4>
+          <div class="quiz-option" onclick="checkAnswer(this,'q4',false)" role="button" tabindex="0" aria-label="Option A">
+            <div class="quiz-marker">A</div>
+            <div>Update every <code>OpenAI(base_url=...)</code> call in the codebase to use Groq's URL.</div>
+          </div>
+          <div class="quiz-option" onclick="checkAnswer(this,'q4',false)" role="button" tabindex="0" aria-label="Option B">
+            <div class="quiz-marker">B</div>
+            <div>Create a separate <code>groq_client.py</code> file and update all imports in CI.</div>
+          </div>
+          <div class="quiz-option" onclick="checkAnswer(this,'q4',true)" role="button" tabindex="0" aria-label="Option C">
+            <div class="quiz-marker">C</div>
+            <div>Set <code>LOCAL_MODEL_PROVIDER=groq</code> and <code>GROQ_API_KEY=&lt;key&gt;</code> as CI environment variables — no code changes needed.</div>
+          </div>
+          <div class="quiz-option" onclick="checkAnswer(this,'q4',false)" role="button" tabindex="0" aria-label="Option D">
+            <div class="quiz-marker">D</div>
+            <div>Pass <code>provider="groq"</code> as an argument to every agent function call.</div>
+          </div>
+          <div class="quiz-feedback" id="q4-fb"></div>
+        </div>
+
+        <div class="quiz-question" id="q5">
+          <h4>5. At what approximate monthly token volume does self-hosting an A10 GPU VM typically become cheaper than paying Groq per-token rates?</h4>
+          <div class="quiz-option" onclick="checkAnswer(this,'q5',false)" role="button" tabindex="0" aria-label="Option A">
+            <div class="quiz-marker">A</div>
+            <div>100K tokens/month — VMs are almost always cheaper than APIs.</div>
+          </div>
+          <div class="quiz-option" onclick="checkAnswer(this,'q5',false)" role="button" tabindex="0" aria-label="Option B">
+            <div class="quiz-marker">B</div>
+            <div>500K tokens/month.</div>
+          </div>
+          <div class="quiz-option" onclick="checkAnswer(this,'q5',true)" role="button" tabindex="0" aria-label="Option C">
+            <div class="quiz-marker">C</div>
+            <div>2–5M tokens/month — below that threshold, per-token managed APIs are cheaper; above it, the flat VM hourly rate wins.</div>
+          </div>
+          <div class="quiz-option" onclick="checkAnswer(this,'q5',false)" role="button" tabindex="0" aria-label="Option D">
+            <div class="quiz-marker">D</div>
+            <div>50M tokens/month — managed APIs are almost always cheaper at any realistic usage.</div>
+          </div>
+          <div class="quiz-feedback" id="q5-fb"></div>
+        </div>
+
+        <div class="quiz-question" id="q6">
+          <h4>6. Which managed provider currently offers the lowest first-token latency (~50 ms) due to custom LPU hardware?</h4>
+          <div class="quiz-option" onclick="checkAnswer(this,'q6',false)" role="button" tabindex="0" aria-label="Option A">
+            <div class="quiz-marker">A</div>
+            <div>Together AI</div>
+          </div>
+          <div class="quiz-option" onclick="checkAnswer(this,'q6',true)" role="button" tabindex="0" aria-label="Option B">
+            <div class="quiz-marker">B</div>
+            <div>Groq — their Language Processing Unit (LPU) custom silicon delivers ~50 ms TTFT, significantly faster than GPU-based providers.</div>
+          </div>
+          <div class="quiz-option" onclick="checkAnswer(this,'q6',false)" role="button" tabindex="0" aria-label="Option C">
+            <div class="quiz-marker">C</div>
+            <div>Fireworks AI</div>
+          </div>
+          <div class="quiz-option" onclick="checkAnswer(this,'q6',false)" role="button" tabindex="0" aria-label="Option D">
+            <div class="quiz-marker">D</div>
+            <div>Amazon Bedrock</div>
+          </div>
+          <div class="quiz-feedback" id="q6-fb"></div>
+        </div>
+
+      </div><!-- /quiz-container -->
+
+      <div class="quiz-score" id="quiz-score">
+        <div class="score-num" id="score-display">0 / 6</div>
+        <p style="color:var(--text-secondary);margin-top:0.5rem;">Module complete! Head to M24 to explore the frontier of open-source agents.</p>
+      </div>
+    </section>
+
+    <!-- MODULE NAV -->
+    <nav class="module-nav" aria-label="Module navigation">
+      <a class="nav-btn" href="M22-cost-optimization.html">
+        <span class="nav-btn-label">&#8592; Previous</span>
+        <span class="nav-btn-title">M22: Cost Optimization</span>
+      </a>
+      <a class="nav-btn next" href="M24-whats-next-frontier.html">
+        <span class="nav-btn-label">Next &#8594;</span>
+        <span class="nav-btn-title">M24: What's Next &amp; Frontier</span>
+      </a>
+    </nav>
+
+  </main>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+<script>
+// ── Tab switching ─────────────────────────────────────────────────────────
+function switchTab(btn, panelId) {
+  const wrapper = btn.closest('.code-block-wrapper');
+  wrapper.querySelectorAll('.code-tab').forEach(t => t.classList.remove('active'));
+  wrapper.querySelectorAll('.code-panel').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  const panel = wrapper.querySelector('#' + panelId);
+  if (panel) panel.classList.add('active');
+}
+
+// ── Copy button ───────────────────────────────────────────────────────────
+function copyCode(btn) {
+  const panel = btn.closest('.code-panel, .code-single');
+  const code  = panel ? panel.querySelector('code') : null;
+  if (!code) return;
+  navigator.clipboard.writeText(code.innerText).then(() => {
+    const orig = btn.textContent;
+    btn.textContent = 'Copied!';
+    btn.style.color = 'var(--success)';
+    btn.style.borderColor = 'var(--success)';
+    setTimeout(() => {
+      btn.textContent = orig;
+      btn.style.color = '';
+      btn.style.borderColor = '';
+    }, 1800);
+  });
+}
+
+// ── Sidebar active link on scroll ────────────────────────────────────────
+(function () {
+  const links = document.querySelectorAll('.sidebar-nav a');
+  const sections = Array.from(links)
+    .map(a => a.getAttribute('href'))
+    .filter(h => h && h.startsWith('#'))
+    .map(h => document.querySelector(h))
+    .filter(Boolean);
+
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        links.forEach(l => l.classList.remove('active'));
+        const active = document.querySelector(`.sidebar-nav a[href="#${entry.target.id}"]`);
+        if (active) active.classList.add('active');
+      }
+    });
+  }, { rootMargin: '-20% 0px -70% 0px' });
+
+  sections.forEach(s => observer.observe(s));
+})();
+
+// ── Animation 1: Cost vs Speed Bar Chart ─────────────────────────────────
+const BAR_DATA = [
+  { label: 'Vast.ai\n3090',   speed: 80,   cost: 0.20 },
+  { label: 'RunPod\n3090',    speed: 80,   cost: 0.22 },
+  { label: 'GCP\nT4',        speed: 40,   cost: 0.35 },
+  { label: 'AWS\ng4dn',      speed: 40,   cost: 0.53 },
+  { label: 'Lambda\nA10',    speed: 100,  cost: 0.60 },
+  { label: 'Core-\nWeave',   speed: 200,  cost: 2.21 },
+];
+
+const MAX_SPEED = Math.max(...BAR_DATA.map(d => d.speed));
+const MAX_COST  = Math.max(...BAR_DATA.map(d => d.cost));
+const BAR_MAX_H = 160; // px
+
+function buildBarChart() {
+  const grid = document.getElementById('bar-chart-grid');
+  if (!grid) return;
+  grid.innerHTML = '';
+
+  BAR_DATA.forEach((d, i) => {
+    const speedH = Math.round((d.speed / MAX_SPEED) * BAR_MAX_H);
+    const costH  = Math.round((d.cost  / MAX_COST)  * BAR_MAX_H);
+
+    const group = document.createElement('div');
+    group.className = 'bar-group';
+
+    const pair = document.createElement('div');
+    pair.className = 'bar-pair';
+    pair.style.height = BAR_MAX_H + 'px';
+
+    const speedBar = document.createElement('div');
+    speedBar.className = 'bar-col bar-speed';
+    speedBar.style.height = '0px';
+    speedBar.dataset.targetH = speedH;
+    speedBar.setAttribute('title', `${d.speed} tok/s`);
+
+    const costBar = document.createElement('div');
+    costBar.className = 'bar-col bar-cost';
+    costBar.style.height = '0px';
+    costBar.dataset.targetH = costH;
+    costBar.setAttribute('title', `$${d.cost}/hr`);
+
+    pair.appendChild(speedBar);
+    pair.appendChild(costBar);
+
+    const label = document.createElement('div');
+    label.className = 'bar-label';
+    label.style.whiteSpace = 'pre-line';
+    label.textContent = d.label;
+
+    const val = document.createElement('div');
+    val.className = 'bar-val';
+    val.textContent = `${d.speed}t/s · $${d.cost}`;
+
+    group.appendChild(pair);
+    group.appendChild(label);
+    group.appendChild(val);
+    grid.appendChild(group);
+  });
+}
+
+const barChart = (() => {
+  let running = false;
+  let raf = null;
+
+  function animate() {
+    const bars = document.querySelectorAll('.bar-col');
+    let allDone = true;
+
+    bars.forEach(bar => {
+      const target = parseInt(bar.dataset.targetH || '0');
+      const current = parseInt(bar.style.height) || 0;
+      if (current < target) {
+        bar.style.height = Math.min(current + 4, target) + 'px';
+        allDone = false;
+      }
+    });
+
+    if (!allDone) {
+      raf = requestAnimationFrame(animate);
+    } else {
+      running = false;
+      document.getElementById('bar-play-btn').innerHTML = '&#9654;';
+    }
+  }
+
+  return {
+    toggle() {
+      if (running) {
+        cancelAnimationFrame(raf);
+        running = false;
+        document.getElementById('bar-play-btn').innerHTML = '&#9654;';
+      } else {
+        running = true;
+        document.getElementById('bar-play-btn').innerHTML = '&#9646;&#9646;';
+        raf = requestAnimationFrame(animate);
+      }
+    },
+    restart() {
+      cancelAnimationFrame(raf);
+      running = false;
+      document.querySelectorAll('.bar-col').forEach(b => { b.style.height = '0px'; });
+      setTimeout(() => {
+        running = true;
+        document.getElementById('bar-play-btn').innerHTML = '&#9646;&#9646;';
+        raf = requestAnimationFrame(animate);
+      }, 50);
+    }
+  };
+})();
+
+buildBarChart();
+
+// ── Animation 2: Provider Decision Tree ──────────────────────────────────
+const dtreeAnim = (() => {
+  const steps = [
+    { el: 'dt0',    delay: 0 },
+    { el: 'dt-a0',  delay: 600 },
+    { el: 'dt1',    delay: 900 },
+    { el: 'dt-a1',  delay: 1400 },
+    { el: 'dt2',    delay: 1700 },
+    { el: 'dt3',    delay: 2400 },
+    { el: 'dt-a3',  delay: 3000 },
+    { el: 'dt4',    delay: 3300 },
+    { el: 'dt5',    delay: 4000 },
+    { el: 'dt-a5',  delay: 4600 },
+    { el: 'dt6',    delay: 4900 },
+    { el: 'dt-a6',  delay: 5200 },
+    { el: 'dt7',    delay: 5500 },
+  ];
+  let timers = [];
+  let running = false;
+
+  return {
+    toggle() {
+      if (running) {
+        timers.forEach(clearTimeout);
+        timers = [];
+        running = false;
+        document.getElementById('dtree-play-btn').innerHTML = '&#9654;';
+      } else {
+        this.restart();
+      }
+    },
+    restart() {
+      timers.forEach(clearTimeout);
+      timers = [];
+      steps.forEach(s => {
+        const el = document.getElementById(s.el);
+        if (el) { el.style.opacity = '0'; el.classList.remove('show'); }
+      });
+      running = true;
+      document.getElementById('dtree-play-btn').innerHTML = '&#9646;&#9646;';
+
+      steps.forEach(s => {
+        const t = setTimeout(() => {
+          const el = document.getElementById(s.el);
+          if (el) { el.style.opacity = ''; el.classList.add('show'); }
+        }, s.delay);
+        timers.push(t);
+      });
+
+      const totalDuration = Math.max(...steps.map(s => s.delay)) + 600;
+      timers.push(setTimeout(() => {
+        running = false;
+        document.getElementById('dtree-play-btn').innerHTML = '&#9654;';
+      }, totalDuration));
+    }
+  };
+})();
+
+// ── Animation 3: SSH Tunnel ───────────────────────────────────────────────
+const tunnelAnim = (() => {
+  let timers = [];
+  let running = false;
+  let packetsActive = false;
+
+  const showSeq = [
+    { id: 'tn-local',  delay: 0 },
+    { id: 'tn-line1',  delay: 500 },
+    { id: 'tn-cloud',  delay: 1000 },
+    { id: 'tn-line2',  delay: 1500 },
+    { id: 'tn-ollama', delay: 2000 },
+  ];
+
+  return {
+    toggle() {
+      if (running) {
+        timers.forEach(clearTimeout);
+        timers = [];
+        running = false;
+        ['tn-pkt1','tn-pkt2'].forEach(id => {
+          const el = document.getElementById(id);
+          if (el) el.classList.remove('active');
+        });
+        document.getElementById('tunnel-play-btn').innerHTML = '&#9654;';
+      } else {
+        this.restart();
+      }
+    },
+    restart() {
+      timers.forEach(clearTimeout);
+      timers = [];
+      running = false;
+      ['tn-pkt1','tn-pkt2'].forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.classList.remove('active');
+      });
+
+      showSeq.forEach(s => {
+        const el = document.getElementById(s.id);
+        if (el) { el.classList.remove('show'); }
+      });
+
+      running = true;
+      document.getElementById('tunnel-play-btn').innerHTML = '&#9646;&#9646;';
+
+      showSeq.forEach(s => {
+        const t = setTimeout(() => {
+          const el = document.getElementById(s.id);
+          if (el) el.classList.add('show');
+        }, s.delay);
+        timers.push(t);
+      });
+
+      // Activate packets after all nodes are visible
+      const t = setTimeout(() => {
+        ['tn-pkt1','tn-pkt2'].forEach(id => {
+          const el = document.getElementById(id);
+          if (el) el.classList.add('active');
+        });
+        running = false;
+        document.getElementById('tunnel-play-btn').innerHTML = '&#9654;';
+      }, 2500);
+      timers.push(t);
+    }
+  };
+})();
+
+// ── Quiz ──────────────────────────────────────────────────────────────────
+let quizScore = 0;
+let quizAnswered = 0;
+const TOTAL_QUESTIONS = 6;
+
+const FEEDBACK = {
+  q1: {
+    correct:   'Correct! The SSH tunnel transparently maps local :11434 to the VM — your agent code is oblivious to the network hop.',
+    incorrect: 'Not quite. The tunnel forwards localhost:11434 to the VM, so the agent code sees no difference from local development.'
+  },
+  q2: {
+    correct:   'Correct! GCP cannot live-migrate VMs with GPU attachments, so the VM must be terminated (stopped) when host maintenance is needed.',
+    incorrect: 'Incorrect. The flag exists because GPU VMs cannot be live-migrated during host maintenance events — GCP requires termination instead.'
+  },
+  q3: {
+    correct:   'Correct! The loopback interface (127.0.0.1) is not routable — no external connection can reach it, even through an open firewall port.',
+    incorrect: 'Not quite. Binding to 127.0.0.1 means the port is only accessible from within the VM itself — a defence-in-depth measure even if a firewall rule is misconfigured.'
+  },
+  q4: {
+    correct:   'Correct! The wrapper reads LOCAL_MODEL_PROVIDER at runtime — a CI env var switch replaces Ollama with Groq for the entire application.',
+    incorrect: 'Not quite. The whole point of the provider-agnostic wrapper is that you change an env var, not code.'
+  },
+  q5: {
+    correct:   'Correct! Below ~2–5M tokens/month, per-token API pricing is cheaper. Above that, the flat VM hourly rate wins regardless of volume.',
+    incorrect: 'Incorrect. The crossover is typically 2–5M tokens/month. Use the CostEstimator to find your exact breakeven.'
+  },
+  q6: {
+    correct:   'Correct! Groq uses custom Language Processing Units (LPUs) — application-specific chips optimised for token generation — delivering ~50 ms first-token latency.',
+    incorrect: 'Incorrect. Groq is the standout for raw speed thanks to their custom LPU silicon.'
+  },
+};
+
+function checkAnswer(option, qId, isCorrect) {
+  const qEl = document.getElementById(qId);
+  if (!qEl) return;
+  const options = qEl.querySelectorAll('.quiz-option');
+  const fbEl    = document.getElementById(qId + '-fb');
+
+  if (qEl.dataset.answered) return;
+  qEl.dataset.answered = '1';
+  quizAnswered++;
+
+  options.forEach(o => o.classList.add('disabled'));
+
+  if (isCorrect) {
+    option.classList.add('correct');
+    const marker = option.querySelector('.quiz-marker');
+    if (marker) marker.textContent = '✓';
+    quizScore++;
+    if (fbEl) {
+      fbEl.textContent = FEEDBACK[qId].correct;
+      fbEl.className = 'quiz-feedback show correct-fb';
+    }
+  } else {
+    option.classList.add('incorrect');
+    const marker = option.querySelector('.quiz-marker');
+    if (marker) marker.textContent = '✗';
+    if (fbEl) {
+      fbEl.textContent = FEEDBACK[qId].incorrect;
+      fbEl.className = 'quiz-feedback show incorrect-fb';
+    }
+  }
+
+  if (quizAnswered === TOTAL_QUESTIONS) {
+    const scoreEl = document.getElementById('quiz-score');
+    const displayEl = document.getElementById('score-display');
+    if (scoreEl && displayEl) {
+      displayEl.textContent = `${quizScore} / ${TOTAL_QUESTIONS}`;
+      scoreEl.style.display = 'block';
+    }
+  }
+}
+</script>
+</body>
+</html>

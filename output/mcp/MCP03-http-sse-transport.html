@@ -1,0 +1,2316 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MCP03: HTTP + SSE Transport — Remote MCP Servers | MCP Track</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;700;800&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+<link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
+:root{
+  --bg-primary:#06101E;
+  --bg-secondary:#0B1629;
+  --bg-card:#0F1E35;
+  --bg-surface:#142240;
+  --text-primary:#E8ECF1;
+  --text-secondary:#94A3B8;
+  --text-muted:#64748B;
+  --accent-primary:#D4A843;
+  --success:#10B981;
+  --success-bg:rgba(16,185,129,0.1);
+  --warning:#F59E0B;
+  --warning-bg:rgba(245,158,11,0.1);
+  --error:#F43F5E;
+  --error-bg:rgba(244,63,94,0.1);
+  --info:#3B82F6;
+  --info-bg:rgba(59,130,246,0.1);
+  --mcp-teal:#0891B2;
+  --mcp-teal-light:#22D3EE;
+  --mcp-teal-bg:rgba(8,145,178,0.1);
+  --mcp-teal-border:rgba(8,145,178,0.35);
+  --code-bg:#0D1117;
+  --code-border:#1E2D45;
+  --transition-fast:150ms;
+}
+body{background:var(--bg-primary);color:var(--text-primary);font-family:'Source Sans 3',sans-serif;font-size:1.05rem;line-height:1.7;}
+
+/* Progress */
+.top-progress{position:fixed;top:0;left:0;right:0;height:4px;background:var(--bg-surface);z-index:200;}
+.top-progress .fill{height:100%;background:linear-gradient(90deg,var(--mcp-teal),var(--mcp-teal-light));width:0%;}
+
+/* Header */
+.course-header{background:var(--bg-secondary);border-bottom:1px solid var(--code-border);padding:1rem 2rem;margin-top:4px;}
+.course-header-inner{max-width:1200px;margin:0 auto;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:0.75rem;}
+.course-title{font-family:'Bricolage Grotesque',sans-serif;font-size:0.9rem;font-weight:600;color:var(--text-secondary);}
+.track-badge{display:inline-flex;align-items:center;gap:0.5rem;background:var(--mcp-teal-bg);border:1px solid var(--mcp-teal);border-radius:20px;padding:0.25rem 0.75rem;font-family:'Bricolage Grotesque',sans-serif;font-size:0.8rem;font-weight:700;color:var(--mcp-teal-light);}
+.header-meta{display:flex;gap:1.5rem;font-size:0.82rem;color:var(--text-muted);}
+
+/* Layout */
+.page-container{max-width:1200px;margin:0 auto;padding:2rem;display:grid;grid-template-columns:240px 1fr;gap:3rem;}
+
+/* Sidebar */
+.sidebar-nav{position:sticky;top:2rem;height:calc(100vh - 4rem);overflow-y:auto;padding-right:1rem;}
+.sidebar-title{font-family:'Bricolage Grotesque',sans-serif;font-size:0.72rem;font-weight:700;text-transform:uppercase;letter-spacing:0.1em;color:var(--text-muted);margin-bottom:1rem;}
+.sidebar-nav a{display:block;padding:0.38rem 0.75rem;margin-bottom:0.15rem;font-family:'Bricolage Grotesque',sans-serif;font-size:0.82rem;font-weight:600;color:var(--text-muted);text-decoration:none;border-left:2px solid transparent;border-radius:0 4px 4px 0;transition:all var(--transition-fast);}
+.sidebar-nav a:hover{color:var(--text-primary);background:var(--bg-surface);}
+.sidebar-nav a.active{color:var(--mcp-teal-light);border-left-color:var(--mcp-teal);background:var(--mcp-teal-bg);}
+
+/* Content */
+.content{max-width:800px;}
+.section{margin-bottom:4rem;}
+
+/* Typography */
+h1{font-family:'Bricolage Grotesque',sans-serif;font-weight:800;font-size:2.2rem;line-height:1.2;margin-bottom:0.75rem;}
+h2{font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:1.5rem;margin:2.5rem 0 1rem;padding-top:1rem;border-top:1px solid var(--code-border);}
+h2:first-of-type{border-top:none;}
+h3{font-family:'Bricolage Grotesque',sans-serif;font-weight:600;font-size:1.15rem;margin:1.75rem 0 0.6rem;}
+p{margin-bottom:1rem;}
+ul,ol{margin:0.5rem 0 1rem 1.5rem;}li{margin-bottom:0.4rem;}
+strong{font-weight:600;}
+a{color:var(--mcp-teal-light);text-decoration:none;}a:hover{text-decoration:underline;}
+code{font-family:'JetBrains Mono',monospace;background:var(--bg-surface);padding:0.1rem 0.35rem;border-radius:4px;font-size:0.88em;color:var(--mcp-teal-light);}
+
+/* Tooltip */
+.tooltip-host{position:relative;display:inline;border-bottom:1px dotted var(--mcp-teal);cursor:help;}
+.tooltip-host:hover .tooltip-pop{opacity:1;pointer-events:auto;transform:translateX(-50%) translateY(-4px);}
+.tooltip-pop{position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%) translateY(0);background:var(--bg-surface);border:1px solid var(--mcp-teal-border);border-radius:8px;padding:0.65rem 0.9rem;font-size:0.82rem;line-height:1.5;color:var(--text-secondary);width:260px;z-index:100;opacity:0;pointer-events:none;transition:opacity 0.2s,transform 0.2s;font-style:normal;text-decoration:none;}
+.tooltip-pop strong{color:var(--mcp-teal-light);}
+
+/* Callout boxes */
+.analogy-box,.tech-def-box,.callout-why,.callout-warning,.callout-note,.callout-gotcha{border-left:4px solid;border-radius:0 8px 8px 0;padding:1.25rem 1.5rem;margin:1.5rem 0;}
+.analogy-box{background:rgba(212,168,67,0.07);border-left-color:var(--accent-primary);}
+.tech-def-box{background:var(--info-bg);border-left-color:var(--info);}
+.callout-why{background:var(--success-bg);border-left-color:var(--success);}
+.callout-warning{background:var(--warning-bg);border-left-color:var(--warning);}
+.callout-note{background:var(--mcp-teal-bg);border-left-color:var(--mcp-teal);}
+.callout-gotcha{background:rgba(244,63,94,0.07);border-left-color:var(--error);}
+.box-label{font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:0.85rem;display:block;margin-bottom:0.5rem;}
+.analogy-box .box-label{color:var(--accent-primary);}
+.tech-def-box .box-label{color:var(--info);}
+.callout-why .box-label{color:var(--success);}
+.callout-warning .box-label{color:var(--warning);}
+.callout-note .box-label{color:var(--mcp-teal-light);}
+.callout-gotcha .box-label{color:var(--error);}
+
+/* Bridge + checkpoint */
+.bridge{background:var(--bg-surface);border-radius:8px;padding:1rem 1.25rem;margin:2rem 0;font-style:italic;color:var(--text-secondary);border-left:3px solid var(--text-muted);}
+.checkpoint{background:var(--bg-card);border:1px solid var(--mcp-teal-border);border-radius:8px;padding:1rem 1.25rem;margin:1.75rem 0;}
+.checkpoint-label{font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:0.82rem;color:var(--mcp-teal-light);margin-bottom:0.4rem;}
+
+/* Code tabs */
+.code-tabs{margin:1.5rem 0;}
+.tab-bar{display:flex;gap:0;border-bottom:1px solid var(--code-border);margin-bottom:0;}
+.tab-btn{padding:0.45rem 1rem;font-family:'Bricolage Grotesque',sans-serif;font-size:0.8rem;font-weight:700;color:var(--text-muted);background:transparent;border:none;border-bottom:2px solid transparent;cursor:pointer;transition:all var(--transition-fast);letter-spacing:0.04em;}
+.tab-btn.active{color:var(--mcp-teal-light);border-bottom-color:var(--mcp-teal);}
+.tab-btn:hover{color:var(--text-primary);}
+.tab-panel{display:none;}
+.tab-panel.active{display:block;}
+
+/* Code block */
+.code-block-wrapper{background:var(--code-bg);border:1px solid var(--code-border);border-radius:12px;overflow:hidden;}
+.tab-panel .code-block-wrapper{border-radius:0 12px 12px 12px;}
+.code-block-header{display:flex;justify-content:space-between;align-items:center;padding:0.55rem 1.1rem;background:rgba(0,0,0,0.35);border-bottom:1px solid var(--code-border);}
+.code-lang{font-family:'Bricolage Grotesque',sans-serif;font-size:0.7rem;font-weight:800;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.1em;}
+.copy-btn{background:var(--bg-surface);border:1px solid var(--code-border);color:var(--text-muted);padding:0.25rem 0.65rem;border-radius:5px;font-size:0.72rem;cursor:pointer;font-family:'Bricolage Grotesque',sans-serif;font-weight:700;letter-spacing:0.05em;text-transform:uppercase;transition:all var(--transition-fast);}
+.copy-btn:hover{color:var(--mcp-teal-light);border-color:var(--mcp-teal);}
+.code-block-wrapper pre{margin:0;padding:1.2rem;overflow-x:auto;}
+.code-block-wrapper pre code{background:none;color:#C9D1D9;padding:0;font-size:0.83rem;font-family:'JetBrains Mono',monospace;line-height:1.6;}
+
+/* Code annotation */
+.code-annotation{background:var(--bg-card);border:1px solid var(--code-border);border-left:3px solid var(--mcp-teal);border-radius:0 6px 6px 0;padding:0.75rem 1rem;margin:0.6rem 0;font-size:0.88rem;}
+.annot-label{font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:0.75rem;text-transform:uppercase;letter-spacing:0.08em;color:var(--mcp-teal-light);margin-bottom:0.25rem;}
+.annot-label.what{color:var(--mcp-teal-light);}
+.annot-label.why{color:var(--success);}
+.annot-label.gotcha{color:var(--error);}
+
+/* What just happened */
+.what-happened{background:rgba(16,185,129,0.06);border:1px solid rgba(16,185,129,0.2);border-left:3px solid var(--success);border-radius:6px;padding:0.85rem 1rem 0.95rem;margin:0.5rem 0 1.6rem;}
+.what-happened-label{display:block;font-family:'Bricolage Grotesque',sans-serif;font-size:0.7rem;font-weight:800;letter-spacing:0.12em;color:var(--success);margin-bottom:0.4rem;text-transform:uppercase;}
+.what-happened p{margin:0 0 0.4rem;font-size:0.92rem;color:var(--text-secondary);line-height:1.6;}
+.what-happened p:last-child{margin-bottom:0;}
+.what-happened ul{margin:0.3rem 0 0 1.25rem;font-size:0.92rem;color:var(--text-secondary);}
+
+/* Terminal block */
+.terminal-block{margin:1rem 0;border-radius:8px;overflow:hidden;border:1px solid var(--code-border);position:relative;}
+.terminal-header{background:rgba(0,0,0,0.5);padding:0.35rem 0.9rem;font-family:'Bricolage Grotesque',sans-serif;font-size:0.68rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.08em;border-bottom:1px solid var(--code-border);display:flex;justify-content:space-between;align-items:center;}
+.terminal-cmd{background:#000;color:#E8ECF1;padding:0.5rem 0.85rem;font-family:'JetBrains Mono',monospace;font-size:0.83rem;display:flex;align-items:flex-start;gap:0.5rem;line-height:1.5;}
+.terminal-cmd::before{content:'$';color:var(--mcp-teal-light);font-weight:700;flex-shrink:0;}
+.terminal-cmd code{background:none;color:inherit;padding:0;font-size:inherit;white-space:pre-wrap;}
+.terminal-output{background:var(--code-bg);color:var(--text-secondary);padding:0.5rem 0.9rem 0.75rem;font-family:'JetBrains Mono',monospace;font-size:0.8rem;line-height:1.55;overflow-x:auto;white-space:pre;}
+.t-copy{background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.15);color:var(--text-muted);padding:0.2rem 0.5rem;border-radius:4px;font-size:0.68rem;cursor:pointer;font-family:'Bricolage Grotesque',sans-serif;font-weight:700;}
+.t-copy:hover{color:var(--mcp-teal-light);}
+
+/* Animation containers */
+.anim-container{background:var(--bg-secondary);border:1px solid var(--mcp-teal-border);border-radius:14px;padding:1.75rem;margin:1.75rem 0;overflow:hidden;}
+.anim-title{font-family:'Bricolage Grotesque',sans-serif;font-size:0.78rem;font-weight:700;color:var(--mcp-teal-light);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:1.25rem;}
+.anim-controls{display:flex;gap:0.5rem;margin-top:1.25rem;}
+.anim-btn{background:var(--bg-surface);border:1px solid var(--mcp-teal-border);color:var(--mcp-teal-light);padding:0.35rem 0.9rem;border-radius:6px;font-family:'Bricolage Grotesque',sans-serif;font-size:0.78rem;font-weight:700;cursor:pointer;transition:all var(--transition-fast);}
+.anim-btn:hover{background:var(--mcp-teal-bg);border-color:var(--mcp-teal);}
+
+/* Table */
+table{width:100%;border-collapse:collapse;font-size:0.88rem;margin:1rem 0;}
+th{background:var(--bg-surface);padding:0.55rem 0.8rem;text-align:left;font-family:'Bricolage Grotesque',sans-serif;font-size:0.78rem;color:var(--text-secondary);border-bottom:1px solid var(--code-border);}
+td{padding:0.5rem 0.8rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);vertical-align:top;}
+tr:last-child td{border-bottom:none;}
+td:first-child{color:var(--text-primary);font-weight:600;}
+
+/* Quiz */
+.quiz-question{background:var(--bg-card);border:1px solid var(--code-border);border-radius:12px;padding:1.5rem;margin-bottom:1.5rem;}
+.quiz-question h4{font-family:'Bricolage Grotesque',sans-serif;font-weight:600;margin-bottom:1rem;font-size:1rem;line-height:1.4;}
+.quiz-option{padding:0.7rem 1rem;margin:0.4rem 0;border:1px solid var(--code-border);border-radius:8px;cursor:pointer;transition:all var(--transition-fast);display:flex;align-items:flex-start;gap:0.75rem;}
+.quiz-option:hover{border-color:var(--mcp-teal);}
+.quiz-option.correct{border-color:var(--success);background:var(--success-bg);}
+.quiz-option.incorrect{border-color:var(--error);background:var(--error-bg);}
+.quiz-option.disabled{pointer-events:none;}
+.quiz-marker{width:22px;height:22px;border-radius:50%;border:2px solid var(--code-border);flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:0.7rem;font-weight:700;margin-top:3px;}
+.quiz-option.correct .quiz-marker{border-color:var(--success);color:var(--success);}
+.quiz-option.incorrect .quiz-marker{border-color:var(--error);color:var(--error);}
+.quiz-feedback{margin-top:0.75rem;padding:0.7rem;border-radius:6px;font-size:0.88rem;display:none;}
+.quiz-feedback.show{display:block;}
+.quiz-feedback.correct-fb{background:var(--success-bg);color:var(--success);}
+.quiz-feedback.incorrect-fb{background:var(--error-bg);color:var(--error);}
+
+/* Module nav */
+.module-nav{display:flex;justify-content:space-between;align-items:center;padding:1.5rem 0;margin:2rem 0;border-top:1px solid var(--code-border);}
+.module-nav a{display:flex;align-items:center;gap:0.5rem;color:var(--mcp-teal-light);text-decoration:none;font-family:'Bricolage Grotesque',sans-serif;font-weight:600;font-size:0.88rem;padding:0.5rem 1rem;border:1px solid var(--mcp-teal-border);border-radius:8px;}
+.module-nav a:hover{border-color:var(--mcp-teal);background:var(--mcp-teal-bg);}
+
+/* Module intro badge */
+.module-badge{display:inline-flex;align-items:center;gap:0.6rem;background:var(--mcp-teal-bg);border:1px solid var(--mcp-teal);border-radius:999px;padding:0.35rem 1rem;font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:0.82rem;color:var(--mcp-teal-light);letter-spacing:0.04em;text-transform:uppercase;margin-bottom:1.25rem;}
+
+/* Lab steps */
+.lab-step{background:var(--bg-card);border:1px solid var(--code-border);border-radius:10px;padding:1.25rem 1.5rem;margin:1.25rem 0;position:relative;padding-left:4rem;}
+.lab-step-num{position:absolute;left:1.25rem;top:1.25rem;width:1.75rem;height:1.75rem;background:var(--mcp-teal-bg);border:1px solid var(--mcp-teal);border-radius:50%;display:flex;align-items:center;justify-content:center;font-family:'Bricolage Grotesque',sans-serif;font-weight:800;font-size:0.82rem;color:var(--mcp-teal-light);}
+.lab-step h4{font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:0.95rem;margin-bottom:0.6rem;color:var(--text-primary);}
+
+/* Deploy target cards */
+.deploy-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:1rem;margin:1.25rem 0;}
+.deploy-card{background:var(--bg-card);border:1px solid var(--code-border);border-radius:10px;padding:1.1rem;}
+.deploy-card-title{font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:0.92rem;color:var(--mcp-teal-light);margin-bottom:0.4rem;}
+.deploy-card p{font-size:0.85rem;color:var(--text-secondary);margin-bottom:0;}
+
+/* Responsive */
+@media (max-width:900px){
+  .page-container{grid-template-columns:1fr;}
+  .sidebar-nav{position:fixed;bottom:0;left:0;right:0;height:auto;z-index:100;background:var(--bg-secondary);border-top:1px solid var(--code-border);padding:0.6rem 0.75rem;display:flex;gap:0.2rem;overflow-x:auto;}
+  .sidebar-title{display:none;}
+  .sidebar-nav a{white-space:nowrap;font-size:0.75rem;border-left:none;border-bottom:2px solid transparent;border-radius:4px 4px 0 0;}
+  .sidebar-nav a.active{border-bottom-color:var(--mcp-teal);background:var(--mcp-teal-bg);}
+}
+@media (max-width:600px){h1{font-size:1.65rem;}}
+@media (prefers-reduced-motion:reduce){*,*::before,*::after{transition-duration:0.01ms !important;animation-duration:0.01ms !important;}}
+</style>
+</head>
+<body>
+
+<div class="top-progress" role="progressbar" aria-label="Module progress" aria-valuenow="3" aria-valuemin="0" aria-valuemax="8">
+  <div class="fill" id="topFill"></div>
+</div>
+
+<header class="course-header">
+  <div class="course-header-inner">
+    <span class="course-title">MCP Track — Building with the Model Context Protocol</span>
+    <span class="track-badge">&#9889; MODULE 03 of 8 · MCP Track</span>
+    <div class="header-meta">
+      <span>~75 min</span>
+      <span>Intermediate</span>
+      <span>Lab — 80% Code</span>
+    </div>
+  </div>
+</header>
+
+<div class="page-container">
+
+<!-- SIDEBAR -->
+<nav class="sidebar-nav" aria-label="Module sections">
+  <div class="sidebar-title">In This Module</div>
+  <a href="#stdio-limits">Why stdio Isn't Enough</a>
+  <a href="#http-sse-architecture">HTTP + SSE Architecture</a>
+  <a href="#convert-to-http">Convert to HTTP</a>
+  <a href="#oauth">OAuth 2.0 Auth</a>
+  <a href="#docker">Containerizing</a>
+  <a href="#cors-config">CORS Config</a>
+  <a href="#connect-client">Connecting Clients</a>
+  <a href="#deploy-cloud">Deploy to Cloud</a>
+  <a href="#lab">Lab</a>
+  <a href="#quiz">Quiz</a>
+</nav>
+
+<!-- CONTENT -->
+<main class="content" id="mainContent">
+
+  <div class="module-badge">MODULE 03 · HTTP + SSE Transport</div>
+  <h1>HTTP + SSE Transport — Remote MCP Servers</h1>
+  <p style="color:var(--text-secondary);font-size:1.1rem;margin-bottom:2rem;">Convert your local stdio server to a deployable HTTP service. Add OAuth auth, containerize it, and connect multiple clients — all with the same tool definitions you already wrote.</p>
+
+  <!-- Learning objectives -->
+  <div style="background:var(--bg-card);border:1px solid var(--mcp-teal-border);border-radius:10px;padding:1.25rem 1.5rem;margin-bottom:2.5rem;">
+    <div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:0.85rem;color:var(--mcp-teal-light);margin-bottom:0.75rem;text-transform:uppercase;letter-spacing:0.06em;">After this module you will:</div>
+    <ul style="list-style:none;margin:0;padding:0;">
+      <li style="padding:0.3rem 0 0.3rem 1.6rem;position:relative;color:var(--text-secondary);font-size:0.95rem;"><span style="position:absolute;left:0;color:var(--mcp-teal);">&#10003;</span>Explain when stdio falls short and why HTTP transport solves the multi-client problem</li>
+      <li style="padding:0.3rem 0 0.3rem 1.6rem;position:relative;color:var(--text-secondary);font-size:0.95rem;"><span style="position:absolute;left:0;color:var(--mcp-teal);">&#10003;</span>Convert a FastMCP stdio server to HTTP/SSE with a one-line change</li>
+      <li style="padding:0.3rem 0 0.3rem 1.6rem;position:relative;color:var(--text-secondary);font-size:0.95rem;"><span style="position:absolute;left:0;color:var(--mcp-teal);">&#10003;</span>Implement OAuth 2.0 Bearer token auth including scope-based restrictions</li>
+      <li style="padding:0.3rem 0 0.3rem 1.6rem;position:relative;color:var(--text-secondary);font-size:0.95rem;"><span style="position:absolute;left:0;color:var(--mcp-teal);">&#10003;</span>Write a Dockerfile with health checks, build it, and run it locally</li>
+      <li style="padding:0.3rem 0 0.3rem 1.6rem;position:relative;color:var(--text-secondary);font-size:0.95rem;"><span style="position:absolute;left:0;color:var(--mcp-teal);">&#10003;</span>Connect Claude Code to your HTTP server and deploy to Fly.io, Cloud Run, or a VPS</li>
+    </ul>
+  </div>
+
+  <!-- ── SECTION 1: stdio limits ── -->
+  <section class="section" id="stdio-limits">
+    <h2 id="stdio-limits">1. Why stdio Isn't Enough</h2>
+
+    <div class="analogy-box">
+      <span class="box-label">Analogy — The Walkie-Talkie</span>
+      <p><strong>BEFORE:</strong> Imagine your team communicates with walkie-talkies. Each person presses a button, speaks directly to one other person, and that conversation is private and immediate. It works perfectly for one-to-one communication in the same physical space.</p>
+      <p><strong>PAIN:</strong> Now your team grows to 20 people, some working remotely. You can't hand everyone a personal walkie-talkie tuned to your frequency — and even if you could, you'd need a separate device for each conversation. Walkie-talkies don't scale to shared broadcast.</p>
+      <p><strong>MAPPING:</strong> stdio is the walkie-talkie. It's a direct, private channel between one host process and one server process on the same machine. HTTP is the radio station — one broadcast endpoint that any number of receivers can tune into, from anywhere, with standard equipment.</p>
+    </div>
+
+    <p>In MCP01 you built a stdio server. The host spawns it as a subprocess and they communicate through stdin/stdout pipes. This is perfect for local development, but breaks down the moment you need any of the following:</p>
+
+    <table>
+      <thead>
+        <tr><th>Scenario</th><th>stdio</th><th>HTTP + SSE</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Multiple clients sharing one server</td>
+          <td style="color:var(--error);">&#10007; Each client spawns a separate process</td>
+          <td style="color:var(--success);">&#10003; One process, many concurrent connections</td>
+        </tr>
+        <tr>
+          <td>Server runs in the cloud</td>
+          <td style="color:var(--error);">&#10007; Requires subprocess on same machine</td>
+          <td style="color:var(--success);">&#10003; Deploy anywhere with an IP/hostname</td>
+        </tr>
+        <tr>
+          <td>OAuth / token-based auth</td>
+          <td style="color:var(--error);">&#10007; No transport-layer auth mechanism</td>
+          <td style="color:var(--success);">&#10003; Standard HTTP headers carry Bearer tokens</td>
+        </tr>
+        <tr>
+          <td>Shared server for a team</td>
+          <td style="color:var(--error);">&#10007; Everyone needs the script locally</td>
+          <td style="color:var(--success);">&#10003; One URL, all team members connect</td>
+        </tr>
+        <tr>
+          <td>Web app / browser client</td>
+          <td style="color:var(--error);">&#10007; Browsers can't spawn subprocesses</td>
+          <td style="color:var(--success);">&#10003; Native HTTP + EventSource API</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="callout-why">
+      <span class="box-label">Why It Matters</span>
+      A team of 5 engineers each spawning their own copy of a stdio server wastes resources and leads to drift — server version A on Alice's machine, version B on Bob's. One centrally-deployed HTTP server means everyone uses the same code, same data, and the same update simultaneously. Real production MCP deployments at companies like Anthropic, Sourcegraph, and JetBrains are all HTTP-based.
+    </div>
+
+    <!-- ANIMATION 1: stdio vs HTTP/SSE multi-client topology -->
+    <div class="anim-container" role="region" aria-label="stdio vs HTTP multi-client topology animation">
+      <div class="anim-title">Animation 1 — stdio (single-client) vs HTTP/SSE (multi-client) Topology</div>
+      <div id="anim1Canvas">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:2rem;min-height:170px;">
+          <!-- stdio side -->
+          <div>
+            <div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:0.75rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.75rem;">stdio — Local Only</div>
+            <div style="display:flex;flex-direction:column;gap:0.4rem;">
+              <div id="a1s_client1" style="background:var(--bg-card);border:2px solid var(--code-border);border-radius:7px;padding:0.5rem 0.75rem;font-family:'JetBrains Mono',monospace;font-size:0.72rem;display:flex;align-items:center;gap:0.5rem;transition:border-color 0.35s;">
+                <span style="color:var(--mcp-teal-light);">&#9654;</span><span>Claude Code (Alice)</span>
+                <span id="a1s_arrow1" style="margin-left:auto;opacity:0.2;transition:opacity 0.3s;">&#8596;</span>
+                <span id="a1s_server1" style="font-size:0.65rem;color:var(--text-muted);transition:color 0.3s;">server.py PID 1201</span>
+              </div>
+              <div id="a1s_client2" style="background:var(--bg-card);border:2px solid var(--code-border);border-radius:7px;padding:0.5rem 0.75rem;font-family:'JetBrains Mono',monospace;font-size:0.72rem;display:flex;align-items:center;gap:0.5rem;transition:border-color 0.35s;opacity:0.35;">
+                <span style="color:var(--mcp-teal-light);">&#9654;</span><span>Claude Code (Bob)</span>
+                <span id="a1s_arrow2" style="margin-left:auto;opacity:0.2;transition:opacity 0.3s;">&#8596;</span>
+                <span id="a1s_server2" style="font-size:0.65rem;color:var(--text-muted);transition:color 0.3s;">server.py PID 2847</span>
+              </div>
+              <div id="a1s_client3" style="background:var(--bg-card);border:2px solid var(--code-border);border-radius:7px;padding:0.5rem 0.75rem;font-family:'JetBrains Mono',monospace;font-size:0.72rem;display:flex;align-items:center;gap:0.5rem;transition:border-color 0.35s;opacity:0.35;">
+                <span style="color:var(--mcp-teal-light);">&#9654;</span><span>Claude Code (Carol)</span>
+                <span id="a1s_arrow3" style="margin-left:auto;opacity:0.2;transition:opacity 0.3s;">&#8596;</span>
+                <span id="a1s_server3" style="font-size:0.65rem;color:var(--text-muted);transition:color 0.3s;">server.py PID 3512</span>
+              </div>
+              <div id="a1s_warn" style="margin-top:0.3rem;font-size:0.7rem;color:var(--warning);opacity:0;transition:opacity 0.4s;">&#9888; 3 separate processes, 3&#215; memory</div>
+            </div>
+          </div>
+          <!-- HTTP side -->
+          <div>
+            <div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:0.75rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:0.75rem;">HTTP/SSE — Shared Server</div>
+            <div style="display:flex;flex-direction:column;gap:0.4rem;">
+              <div id="a1h_client1" style="background:var(--bg-card);border:2px solid var(--code-border);border-radius:7px;padding:0.5rem 0.75rem;font-family:'JetBrains Mono',monospace;font-size:0.72rem;display:flex;align-items:center;gap:0.5rem;transition:border-color 0.35s;opacity:0.35;">
+                <span style="color:var(--mcp-teal-light);">&#9654;</span><span>Claude Code (Alice)</span>
+                <span id="a1h_arrow1" style="margin-left:auto;color:var(--mcp-teal);opacity:0;transition:opacity 0.3s;">&#8594;</span>
+              </div>
+              <div id="a1h_client2" style="background:var(--bg-card);border:2px solid var(--code-border);border-radius:7px;padding:0.5rem 0.75rem;font-family:'JetBrains Mono',monospace;font-size:0.72rem;display:flex;align-items:center;gap:0.5rem;transition:border-color 0.35s;opacity:0.35;">
+                <span style="color:var(--mcp-teal-light);">&#9654;</span><span>Claude Code (Bob)</span>
+                <span id="a1h_arrow2" style="margin-left:auto;color:var(--mcp-teal);opacity:0;transition:opacity 0.3s;">&#8594;</span>
+              </div>
+              <div id="a1h_client3" style="background:var(--bg-card);border:2px solid var(--code-border);border-radius:7px;padding:0.5rem 0.75rem;font-family:'JetBrains Mono',monospace;font-size:0.72rem;display:flex;align-items:center;gap:0.5rem;transition:border-color 0.35s;opacity:0.35;">
+                <span style="color:var(--mcp-teal-light);">&#9654;</span><span>Claude Code (Carol)</span>
+                <span id="a1h_arrow3" style="margin-left:auto;color:var(--mcp-teal);opacity:0;transition:opacity 0.3s;">&#8594;</span>
+              </div>
+              <div id="a1h_server" style="margin-top:0.3rem;background:var(--mcp-teal-bg);border:2px solid var(--code-border);border-radius:7px;padding:0.5rem 0.75rem;font-family:'JetBrains Mono',monospace;font-size:0.72rem;text-align:center;transition:border-color 0.35s;">
+                http://mcp.example.com:8000
+              </div>
+            </div>
+          </div>
+        </div>
+        <div id="a1Label" style="margin-top:0.9rem;font-family:'JetBrains Mono',monospace;font-size:0.78rem;color:var(--text-secondary);min-height:1.2em;text-align:center;"></div>
+      </div>
+      <div class="anim-controls">
+        <button class="anim-btn" onclick="anim1Control('play')" aria-label="Play topology comparison animation">&#9654; Play</button>
+        <button class="anim-btn" onclick="anim1Control('pause')" aria-label="Pause animation">&#9646;&#9646; Pause</button>
+        <button class="anim-btn" onclick="anim1Control('restart')" aria-label="Restart animation">&#8635; Restart</button>
+      </div>
+    </div>
+
+  </section>
+
+  <div class="bridge">The problem is clear. Now let's understand exactly how HTTP + SSE solves it — request direction, wire format, and the raw HTTP headers involved.</div>
+
+  <!-- ── SECTION 2: HTTP + SSE Architecture ── -->
+  <section class="section" id="http-sse-architecture">
+    <h2 id="http-sse-architecture">2. HTTP + SSE Architecture</h2>
+
+    <div class="tech-def-box">
+      <span class="box-label">Technical Definition — SSE (Server-Sent Events)</span>
+      <p><span class="tooltip-host">SSE<span class="tooltip-pop"><strong>Server-Sent Events (SSE)</strong> — an HTTP-based protocol where a client opens a long-lived GET connection and the server pushes newline-delimited text events over it. Each event is prefixed with <code>data:</code>. Unlike WebSockets, SSE is unidirectional (server→client) and rides plain HTTP/1.1, requiring no protocol upgrade.</span></span> is a W3C standard where a client opens a persistent HTTP GET connection and the server pushes <code>text/event-stream</code> messages as they arrive. Each message is a line starting with <code>data:</code>. The connection stays open until the client closes it or the server sends a blank line.</p>
+      <p>In MCP's HTTP transport: the client <strong>POSTs requests</strong> to <code>/messages</code> (or <code>/mcp</code> in Streamable HTTP) and the server <strong>streams responses</strong> back via SSE on <code>/sse</code>. Why SSE instead of WebSockets? SSE is simpler (no handshake upgrade), works through every HTTP proxy and corporate firewall, requires no special server infrastructure, and the browser <code>EventSource</code> API handles reconnection automatically.</p>
+    </div>
+
+    <h3>The Full Request/Response Cycle</h3>
+    <p>Here is what the raw HTTP traffic looks like for a single tool call over the HTTP transport:</p>
+
+    <div class="code-annotation">
+      <div class="annot-label what">WHAT — Step 1: Client opens the SSE channel</div>
+      <p>The client makes a long-lived GET request. The server holds this connection open and sends events down it as they occur.</p>
+    </div>
+
+    <div class="code-block-wrapper" style="margin:0.75rem 0 1.25rem;">
+      <div class="code-block-header">
+        <span class="code-lang">HTTP — SSE Connection Open</span>
+        <button class="copy-btn" aria-label="Copy code to clipboard" onclick="copyCode(this)">Copy</button>
+      </div>
+      <pre><code class="language-http">GET /sse HTTP/1.1
+Host: localhost:8000
+Accept: text/event-stream
+Authorization: Bearer eyJhbGciOiJIUzI1NiJ9...
+Cache-Control: no-cache
+
+--- Server response (headers only, connection stays open) ---
+HTTP/1.1 200 OK
+Content-Type: text/event-stream
+Cache-Control: no-cache
+X-Accel-Buffering: no
+Transfer-Encoding: chunked
+
+data: {"jsonrpc":"2.0","method":"notifications/initialized","params":{}}
+
+</code></pre>
+    </div>
+
+    <div class="code-annotation">
+      <div class="annot-label what">WHAT — Step 2: Client POSTs a tool call</div>
+      <p>The client makes a separate POST request for each JSON-RPC message. The POST returns 202 Accepted immediately — the actual result comes back over the SSE channel.</p>
+    </div>
+
+    <div class="code-block-wrapper" style="margin:0.75rem 0 1.25rem;">
+      <div class="code-block-header">
+        <span class="code-lang">HTTP — Tool Call POST</span>
+        <button class="copy-btn" aria-label="Copy code to clipboard" onclick="copyCode(this)">Copy</button>
+      </div>
+      <pre><code class="language-http">POST /messages HTTP/1.1
+Host: localhost:8000
+Content-Type: application/json
+Authorization: Bearer eyJhbGciOiJIUzI1NiJ9...
+
+{
+  "jsonrpc": "2.0",
+  "id": 42,
+  "method": "tools/call",
+  "params": {
+    "name": "search_documents",
+    "arguments": { "query": "MCP transport", "limit": 3 }
+  }
+}
+
+--- Server response (immediate acknowledgement) ---
+HTTP/1.1 202 Accepted
+
+--- Result arrives on the SSE channel (milliseconds later) ---
+data: {"jsonrpc":"2.0","id":42,"result":{"content":[{"type":"text","text":"[{\"id\":\"transport-docs\"..."}],"isError":false}}
+
+</code></pre>
+    </div>
+
+    <div class="code-annotation">
+      <div class="annot-label gotcha">GOTCHA — The POST and SSE are decoupled</div>
+      <p>Beginners expect the POST to return the tool result in its response body. It doesn't. The POST only acknowledges receipt (202). The result travels on the persistent SSE channel identified by a session ID. If you lose the SSE connection, you lose pending results.</p>
+    </div>
+
+    <!-- ANIMATION 2: HTTP + SSE message flow -->
+    <div class="anim-container" role="region" aria-label="HTTP SSE message flow animation">
+      <div class="anim-title">Animation 2 — HTTP + SSE Message Flow: POST Request ↔ SSE Response</div>
+      <div id="anim2Canvas" style="min-height:200px;">
+        <div style="display:grid;grid-template-columns:1fr auto 1fr;gap:1rem;align-items:start;">
+          <!-- Client column -->
+          <div>
+            <div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:0.75rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.08em;text-align:center;margin-bottom:0.75rem;">MCP Client</div>
+            <div id="a2_c1" style="background:var(--bg-card);border:2px solid var(--code-border);border-radius:8px;padding:0.65rem 0.9rem;font-size:0.73rem;font-family:'JetBrains Mono',monospace;transition:border-color 0.35s;margin-bottom:0.4rem;opacity:0.3;">
+              <div style="color:var(--text-muted);font-size:0.62rem;margin-bottom:0.2rem;">STEP 1</div>
+              <div style="color:var(--mcp-teal-light);">GET /sse</div>
+              <div style="color:var(--text-secondary);font-size:0.65rem;">Open SSE channel</div>
+            </div>
+            <div id="a2_c2" style="background:var(--bg-card);border:2px solid var(--code-border);border-radius:8px;padding:0.65rem 0.9rem;font-size:0.73rem;font-family:'JetBrains Mono',monospace;transition:border-color 0.35s;margin-bottom:0.4rem;opacity:0.3;">
+              <div style="color:var(--text-muted);font-size:0.62rem;margin-bottom:0.2rem;">STEP 3</div>
+              <div style="color:var(--mcp-teal-light);">POST /messages</div>
+              <div style="color:var(--text-secondary);font-size:0.65rem;">tools/call search_documents</div>
+            </div>
+            <div id="a2_c3" style="background:var(--bg-card);border:2px solid var(--code-border);border-radius:8px;padding:0.65rem 0.9rem;font-size:0.73rem;font-family:'JetBrains Mono',monospace;transition:border-color 0.35s;opacity:0.3;">
+              <div style="color:var(--text-muted);font-size:0.62rem;margin-bottom:0.2rem;">STEP 5</div>
+              <div style="color:var(--success);">SSE data: result</div>
+              <div style="color:var(--text-secondary);font-size:0.65rem;">isError: false</div>
+            </div>
+          </div>
+          <!-- Arrows column -->
+          <div style="display:flex;flex-direction:column;gap:0.4rem;align-items:center;padding-top:2.2rem;">
+            <div id="a2_arr1" style="color:var(--mcp-teal);font-size:1.2rem;opacity:0.2;transition:opacity 0.35s;margin-bottom:0.4rem;">&#8594;</div>
+            <div id="a2_arr2" style="color:var(--mcp-teal);font-size:0.7rem;opacity:0.2;transition:opacity 0.35s;margin-bottom:0.4rem;color:var(--success);">&#8592; 200 OK</div>
+            <div id="a2_arr3" style="color:var(--mcp-teal);font-size:1.2rem;opacity:0.2;transition:opacity 0.35s;margin-bottom:0.4rem;">&#8594;</div>
+            <div id="a2_arr4" style="color:var(--success);font-size:0.7rem;opacity:0.2;transition:opacity 0.35s;margin-bottom:0.4rem;">&#8592; 202</div>
+            <div id="a2_arr5" style="color:var(--success);font-size:1.2rem;opacity:0.2;transition:opacity 0.35s;">&#8592;</div>
+          </div>
+          <!-- Server column -->
+          <div>
+            <div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:0.75rem;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.08em;text-align:center;margin-bottom:0.75rem;">MCP Server</div>
+            <div id="a2_s1" style="background:var(--bg-card);border:2px solid var(--code-border);border-radius:8px;padding:0.65rem 0.9rem;font-size:0.73rem;font-family:'JetBrains Mono',monospace;transition:border-color 0.35s;margin-bottom:0.4rem;opacity:0.3;">
+              <div style="color:var(--text-muted);font-size:0.62rem;margin-bottom:0.2rem;">STEP 2</div>
+              <div style="color:var(--mcp-teal-light);">200 + event-stream</div>
+              <div style="color:var(--text-secondary);font-size:0.65rem;">Channel open, session-id assigned</div>
+            </div>
+            <div id="a2_s2" style="background:var(--bg-card);border:2px solid var(--code-border);border-radius:8px;padding:0.65rem 0.9rem;font-size:0.73rem;font-family:'JetBrains Mono',monospace;transition:border-color 0.35s;margin-bottom:0.4rem;opacity:0.3;">
+              <div style="color:var(--text-muted);font-size:0.62rem;margin-bottom:0.2rem;">STEP 4</div>
+              <div style="color:var(--mcp-teal-light);">202 + execute tool</div>
+              <div style="color:var(--text-secondary);font-size:0.65rem;">Validates → runs fn → queues result</div>
+            </div>
+            <div id="a2_s3" style="background:var(--bg-card);border:2px solid var(--code-border);border-radius:8px;padding:0.65rem 0.9rem;font-size:0.73rem;font-family:'JetBrains Mono',monospace;transition:border-color 0.35s;opacity:0.3;">
+              <div style="color:var(--text-muted);font-size:0.62rem;margin-bottom:0.2rem;">STEP 5</div>
+              <div style="color:var(--success);">Push SSE event</div>
+              <div style="color:var(--text-secondary);font-size:0.65rem;">data: &#123;"id":42,"result"...&#125;</div>
+            </div>
+          </div>
+        </div>
+        <div id="a2Label" style="margin-top:0.9rem;font-family:'JetBrains Mono',monospace;font-size:0.78rem;color:var(--text-secondary);min-height:1.2em;text-align:center;"></div>
+      </div>
+      <div class="anim-controls">
+        <button class="anim-btn" onclick="anim2Control('play')" aria-label="Play HTTP SSE message flow animation">&#9654; Play</button>
+        <button class="anim-btn" onclick="anim2Control('pause')" aria-label="Pause animation">&#9646;&#9646; Pause</button>
+        <button class="anim-btn" onclick="anim2Control('restart')" aria-label="Restart animation">&#8635; Restart</button>
+      </div>
+    </div>
+
+  </section>
+
+  <div class="bridge">Architecture understood. Now the fun part — converting MCP01's 3-tool server to HTTP with a single line change.</div>
+
+  <!-- ── SECTION 3: Convert to HTTP ── -->
+  <section class="section" id="convert-to-http">
+    <h2 id="convert-to-http">3. Converting a stdio Server to HTTP</h2>
+
+    <p>FastMCP abstracts the transport entirely. The only change between a stdio server and an HTTP server is the argument to <code>mcp.run()</code>. Every tool, every resource, every prompt stays identical.</p>
+
+    <div class="code-annotation">
+      <div class="annot-label what">WHAT — The one-line change</div>
+      <p><code>mcp.run()</code> defaults to stdio. Passing <code>transport="streamable-http"</code> switches to HTTP. Add <code>host</code> and <code>port</code> to control where it binds. The server now exposes <code>/mcp</code> (POST endpoint) and <code>/sse</code> (event stream) automatically.</p>
+    </div>
+    <div class="code-annotation">
+      <div class="annot-label why">WHY — "streamable-http" vs the older "sse" transport</div>
+      <p>MCP originally shipped a transport called <code>"sse"</code>. The newer <code>"streamable-http"</code> transport adds response streaming and is the current standard. Use <code>"streamable-http"</code> for all new servers — it's backward compatible with clients that understand the older SSE mode and is the transport Claude.ai uses.</p>
+    </div>
+    <div class="code-annotation">
+      <div class="annot-label gotcha">GOTCHA — <code>host="0.0.0.0"</code> is required inside Docker</div>
+      <p>The default <code>host="127.0.0.1"</code> only listens on loopback. Inside a Docker container, this means the port is unreachable from outside. Always set <code>host="0.0.0.0"</code> when you plan to containerize or deploy to cloud infrastructure.</p>
+    </div>
+
+    <div class="code-tabs">
+      <div class="tab-bar">
+        <button class="tab-btn active" onclick="switchTab(this,'t_convert','py')" aria-label="Python tab">Python</button>
+        <button class="tab-btn" onclick="switchTab(this,'t_convert','ts')" aria-label="TypeScript tab">TypeScript</button>
+      </div>
+      <div id="t_convert_py" class="tab-panel active">
+        <div class="code-block-wrapper">
+          <div class="code-block-header">
+            <span class="code-lang">Python — document_server_http.py</span>
+            <button class="copy-btn" aria-label="Copy code to clipboard" onclick="copyCode(this)">Copy</button>
+          </div>
+          <pre><code class="language-python"># document_server_http.py — same 3 tools as MCP01, HTTP transport added
+from __future__ import annotations
+import math
+import os
+from mcp.server.fastmcp import FastMCP
+
+# ── All configuration via environment variables ──
+PORT = int(os.getenv("MCP_PORT", "8000"))
+HOST = os.getenv("MCP_HOST", "0.0.0.0")  # 0.0.0.0 required for Docker
+
+mcp = FastMCP(
+    "document-server",
+    # Stateless mode is ideal for multi-client HTTP servers.
+    # Each request is independent — no session state carried between calls.
+    stateless_http=True,
+)
+
+# ── In-memory document store (same as MCP01) ──
+DOCUMENTS: dict[str, str] = {
+    "mcp-overview": "MCP is an open protocol for connecting AI to tools.",
+    "fastmcp-guide": "FastMCP reduces MCP server boilerplate with decorators.",
+    "transport-docs": "stdio is local; HTTP/SSE is for shared, remote servers.",
+}
+NOTES: dict[str, str] = {}
+
+
+@mcp.tool()
+def search_documents(query: str, limit: int = 5) -> list[dict]:
+    """Search the document store for documents matching a query string."""
+    if not query or not query.strip():
+        raise ValueError("query must be a non-empty string")
+    if limit < 1 or limit > 50:
+        raise ValueError("limit must be between 1 and 50")
+    q = query.lower()
+    results = []
+    for doc_id, content in DOCUMENTS.items():
+        score = (2 if q in doc_id.lower() else 0) + (1 if q in content.lower() else 0)
+        if score > 0:
+            results.append({"id": doc_id, "preview": content[:120], "score": score})
+    results.sort(key=lambda r: r["score"], reverse=True)
+    return results[:limit]
+
+
+@mcp.tool()
+def calculate_similarity(text_a: str, text_b: str) -> dict:
+    """Calculate cosine similarity between two texts using word overlap."""
+    if not text_a or not text_b:
+        raise ValueError("Both text_a and text_b must be non-empty")
+    def freq(t: str) -> dict:
+        d: dict = {}
+        for w in t.lower().split():
+            w = w.strip(".,!?;:")
+            if w: d[w] = d.get(w, 0) + 1
+        return d
+    fa, fb = freq(text_a), freq(text_b)
+    words = set(fa) | set(fb)
+    dot = sum(fa.get(w,0)*fb.get(w,0) for w in words)
+    mag = (math.sqrt(sum(v**2 for v in fa.values())) *
+           math.sqrt(sum(v**2 for v in fb.values())))
+    sim = round(dot/mag, 4) if mag else 0.0
+    return {"similarity": sim, "common_words": sorted(set(fa)&set(fb))[:10],
+            "interpretation": "highly similar" if sim>0.7 else "somewhat related" if sim>0.3 else "largely different"}
+
+
+@mcp.tool()
+def save_note(title: str, content: str) -> dict:
+    """Save a note. Notes persist for the server process lifetime."""
+    if not title or len(title) > 100:
+        raise ValueError("title must be 1–100 characters")
+    if not content or len(content) > 5000:
+        raise ValueError("content must be 1–5000 characters")
+    NOTES[title.strip()] = content
+    return {"success": True, "title": title.strip(), "total_notes": len(NOTES)}
+
+
+# ── Health check endpoint (required for Docker / cloud health probes) ──
+@mcp.custom_server.get("/health")
+async def health():
+    return {"status": "ok", "server": "document-server", "tools": 3}
+
+
+if __name__ == "__main__":
+    # stdio (MCP01 style):
+    #   mcp.run()
+
+    # HTTP/SSE — change is here only, tools are untouched:
+    mcp.run(transport="streamable-http", host=HOST, port=PORT)
+    # Server now exposes:
+    #   POST http://HOST:PORT/mcp     — JSON-RPC messages
+    #   GET  http://HOST:PORT/sse     — SSE event stream
+    #   GET  http://HOST:PORT/health  — health check</code></pre>
+        </div>
+      </div>
+      <div id="t_convert_ts" class="tab-panel">
+        <div class="code-block-wrapper">
+          <div class="code-block-header">
+            <span class="code-lang">TypeScript — documentServerHttp.ts</span>
+            <button class="copy-btn" aria-label="Copy code to clipboard" onclick="copyCode(this)">Copy</button>
+          </div>
+          <pre><code class="language-typescript">// documentServerHttp.ts — stdio → HTTP in the TypeScript SDK
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
+import { z } from "zod";
+import express from "express";
+
+const PORT = parseInt(process.env.MCP_PORT ?? "8000", 10);
+
+// ── Express app wraps the MCP transport ──
+const app = express();
+app.use(express.json());
+
+// ── Health check (required for Docker / cloud probes) ──
+app.get("/health", (_req, res) => {
+  res.json({ status: "ok", server: "document-server", tools: 3 });
+});
+
+// ── MCP Server (same tool definitions as MCP01) ──
+const server = new McpServer({ name: "document-server", version: "1.0.0" });
+
+const DOCUMENTS: Record<string, string> = {
+  "mcp-overview": "MCP is an open protocol for connecting AI to tools.",
+  "fastmcp-guide": "FastMCP reduces MCP server boilerplate with decorators.",
+  "transport-docs": "stdio is local; HTTP/SSE is for shared, remote servers.",
+};
+const NOTES: Record<string, string> = {};
+
+server.tool(
+  "search_documents",
+  "Search the document store for documents matching a query string.",
+  { query: z.string().min(1), limit: z.number().int().min(1).max(50).default(5) },
+  async ({ query, limit }) => {
+    const q = query.toLowerCase();
+    const results = Object.entries(DOCUMENTS)
+      .map(([id, content]) => ({
+        id,
+        preview: content.slice(0, 120),
+        score: (id.toLowerCase().includes(q) ? 2 : 0) + (content.toLowerCase().includes(q) ? 1 : 0),
+      }))
+      .filter((r) => r.score > 0)
+      .sort((a, b) => b.score - a.score)
+      .slice(0, limit);
+    return { content: [{ type: "text" as const, text: JSON.stringify(results) }] };
+  }
+);
+
+server.tool(
+  "save_note",
+  "Save a note. Notes persist for the server process lifetime.",
+  {
+    title: z.string().min(1).max(100),
+    content: z.string().min(1).max(5000),
+  },
+  async ({ title, content }) => {
+    const key = title.trim();
+    NOTES[key] = content;
+    return { content: [{ type: "text" as const, text: JSON.stringify({ success: true, title: key, total_notes: Object.keys(NOTES).length }) }] };
+  }
+);
+
+// ── HTTP transport: POST /mcp + GET /sse ──
+const transport = new StreamableHTTPServerTransport({
+  sessionIdGenerator: () => crypto.randomUUID(),
+});
+
+// Mount MCP endpoints on Express
+app.post("/mcp", async (req, res) => {
+  await transport.handleRequest(req, res, req.body);
+});
+app.get("/sse", async (req, res) => {
+  await transport.handleSseRequest(req, res);
+});
+app.delete("/mcp", async (req, res) => {
+  await transport.handleRequest(req, res, req.body);
+});
+
+// Connect server to transport, then start listening
+await server.connect(transport);
+app.listen(PORT, "0.0.0.0", () => {
+  console.log(`MCP server listening on http://0.0.0.0:${PORT}`);
+  console.log("  POST /mcp   — JSON-RPC messages");
+  console.log("  GET  /sse   — SSE event stream");
+  console.log("  GET  /health — health check");
+});</code></pre>
+        </div>
+      </div>
+    </div>
+
+    <h3>Quick smoke test with curl</h3>
+    <div class="terminal-block">
+      <div class="terminal-header">
+        <span>Terminal — test after starting the server</span>
+        <button class="t-copy" aria-label="Copy command" onclick="copyTerminal(this)">Copy</button>
+      </div>
+      <div class="terminal-cmd"><code>curl http://localhost:8000/health</code></div>
+      <div class="terminal-output">{"status":"ok","server":"document-server","tools":3}</div>
+    </div>
+
+    <div class="what-happened">
+      <span class="what-happened-label">What Just Happened?</span>
+      <ul>
+        <li><strong>One argument changed</strong> — <code>mcp.run()</code> → <code>mcp.run(transport="streamable-http", host="0.0.0.0", port=8000)</code>. All three tools are identical.</li>
+        <li><strong>Two endpoints auto-created</strong> — <code>POST /mcp</code> accepts JSON-RPC requests; <code>GET /sse</code> streams responses back to the connected client.</li>
+        <li><strong>Health endpoint added</strong> — Cloud providers (Fly, Cloud Run, ECS) send HTTP GET probes to verify your container is alive. Without a health endpoint returning 200, the platform will restart your container.</li>
+      </ul>
+    </div>
+
+  </section>
+
+  <div class="bridge">The server runs over HTTP now, but anyone with the URL can call it. Let's add OAuth 2.0 Bearer token auth so only authorized clients get through.</div>
+
+  <!-- ── SECTION 4: OAuth ── -->
+  <section class="section" id="oauth">
+    <h2 id="oauth">4. OAuth 2.0 Authentication</h2>
+
+    <p><span class="tooltip-host">OAuth 2.0<span class="tooltip-pop"><strong>OAuth 2.0</strong> — an authorization framework (RFC 6749) that lets clients obtain limited access tokens from an authorization server. MCP uses the Bearer token flow: the client presents a token in the Authorization header; the resource server (your MCP server) validates it without needing to know the user's credentials.</span></span> Bearer token authentication answers the question: "Is this client allowed to call my MCP server?" The MCP specification mandates OAuth 2.0 for all HTTP transports exposed to untrusted clients. The flow has four parts: a token endpoint (to issue tokens during development), a middleware that validates the <code>Authorization: Bearer &lt;token&gt;</code> header, scope-based restrictions (read-only vs read-write clients), and a client that passes the token with every request.</p>
+
+    <!-- ANIMATION 3: OAuth handshake -->
+    <div class="anim-container" role="region" aria-label="OAuth 2.0 Bearer token handshake animation">
+      <div class="anim-title">Animation 3 — OAuth 2.0 Handshake: Client → Auth Server → Token → MCP Server</div>
+      <div id="anim3Canvas" style="min-height:180px;">
+        <div style="display:grid;grid-template-columns:1fr auto 1fr auto 1fr;gap:0.5rem;align-items:center;">
+          <div id="a3_client" style="background:var(--bg-card);border:2px solid var(--code-border);border-radius:9px;padding:0.8rem;text-align:center;transition:border-color 0.35s;">
+            <div style="font-family:'JetBrains Mono',monospace;font-size:0.63rem;color:var(--text-muted);margin-bottom:0.25rem;">CLIENT</div>
+            <div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:0.82rem;color:var(--mcp-teal-light);">Claude Code</div>
+            <div id="a3_client_state" style="font-size:0.68rem;color:var(--text-muted);margin-top:0.3rem;min-height:1em;"></div>
+          </div>
+          <div id="a3_arr1" style="text-align:center;font-size:1.1rem;opacity:0.2;transition:opacity 0.35s;color:var(--mcp-teal);">&#8594;</div>
+          <div id="a3_auth" style="background:var(--bg-card);border:2px solid var(--code-border);border-radius:9px;padding:0.8rem;text-align:center;transition:border-color 0.35s;">
+            <div style="font-family:'JetBrains Mono',monospace;font-size:0.63rem;color:var(--text-muted);margin-bottom:0.25rem;">AUTH SERVER</div>
+            <div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:0.82rem;color:var(--mcp-teal-light);">POST /token</div>
+            <div id="a3_auth_state" style="font-size:0.68rem;color:var(--text-muted);margin-top:0.3rem;min-height:1em;"></div>
+          </div>
+          <div id="a3_arr2" style="text-align:center;font-size:1.1rem;opacity:0.2;transition:opacity 0.35s;color:var(--mcp-teal);">&#8594;</div>
+          <div id="a3_mcp" style="background:var(--bg-card);border:2px solid var(--code-border);border-radius:9px;padding:0.8rem;text-align:center;transition:border-color 0.35s;">
+            <div style="font-family:'JetBrains Mono',monospace;font-size:0.63rem;color:var(--text-muted);margin-bottom:0.25rem;">MCP SERVER</div>
+            <div style="font-family:'Bricolage Grotesque',sans-serif;font-weight:700;font-size:0.82rem;color:var(--mcp-teal-light);">Validate Token</div>
+            <div id="a3_mcp_state" style="font-size:0.68rem;color:var(--text-muted);margin-top:0.3rem;min-height:1em;"></div>
+          </div>
+        </div>
+        <div id="a3Label" style="margin-top:0.9rem;font-family:'JetBrains Mono',monospace;font-size:0.78rem;color:var(--text-secondary);min-height:1.2em;text-align:center;"></div>
+      </div>
+      <div class="anim-controls">
+        <button class="anim-btn" onclick="anim3Control('play')" aria-label="Play OAuth handshake animation">&#9654; Play</button>
+        <button class="anim-btn" onclick="anim3Control('pause')" aria-label="Pause animation">&#9646;&#9646; Pause</button>
+        <button class="anim-btn" onclick="anim3Control('restart')" aria-label="Restart animation">&#8635; Restart</button>
+      </div>
+    </div>
+
+    <div class="code-annotation">
+      <div class="annot-label what">WHAT — Four components in the auth layer</div>
+      <ol style="margin:0.4rem 0 0 1.4rem;font-size:0.9rem;color:var(--text-secondary);">
+        <li>Token generation endpoint (dev/test — use Auth0/Okta/Cognito in production)</li>
+        <li>Bearer token validation middleware that runs on every request</li>
+        <li>Scope extraction: <code>mcp:read</code> allows tools/list; <code>mcp:write</code> allows tools/call</li>
+        <li>Client-side header: <code>Authorization: Bearer &lt;token&gt;</code></li>
+      </ol>
+    </div>
+    <div class="code-annotation">
+      <div class="annot-label why">WHY — <span class="tooltip-host">Bearer token<span class="tooltip-pop"><strong>Bearer token</strong> — an opaque or signed string that grants access to a protected resource. The bearer (whoever presents it) gets the associated permissions. Never transmit bearer tokens over plain HTTP — always use HTTPS in production.</span></span> vs API key</div>
+      <p>API keys are static and require a lookup table. Bearer tokens (especially JWTs) are self-contained — the server validates the token signature without a database lookup, and scopes are embedded in the token payload. This makes them cheaper at scale and easier to rotate.</p>
+    </div>
+    <div class="code-annotation">
+      <div class="annot-label gotcha">GOTCHA — The dev token endpoint is NOT for production</div>
+      <p>The <code>POST /token</code> endpoint shown here is for local development and testing. In production, delegate token issuance to an identity provider (Auth0, AWS Cognito, Google IAM). Never run a secret-based token endpoint in production without rate limiting and HTTPS.</p>
+    </div>
+
+    <div class="code-tabs">
+      <div class="tab-bar">
+        <button class="tab-btn active" onclick="switchTab(this,'t_oauth','py')" aria-label="Python tab">Python</button>
+        <button class="tab-btn" onclick="switchTab(this,'t_oauth','ts')" aria-label="TypeScript tab">TypeScript</button>
+      </div>
+      <div id="t_oauth_py" class="tab-panel active">
+        <div class="code-block-wrapper">
+          <div class="code-block-header">
+            <span class="code-lang">Python — auth_middleware.py (add to your server)</span>
+            <button class="copy-btn" aria-label="Copy code to clipboard" onclick="copyCode(this)">Copy</button>
+          </div>
+          <pre><code class="language-python"># auth_middleware.py — Bearer token auth for FastMCP HTTP server
+# pip install fastapi python-jose[cryptography] uvicorn
+from __future__ import annotations
+
+import os
+import time
+from typing import Annotated
+
+from fastapi import Depends, FastAPI, HTTPException, Request, Security
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from jose import JWTError, jwt
+
+SECRET_KEY = os.environ["JWT_SECRET"]          # set in env, never hardcode
+ALGORITHM = "HS256"
+TOKEN_EXPIRE_SECONDS = 3600
+
+app = FastAPI()
+bearer_scheme = HTTPBearer()
+
+
+# ── Token issuance (dev/test only — replace with real IdP in production) ──
+@app.post("/token")
+async def issue_token(client_id: str, scope: str = "mcp:read"):
+    """
+    Issue a JWT for development.
+    scope values: "mcp:read"  — can only list tools
+                  "mcp:write" — can list + call tools
+    In production: use Auth0 / AWS Cognito / Google IAM here instead.
+    """
+    allowed_scopes = {"mcp:read", "mcp:write"}
+    if scope not in allowed_scopes:
+        raise HTTPException(400, f"Invalid scope. Allowed: {allowed_scopes}")
+
+    payload = {
+        "sub": client_id,
+        "scope": scope,
+        "iat": int(time.time()),
+        "exp": int(time.time()) + TOKEN_EXPIRE_SECONDS,
+    }
+    token = jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+    return {"access_token": token, "token_type": "bearer", "expires_in": TOKEN_EXPIRE_SECONDS}
+
+
+# ── Token validation dependency ──
+def verify_token(
+    credentials: Annotated[HTTPAuthorizationCredentials, Security(bearer_scheme)]
+) -> dict:
+    """FastAPI dependency: validate the Bearer token and return the payload."""
+    try:
+        payload = jwt.decode(credentials.credentials, SECRET_KEY, algorithms=[ALGORITHM])
+    except JWTError as exc:
+        raise HTTPException(
+            status_code=401,
+            detail=f"Invalid or expired token: {exc}",
+            headers={"WWW-Authenticate": "Bearer"},
+        )
+    return payload
+
+
+# ── Scope-based restriction dependency ──
+def require_write_scope(token_payload: Annotated[dict, Depends(verify_token)]) -> dict:
+    """Only allow clients with mcp:write scope to mutate state."""
+    if "mcp:write" not in token_payload.get("scope", ""):
+        raise HTTPException(
+            status_code=403,
+            detail="This operation requires mcp:write scope",
+        )
+    return token_payload
+
+
+# ── Protected MCP endpoint ──
+from mcp.server.fastmcp import FastMCP
+
+mcp = FastMCP("document-server", stateless_http=True)
+
+# Attach FastMCP to FastAPI — both share the same app
+# Requests to /mcp and /sse are guarded by verify_token
+@app.post("/mcp")
+async def mcp_post(request: Request, _tok: Annotated[dict, Depends(verify_token)]):
+    return await mcp.handle_streamable_http(request)
+
+
+@app.get("/sse")
+async def mcp_sse(request: Request, _tok: Annotated[dict, Depends(verify_token)]):
+    return await mcp.handle_sse(request)
+
+
+@app.get("/health")
+async def health():
+    return {"status": "ok"}
+
+
+# ── Tools (same as before, write tool checks write scope) ──
+@mcp.tool()
+async def save_note_authed(
+    title: str, content: str, request: Request
+) -> dict:
+    """Save a note (requires mcp:write scope)."""
+    # Extract token from request headers and check scope
+    auth = request.headers.get("Authorization", "")
+    if not auth.startswith("Bearer "):
+        raise PermissionError("Authorization header required")
+    token_str = auth.removeprefix("Bearer ")
+    try:
+        payload = jwt.decode(token_str, SECRET_KEY, algorithms=[ALGORITHM])
+    except JWTError:
+        raise PermissionError("Invalid token")
+    if "mcp:write" not in payload.get("scope", ""):
+        raise PermissionError("mcp:write scope required to save notes")
+    NOTES[title.strip()] = content
+    return {"success": True, "title": title.strip()}
+
+
+NOTES: dict[str, str] = {}
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)</code></pre>
+        </div>
+      </div>
+      <div id="t_oauth_ts" class="tab-panel">
+        <div class="code-block-wrapper">
+          <div class="code-block-header">
+            <span class="code-lang">TypeScript — authMiddleware.ts (add to your server)</span>
+            <button class="copy-btn" aria-label="Copy code to clipboard" onclick="copyCode(this)">Copy</button>
+          </div>
+          <pre><code class="language-typescript">// authMiddleware.ts — Bearer token auth for Express MCP server
+// npm install jsonwebtoken @types/jsonwebtoken
+import express, { NextFunction, Request, Response } from "express";
+import jwt from "jsonwebtoken";
+
+const SECRET_KEY = process.env.JWT_SECRET!;  // set in env, never hardcode
+const TOKEN_EXPIRE = "1h";
+
+// ── Token interface ──
+interface TokenPayload {
+  sub: string;
+  scope: string;
+  iat: number;
+  exp: number;
+}
+
+// ── Token issuance (dev/test only) ──
+export function addTokenEndpoint(app: express.Application): void {
+  app.post("/token", express.urlencoded({ extended: false }), (req, res) => {
+    const { client_id, scope = "mcp:read" } = req.body as { client_id: string; scope?: string };
+    const allowed = new Set(["mcp:read", "mcp:write"]);
+    if (!allowed.has(scope)) {
+      res.status(400).json({ error: `Invalid scope. Allowed: ${[...allowed].join(", ")}` });
+      return;
+    }
+    const token = jwt.sign({ sub: client_id, scope }, SECRET_KEY, { expiresIn: TOKEN_EXPIRE });
+    res.json({ access_token: token, token_type: "bearer" });
+  });
+}
+
+// ── Bearer token validation middleware ──
+export function requireAuth(req: Request, res: Response, next: NextFunction): void {
+  const auth = req.headers.authorization;
+  if (!auth?.startsWith("Bearer ")) {
+    res.status(401).json({ error: "Missing Bearer token" });
+    return;
+  }
+  try {
+    const payload = jwt.verify(auth.slice(7), SECRET_KEY) as TokenPayload;
+    (req as Request & { tokenPayload: TokenPayload }).tokenPayload = payload;
+    next();
+  } catch (err) {
+    res.status(401).json({ error: `Invalid or expired token: ${err instanceof Error ? err.message : err}` });
+  }
+}
+
+// ── Scope restriction middleware factory ──
+export function requireScope(scope: string) {
+  return (req: Request, res: Response, next: NextFunction): void => {
+    const payload = (req as Request & { tokenPayload?: TokenPayload }).tokenPayload;
+    if (!payload?.scope.includes(scope)) {
+      res.status(403).json({ error: `This operation requires ${scope} scope` });
+      return;
+    }
+    next();
+  };
+}
+
+// ── Usage in your server ──
+// import { addTokenEndpoint, requireAuth, requireScope } from "./authMiddleware.js";
+//
+// addTokenEndpoint(app);
+// app.post("/mcp", requireAuth, async (req, res) => { ... });
+// app.get("/sse", requireAuth, async (req, res) => { ... });
+//
+// curl -X POST http://localhost:8000/token \
+//   -d "client_id=alice&scope=mcp:write"
+// curl http://localhost:8000/sse \
+//   -H "Authorization: Bearer <token>"</code></pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="what-happened">
+      <span class="what-happened-label">What Just Happened?</span>
+      <ul>
+        <li><strong>Token issuance</strong> — <code>POST /token</code> signs a JWT with the client's ID and requested scope. In production this endpoint is replaced by Auth0/Cognito/Google IAM.</li>
+        <li><strong>Middleware intercepts every request</strong> — <code>verify_token</code> / <code>requireAuth</code> decodes and validates the JWT before any tool code runs. Invalid token = 401, no further processing.</li>
+        <li><strong>Scope restriction</strong> — <code>mcp:read</code> clients can list tools but <code>save_note</code> (a write operation) checks for <code>mcp:write</code> scope and raises <code>PermissionError</code> otherwise. This becomes an <code>isError: true</code> tool result the LLM reads.</li>
+      </ul>
+    </div>
+
+  </section>
+
+  <div class="bridge">Auth in place. Now containerize the server so it runs identically everywhere — your laptop, CI, and cloud.</div>
+
+  <!-- ── SECTION 5: Docker ── -->
+  <section class="section" id="docker">
+    <h2 id="docker">5. Containerizing the MCP Server</h2>
+
+    <p>Docker makes your server reproducible. The same image that runs on your laptop will run on Fly.io, Cloud Run, and DigitalOcean without modification. Two files needed: <code>Dockerfile</code> and <code>docker-compose.yml</code>.</p>
+
+    <div class="code-annotation">
+      <div class="annot-label what">WHAT — Multi-stage build</div>
+      <p>Stage 1 installs dependencies. Stage 2 copies only the app code — no build tools, no pip cache, no test files. This keeps the final image small (typically 150–200 MB for a Python server vs 900 MB+ for a non-staged build).</p>
+    </div>
+    <div class="code-annotation">
+      <div class="annot-label why">WHY — HEALTHCHECK is not optional</div>
+      <p>Cloud platforms (Cloud Run, ECS, Fly.io, Kubernetes) send periodic HTTP probes to your <code>/health</code> endpoint. If the probe fails three times, the platform kills and restarts the container. Without a health check the platform has no way to know your server is alive — it may route traffic to a crashed instance.</p>
+    </div>
+    <div class="code-annotation">
+      <div class="annot-label gotcha">GOTCHA — Never hardcode secrets in the Dockerfile</div>
+      <p><code>ENV JWT_SECRET=my-secret</code> in a Dockerfile bakes the secret into the image layer history — it will appear in <code>docker history</code> and in any registry the image is pushed to. Always pass secrets via environment variables at runtime (<code>docker run -e JWT_SECRET=...</code>) or via a secrets manager.</p>
+    </div>
+
+    <div class="code-tabs">
+      <div class="tab-bar">
+        <button class="tab-btn active" onclick="switchTab(this,'t_docker','py')" aria-label="Python tab">Python</button>
+        <button class="tab-btn" onclick="switchTab(this,'t_docker','ts')" aria-label="TypeScript tab">TypeScript</button>
+      </div>
+      <div id="t_docker_py" class="tab-panel active">
+        <div class="code-block-wrapper">
+          <div class="code-block-header">
+            <span class="code-lang">Dockerfile — Python MCP Server</span>
+            <button class="copy-btn" aria-label="Copy code to clipboard" onclick="copyCode(this)">Copy</button>
+          </div>
+          <pre><code class="language-dockerfile"># ── Stage 1: dependency installation ──
+FROM python:3.12-slim AS builder
+WORKDIR /build
+
+# Copy and install dependencies first (layer caches if requirements unchanged)
+COPY requirements.txt .
+RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
+
+# ── Stage 2: minimal runtime image ──
+FROM python:3.12-slim
+WORKDIR /app
+
+# Copy installed packages from builder stage
+COPY --from=builder /install /usr/local
+
+# Copy application code
+COPY document_server_http.py .
+# If you added auth_middleware.py, copy it too:
+# COPY auth_middleware.py .
+
+# Expose the server port (documentation only — does not publish the port)
+EXPOSE 8000
+
+# Health check: cloud platforms probe this endpoint every 10s
+# If it fails 3 times in a row, the container is restarted
+HEALTHCHECK --interval=10s --timeout=5s --retries=3 \
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" \
+  || exit 1
+
+# Secrets via environment variables (never hardcode here)
+# Set at runtime: docker run -e JWT_SECRET=... -e MCP_PORT=8000
+ENV MCP_HOST=0.0.0.0
+ENV MCP_PORT=8000
+
+# Run as non-root user (security best practice)
+RUN useradd -m mcpuser && chown -R mcpuser /app
+USER mcpuser
+
+CMD ["python", "document_server_http.py"]</code></pre>
+        </div>
+      </div>
+      <div id="t_docker_ts" class="tab-panel">
+        <div class="code-block-wrapper">
+          <div class="code-block-header">
+            <span class="code-lang">Dockerfile — TypeScript MCP Server</span>
+            <button class="copy-btn" aria-label="Copy code to clipboard" onclick="copyCode(this)">Copy</button>
+          </div>
+          <pre><code class="language-dockerfile"># ── Stage 1: build TypeScript → JavaScript ──
+FROM node:20-slim AS builder
+WORKDIR /build
+
+COPY package.json package-lock.json tsconfig.json ./
+RUN npm ci --omit=dev
+
+COPY src/ ./src/
+RUN npx tsc --outDir dist
+
+# ── Stage 2: minimal runtime image ──
+FROM node:20-slim
+WORKDIR /app
+
+# Copy compiled JS and node_modules from builder
+COPY --from=builder /build/dist ./dist
+COPY --from=builder /build/node_modules ./node_modules
+
+EXPOSE 8000
+
+HEALTHCHECK --interval=10s --timeout=5s --retries=3 \
+  CMD node -e "fetch('http://localhost:8000/health').then(r=>r.ok||process.exit(1)).catch(()=>process.exit(1))" \
+  || exit 1
+
+ENV MCP_HOST=0.0.0.0
+ENV MCP_PORT=8000
+
+RUN useradd -m mcpuser && chown -R mcpuser /app
+USER mcpuser
+
+CMD ["node", "dist/documentServerHttp.js"]</code></pre>
+        </div>
+      </div>
+    </div>
+
+    <h3>docker-compose.yml — server + test client</h3>
+    <div class="code-block-wrapper" style="margin:0.75rem 0 1.25rem;">
+      <div class="code-block-header">
+        <span class="code-lang">YAML — docker-compose.yml</span>
+        <button class="copy-btn" aria-label="Copy code to clipboard" onclick="copyCode(this)">Copy</button>
+      </div>
+      <pre><code class="language-yaml">version: "3.9"
+
+services:
+  mcp-server:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      MCP_PORT: "8000"
+      MCP_HOST: "0.0.0.0"
+      JWT_SECRET: "${JWT_SECRET}"       # loaded from .env file or shell
+      ALLOWED_ORIGINS: "http://localhost:3000"
+    healthcheck:
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+    restart: unless-stopped
+
+  # Simple curl-based smoke test client
+  mcp-test:
+    image: curlimages/curl:latest
+    depends_on:
+      mcp-server:
+        condition: service_healthy
+    command: >
+      sh -c "
+        echo '--- Health check ---' &&
+        curl -sf http://mcp-server:8000/health &&
+        echo '' &&
+        echo '--- Get token ---' &&
+        TOKEN=$(curl -sf -X POST http://mcp-server:8000/token
+          -H 'Content-Type: application/x-www-form-urlencoded'
+          -d 'client_id=test&scope=mcp:write') &&
+        echo $TOKEN
+      "
+    profiles:
+      - test   # only runs with: docker compose --profile test up</code></pre>
+    </div>
+
+    <div class="terminal-block">
+      <div class="terminal-header">
+        <span>Terminal — build and run</span>
+        <button class="t-copy" aria-label="Copy command" onclick="copyTerminal(this)">Copy</button>
+      </div>
+      <div class="terminal-cmd"><code>docker build -t mcp-document-server . && docker run -p 8000:8000 -e JWT_SECRET=dev-secret-change-me mcp-document-server</code></div>
+      <div class="terminal-output">Successfully built a3f82c9e1d47
+Successfully tagged mcp-document-server:latest
+MCP server listening on http://0.0.0.0:8000
+  POST /mcp   — JSON-RPC messages
+  GET  /sse   — SSE event stream
+  GET  /health — health check</div>
+    </div>
+
+    <div class="what-happened">
+      <span class="what-happened-label">What Just Happened?</span>
+      <p>Your server is now a portable container. The multi-stage build keeps the image lean. Non-root user prevents privilege escalation. Health check lets cloud platforms verify liveness. The same image runs locally with <code>docker run</code> and in the cloud with <code>fly deploy</code> or <code>gcloud run deploy</code> — no changes needed.</p>
+    </div>
+
+  </section>
+
+  <div class="bridge">Container built. Before deploying, lock down which browser origins can reach the server — that's CORS configuration.</div>
+
+  <!-- ── SECTION 6: CORS ── -->
+  <section class="section" id="cors-config">
+    <h2 id="cors-config">6. CORS Configuration</h2>
+
+    <p><span class="tooltip-host">CORS<span class="tooltip-pop"><strong>Cross-Origin Resource Sharing (CORS)</strong> — a browser security mechanism that restricts web pages from making requests to a different domain than the one that served the page. The browser sends an <code>Origin</code> header; the server must respond with matching <code>Access-Control-Allow-Origin</code> headers or the browser blocks the response.</span></span> (Cross-Origin Resource Sharing) only matters for browser-based clients — Claude Desktop, Claude Code, and custom Python clients ignore it. But if you're building a web app that connects to your MCP server, or exposing the server to claude.ai, CORS headers are required.</p>
+
+    <div class="callout-warning">
+      <span class="box-label">Security Warning — Never Use <code>*</code> in Production</span>
+      <code>Access-Control-Allow-Origin: *</code> allows any website to send requests to your MCP server. Combined with OAuth tokens stored in browser localStorage (which are readable by any JS on the page), this creates a cross-site request forgery vector. Always enumerate specific allowed origins in production.
+    </div>
+
+    <div class="code-tabs">
+      <div class="tab-bar">
+        <button class="tab-btn active" onclick="switchTab(this,'t_cors','py')" aria-label="Python tab">Python</button>
+        <button class="tab-btn" onclick="switchTab(this,'t_cors','ts')" aria-label="TypeScript tab">TypeScript</button>
+      </div>
+      <div id="t_cors_py" class="tab-panel active">
+        <div class="code-block-wrapper">
+          <div class="code-block-header">
+            <span class="code-lang">Python — CORS with FastAPI CORSMiddleware</span>
+            <button class="copy-btn" aria-label="Copy code to clipboard" onclick="copyCode(this)">Copy</button>
+          </div>
+          <pre><code class="language-python"># Add to your FastAPI app (or FastMCP's underlying Starlette app)
+import os
+from fastapi.middleware.cors import CORSMiddleware
+
+# Read allowed origins from environment variable (comma-separated)
+# Example: ALLOWED_ORIGINS=https://app.example.com,https://staging.example.com
+raw_origins = os.getenv("ALLOWED_ORIGINS", "http://localhost:3000")
+ALLOWED_ORIGINS = [o.strip() for o in raw_origins.split(",") if o.strip()]
+
+# For FastMCP, access the underlying Starlette app:
+# mcp._app is the Starlette app FastMCP wraps
+fastapi_app = mcp.streamable_http_app()
+
+fastapi_app.add_middleware(
+    CORSMiddleware,
+    allow_origins=ALLOWED_ORIGINS,     # specific origins only, never "*"
+    allow_credentials=True,            # required for Authorization header
+    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-Session-Id"],
+    max_age=3600,                      # preflight cache TTL in seconds
+)
+
+# Example CORS headers sent to an allowed origin:
+# Access-Control-Allow-Origin: https://app.example.com
+# Access-Control-Allow-Credentials: true
+# Access-Control-Allow-Methods: GET, POST, DELETE, OPTIONS
+# Access-Control-Allow-Headers: Authorization, Content-Type, X-Session-Id
+
+# Example: blocking an unrecognized origin
+# Browser sends: Origin: https://evil.example.com
+# Server responds with NO Access-Control-Allow-Origin header
+# Browser: blocks the response, logs "CORS error"</code></pre>
+        </div>
+      </div>
+      <div id="t_cors_ts" class="tab-panel">
+        <div class="code-block-wrapper">
+          <div class="code-block-header">
+            <span class="code-lang">TypeScript — CORS with cors npm package</span>
+            <button class="copy-btn" aria-label="Copy code to clipboard" onclick="copyCode(this)">Copy</button>
+          </div>
+          <pre><code class="language-typescript">// npm install cors @types/cors
+import cors from "cors";
+
+const rawOrigins = process.env.ALLOWED_ORIGINS ?? "http://localhost:3000";
+const ALLOWED_ORIGINS = rawOrigins.split(",").map((o) => o.trim()).filter(Boolean);
+
+// Apply before all routes
+app.use(
+  cors({
+    origin: (origin, callback) => {
+      // Allow requests with no origin (server-to-server, curl, Postman)
+      if (!origin) return callback(null, true);
+      if (ALLOWED_ORIGINS.includes(origin)) return callback(null, true);
+      callback(new Error(`CORS: origin '${origin}' is not allowed`));
+    },
+    credentials: true,           // required for Authorization header
+    methods: ["GET", "POST", "DELETE", "OPTIONS"],
+    allowedHeaders: ["Authorization", "Content-Type"],
+    maxAge: 3600,                // preflight cache TTL
+  })
+);
+
+// Verify your CORS config at startup
+console.log("CORS allowed origins:", ALLOWED_ORIGINS);</code></pre>
+        </div>
+      </div>
+    </div>
+
+    <div class="callout-note">
+      <span class="box-label">CORS for Claude Code and Claude Desktop</span>
+      Claude Code and Claude Desktop connect server-to-server (not browser-to-server). They do not send an <code>Origin</code> header and are not subject to CORS restrictions. CORS is only relevant when a web page in a browser is making the MCP connection.
+    </div>
+
+  </section>
+
+  <div class="bridge">Server secured and CORS configured. Now update the client side — Claude Desktop config and Claude Code settings.json — to point at the HTTP server.</div>
+
+  <!-- ── SECTION 7: Connecting Clients ── -->
+  <section class="section" id="connect-client">
+    <h2 id="connect-client">7. Connecting a Client to an HTTP Server</h2>
+
+    <p>HTTP MCP servers use a URL instead of a command in the client config. Both Claude Desktop and Claude Code support this with the <code>url</code> key. The <code>headers</code> key passes the <code>Authorization: Bearer</code> token.</p>
+
+    <div class="code-annotation">
+      <div class="annot-label what">WHAT — URL-based config vs command-based config</div>
+      <p>For stdio servers you specified <code>"command"</code> and <code>"args"</code>. For HTTP servers you specify <code>"url"</code> pointing at the SSE endpoint. The MCP client library handles all HTTP and SSE connection management automatically.</p>
+    </div>
+    <div class="code-annotation">
+      <div class="annot-label gotcha">GOTCHA — The URL must point at <code>/sse</code>, not <code>/mcp</code></div>
+      <p>Claude Desktop and Claude Code connect by opening the SSE channel first. Use the <code>/sse</code> endpoint in your config URL. Using <code>/mcp</code> (the POST endpoint) will cause a connection failure — it expects SSE headers, not a plain POST response.</p>
+    </div>
+
+    <h3>Claude Desktop</h3>
+    <div class="code-tabs">
+      <div class="tab-bar">
+        <button class="tab-btn active" onclick="switchTab(this,'t_desktop','json')" aria-label="JSON config tab">JSON Config</button>
+        <button class="tab-btn" onclick="switchTab(this,'t_desktop','py')" aria-label="Python client tab">Python Client</button>
+        <button class="tab-btn" onclick="switchTab(this,'t_desktop','ts')" aria-label="TypeScript client tab">TypeScript Client</button>
+      </div>
+      <div id="t_desktop_json" class="tab-panel active">
+        <div class="code-block-wrapper">
+          <div class="code-block-header">
+            <span class="code-lang">JSON — claude_desktop_config.json (HTTP server)</span>
+            <button class="copy-btn" aria-label="Copy code to clipboard" onclick="copyCode(this)">Copy</button>
+          </div>
+          <pre><code class="language-json">{
+  "mcpServers": {
+    "my-remote-server": {
+      "url": "http://localhost:8000/sse",
+      "headers": {
+        "Authorization": "Bearer YOUR_TOKEN_HERE"
+      }
+    }
+  }
+}
+
+// For a deployed server (replace with your actual URL):
+// {
+//   "mcpServers": {
+//     "my-remote-server": {
+//       "url": "https://mcp.example.com/sse",
+//       "headers": {
+//         "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9..."
+//       }
+//     }
+//   }
+// }
+
+// macOS config path:
+//   ~/Library/Application Support/Claude/claude_desktop_config.json
+// Windows:
+//   %APPDATA%\Claude\claude_desktop_config.json</code></pre>
+        </div>
+      </div>
+      <div id="t_desktop_py" class="tab-panel">
+        <div class="code-block-wrapper">
+          <div class="code-block-header">
+            <span class="code-lang">Python — custom MCP client over HTTP</span>
+            <button class="copy-btn" aria-label="Copy code to clipboard" onclick="copyCode(this)">Copy</button>
+          </div>
+          <pre><code class="language-python"># custom_client.py — Python MCP client connecting over HTTP/SSE
+# pip install mcp httpx
+import asyncio
+from mcp import ClientSession
+from mcp.client.sse import sse_client
+
+SERVER_URL = "http://localhost:8000/sse"
+TOKEN = "YOUR_TOKEN_HERE"  # obtain from POST /token in production
+
+
+async def main():
+    headers = {"Authorization": f"Bearer {TOKEN}"}
+
+    # Open the SSE connection with auth headers
+    async with sse_client(SERVER_URL, headers=headers) as (read, write):
+        async with ClientSession(read, write) as session:
+            # Perform capability negotiation
+            await session.initialize()
+
+            # List available tools
+            tools = await session.list_tools()
+            print("Available tools:")
+            for tool in tools.tools:
+                print(f"  {tool.name}: {tool.description}")
+
+            # Call a tool
+            result = await session.call_tool(
+                "search_documents",
+                arguments={"query": "MCP", "limit": 3}
+            )
+            print("\nsearch_documents result:")
+            for block in result.content:
+                print(block.text)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())</code></pre>
+        </div>
+      </div>
+      <div id="t_desktop_ts" class="tab-panel">
+        <div class="code-block-wrapper">
+          <div class="code-block-header">
+            <span class="code-lang">TypeScript — custom MCP client over HTTP</span>
+            <button class="copy-btn" aria-label="Copy code to clipboard" onclick="copyCode(this)">Copy</button>
+          </div>
+          <pre><code class="language-typescript">// customClient.ts — TypeScript MCP client connecting over HTTP/SSE
+// npm install @modelcontextprotocol/sdk
+import { Client } from "@modelcontextprotocol/sdk/client/index.js";
+import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
+
+const SERVER_URL = "http://localhost:8000/sse";
+const TOKEN = process.env.MCP_TOKEN ?? "YOUR_TOKEN_HERE";
+
+async function main() {
+  const transport = new SSEClientTransport(
+    new URL(SERVER_URL),
+    {
+      // Pass auth headers with the SSE connection request
+      requestInit: {
+        headers: { Authorization: `Bearer ${TOKEN}` },
+      },
+    }
+  );
+
+  const client = new Client(
+    { name: "custom-client", version: "1.0.0" },
+    { capabilities: {} }
+  );
+
+  try {
+    await client.connect(transport);
+
+    // List tools
+    const { tools } = await client.listTools();
+    console.log("Available tools:");
+    tools.forEach((t) => console.log(`  ${t.name}: ${t.description}`));
+
+    // Call a tool
+    const result = await client.callTool({
+      name: "search_documents",
+      arguments: { query: "MCP", limit: 3 },
+    });
+    console.log("\nsearch_documents result:");
+    result.content.forEach((b) => {
+      if (b.type === "text") console.log(b.text);
+    });
+  } finally {
+    await client.close();
+  }
+}
+
+main().catch(console.error);</code></pre>
+        </div>
+      </div>
+    </div>
+
+    <h3>Claude Code — .claude/settings.json</h3>
+    <div class="code-block-wrapper" style="margin:0.75rem 0;">
+      <div class="code-block-header">
+        <span class="code-lang">JSON — .claude/settings.json (HTTP server)</span>
+        <button class="copy-btn" aria-label="Copy code to clipboard" onclick="copyCode(this)">Copy</button>
+      </div>
+      <pre><code class="language-json">{
+  "mcpServers": {
+    "document-server": {
+      "url": "http://localhost:8000/sse",
+      "headers": {
+        "Authorization": "Bearer YOUR_TOKEN_HERE"
+      }
+    }
+  }
+}
+
+// For a team-shared server at a real hostname:
+// {
+//   "mcpServers": {
+//     "document-server": {
+//       "url": "https://mcp.yourcompany.com/sse",
+//       "headers": {
+//         "Authorization": "Bearer ${MCP_TOKEN}"
+//       }
+//     }
+//   }
+// }
+// Set MCP_TOKEN in your shell profile or .env file.
+// Claude Code expands ${ENV_VAR} references in settings.json.</code></pre>
+    </div>
+
+    <div class="what-happened">
+      <span class="what-happened-label">What Just Happened?</span>
+      <p>The client config went from <code>"command": "python"</code> + <code>"args"</code> (local subprocess) to <code>"url": "http://..."</code> + <code>"headers"</code> (HTTP connection). The tools available to Claude are identical — only the transport changed. Any team member who adds this URL to their settings.json immediately gets all three tools without installing anything locally.</p>
+    </div>
+
+  </section>
+
+  <div class="bridge">Everything works locally. Let's deploy the Docker image to three different cloud targets — same image, different platforms.</div>
+
+  <!-- ── SECTION 8: Deploy to Cloud ── -->
+  <section class="section" id="deploy-cloud">
+    <h2 id="deploy-cloud">8. Deploy to Cloud</h2>
+
+    <p>Your Docker image is the deployment artifact. The same image runs on Fly.io, Google Cloud Run, and any VPS. Pick the platform that matches your needs.</p>
+
+    <div class="deploy-grid">
+      <div class="deploy-card">
+        <div class="deploy-card-title">Fly.io</div>
+        <p>Simplest. Free tier. Global edge deployment. One CLI command. Best for: personal tools and small teams.</p>
+      </div>
+      <div class="deploy-card">
+        <div class="deploy-card-title">Cloud Run</div>
+        <p>Scales to zero. Pay-per-request. Google-managed TLS. Best for: cost-sensitive production workloads.</p>
+      </div>
+      <div class="deploy-card">
+        <div class="deploy-card-title">VPS (DO / Hetzner)</div>
+        <p>Full control. Predictable pricing. Persistent storage easy. Best for: teams that want no cloud lock-in.</p>
+      </div>
+    </div>
+
+    <div class="code-annotation">
+      <div class="annot-label what">WHAT — Three targets, same Docker image</div>
+      <p>All three deploy the same image. The only difference is the CLI commands and where TLS terminates. Fly.io and Cloud Run handle TLS automatically. On a VPS you manage TLS yourself (nginx + Let's Encrypt).</p>
+    </div>
+    <div class="code-annotation">
+      <div class="annot-label gotcha">GOTCHA — Always use HTTPS in production</div>
+      <p>Bearer tokens sent over plain HTTP are visible to anyone on the network path. Cloud Run and Fly.io auto-provision TLS certificates. On a VPS, set up nginx as a reverse proxy with a Let's Encrypt certificate before exposing your server to the internet.</p>
+    </div>
+
+    <div class="code-tabs">
+      <div class="tab-bar">
+        <button class="tab-btn active" onclick="switchTab(this,'t_deploy','flyio')" aria-label="Fly.io tab">Fly.io</button>
+        <button class="tab-btn" onclick="switchTab(this,'t_deploy','cloudrun')" aria-label="Cloud Run tab">Cloud Run</button>
+        <button class="tab-btn" onclick="switchTab(this,'t_deploy','vps')" aria-label="VPS tab">VPS</button>
+      </div>
+      <div id="t_deploy_flyio" class="tab-panel active">
+        <div class="terminal-block">
+          <div class="terminal-header">
+            <span>Terminal — Fly.io deployment</span>
+            <button class="t-copy" aria-label="Copy command" onclick="copyTerminal(this)">Copy</button>
+          </div>
+          <div class="terminal-cmd"><code># 1. Install flyctl and authenticate
+curl -L https://fly.io/install.sh | sh
+fly auth login
+
+# 2. Initialise the app (run once, generates fly.toml)
+fly launch --name mcp-document-server --dockerfile Dockerfile \
+  --region lax --no-deploy
+
+# 3. Set the JWT secret as a Fly secret (stored encrypted, never in toml)
+fly secrets set JWT_SECRET="your-production-secret-here"
+
+# 4. Deploy
+fly deploy
+
+# 5. Get your server URL
+fly status</code></div>
+          <div class="terminal-output">Deploying mcp-document-server...
+  Building image...
+  Pushing image...
+  Creating release v1...
+  --> v1 deployed successfully
+
+Hostname: mcp-document-server.fly.dev
+
+# Your MCP server is now at:
+# https://mcp-document-server.fly.dev/sse     ← SSE endpoint
+# https://mcp-document-server.fly.dev/health  ← health check
+# TLS is automatic — no nginx, no certbot needed</div>
+        </div>
+        <div class="code-block-wrapper" style="margin-top:0.75rem;">
+          <div class="code-block-header">
+            <span class="code-lang">TOML — fly.toml (generated by fly launch)</span>
+            <button class="copy-btn" aria-label="Copy code to clipboard" onclick="copyCode(this)">Copy</button>
+          </div>
+          <pre><code class="language-toml">app = "mcp-document-server"
+primary_region = "lax"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  MCP_PORT = "8080"            # Fly uses 8080 internally
+  MCP_HOST = "0.0.0.0"
+  ALLOWED_ORIGINS = "https://yourapp.example.com"
+  # JWT_SECRET set via: fly secrets set JWT_SECRET=...
+
+[[services]]
+  internal_port = 8080
+  protocol = "tcp"
+
+  [[services.ports]]
+    port = 443
+    handlers = ["tls", "http"]    # TLS termination by Fly
+
+  [[services.http_checks]]
+    path = "/health"
+    interval = "10s"
+    timeout = "5s"</code></pre>
+        </div>
+      </div>
+      <div id="t_deploy_cloudrun" class="tab-panel">
+        <div class="terminal-block">
+          <div class="terminal-header">
+            <span>Terminal — Google Cloud Run deployment</span>
+            <button class="t-copy" aria-label="Copy command" onclick="copyTerminal(this)">Copy</button>
+          </div>
+          <div class="terminal-cmd"><code># 1. Authenticate and set project
+gcloud auth login
+gcloud config set project YOUR_PROJECT_ID
+
+# 2. Build and push to Google Artifact Registry
+gcloud builds submit --tag gcr.io/YOUR_PROJECT_ID/mcp-document-server:latest
+
+# 3. Deploy to Cloud Run (scales to zero when idle — pay only for requests)
+gcloud run deploy mcp-document-server \
+  --image gcr.io/YOUR_PROJECT_ID/mcp-document-server:latest \
+  --platform managed \
+  --region us-central1 \
+  --port 8000 \
+  --allow-unauthenticated \
+  --set-env-vars MCP_HOST=0.0.0.0,MCP_PORT=8000 \
+  --set-secrets JWT_SECRET=mcp-jwt-secret:latest \
+  --min-instances 0 \
+  --max-instances 10
+
+# 4. Get the deployed URL
+gcloud run services describe mcp-document-server \
+  --region us-central1 \
+  --format "value(status.url)"</code></div>
+          <div class="terminal-output">Deploying container to Cloud Run service [mcp-document-server]...
+OK Deploying... Done.
+  OK Creating Revision...
+  OK Routing traffic...
+
+Service [mcp-document-server] revision [mcp-document-server-00001-abc]
+has been deployed and is serving 100 percent of traffic.
+
+Service URL: https://mcp-document-server-xxxx-uc.a.run.app
+
+# SSE endpoint: https://mcp-document-server-xxxx-uc.a.run.app/sse
+# Scales to zero when no requests — costs ~$0 when idle</div>
+        </div>
+      </div>
+      <div id="t_deploy_vps" class="tab-panel">
+        <div class="terminal-block">
+          <div class="terminal-header">
+            <span>Terminal — VPS deployment (DigitalOcean / Hetzner)</span>
+            <button class="t-copy" aria-label="Copy command" onclick="copyTerminal(this)">Copy</button>
+          </div>
+          <div class="terminal-cmd"><code># ── On your VPS (Ubuntu 22.04) ──
+
+# 1. Install Docker
+curl -fsSL https://get.docker.com | sh
+usermod -aG docker $USER
+
+# 2. Copy image (option A: push to Docker Hub)
+docker tag mcp-document-server YOUR_DOCKERHUB_USER/mcp-document-server
+docker push YOUR_DOCKERHUB_USER/mcp-document-server
+
+# On VPS:
+docker pull YOUR_DOCKERHUB_USER/mcp-document-server
+
+# 3. Run the container
+docker run -d \
+  --name mcp-server \
+  --restart unless-stopped \
+  -p 127.0.0.1:8000:8000 \    # bind to loopback only — nginx proxies
+  -e JWT_SECRET="your-production-secret" \
+  -e MCP_HOST=0.0.0.0 \
+  -e MCP_PORT=8000 \
+  YOUR_DOCKERHUB_USER/mcp-document-server
+
+# 4. Install nginx + certbot for TLS
+apt install nginx certbot python3-certbot-nginx
+certbot --nginx -d mcp.yourdomain.com
+
+# 5. nginx config snippet (add to /etc/nginx/sites-available/mcp)
+# server {
+#     listen 443 ssl;
+#     server_name mcp.yourdomain.com;
+#
+#     location / {
+#         proxy_pass http://127.0.0.1:8000;
+#         proxy_set_header X-Real-IP $remote_addr;
+#         # Required for SSE:
+#         proxy_buffering off;
+#         proxy_cache off;
+#         proxy_set_header Connection '';
+#         proxy_http_version 1.1;
+#         chunked_transfer_encoding on;
+#     }
+# }</code></div>
+          <div class="terminal-output">Container started: mcp-server
+Health check passing at http://127.0.0.1:8000/health
+nginx configured for mcp.yourdomain.com with Let's Encrypt TLS
+
+# SSE endpoint: https://mcp.yourdomain.com/sse</div>
+        </div>
+        <div class="callout-warning" style="margin-top:0.75rem;">
+          <span class="box-label">VPS nginx + SSE: Disable Buffering</span>
+          nginx buffers responses by default. SSE requires that events flush to the client immediately. The <code>proxy_buffering off</code>, <code>proxy_cache off</code>, and <code>chunked_transfer_encoding on</code> directives are mandatory — without them, SSE events will queue in nginx and clients will see long delays or connection timeouts.
+        </div>
+      </div>
+    </div>
+
+    <h3>Production Checklist</h3>
+    <table>
+      <thead><tr><th>Item</th><th>Why Required</th><th>How</th></tr></thead>
+      <tbody>
+        <tr><td>TLS (HTTPS)</td><td>Bearer tokens over HTTP are visible to network eavesdroppers</td><td>Fly.io / Cloud Run: automatic. VPS: nginx + Let's Encrypt</td></tr>
+        <tr><td>Secrets management</td><td>JWT_SECRET in env files = credential leak risk</td><td>Fly secrets, GCP Secret Manager, or HashiCorp Vault</td></tr>
+        <tr><td>Rate limiting</td><td>Unauthenticated token endpoint can be brute-forced</td><td>nginx rate_limit, Cloud Armor, or Fly.io rate limiting</td></tr>
+        <tr><td>Health check endpoint</td><td>Platform needs liveness signal to avoid routing to crashed container</td><td><code>GET /health</code> returning 200 (already implemented)</td></tr>
+        <tr><td>Request logging</td><td>Debugging tool call failures requires a log trail</td><td>structlog (Python) or pino (Node.js) with JSON output</td></tr>
+      </tbody>
+    </table>
+
+  </section>
+
+  <div class="bridge">You now have everything you need. The lab puts it all together: convert MCP01's server, containerize it, and connect Claude Code.</div>
+
+  <!-- ── SECTION 9: Lab ── -->
+  <section class="section" id="lab">
+    <h2 id="lab">9. Lab: Deploy Your First HTTP MCP Server</h2>
+
+    <p>End-to-end: take MCP01's 3-tool server, convert it to HTTP, run it in Docker, and connect Claude Code. Five steps, each with code, command, and a checkpoint.</p>
+
+    <div class="lab-step">
+      <div class="lab-step-num">1</div>
+      <h4>Convert mcp.run() to HTTP transport</h4>
+      <p>Open your <code>document_server.py</code> from MCP01. The only required change is the last two lines:</p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-lang">Python — document_server.py (change only this)</span>
+          <button class="copy-btn" aria-label="Copy code to clipboard" onclick="copyCode(this)">Copy</button>
+        </div>
+        <pre><code class="language-python"># Remove this line:
+# mcp.run()
+
+# Add these lines:
+import os
+if __name__ == "__main__":
+    mcp.run(
+        transport="streamable-http",
+        host=os.getenv("MCP_HOST", "0.0.0.0"),
+        port=int(os.getenv("MCP_PORT", "8000")),
+    )</code></pre>
+      </div>
+      <div class="checkpoint">
+        <div class="checkpoint-label">Checkpoint 1</div>
+        <p>Run <code>python document_server.py</code> and curl the health endpoint: <code>curl http://localhost:8000/health</code>. You should see <code>{"status":"ok"}</code>.</p>
+      </div>
+    </div>
+
+    <div class="lab-step">
+      <div class="lab-step-num">2</div>
+      <h4>Write the Dockerfile</h4>
+      <p>Create <code>Dockerfile</code> in the same directory as your server:</p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-lang">Dockerfile — minimal, working</span>
+          <button class="copy-btn" aria-label="Copy code to clipboard" onclick="copyCode(this)">Copy</button>
+        </div>
+        <pre><code class="language-dockerfile">FROM python:3.12-slim
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+COPY document_server.py .
+EXPOSE 8000
+HEALTHCHECK CMD python -c \
+  "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')" \
+  || exit 1
+ENV MCP_HOST=0.0.0.0
+ENV MCP_PORT=8000
+CMD ["python", "document_server.py"]</code></pre>
+      </div>
+      <p>Also create <code>requirements.txt</code>:</p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-lang">requirements.txt</span>
+          <button class="copy-btn" aria-label="Copy code to clipboard" onclick="copyCode(this)">Copy</button>
+        </div>
+        <pre><code class="language-text">mcp>=1.0
+uvicorn>=0.29</code></pre>
+      </div>
+      <div class="checkpoint">
+        <div class="checkpoint-label">Checkpoint 2</div>
+        <p>Run <code>docker build -t mcp-lab .</code>. You should see <code>Successfully built ...</code> with no errors. The image should be under 300 MB: <code>docker image ls mcp-lab</code>.</p>
+      </div>
+    </div>
+
+    <div class="lab-step">
+      <div class="lab-step-num">3</div>
+      <h4>docker build &amp;&amp; docker run</h4>
+      <div class="terminal-block">
+        <div class="terminal-header">
+          <span>Terminal</span>
+          <button class="t-copy" aria-label="Copy command" onclick="copyTerminal(this)">Copy</button>
+        </div>
+        <div class="terminal-cmd"><code>docker run -d --name mcp-lab -p 8000:8000 mcp-lab && curl http://localhost:8000/health</code></div>
+        <div class="terminal-output">a1b2c3d4e5f6...
+{"status":"ok","server":"document-server","tools":3}</div>
+      </div>
+      <div class="checkpoint">
+        <div class="checkpoint-label">Checkpoint 3</div>
+        <p>The health check returns 200 and the container is running. Verify: <code>docker ps --filter name=mcp-lab</code> — STATUS should show <code>healthy</code> after about 30 seconds.</p>
+      </div>
+    </div>
+
+    <div class="lab-step">
+      <div class="lab-step-num">4</div>
+      <h4>Update .claude/settings.json</h4>
+      <p>In your project root, edit (or create) <code>.claude/settings.json</code>:</p>
+      <div class="code-block-wrapper">
+        <div class="code-block-header">
+          <span class="code-lang">JSON — .claude/settings.json</span>
+          <button class="copy-btn" aria-label="Copy code to clipboard" onclick="copyCode(this)">Copy</button>
+        </div>
+        <pre><code class="language-json">{
+  "mcpServers": {
+    "document-server": {
+      "url": "http://localhost:8000/sse"
+    }
+  }
+}</code></pre>
+      </div>
+      <p>No auth headers needed for a local-only dev server. In production, add <code>"headers": {"Authorization": "Bearer TOKEN"}</code>.</p>
+      <div class="checkpoint">
+        <div class="checkpoint-label">Checkpoint 4</div>
+        <p>The settings.json file is saved. No restart needed for Claude Code — it reads settings on session start.</p>
+      </div>
+    </div>
+
+    <div class="lab-step">
+      <div class="lab-step-num">5</div>
+      <h4>Test from Claude Code</h4>
+      <div class="terminal-block">
+        <div class="terminal-header">
+          <span>Terminal — start a new Claude Code session</span>
+          <button class="t-copy" aria-label="Copy command" onclick="copyTerminal(this)">Copy</button>
+        </div>
+        <div class="terminal-cmd"><code>claude</code></div>
+        <div class="terminal-output">> /mcp
+Connected MCP servers:
+  document-server (http://localhost:8000/sse)  ✓ connected
+    Tools: search_documents, calculate_similarity, save_note
+
+> Search my documents for anything about transport
+
+Using tool: search_documents (document-server)
+{"query": "transport", "limit": 5}
+
+Result: [{"id":"transport-docs","preview":"stdio is local; HTTP/SSE is for shared...","score":3}]
+
+I found one document about transport: the "transport-docs" entry explains that
+stdio is for local use while HTTP/SSE enables shared, remote servers.</div>
+      </div>
+      <div class="checkpoint">
+        <div class="checkpoint-label">Checkpoint 5 — Lab Complete</div>
+        <p>Claude Code found your tool, called it over HTTP, and returned a real result from your containerized server. The same server is now ready to deploy to Fly.io or Cloud Run with the commands in Section 8.</p>
+      </div>
+    </div>
+
+    <div class="callout-note">
+      <span class="box-label">Cleanup</span>
+      When you're done: <code>docker stop mcp-lab &amp;&amp; docker rm mcp-lab</code> to remove the running container.
+    </div>
+
+  </section>
+
+  <!-- ── SECTION 10: Quiz ── -->
+  <section class="section" id="quiz">
+    <h2 id="quiz">Knowledge Check</h2>
+    <p style="color:var(--text-secondary);margin-bottom:1.5rem;">Five questions covering HTTP transport, auth, and deployment.</p>
+
+    <!-- Q1 -->
+    <div class="quiz-question" id="q1">
+      <h4>1. Which part of the HTTP + SSE request cycle delivers the actual tool result to the client?</h4>
+      <div class="quiz-option" onclick="checkAnswer(this,'q1','A')" aria-label="Option A">
+        <div class="quiz-marker">A</div><div>The HTTP 202 response body from the POST to <code>/messages</code></div>
+      </div>
+      <div class="quiz-option" onclick="checkAnswer(this,'q1','B')" aria-label="Option B">
+        <div class="quiz-marker">B</div><div>A WebSocket message pushed after the POST completes</div>
+      </div>
+      <div class="quiz-option" onclick="checkAnswer(this,'q1','C')" aria-label="Option C">
+        <div class="quiz-marker">C</div><div>A <code>data:</code> event pushed on the persistent SSE channel opened with <code>GET /sse</code></div>
+      </div>
+      <div class="quiz-option" onclick="checkAnswer(this,'q1','D')" aria-label="Option D">
+        <div class="quiz-marker">D</div><div>A separate GET request the client polls after the POST returns</div>
+      </div>
+      <div class="quiz-feedback" id="q1-feedback"></div>
+    </div>
+
+    <!-- Q2 -->
+    <div class="quiz-question" id="q2">
+      <h4>2. What single argument to <code>mcp.run()</code> converts a FastMCP server from stdio to HTTP transport?</h4>
+      <div class="quiz-option" onclick="checkAnswer(this,'q2','A')" aria-label="Option A">
+        <div class="quiz-marker">A</div><div><code>transport="websocket"</code></div>
+      </div>
+      <div class="quiz-option" onclick="checkAnswer(this,'q2','B')" aria-label="Option B">
+        <div class="quiz-marker">B</div><div><code>transport="streamable-http"</code></div>
+      </div>
+      <div class="quiz-option" onclick="checkAnswer(this,'q2','C')" aria-label="Option C">
+        <div class="quiz-marker">C</div><div><code>mode="http"</code></div>
+      </div>
+      <div class="quiz-option" onclick="checkAnswer(this,'q2','D')" aria-label="Option D">
+        <div class="quiz-marker">D</div><div><code>protocol="sse"</code></div>
+      </div>
+      <div class="quiz-feedback" id="q2-feedback"></div>
+    </div>
+
+    <!-- Q3 -->
+    <div class="quiz-question" id="q3">
+      <h4>3. Your Docker MCP server is running behind nginx. SSE events are delivered with a 30-second delay. What nginx directive is missing?</h4>
+      <div class="quiz-option" onclick="checkAnswer(this,'q3','A')" aria-label="Option A">
+        <div class="quiz-marker">A</div><div><code>gzip on;</code> — response compression is interfering</div>
+      </div>
+      <div class="quiz-option" onclick="checkAnswer(this,'q3','B')" aria-label="Option B">
+        <div class="quiz-marker">B</div><div><code>proxy_buffering off;</code> combined with <code>proxy_cache off;</code> — nginx buffers responses by default, queuing SSE events instead of flushing them immediately</div>
+      </div>
+      <div class="quiz-option" onclick="checkAnswer(this,'q3','C')" aria-label="Option C">
+        <div class="quiz-marker">C</div><div><code>keepalive_timeout 0;</code> — connection timeout is too short</div>
+      </div>
+      <div class="quiz-option" onclick="checkAnswer(this,'q3','D')" aria-label="Option D">
+        <div class="quiz-marker">D</div><div><code>ssl_protocols TLSv1.3;</code> — TLS version mismatch causes buffering</div>
+      </div>
+      <div class="quiz-feedback" id="q3-feedback"></div>
+    </div>
+
+    <!-- Q4 -->
+    <div class="quiz-question" id="q4">
+      <h4>4. A browser-based web app at <code>https://app.example.com</code> tries to connect to your MCP server at <code>https://mcp.example.com/sse</code>. The browser blocks the request with a CORS error. What is the minimal correct fix?</h4>
+      <div class="quiz-option" onclick="checkAnswer(this,'q4','A')" aria-label="Option A">
+        <div class="quiz-marker">A</div><div>Set <code>Access-Control-Allow-Origin: *</code> — wildcard allows all origins</div>
+      </div>
+      <div class="quiz-option" onclick="checkAnswer(this,'q4','B')" aria-label="Option B">
+        <div class="quiz-marker">B</div><div>Move the MCP server to the same domain as the web app</div>
+      </div>
+      <div class="quiz-option" onclick="checkAnswer(this,'q4','C')" aria-label="Option C">
+        <div class="quiz-marker">C</div><div>Set <code>Access-Control-Allow-Origin: https://app.example.com</code> and <code>Access-Control-Allow-Credentials: true</code> on the MCP server's responses</div>
+      </div>
+      <div class="quiz-option" onclick="checkAnswer(this,'q4','D')" aria-label="Option D">
+        <div class="quiz-marker">D</div><div>CORS cannot be configured for SSE endpoints — only POST endpoints support CORS</div>
+      </div>
+      <div class="quiz-feedback" id="q4-feedback"></div>
+    </div>
+
+    <!-- Q5 -->
+    <div class="quiz-question" id="q5">
+      <h4>5. You need a team of 10 engineers to share one deployed MCP server. Each engineer's Claude Code instance connects simultaneously. Which transport makes this possible and why?</h4>
+      <div class="quiz-option" onclick="checkAnswer(this,'q5','A')" aria-label="Option A">
+        <div class="quiz-marker">A</div><div>stdio — each engineer spawns their own subprocess copy of the server, so 10 engineers = 10 process instances all running in parallel</div>
+      </div>
+      <div class="quiz-option" onclick="checkAnswer(this,'q5','B')" aria-label="Option B">
+        <div class="quiz-marker">B</div><div>HTTP + SSE — one deployed server process accepts multiple concurrent SSE connections; engineers connect by URL so no local installation is needed</div>
+      </div>
+      <div class="quiz-option" onclick="checkAnswer(this,'q5','C')" aria-label="Option C">
+        <div class="quiz-marker">C</div><div>Both stdio and HTTP work equally well for multi-user scenarios</div>
+      </div>
+      <div class="quiz-option" onclick="checkAnswer(this,'q5','D')" aria-label="Option D">
+        <div class="quiz-marker">D</div><div>HTTP + SSE only works for browser clients, not Claude Code</div>
+      </div>
+      <div class="quiz-feedback" id="q5-feedback"></div>
+    </div>
+
+    <!-- Q6 -->
+    <div class="quiz-question" id="q6">
+      <h4>6. You set <code>host="127.0.0.1"</code> in your FastMCP HTTP server and package it in Docker. The container starts but is unreachable from outside. What is the cause?</h4>
+      <div class="quiz-option" onclick="checkAnswer(this,'q6','A')" aria-label="Option A">
+        <div class="quiz-marker">A</div><div>The port was not published with <code>-p</code> in the docker run command</div>
+      </div>
+      <div class="quiz-option" onclick="checkAnswer(this,'q6','B')" aria-label="Option B">
+        <div class="quiz-marker">B</div><div><code>127.0.0.1</code> is the container's loopback — it refuses all connections from outside the container network. Use <code>host="0.0.0.0"</code> to bind all interfaces.</div>
+      </div>
+      <div class="quiz-option" onclick="checkAnswer(this,'q6','C')" aria-label="Option C">
+        <div class="quiz-marker">C</div><div>FastMCP does not support binding to specific IP addresses</div>
+      </div>
+      <div class="quiz-option" onclick="checkAnswer(this,'q6','D')" aria-label="Option D">
+        <div class="quiz-marker">D</div><div>Docker requires the server to listen on port 80 by default</div>
+      </div>
+      <div class="quiz-feedback" id="q6-feedback"></div>
+    </div>
+
+  </section>
+
+  <!-- MODULE NAV -->
+  <nav class="module-nav" aria-label="Module navigation">
+    <a href="MCP02-resources-prompts.html" aria-label="Previous module: Resources and Prompts">&#8592; Resources &amp; Prompts</a>
+    <a href="MCP04-mcp-clients-hosts.html" aria-label="Next module: MCP Clients and Hosts">MCP Clients &amp; Hosts &#8594;</a>
+  </nav>
+
+</main>
+</div>
+
+<!-- Prism.js -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+
+<script>
+// ── Scroll-spy sidebar ──
+const sectionIds = ['stdio-limits','http-sse-architecture','convert-to-http','oauth','docker','cors-config','connect-client','deploy-cloud','lab','quiz'];
+const sideLinks = {};
+sectionIds.forEach(id => { sideLinks[id] = document.querySelector('.sidebar-nav a[href="#'+id+'"]'); });
+
+function updateSidebar() {
+  let active = sectionIds[0];
+  sectionIds.forEach(id => {
+    const el = document.getElementById(id);
+    if (el && el.getBoundingClientRect().top < 120) active = id;
+  });
+  Object.values(sideLinks).forEach(a => { if (a) a.classList.remove('active'); });
+  if (sideLinks[active]) sideLinks[active].classList.add('active');
+  const scrolled = window.scrollY;
+  const total = document.body.scrollHeight - window.innerHeight;
+  document.getElementById('topFill').style.width = (total > 0 ? (scrolled/total)*100 : 0) + '%';
+}
+window.addEventListener('scroll', updateSidebar, { passive: true });
+updateSidebar();
+
+// ── Tab switching ──
+function switchTab(btn, groupId, lang) {
+  const bar = btn.closest('.tab-bar');
+  bar.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  const wrapper = bar.closest('.code-tabs');
+  wrapper.querySelectorAll('.tab-panel').forEach(p => p.classList.remove('active'));
+  const panel = document.getElementById(groupId + '_' + lang);
+  if (panel) { panel.classList.add('active'); Prism.highlightAllUnder(panel); }
+}
+
+// ── Copy button ──
+function copyCode(btn) {
+  const wrapper = btn.closest('.code-block-wrapper');
+  const code = wrapper.querySelector('code');
+  navigator.clipboard.writeText(code.textContent).then(() => {
+    const orig = btn.textContent; btn.textContent = 'Copied!';
+    setTimeout(() => { btn.textContent = orig; }, 2000);
+  });
+}
+
+function copyTerminal(btn) {
+  const block = btn.closest('.terminal-block');
+  const cmd = block.querySelector('.terminal-cmd code');
+  if (cmd) navigator.clipboard.writeText(cmd.textContent).then(() => {
+    const orig = btn.textContent; btn.textContent = 'Copied!';
+    setTimeout(() => { btn.textContent = orig; }, 2000);
+  });
+}
+
+// ── Quiz logic ──
+const answers = { q1:'C', q2:'B', q3:'B', q4:'C', q5:'B', q6:'B' };
+const explanations = {
+  q1: {
+    correct: 'Correct! In HTTP + SSE transport, the POST to /messages returns only 202 Accepted. The actual tool result arrives as a <code>data:</code> event on the persistent SSE channel. This decoupling is what enables long-running tools — the POST acknowledges receipt, the result comes whenever the tool finishes.',
+    wrong: 'Not quite. The POST returns 202 Accepted immediately — it does not contain the result. The actual tool result is pushed as an SSE event on the long-lived GET /sse channel. The client must maintain that SSE connection to receive results.'
+  },
+  q2: {
+    correct: 'Correct! <code>mcp.run(transport="streamable-http")</code> switches FastMCP from stdio to HTTP. This is the current MCP standard transport. Add <code>host="0.0.0.0"</code> and <code>port=8000</code> to control binding.',
+    wrong: 'Not quite. The correct argument is <code>transport="streamable-http"</code>. FastMCP uses this to start the HTTP server, create the /mcp POST endpoint, and the /sse event stream endpoint automatically.'
+  },
+  q3: {
+    correct: 'Correct! nginx buffers proxy responses by default, batching SSE events instead of flushing them immediately. <code>proxy_buffering off</code> and <code>proxy_cache off</code> are mandatory for SSE. Without them, events accumulate in nginx\'s buffer until it fills or times out, causing the 30-second delays you observed.',
+    wrong: 'Not quite. The culprit is nginx response buffering. By default nginx accumulates the backend\'s response before forwarding it to the client. For SSE this means events queue up instead of streaming immediately. Add <code>proxy_buffering off;</code> and <code>proxy_cache off;</code> to the nginx location block.'
+  },
+  q4: {
+    correct: 'Correct! The fix is to set <code>Access-Control-Allow-Origin: https://app.example.com</code> (the exact requesting origin, not *) and <code>Access-Control-Allow-Credentials: true</code> (required when the Authorization header is present). Wildcard * would also suppress the error but creates a security risk when credentials are involved.',
+    wrong: 'Not quite. The correct fix is to configure the MCP server to return <code>Access-Control-Allow-Origin: https://app.example.com</code> and <code>Access-Control-Allow-Credentials: true</code>. Using * is insecure when credentials are involved, and SSE endpoints require the same CORS configuration as any other endpoint.'
+  },
+  q5: {
+    correct: 'Correct! HTTP + SSE transport runs as a single server process that multiplexes many concurrent SSE connections. Each engineer\'s Claude Code instance connects by URL — no local installation needed. stdio would require 10 separate server processes (one per engineer per machine), wasting resources and creating version drift.',
+    wrong: 'Not quite. HTTP + SSE is the right answer. A single deployed server accepts all 10 connections simultaneously through normal HTTP concurrency. stdio only supports one client per process — 10 engineers would need 10 separate processes, and each engineer would need the server installed locally.'
+  },
+  q6: {
+    correct: 'Correct! Inside a Docker container, <code>127.0.0.1</code> refers to the container\'s own loopback interface — traffic from outside the container is rejected. Setting <code>host="0.0.0.0"</code> tells the server to listen on all network interfaces, including the container\'s eth0, which Docker maps to the host via <code>-p 8000:8000</code>.',
+    wrong: 'Not quite. The problem is the host address. <code>127.0.0.1</code> inside a container means "this container\'s loopback only" — external connections are rejected regardless of the <code>-p</code> flag. Use <code>host="0.0.0.0"</code> to listen on all interfaces, allowing Docker\'s port mapping to work.'
+  }
+};
+
+function checkAnswer(el, qid, option) {
+  const block = document.getElementById(qid);
+  const opts = block.querySelectorAll('.quiz-option');
+  opts.forEach(o => o.classList.add('disabled'));
+  const correct = answers[qid] === option;
+  el.classList.add(correct ? 'correct' : 'incorrect');
+  el.querySelector('.quiz-marker').textContent = correct ? '✓' : '✗';
+  if (!correct) {
+    const correctIdx = ['A','B','C','D'].indexOf(answers[qid]);
+    if (correctIdx >= 0) {
+      opts[correctIdx].classList.add('correct');
+      opts[correctIdx].querySelector('.quiz-marker').textContent = '✓';
+    }
+  }
+  const fb = document.getElementById(qid+'-feedback');
+  fb.innerHTML = correct ? explanations[qid].correct : explanations[qid].wrong;
+  fb.className = 'quiz-feedback show ' + (correct ? 'correct-fb' : 'incorrect-fb');
+}
+
+// ── Animation 1: stdio vs HTTP multi-client topology ──
+let a1Timer = null, a1Step = -1, a1Running = false;
+const a1Steps = [
+  {
+    label: 'stdio: Alice connects — server.py spawns as PID 1201',
+    fn: () => {
+      document.getElementById('a1s_client1').style.borderColor = 'var(--mcp-teal)';
+      document.getElementById('a1s_arrow1').style.opacity = '1';
+      document.getElementById('a1s_server1').style.color = 'var(--mcp-teal-light)';
+    }
+  },
+  {
+    label: 'stdio: Bob connects — needs his OWN subprocess, PID 2847',
+    fn: () => {
+      document.getElementById('a1s_client2').style.opacity = '1';
+      document.getElementById('a1s_client2').style.borderColor = 'var(--mcp-teal)';
+      document.getElementById('a1s_arrow2').style.opacity = '1';
+      document.getElementById('a1s_server2').style.color = 'var(--mcp-teal-light)';
+    }
+  },
+  {
+    label: 'stdio: Carol connects — yet another subprocess, PID 3512. 3 processes, 3× memory.',
+    fn: () => {
+      document.getElementById('a1s_client3').style.opacity = '1';
+      document.getElementById('a1s_client3').style.borderColor = 'var(--mcp-teal)';
+      document.getElementById('a1s_arrow3').style.opacity = '1';
+      document.getElementById('a1s_server3').style.color = 'var(--mcp-teal-light)';
+      document.getElementById('a1s_warn').style.opacity = '1';
+    }
+  },
+  {
+    label: 'HTTP: ONE server at http://mcp.example.com:8000 — all three clients connect to it',
+    fn: () => {
+      const srv = document.getElementById('a1h_server');
+      srv.style.borderColor = 'var(--mcp-teal)';
+      ['a1h_client1','a1h_client2','a1h_client3'].forEach(id => {
+        const el = document.getElementById(id);
+        el.style.opacity = '1';
+        el.style.borderColor = 'var(--mcp-teal)';
+      });
+      ['a1h_arrow1','a1h_arrow2','a1h_arrow3'].forEach(id => {
+        document.getElementById(id).style.opacity = '1';
+      });
+    }
+  }
+];
+function a1Reset() {
+  ['a1s_client1','a1s_client2','a1s_client3'].forEach(id => {
+    const el = document.getElementById(id);
+    el.style.borderColor = 'var(--code-border)';
+    el.style.opacity = id === 'a1s_client1' ? '1' : '0.35';
+  });
+  ['a1s_arrow1','a1s_arrow2','a1s_arrow3'].forEach(id => document.getElementById(id).style.opacity = '0.2');
+  ['a1s_server1','a1s_server2','a1s_server3'].forEach(id => document.getElementById(id).style.color = 'var(--text-muted)');
+  document.getElementById('a1s_warn').style.opacity = '0';
+  ['a1h_client1','a1h_client2','a1h_client3'].forEach(id => {
+    const el = document.getElementById(id);
+    el.style.opacity = '0.35';
+    el.style.borderColor = 'var(--code-border)';
+  });
+  ['a1h_arrow1','a1h_arrow2','a1h_arrow3'].forEach(id => document.getElementById(id).style.opacity = '0');
+  document.getElementById('a1h_server').style.borderColor = 'var(--code-border)';
+  document.getElementById('a1Label').textContent = 'Click Play to compare stdio vs HTTP multi-client topology';
+}
+function anim1Control(action) {
+  if (action === 'play' && !a1Running) {
+    a1Running = true;
+    a1Timer = setInterval(() => {
+      a1Step = (a1Step + 1) % a1Steps.length;
+      if (a1Step === 0) a1Reset();
+      a1Steps[a1Step].fn();
+      document.getElementById('a1Label').textContent = a1Steps[a1Step].label;
+    }, 1600);
+  } else if (action === 'pause') { a1Running = false; clearInterval(a1Timer); }
+  else if (action === 'restart') { clearInterval(a1Timer); a1Running = false; a1Step = -1; a1Reset(); }
+}
+a1Reset();
+
+// ── Animation 2: HTTP + SSE message flow ──
+let a2Timer = null, a2Step = -1, a2Running = false;
+const a2Seq = [
+  {
+    label: 'Step 1: Client opens SSE channel — GET /sse with Authorization header',
+    active: { client: ['a2_c1'], server: [], arrows: ['a2_arr1'] }
+  },
+  {
+    label: 'Step 2: Server accepts, returns 200 + text/event-stream, assigns session-id',
+    active: { client: [], server: ['a2_s1'], arrows: ['a2_arr2'] }
+  },
+  {
+    label: 'Step 3: Client POSTs tools/call to /messages — returns 202 immediately',
+    active: { client: ['a2_c2'], server: [], arrows: ['a2_arr3'] }
+  },
+  {
+    label: 'Step 4: Server validates token, runs tool function, queues result',
+    active: { client: [], server: ['a2_s2'], arrows: ['a2_arr4'] }
+  },
+  {
+    label: 'Step 5: Result pushed as SSE data event — client receives tool output',
+    active: { client: ['a2_c3'], server: ['a2_s3'], arrows: ['a2_arr5'] }
+  },
+];
+function a2Reset() {
+  ['a2_c1','a2_c2','a2_c3','a2_s1','a2_s2','a2_s3'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) { el.style.borderColor = 'var(--code-border)'; el.style.opacity = '0.3'; }
+  });
+  ['a2_arr1','a2_arr2','a2_arr3','a2_arr4','a2_arr5'].forEach(id => {
+    const el = document.getElementById(id);
+    if(el) el.style.opacity = '0.2';
+  });
+  document.getElementById('a2Label').textContent = 'Click Play to walk through the HTTP + SSE request/response cycle';
+}
+function anim2Control(action) {
+  if (action === 'play' && !a2Running) {
+    a2Running = true;
+    a2Timer = setInterval(() => {
+      a2Step = (a2Step + 1) % a2Seq.length;
+      a2Reset();
+      const s = a2Seq[a2Step];
+      [...s.active.client, ...s.active.server].forEach(id => {
+        const el = document.getElementById(id);
+        if(el) { el.style.borderColor = 'var(--mcp-teal)'; el.style.opacity = '1'; }
+      });
+      s.active.arrows.forEach(id => {
+        const el = document.getElementById(id);
+        if(el) el.style.opacity = '1';
+      });
+      document.getElementById('a2Label').textContent = s.label;
+    }, 1500);
+  } else if (action === 'pause') { a2Running = false; clearInterval(a2Timer); }
+  else if (action === 'restart') { clearInterval(a2Timer); a2Running = false; a2Step = -1; a2Reset(); }
+}
+a2Reset();
+
+// ── Animation 3: OAuth handshake ──
+let a3Timer = null, a3Step = -1, a3Running = false;
+const a3Seq = [
+  {
+    label: 'Step 1: Client requests a token — POST /token with client_id and scope',
+    client: 'POST /token\nscope=mcp:write', auth: '', mcp: '',
+    highlight: 'client', arr1: true, arr2: false
+  },
+  {
+    label: 'Step 2: Auth server validates client_id, signs a JWT with the requested scope',
+    client: '', auth: 'sign JWT\nsub+scope', mcp: '',
+    highlight: 'auth', arr1: false, arr2: false
+  },
+  {
+    label: 'Step 3: Auth server returns access_token — client stores it',
+    client: 'token stored\nlocally', auth: '200 + token', mcp: '',
+    highlight: 'client', arr1: true, arr2: false
+  },
+  {
+    label: 'Step 4: Client connects to MCP server with Authorization: Bearer <token>',
+    client: 'GET /sse\nBearer token', auth: '', mcp: '',
+    highlight: 'client', arr1: false, arr2: true
+  },
+  {
+    label: 'Step 5: MCP server validates token signature and scope — grants or denies access',
+    client: '', auth: '', mcp: 'verify sig\ncheck scope\n✓ mcp:write',
+    highlight: 'mcp', arr1: false, arr2: true
+  },
+];
+function a3Reset() {
+  ['a3_client','a3_auth','a3_mcp'].forEach(id => {
+    document.getElementById(id).style.borderColor = 'var(--code-border)';
+  });
+  ['a3_client_state','a3_auth_state','a3_mcp_state'].forEach(id => {
+    document.getElementById(id).textContent = '';
+    document.getElementById(id).style.color = 'var(--text-muted)';
+  });
+  document.getElementById('a3_arr1').style.opacity = '0.2';
+  document.getElementById('a3_arr2').style.opacity = '0.2';
+  document.getElementById('a3Label').textContent = 'Click Play to step through the OAuth 2.0 Bearer token handshake';
+}
+function anim3Control(action) {
+  if (action === 'play' && !a3Running) {
+    a3Running = true;
+    a3Timer = setInterval(() => {
+      a3Step = (a3Step + 1) % a3Seq.length;
+      a3Reset();
+      const s = a3Seq[a3Step];
+      const hiEl = document.getElementById('a3_' + s.highlight);
+      if(hiEl) hiEl.style.borderColor = 'var(--mcp-teal)';
+      if(s.client) { document.getElementById('a3_client_state').textContent = s.client; document.getElementById('a3_client_state').style.color = 'var(--mcp-teal-light)'; }
+      if(s.auth) { document.getElementById('a3_auth_state').textContent = s.auth; document.getElementById('a3_auth_state').style.color = 'var(--mcp-teal-light)'; }
+      if(s.mcp) { document.getElementById('a3_mcp_state').textContent = s.mcp; document.getElementById('a3_mcp_state').style.color = 'var(--success)'; }
+      document.getElementById('a3_arr1').style.opacity = s.arr1 ? '1' : '0.2';
+      document.getElementById('a3_arr2').style.opacity = s.arr2 ? '1' : '0.2';
+      document.getElementById('a3Label').textContent = s.label;
+    }, 1600);
+  } else if (action === 'pause') { a3Running = false; clearInterval(a3Timer); }
+  else if (action === 'restart') { clearInterval(a3Timer); a3Running = false; a3Step = -1; a3Reset(); }
+}
+a3Reset();
+</script>
+
+</body>
+</html>

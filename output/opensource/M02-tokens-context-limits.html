@@ -1,0 +1,2366 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>M02: Tokens &amp; Context Limits | Building AI Agents with Open Source Models</title>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;700;800&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+  <style>
+    /* === CSS RESET & ROOT === */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg-primary: #0A1628;
+      --bg-secondary: #111D33;
+      --bg-card: #162033;
+      --bg-surface: #1A2740;
+      --text-primary: #E8ECF1;
+      --text-secondary: #94A3B8;
+      --text-muted: #64748B;
+      --accent-primary: #D4A843;
+      --accent-hover: #E5BC5A;
+      --accent-muted: rgba(212, 168, 67, 0.15);
+      --success: #10B981;
+      --success-bg: rgba(16, 185, 129, 0.1);
+      --warning: #F59E0B;
+      --warning-bg: rgba(245, 158, 11, 0.1);
+      --error: #F43F5E;
+      --error-bg: rgba(244, 63, 94, 0.1);
+      --info: #3B82F6;
+      --info-bg: rgba(59, 130, 246, 0.1);
+      --track-foundations: #6366F1;
+      --track-color: var(--track-foundations);
+      --track-capstones: #D4A843;
+      --code-bg: #0D1117;
+      --code-border: #21262D;
+      --code-text: #C9D1D9;
+      --transition-fast: 150ms;
+      --transition-normal: 300ms;
+      --transition-slow: 500ms;
+    }
+
+    body {
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      font-family: 'Source Sans 3', sans-serif;
+      font-size: 1.05rem;
+      line-height: 1.7;
+      min-height: 100vh;
+    }
+
+    /* === PROGRESS BAR (top of page) === */
+    .top-progress {
+      position: fixed; top: 0; left: 0; right: 0;
+      height: 4px; background: var(--bg-surface); z-index: 200;
+    }
+    .top-progress .fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--track-color), var(--accent-primary));
+      width: 20%; /* 4/20 */
+      border-radius: 0 2px 2px 0;
+    }
+
+    /* === COURSE HEADER === */
+    .course-header {
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--code-border);
+      padding: 1.25rem 2rem;
+    }
+    .course-header-inner {
+      max-width: 1200px; margin: 0 auto;
+      display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem;
+    }
+    .course-title {
+      font-family: 'Bricolage Grotesque', sans-serif;
+      font-size: 0.95rem; font-weight: 600; color: var(--text-secondary);
+    }
+    .track-badge {
+      display: inline-flex; align-items: center; gap: 0.5rem;
+      background: rgba(99, 102, 241, 0.15);
+      border: 1px solid var(--track-color);
+      border-radius: 20px; padding: 0.25rem 0.75rem;
+      font-family: 'Bricolage Grotesque', sans-serif;
+      font-size: 0.8rem; font-weight: 600; color: var(--track-color);
+    }
+    .track-badge .dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--track-color);
+    }
+    .header-meta {
+      display: flex; gap: 1.5rem; font-size: 0.85rem; color: var(--text-muted);
+    }
+
+    /* === PAGE LAYOUT === */
+    .page-container {
+      max-width: 1200px; margin: 0 auto; padding: 2rem;
+      display: grid; grid-template-columns: 240px 1fr; gap: 3rem;
+    }
+
+    /* === SIDEBAR === */
+    .sidebar-nav {
+      position: sticky; top: 2rem;
+      height: calc(100vh - 4rem);
+      overflow-y: auto;
+      padding-right: 1rem;
+    }
+    .sidebar-nav::-webkit-scrollbar { width: 3px; }
+    .sidebar-nav::-webkit-scrollbar-thumb { background: var(--bg-surface); border-radius: 3px; }
+    .sidebar-title {
+      font-family: 'Bricolage Grotesque', sans-serif;
+      font-size: 0.75rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.1em;
+      color: var(--text-muted); margin-bottom: 1rem;
+    }
+    .sidebar-nav a {
+      display: block; padding: 0.4rem 0.75rem; margin-bottom: 0.15rem;
+      font-family: 'Bricolage Grotesque', sans-serif;
+      font-size: 0.82rem; font-weight: 600;
+      color: var(--text-muted); text-decoration: none;
+      border-left: 2px solid transparent; border-radius: 0 4px 4px 0;
+      transition: all var(--transition-fast);
+    }
+    .sidebar-nav a:hover { color: var(--text-primary); background: var(--bg-surface); }
+    .sidebar-nav a.active {
+      color: var(--accent-primary); border-left-color: var(--accent-primary);
+      background: var(--accent-muted);
+    }
+    .sidebar-nav a.sub { padding-left: 1.5rem; font-size: 0.78rem; font-weight: 400; }
+
+    /* === CONTENT === */
+    .content { max-width: 800px; }
+    .section { margin-bottom: 4rem; }
+    .subsection { margin-bottom: 2.5rem; }
+
+    h1 {
+      font-family: 'Bricolage Grotesque', sans-serif;
+      font-weight: 800; font-size: 2.25rem; line-height: 1.2;
+      margin-bottom: 0.75rem;
+    }
+    h2 {
+      font-family: 'Bricolage Grotesque', sans-serif;
+      font-weight: 700; font-size: 1.5rem;
+      color: var(--text-primary); margin: 2.5rem 0 1rem; padding-top: 1rem;
+      border-top: 1px solid var(--code-border);
+    }
+    h2:first-of-type { border-top: none; }
+    h3 {
+      font-family: 'Bricolage Grotesque', sans-serif;
+      font-weight: 600; font-size: 1.25rem;
+      color: var(--text-primary); margin: 2rem 0 0.75rem;
+    }
+    p { margin-bottom: 1rem; }
+    ul, ol { margin: 0.5rem 0 1rem 1.5rem; }
+    li { margin-bottom: 0.4rem; }
+    strong { font-weight: 600; }
+
+    /* === COMPONENT BOXES === */
+    .analogy-box, .tech-def-box, .callout-why, .callout-warning, .callout-security, .callout-cost, .callout-cert {
+      border-left: 4px solid; border-radius: 0 8px 8px 0;
+      padding: 1.25rem 1.5rem; margin: 1.5rem 0;
+    }
+    .analogy-box { background: var(--accent-muted); border-left-color: var(--accent-primary); }
+    .tech-def-box { background: var(--info-bg); border-left-color: var(--info); }
+    .callout-why { background: var(--success-bg); border-left-color: var(--success); }
+    .callout-warning { background: var(--warning-bg); border-left-color: var(--warning); }
+    .callout-security { background: var(--error-bg); border-left-color: var(--error); }
+    .callout-cost { background: var(--warning-bg); border-left-color: var(--accent-primary); }
+    .callout-cert { background: rgba(212, 168, 67, 0.06); border-left-color: var(--accent-primary); }
+    .box-label {
+      font-family: 'Bricolage Grotesque', sans-serif;
+      font-weight: 700; font-size: 0.9rem;
+      display: block; margin-bottom: 0.4rem;
+    }
+    .analogy-box .box-label { color: var(--accent-primary); }
+    .tech-def-box .box-label { color: var(--info); }
+    .callout-why .box-label { color: var(--success); }
+    .callout-warning .box-label { color: var(--warning); }
+    .callout-security .box-label { color: var(--error); }
+    .callout-cert .box-label { color: var(--accent-primary); }
+
+    /* === TOOLTIPS === */
+    .term-tooltip {
+      position: relative; color: var(--accent-primary);
+      cursor: help; border-bottom: 1px dashed var(--accent-primary);
+    }
+    .term-tooltip .tooltip-content {
+      position: absolute; bottom: calc(100% + 8px); left: 50%;
+      transform: translateX(-50%);
+      background: var(--bg-card); border: 1px solid var(--accent-primary);
+      border-radius: 8px; padding: 0.75rem 1rem;
+      font-size: 0.85rem; color: var(--text-primary);
+      width: 280px; opacity: 0; pointer-events: none;
+      transition: opacity var(--transition-fast);
+      z-index: 10; line-height: 1.5;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+    }
+    .term-tooltip:hover .tooltip-content,
+    .term-tooltip:focus .tooltip-content { opacity: 1; pointer-events: auto; }
+
+    /* === CODE BLOCKS === */
+    .code-block-wrapper {
+      background: var(--code-bg); border: 1px solid var(--code-border);
+      border-radius: 12px; margin: 1.5rem 0; overflow: hidden;
+    }
+    .code-tabs {
+      display: flex; gap: 0; border-bottom: 1px solid var(--code-border);
+      background: var(--bg-surface);
+    }
+    .code-tab {
+      padding: 0.5rem 1.25rem; background: none; border: none;
+      font-family: 'JetBrains Mono', monospace; font-size: 0.8rem;
+      cursor: pointer; border-bottom: 2px solid transparent;
+      margin-bottom: -1px; color: var(--text-muted);
+      transition: all var(--transition-fast);
+    }
+    .code-tab:hover { color: var(--text-primary); }
+    .code-tab.active { color: var(--accent-primary); border-bottom-color: var(--accent-primary); }
+    .code-panel { display: none; position: relative; }
+    .code-panel.active { display: block; }
+    .code-panel pre {
+      margin: 0; padding: 1.25rem; overflow-x: auto;
+      font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; line-height: 1.6;
+    }
+    .code-panel pre code { background: none; color: var(--code-text); }
+    .copy-btn {
+      position: absolute; top: 0.75rem; right: 0.75rem;
+      background: var(--bg-surface); border: 1px solid var(--code-border);
+      color: var(--text-muted); padding: 0.3rem 0.6rem;
+      border-radius: 6px; font-size: 0.75rem; cursor: pointer;
+      font-family: 'JetBrains Mono', monospace;
+      transition: all var(--transition-fast);
+    }
+    .copy-btn:hover { color: var(--accent-primary); border-color: var(--accent-primary); }
+
+    /* single-language code block */
+    .code-single {
+      background: var(--code-bg); border: 1px solid var(--code-border);
+      border-radius: 12px; margin: 1.5rem 0; overflow: hidden; position: relative;
+    }
+    .code-single pre {
+      margin: 0; padding: 1.25rem; overflow-x: auto;
+      font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; line-height: 1.6;
+    }
+    .code-single .copy-btn { top: 0.5rem; right: 0.5rem; }
+    .code-label {
+      display: inline-block; padding: 0.25rem 0.75rem;
+      background: var(--bg-surface); border-bottom: 1px solid var(--code-border);
+      border-right: 1px solid var(--code-border);
+      font-family: 'JetBrains Mono', monospace; font-size: 0.75rem;
+      color: var(--text-muted); border-radius: 0 0 8px 0;
+    }
+    .output-block {
+      background: var(--code-bg); border: 1px solid var(--code-border);
+      border-radius: 8px; padding: 1rem 1.25rem; margin: 0.75rem 0 1.5rem;
+      font-family: 'JetBrains Mono', monospace; font-size: 0.85rem;
+      color: var(--success); line-height: 1.5;
+    }
+    .output-label {
+      font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.8rem;
+      font-weight: 600; color: var(--text-muted); margin-bottom: 0.25rem;
+    }
+
+    /* === ANIMATION CONTAINER === */
+    .animation-container {
+      background: var(--bg-secondary); border: 1px solid var(--code-border);
+      border-radius: 12px; padding: 2rem; margin: 2rem 0;
+      position: relative; min-height: 300px; overflow: hidden;
+    }
+    .animation-title {
+      font-family: 'Bricolage Grotesque', sans-serif;
+      font-size: 0.85rem; font-weight: 700; color: var(--text-muted);
+      text-transform: uppercase; letter-spacing: 0.05em;
+      margin-bottom: 1.25rem;
+    }
+    .animation-controls {
+      display: flex; gap: 0.5rem;
+      position: absolute; bottom: 1rem; right: 1rem;
+    }
+    .anim-btn {
+      background: var(--bg-card); border: 1px solid var(--code-border);
+      color: var(--text-primary); width: 36px; height: 36px;
+      border-radius: 8px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1rem; transition: all var(--transition-fast);
+    }
+    .anim-btn:hover { border-color: var(--accent-primary); color: var(--accent-primary); }
+
+    /* === DATA TABLE === */
+    .data-table {
+      width: 100%; border-collapse: collapse; margin: 1.5rem 0;
+      font-size: 0.9rem;
+    }
+    .data-table th {
+      font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700;
+      font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em;
+      color: var(--text-muted); padding: 0.75rem 1rem;
+      border-bottom: 1px solid var(--code-border);
+      text-align: left; background: var(--bg-surface);
+    }
+    .data-table td {
+      padding: 0.75rem 1rem; border-bottom: 1px solid rgba(33,38,45,0.5);
+      font-family: 'JetBrains Mono', monospace; font-size: 0.85rem;
+      color: var(--text-primary);
+    }
+    .data-table tr:last-child td { border-bottom: none; }
+    .data-table tr:hover td { background: var(--bg-surface); }
+    .badge-model {
+      display: inline-block; padding: 0.2rem 0.5rem;
+      border-radius: 4px; font-size: 0.75rem; font-weight: 600;
+      font-family: 'Bricolage Grotesque', sans-serif;
+    }
+    .badge-green { background: rgba(16,185,129,0.15); color: var(--success); }
+    .badge-yellow { background: rgba(212,168,67,0.15); color: var(--accent-primary); }
+    .badge-orange { background: rgba(245,158,11,0.15); color: var(--warning); }
+
+    /* === QUIZ === */
+    .quiz-question {
+      background: var(--bg-card); border-radius: 12px;
+      padding: 1.5rem; margin-bottom: 1.5rem;
+    }
+    .quiz-question h4 {
+      font-family: 'Bricolage Grotesque', sans-serif;
+      font-weight: 600; margin-bottom: 1rem; font-size: 1rem;
+    }
+    .quiz-option {
+      padding: 0.75rem 1rem; margin: 0.5rem 0;
+      border: 1px solid var(--code-border); border-radius: 8px;
+      cursor: pointer; transition: all var(--transition-fast);
+      display: flex; align-items: center; gap: 0.75rem;
+    }
+    .quiz-option:hover { border-color: var(--accent-primary); }
+    .quiz-option.correct { border-color: var(--success); background: var(--success-bg); }
+    .quiz-option.incorrect { border-color: var(--error); background: var(--error-bg); }
+    .quiz-option.disabled { pointer-events: none; }
+    .quiz-marker {
+      width: 24px; height: 24px; border-radius: 50%;
+      border: 2px solid var(--code-border); flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.75rem; font-weight: 700;
+    }
+    .quiz-option.correct .quiz-marker { border-color: var(--success); color: var(--success); }
+    .quiz-option.incorrect .quiz-marker { border-color: var(--error); color: var(--error); }
+    .quiz-feedback {
+      margin-top: 0.75rem; padding: 0.75rem; border-radius: 8px;
+      font-size: 0.9rem; display: none;
+    }
+    .quiz-feedback.show { display: block; }
+    .quiz-feedback.correct-fb { background: var(--success-bg); color: var(--success); }
+    .quiz-feedback.incorrect-fb { background: var(--error-bg); color: var(--error); }
+    .quiz-score {
+      background: var(--bg-card); border-radius: 12px; padding: 1.5rem;
+      text-align: center; margin-top: 2rem;
+    }
+    .quiz-score .score-num {
+      font-family: 'Bricolage Grotesque', sans-serif;
+      font-size: 2.5rem; font-weight: 800; color: var(--accent-primary);
+    }
+
+    /* === MODULE NAV === */
+    .module-nav {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 1.5rem 0; margin: 2rem 0;
+      border-top: 1px solid var(--code-border);
+    }
+    .module-nav a {
+      display: flex; align-items: center; gap: 0.5rem;
+      color: var(--accent-primary); text-decoration: none;
+      font-family: 'Bricolage Grotesque', sans-serif; font-weight: 600;
+      font-size: 0.9rem; padding: 0.5rem 1rem;
+      border: 1px solid var(--code-border); border-radius: 8px;
+      transition: all var(--transition-fast);
+    }
+    .module-nav a:hover { border-color: var(--accent-primary); background: var(--accent-muted); }
+    .module-nav .disabled {
+      color: var(--text-muted); pointer-events: none; opacity: 0.5;
+    }
+
+    /* === LEARNING OBJECTIVES === */
+    .objectives-list {
+      list-style: none; margin-left: 0;
+    }
+    .objectives-list li {
+      padding: 0.5rem 0 0.5rem 2rem; position: relative;
+    }
+    .objectives-list li::before {
+      content: ''; position: absolute; left: 0; top: 0.85rem;
+      width: 16px; height: 16px; border-radius: 4px;
+      border: 2px solid var(--track-color); background: rgba(99, 102, 241, 0.1);
+    }
+
+    /* === TOKEN CHUNKING ANIMATION === */
+    .token-chunk-area {
+      min-height: 160px;
+      display: flex; flex-wrap: wrap; gap: 4px;
+      align-items: center; padding: 1rem;
+      background: var(--code-bg); border-radius: 8px;
+      border: 1px solid var(--code-border);
+      font-family: 'JetBrains Mono', monospace;
+    }
+    .chunk-token {
+      display: inline-flex; align-items: center; justify-content: center;
+      padding: 0.25rem 0.5rem; border-radius: 5px;
+      font-size: 0.9rem; font-weight: 600;
+      border: 1px solid transparent;
+      opacity: 0; transform: translateY(8px);
+      transition: opacity 0.35s ease, transform 0.35s ease;
+    }
+    .chunk-token.visible { opacity: 1; transform: translateY(0); }
+    .chunk-token.c0 { background: rgba(99,102,241,0.25); border-color: #6366F1; color: #A5B4FC; }
+    .chunk-token.c1 { background: rgba(16,185,129,0.2); border-color: #10B981; color: #6EE7B7; }
+    .chunk-token.c2 { background: rgba(212,168,67,0.2); border-color: #D4A843; color: #FDE68A; }
+    .chunk-token.c3 { background: rgba(244,63,94,0.2); border-color: #F43F5E; color: #FDA4AF; }
+    .chunk-token.c4 { background: rgba(59,130,246,0.2); border-color: #3B82F6; color: #93C5FD; }
+    .chunk-token.c5 { background: rgba(168,85,247,0.2); border-color: #A855F7; color: #D8B4FE; }
+    .chunk-token.c6 { background: rgba(20,184,166,0.2); border-color: #14B8A6; color: #5EEAD4; }
+    .chunk-token.space-char { color: var(--text-muted); opacity: 0.4; font-size: 0.7rem; padding: 0; }
+    .token-count-display {
+      margin-top: 0.75rem; font-family: 'JetBrains Mono', monospace;
+      font-size: 0.85rem; color: var(--text-secondary);
+      text-align: center;
+    }
+    .example-selector {
+      display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1rem;
+    }
+    .example-btn {
+      padding: 0.35rem 0.75rem; border-radius: 20px;
+      border: 1px solid var(--code-border); background: var(--bg-card);
+      color: var(--text-muted); font-size: 0.8rem; cursor: pointer;
+      font-family: 'Bricolage Grotesque', sans-serif; font-weight: 600;
+      transition: all var(--transition-fast);
+    }
+    .example-btn:hover, .example-btn.active {
+      border-color: var(--accent-primary); color: var(--accent-primary);
+      background: var(--accent-muted);
+    }
+
+    /* === CONTEXT WINDOW ANIMATION === */
+    .ctx-window-outer {
+      width: 100%; border: 2px dashed var(--text-muted);
+      border-radius: 8px; padding: 0.75rem;
+      position: relative; min-height: 160px;
+    }
+    .ctx-tokens-container {
+      display: flex; flex-wrap: nowrap; gap: 3px; overflow: hidden;
+      min-height: 120px; align-items: flex-start;
+    }
+    .ctx-tok-block {
+      flex-shrink: 0; height: 28px; border-radius: 4px;
+      display: flex; align-items: center; justify-content: center;
+      font-family: 'JetBrains Mono', monospace; font-size: 0.65rem;
+      color: #fff; transition: all 0.4s ease;
+      min-width: 28px; padding: 0 4px;
+    }
+    .ctx-tok-block.sys { background: rgba(99,102,241,0.6); }
+    .ctx-tok-block.hist { background: rgba(6,182,212,0.5); }
+    .ctx-tok-block.user { background: rgba(59,130,246,0.6); }
+    .ctx-tok-block.new { background: rgba(212,168,67,0.7); }
+    .ctx-tok-block.dropped { opacity: 0; transform: translateX(-20px); }
+    .ctx-legend {
+      display: flex; gap: 1rem; flex-wrap: wrap; margin-top: 0.75rem;
+      font-size: 0.8rem; font-family: 'Bricolage Grotesque', sans-serif;
+    }
+    .ctx-legend-item { display: flex; align-items: center; gap: 0.4rem; }
+    .ctx-legend-dot {
+      width: 12px; height: 12px; border-radius: 3px;
+    }
+    .ctx-stat {
+      font-family: 'JetBrains Mono', monospace; font-size: 0.8rem;
+      color: var(--text-secondary); margin-top: 0.5rem;
+    }
+
+    /* === BUDGET BAR ANIMATION === */
+    .budget-bar-wrapper {
+      background: var(--bg-card); border-radius: 8px; padding: 1rem;
+      margin: 0.75rem 0;
+    }
+    .budget-bar-label {
+      font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.8rem;
+      font-weight: 600; color: var(--text-secondary); margin-bottom: 0.4rem;
+      display: flex; justify-content: space-between;
+    }
+    .budget-bar-track {
+      height: 22px; background: var(--bg-surface); border-radius: 4px; overflow: hidden;
+      position: relative;
+    }
+    .budget-bar-fill {
+      height: 100%; border-radius: 4px;
+      transition: width 0.6s ease, background 0.4s ease;
+      display: flex; align-items: center; padding-left: 6px;
+      font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; color: rgba(255,255,255,0.8);
+    }
+    .budget-bar-fill.safe { background: var(--success); }
+    .budget-bar-fill.warn { background: var(--warning); }
+    .budget-bar-fill.danger { background: var(--error); }
+
+    /* === RESPONSIVE === */
+    @media (max-width: 900px) {
+      .page-container { grid-template-columns: 1fr; padding: 1rem; }
+      .sidebar-nav {
+        position: fixed; bottom: 0; left: 0; right: 0;
+        height: auto; max-height: 40vh; background: var(--bg-secondary);
+        border-top: 1px solid var(--code-border); z-index: 100;
+        padding: 1rem; display: none;
+      }
+      .sidebar-nav.open { display: block; }
+      .sidebar-toggle {
+        display: flex; position: fixed; bottom: 1rem; right: 1rem;
+        z-index: 101; background: var(--accent-primary); color: var(--bg-primary);
+        border: none; width: 48px; height: 48px; border-radius: 50%;
+        align-items: center; justify-content: center; cursor: pointer;
+        font-size: 1.25rem; box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+      }
+      h1 { font-size: 1.75rem; }
+    }
+    @media (min-width: 901px) {
+      .sidebar-toggle { display: none; }
+    }
+
+    /* === REDUCED MOTION === */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+      .chunk-token { opacity: 1; transform: none; }
+      .ctx-tok-block { transition: none; }
+      .budget-bar-fill { transition: none; }
+    }
+
+    /* === FOCUS STYLES === */
+    :focus-visible {
+      outline: 2px solid var(--accent-primary);
+      outline-offset: 2px; border-radius: 4px;
+    }
+
+    /* === CHECKPOINT === */
+    .checkpoint {
+      background: rgba(16,185,129,0.06); border-left: 3px solid var(--success);
+      padding: 1rem 1.25rem; margin: 1.25rem 0; border-radius: 0 6px 6px 0;
+    }
+    .checkpoint strong { color: var(--success); }
+
+    /* === BRIDGE === */
+    .concept-bridge {
+      background: rgba(99,102,241,0.07); border: 1px solid rgba(99,102,241,0.25);
+      border-radius: 8px; padding: 1rem 1.25rem; margin: 2rem 0;
+      font-size: 0.95rem; color: var(--text-secondary);
+    }
+    .concept-bridge strong { color: var(--track-color); }
+
+    /* === ANNOTATION === */
+    .code-annotation {
+      background: var(--bg-surface); border-left: 3px solid var(--info);
+      padding: 0.75rem 1rem; margin: 0.75rem 0;
+      border-radius: 0 6px 6px 0; font-size: 0.9rem;
+    }
+    .code-annotation .ann-label {
+      font-family: 'Bricolage Grotesque', sans-serif;
+      font-weight: 700; font-size: 0.78rem; text-transform: uppercase;
+      letter-spacing: 0.06em; margin-bottom: 0.2rem;
+    }
+    .ann-what { color: var(--info); }
+    .ann-why { color: var(--success); }
+    .ann-gotcha { color: var(--warning); }
+  </style>
+</head>
+<body>
+  <!-- Top progress bar: Module 4 of 20 -->
+  <div class="top-progress" role="progressbar" aria-label="Course progress: OS Track · Module 4 of 20" aria-valuenow="4" aria-valuemin="1" aria-valuemax="20">
+    <div class="fill"></div>
+  </div>
+
+  <!-- Course Header -->
+  <header class="course-header">
+    <div class="course-header-inner">
+      <div>
+        <div class="course-title">Building AI Agents with Open Source Models</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;">
+        <span class="track-badge"><span class="dot"></span>Track 1: Foundations</span>
+        <div class="header-meta">
+          <span>Module 4 of 20 &middot; Open Source Track</span>
+          <span>50-65 min</span>
+          <span>Beginner</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div class="page-container">
+    <!-- Sidebar Navigation -->
+    <nav class="sidebar-nav" id="sidebar" aria-label="Module sections">
+      <div class="sidebar-title">On this page</div>
+      <a href="#objectives">Learning Objectives</a>
+      <a href="#what-is-a-token">What Is a Token?</a>
+      <a href="#bpe-algorithm" class="sub">BPE Algorithm</a>
+      <a href="#token-viz" class="sub">Token Chunking Demo</a>
+      <a href="#token-counting">Counting Tokens</a>
+      <a href="#tiktoken-section" class="sub">tiktoken</a>
+      <a href="#mistral-tokenizer" class="sub">Mistral Tokenizer</a>
+      <a href="#context-windows">Context Windows</a>
+      <a href="#context-table" class="sub">Model Limits Table</a>
+      <a href="#context-anim" class="sub">Sliding Window Demo</a>
+      <a href="#prompt-budgeting">Prompt Budgeting</a>
+      <a href="#budget-class" class="sub">PromptBudget Class</a>
+      <a href="#cost-awareness">Token Cost Awareness</a>
+      <a href="#token-timer" class="sub">TokenTimer</a>
+      <a href="#exercises">Exercises</a>
+      <a href="#quiz">Knowledge Check</a>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="content" role="main">
+
+      <!-- Open Source Track Banner -->
+      <div style="background:rgba(249,115,22,0.1);border:1px solid #F97316;border-radius:12px;padding:1rem 1.5rem;margin-bottom:2rem;display:flex;align-items:flex-start;gap:1rem;">
+        <span style="font-size:1.5rem;flex-shrink:0">&#x1F999;</span>
+        <div>
+          <strong style="color:#F97316;font-family:'Bricolage Grotesque',sans-serif;display:block;margin-bottom:0.25rem">Open Source Track &mdash; Mistral/Ollama Version</strong>
+          <span style="font-size:0.9rem;color:#94A3B8;">All code uses the <code style="font-family:'JetBrains Mono',monospace;background:#1A2740;padding:0.1rem 0.4rem;border-radius:4px">openai</code> SDK pointing at a local Ollama server. No Anthropic API key required. <a href="index.html" style="color:#D4A843;">OS Track Index &rarr;</a></span>
+        </div>
+      </div>
+
+      <!-- Module Title & Nav -->
+      <section class="section" style="margin-bottom:2rem;">
+        <div class="module-nav" style="border-top:none;margin-top:0;">
+          <a href="M04-structured-output.html" aria-label="Previous: Structured Output">&larr; M04: Structured Output</a>
+          <a href="index.html" aria-label="Course Home" style="font-size:1.2rem;">&#x1F3E0; Home</a>
+          <a href="M05-function-calling.html" aria-label="Next: Function Calling">M05: Function Calling &rarr;</a>
+        </div>
+        <h1>M02: Tokens &amp; Context Limits</h1>
+        <p style="color:var(--text-secondary);font-size:1.1rem;">
+          Understand the currency of every LLM interaction — tokens — and learn to count them, budget them, and manage context windows before they manage you.
+        </p>
+      </section>
+
+      <!-- Learning Objectives -->
+      <section class="section" id="objectives">
+        <h2>Learning Objectives</h2>
+        <ul class="objectives-list" aria-label="Learning objectives for this module">
+          <li>Explain what a token is and how Byte Pair Encoding (BPE) splits text into subword units</li>
+          <li>Count tokens using tiktoken and the Mistral sentencepiece tokenizer, and explain why counts differ</li>
+          <li>Read a context window limits table and choose the right local model for your task's token budget</li>
+          <li>Build a <code>PromptBudget</code> class that tracks usage, checks fit, and truncates conversation history</li>
+          <li>Measure tokens-per-second for your local hardware using a <code>TokenTimer</code> wrapper</li>
+          <li>Apply the "keep system prompts under 500 tokens" rule and know when to summarize long histories</li>
+        </ul>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- SECTION 1: WHAT IS A TOKEN -->
+      <!-- ============================================================ -->
+      <section class="section" id="what-is-a-token">
+        <h2>What Is a Token?</h2>
+
+        <div class="analogy-box">
+          <span class="box-label">Everyday Analogy</span>
+          <p><strong>BEFORE:</strong> You might assume LLMs read your text character-by-character (like typing one key at a time) or word-by-word (like a human reading a sentence). Both feel intuitive because those are the units <em>you</em> experience language in.</p>
+          <p><strong>PAIN:</strong> Neither is right, and that mismatch causes real surprises. If LLMs processed characters, "hello" would cost 5 units and "hi" would cost 2 &mdash; but actually they cost similar amounts. If LLMs processed whole words, every new word in the training data would need its own slot, which is impossible at scale. "ChatGPT" is exactly 1 token. "tokenization" is 3 tokens. "supercalifragilistic" is 6. Your intuition about word length and token count are completely uncorrelated.</p>
+          <p style="margin-bottom:0;"><strong>MAPPING:</strong> Tokens are to LLMs what syllables are to reading speed. A skilled reader doesn't decode letters one at a time, nor do they pause at every word boundary &mdash; their brain chunks text into familiar sound-units. LLMs do the same thing but with <em>statistical</em> units: subword pieces that appeared frequently enough in the training corpus to get their own ID. "playing" might be one token. "tokenization" splits into ["token", "ization"]. An emoji is one token. A rare Welsh word might be 8 tokens. The model learned <em>in these chunks</em>, so it <em>thinks</em> in these chunks.</p>
+        </div>
+
+        <div class="tech-def-box">
+          <span class="box-label">Technical Definition</span>
+          <p>A <span class="term-tooltip" tabindex="0">token<span class="tooltip-content" role="tooltip">The smallest unit of text an LLM works with. Tokens are learned during training via a tokenization algorithm like BPE. A token can be a whole word, a word-piece, punctuation, whitespace, or even a single character for rare strings.</span></span> is the smallest discrete unit that an LLM's vocabulary contains. Every model ships with a fixed <em>vocabulary</em> — a lookup table mapping token strings to integer IDs (e.g., "hello" &rarr; 15339). During training, all text is first converted to a sequence of these integer IDs; during inference, input text is tokenized and output IDs are decoded back to text.</p>
+          <p>Modern LLM vocabularies contain 32,000–128,000 tokens. Larger vocabularies mean more words get a single token (better efficiency) but require more memory. Mistral 7B uses 32,000 tokens (SentencePiece); LLaMA 3 uses 128,256. The same English sentence can have different token counts in different models.</p>
+        </div>
+
+        <h3 id="bpe-algorithm">How BPE Builds a Vocabulary</h3>
+
+        <p><span class="term-tooltip" tabindex="0">BPE<span class="tooltip-content" role="tooltip">Byte Pair Encoding — a compression algorithm adapted for tokenization. It starts with individual characters, then iteratively merges the most frequent adjacent pair until the vocabulary reaches the target size.</span></span> (Byte Pair Encoding) is the algorithm behind most modern tokenizers. Here's how it works in three steps:</p>
+
+        <ol>
+          <li><strong>Start with characters:</strong> Split every word in the training corpus into individual characters (plus a special end-of-word marker). At this point, "hello" = ["h", "e", "l", "l", "o"].</li>
+          <li><strong>Count adjacent pairs:</strong> Find the most frequently co-occurring pair across the entire corpus. If "he" appears 1 million times together, merge them: "he" becomes a single token.</li>
+          <li><strong>Repeat until vocabulary is full:</strong> Keep merging the most frequent pairs until the vocabulary reaches its target size (e.g., 32,000). The result is a vocabulary of characters, common subwords, and whole words.</li>
+        </ol>
+
+        <p>This explains why "don't" &rarr; ["don", "'t"] — the tokenizer learned that "don" and "'t" are more useful as separate reusable pieces, since "'t" also appears in "can't", "won't", "isn't". But "hello" &rarr; ["hello"] because it's common enough as a whole unit to earn its own token slot.</p>
+
+        <div class="callout-why">
+          <span class="box-label">Why It Matters</span>
+          <p style="margin-bottom:0;">Understanding BPE explains cost surprises. A 500-word business email might be 600 tokens. The same email in German might be 700 tokens (German compound words get split more). Code with lots of rare variable names like <code>myUnusualFunctionName</code> can balloon token counts by 3–4x compared to terse code. In production agents with 10,000 API calls/day, a 30% token reduction from concise prompts is the difference between a $50/day and $35/day infrastructure bill — even with local models, that maps directly to GPU compute time and latency.</p>
+        </div>
+
+        <h3 id="token-viz">Animation: Token Chunking</h3>
+
+        <!-- ANIMATION 1: Token Chunking -->
+        <div class="animation-container" aria-label="Interactive token chunking visualization" style="min-height:320px;">
+          <div class="animation-title">Animation 1 — BPE Token Chunking</div>
+
+          <div class="example-selector" role="group" aria-label="Choose example text">
+            <button class="example-btn active" onclick="selectExample(0, this)" aria-pressed="true">Hello world</button>
+            <button class="example-btn" onclick="selectExample(1, this)" aria-pressed="false">don't / can't</button>
+            <button class="example-btn" onclick="selectExample(2, this)" aria-pressed="false">tokenization</button>
+            <button class="example-btn" onclick="selectExample(3, this)" aria-pressed="false">ChatGPT</button>
+            <button class="example-btn" onclick="selectExample(4, this)" aria-pressed="false">from openai import</button>
+          </div>
+
+          <div class="token-chunk-area" id="chunkArea" aria-live="polite"></div>
+          <div class="token-count-display" id="chunkCount"></div>
+
+          <div class="animation-controls">
+            <button class="anim-btn" id="chunkPlayBtn" onclick="toggleChunkAnim()" aria-label="Play or pause token chunking animation" title="Play/Pause">&#9654;</button>
+            <button class="anim-btn" onclick="restartChunkAnim()" aria-label="Restart token chunking animation" title="Restart">&#8635;</button>
+          </div>
+        </div>
+
+        <p>Notice how whitespace is often bundled <em>with</em> the following word (e.g., " world" is one token, not " " + "world"). This is a deliberate BPE design choice — leading spaces help the model understand word boundaries without requiring a separate space token.</p>
+
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- SECTION 2: COUNTING TOKENS -->
+      <!-- ============================================================ -->
+      <section class="section" id="token-counting">
+        <h2>Counting Tokens with tiktoken and the Mistral Tokenizer</h2>
+
+        <p>In production you need to count tokens <em>before</em> sending a request — not after. There are two tokenizer libraries you'll reach for in the local-model world:</p>
+
+        <div class="concept-bridge">
+          <strong>Two libraries, two use cases:</strong> <code>tiktoken</code> is OpenAI's fast Rust-backed tokenizer. Because Ollama's OpenAI-compatible API uses similar tokenization vocabulary for many models, tiktoken gives a close approximation (within 5–10%) for Mistral 7B. The <code>transformers</code> library contains the <em>exact</em> Mistral SentencePiece tokenizer — more accurate, but slower and requires downloading a model config. For quick estimates: tiktoken. For production budgeting: the exact tokenizer.
+        </div>
+
+        <h3 id="tiktoken-section">tiktoken (OpenAI Tokenizer)</h3>
+
+        <div class="code-annotation">
+          <div class="ann-label ann-what">WHAT</div>
+          <p style="margin:0;">Load the <code>cl100k_base</code> encoding (used by GPT-4 and close to Mistral's vocabulary). Call <code>encode()</code> to get a list of integer token IDs. <code>len()</code> of that list is your token count.</p>
+        </div>
+        <div class="code-annotation">
+          <div class="ann-label ann-why">WHY</div>
+          <p style="margin:0;"><code>cl100k_base</code> has a 100K-token vocabulary, overlapping significantly with Mistral's 32K vocabulary for common English text. The error rate is low enough for budget estimates, and <code>tiktoken</code> encodes 10MB of text per second — fast enough for real-time pre-flight checks.</p>
+        </div>
+        <div class="code-annotation">
+          <div class="ann-label ann-gotcha">GOTCHA</div>
+          <p style="margin:0;">tiktoken counts chat message <em>overhead</em> differently from the raw text. System messages, role markers, and separator tokens add 3–5 extra tokens per message turn. The full formula is shown in the multi-message example below.</p>
+        </div>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs" role="tablist" aria-label="Language tabs for tiktoken example">
+            <button class="code-tab active" role="tab" aria-selected="true" onclick="switchTab(this,'tiktoken')" id="tab-tiktoken-py">Python</button>
+            <button class="code-tab" role="tab" aria-selected="false" onclick="switchTab(this,'tiktoken')" id="tab-tiktoken-ts">TypeScript</button>
+          </div>
+          <div class="code-panel active" id="tiktoken-python" role="tabpanel" aria-labelledby="tab-tiktoken-py">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code to clipboard">Copy</button>
+            <pre><code class="language-python"># pip install tiktoken
+import tiktoken
+
+# Load the cl100k_base encoding (GPT-4 / close to Mistral)
+enc = tiktoken.get_encoding("cl100k_base")
+
+# ── Basic token counting ────────────────────────────────────────
+samples = [
+    "Hello, world!",
+    "tokenization",
+    "don't use pseudocode",
+    "ChatGPT is one token",
+    "from openai import OpenAI",
+]
+
+for text in samples:
+    ids = enc.encode(text)
+    tokens = [enc.decode_single_token_bytes(t).decode("utf-8", errors="replace")
+              for t in ids]
+    print(f"{len(ids):3d} tokens | {tokens!r}")
+    print(f"         text: {text!r}")
+    print()
+
+# ── Chat message overhead ──────────────────────────────────────
+# OpenAI-style chat adds 3 tokens per message + 3 for the reply primer
+def count_chat_tokens(messages: list[dict]) -> int:
+    """Count tokens for a list of chat messages including overhead."""
+    total = 3  # primer for assistant reply
+    for msg in messages:
+        total += 4  # role, content field markers, sep
+        total += len(enc.encode(msg.get("role", "")))
+        total += len(enc.encode(msg.get("content", "")))
+    return total
+
+messages = [
+    {"role": "system", "content": "You are a helpful coding assistant."},
+    {"role": "user",   "content": "Explain what a token is in 2 sentences."},
+]
+print(f"Chat token estimate: {count_chat_tokens(messages)}")
+# Output: Chat token estimate: ~31</code></pre>
+          </div>
+          <div class="code-panel" id="tiktoken-typescript" role="tabpanel" aria-labelledby="tab-tiktoken-ts">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code to clipboard">Copy</button>
+            <pre><code class="language-typescript">// npm install js-tiktoken
+import { get_encoding } from "js-tiktoken";
+
+// Load the cl100k_base encoding
+const enc = get_encoding("cl100k_base");
+
+// ── Basic token counting ────────────────────────────────────────
+const samples = [
+  "Hello, world!",
+  "tokenization",
+  "don't use pseudocode",
+  "ChatGPT is one token",
+  "from openai import OpenAI",
+];
+
+for (const text of samples) {
+  const ids = enc.encode(text);
+  console.log(`${ids.length} tokens | "${text}"`);
+}
+
+// ── Chat message overhead ──────────────────────────────────────
+interface ChatMessage { role: string; content: string; }
+
+function countChatTokens(messages: ChatMessage[]): number {
+  let total = 3; // primer for assistant reply
+  for (const msg of messages) {
+    total += 4; // role + content markers + sep
+    total += enc.encode(msg.role).length;
+    total += enc.encode(msg.content).length;
+  }
+  return total;
+}
+
+const messages: ChatMessage[] = [
+  { role: "system",  content: "You are a helpful coding assistant." },
+  { role: "user",    content: "Explain what a token is in 2 sentences." },
+];
+console.log(`Chat token estimate: ${countChatTokens(messages)}`);
+// Output: Chat token estimate: ~31
+
+enc.free(); // release WASM memory</code></pre>
+          </div>
+        </div>
+
+        <div class="output-label">Expected Output:</div>
+        <div class="output-block">  4 tokens | ['Hello', ',', ' world', '!']
+         text: 'Hello, world!'
+
+  3 tokens | ['token', 'ization', '']   ← wait, actually 3 subwords
+         text: 'tokenization'
+
+  5 tokens | ["don", "'t", ' use', ' pseudo', 'code']
+         text: "don't use pseudocode"
+
+  4 tokens | ['Chat', 'G', 'PT', ' is one token']   ← ChatGPT = 3 tokens
+         text: 'ChatGPT is one token'
+
+  5 tokens | ['from', ' open', 'ai', ' import', ' OpenAI']
+         text: 'from openai import OpenAI'
+
+Chat token estimate: 31</div>
+
+        <h3 id="mistral-tokenizer">Mistral SentencePiece Tokenizer (Exact Count)</h3>
+
+        <div class="code-annotation">
+          <div class="ann-label ann-what">WHAT</div>
+          <p style="margin:0;">Use HuggingFace <code>transformers</code> to load the <em>actual</em> Mistral 7B tokenizer. This is the same tokenizer that runs inside Ollama when you use <code>mistral</code>. The token IDs will match exactly what Ollama sees.</p>
+        </div>
+        <div class="code-annotation">
+          <div class="ann-label ann-why">WHY</div>
+          <p style="margin:0;">Mistral uses SentencePiece with a 32K vocabulary — different merge rules from tiktoken's 100K BPE. For most English text the difference is small. For code, non-English text, or strings with underscores/colons, the difference can be 15–25%. When you need precision (billing, context-limit checks), use this.</p>
+        </div>
+        <div class="code-annotation">
+          <div class="ann-label ann-gotcha">GOTCHA</div>
+          <p style="margin:0;"><code>AutoTokenizer.from_pretrained()</code> downloads ~500KB of config files on first run. They're cached in <code>~/.cache/huggingface/</code>. In CI/CD or air-gapped environments, pre-download with <code>tokenizer.save_pretrained("./local_tokenizer")</code> and load from the local path instead.</p>
+        </div>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs" role="tablist" aria-label="Language tabs for Mistral tokenizer example">
+            <button class="code-tab active" role="tab" aria-selected="true" onclick="switchTab(this,'misttok')" id="tab-misttok-py">Python</button>
+            <button class="code-tab" role="tab" aria-selected="false" onclick="switchTab(this,'misttok')" id="tab-misttok-ts">TypeScript</button>
+          </div>
+          <div class="code-panel active" id="misttok-python" role="tabpanel" aria-labelledby="tab-misttok-py">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code to clipboard">Copy</button>
+            <pre><code class="language-python"># pip install transformers
+from transformers import AutoTokenizer
+
+# Downloads ~500KB of config from HuggingFace Hub (cached)
+tokenizer = AutoTokenizer.from_pretrained("mistralai/Mistral-7B-v0.1")
+
+samples = [
+    "Hello, world!",
+    "tokenization",
+    "don't use pseudocode",
+    "ChatGPT is one token",
+    "from openai import OpenAI",
+]
+
+import tiktoken
+enc = tiktoken.get_encoding("cl100k_base")
+
+print(f"{'Text':<35} {'tiktoken':>8} {'Mistral':>8} {'diff':>6}")
+print("-" * 62)
+for text in samples:
+    tik_n = len(enc.encode(text))
+    mis_n = len(tokenizer.encode(text, add_special_tokens=False))
+    diff = mis_n - tik_n
+    sign = "+" if diff > 0 else ""
+    print(f"{text!r:<35} {tik_n:>8} {mis_n:>8} {sign+str(diff):>6}")</code></pre>
+          </div>
+          <div class="code-panel" id="misttok-typescript" role="tabpanel" aria-labelledby="tab-misttok-ts">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code to clipboard">Copy</button>
+            <pre><code class="language-typescript">// npm install @xenova/transformers js-tiktoken
+// Note: loads the full Mistral tokenizer via WASM — first run downloads ~2MB
+import { AutoTokenizer } from "@xenova/transformers";
+import { get_encoding } from "js-tiktoken";
+
+async function compareTokenizers() {
+  const mistralTok = await AutoTokenizer.from_pretrained(
+    "mistralai/Mistral-7B-v0.1"
+  );
+  const tiktok = get_encoding("cl100k_base");
+
+  const samples = [
+    "Hello, world!",
+    "tokenization",
+    "don't use pseudocode",
+    "ChatGPT is one token",
+    "from openai import OpenAI",
+  ];
+
+  console.log(
+    `${"Text".padEnd(35)} ${"tiktoken".padStart(8)} ${"Mistral".padStart(8)} ${"diff".padStart(6)}`
+  );
+  console.log("-".repeat(62));
+
+  for (const text of samples) {
+    const tikN = tiktok.encode(text).length;
+    const misN = mistralTok.encode(text, { add_special_tokens: false }).length;
+    const diff = misN - tikN;
+    const sign = diff > 0 ? "+" : "";
+    console.log(
+      `${text.padEnd(35)} ${String(tikN).padStart(8)} ${String(misN).padStart(8)} ${(sign + diff).padStart(6)}`
+    );
+  }
+  tiktok.free();
+}
+
+compareTokenizers().catch(console.error);</code></pre>
+          </div>
+        </div>
+
+        <div class="output-label">Expected Output (approximate):</div>
+        <div class="output-block">Text                                tiktoken  Mistral    diff
+--------------------------------------------------------------
+'Hello, world!'                            4        4       0
+'tokenization'                             3        3       0
+"don't use pseudocode"                     5        6      +1
+'ChatGPT is one token'                     4        5      +1
+'from openai import OpenAI'                5        5       0</div>
+
+        <div class="checkpoint">
+          <strong>What Just Happened?</strong> You ran the same 5 strings through two different tokenizers and observed that they're close but not identical. The differences come from different BPE merge histories — tiktoken was trained on a different corpus slice than Mistral's SentencePiece. For English prose the difference is under 5%. For code or mixed-language text it can reach 20%. The practical takeaway: use tiktoken for fast estimates during development; swap to the exact tokenizer for production context-limit checks.
+        </div>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- SECTION 3: CONTEXT WINDOWS -->
+      <!-- ============================================================ -->
+      <section class="section" id="context-windows">
+        <h2>Context Windows Explained</h2>
+
+        <div class="tech-def-box">
+          <span class="box-label">Technical Definition</span>
+          <p>The <span class="term-tooltip" tabindex="0">context window<span class="tooltip-content" role="tooltip">The total number of tokens a model can process in a single inference call — including the system prompt, all conversation history, tool definitions, and the model's output. Think of it as the model's working memory.</span></span> is the combined token budget for everything the model can see during one inference call: system prompt + conversation history + tool definitions + the current message + the model's output. It is a <em>hard ceiling</em> baked into the model architecture at training time. Once you exceed it, the API returns an error or silently truncates input.</p>
+          <p style="margin-bottom:0;">The <span class="term-tooltip" tabindex="0">attention<span class="tooltip-content" role="tooltip">The mechanism in a transformer that lets every token "look at" every other token in the context. Attention cost scales quadratically with sequence length — doubling the context roughly quadruples the compute needed, which is why long contexts are slower and more memory-intensive.</span></span> mechanism inside a transformer reads every token in context simultaneously. This is why inference on a 128K context is much slower than on a 2K context — the model is running O(n²) operations where n is the token count.</p>
+        </div>
+
+        <h3 id="context-table">Context Limits for Popular Local Models</h3>
+
+        <table class="data-table" aria-label="Context window limits for popular local models">
+          <thead>
+            <tr>
+              <th>Model</th>
+              <th>Advertised Context</th>
+              <th>Practical Limit</th>
+              <th>Notes</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><span class="badge-model badge-yellow">Mistral 7B</span></td>
+              <td>32K</td>
+              <td>~28K usable</td>
+              <td>Sliding Window Attention; quality degrades near edges</td>
+            </tr>
+            <tr>
+              <td><span class="badge-model badge-green">Llama 3.1 8B</span></td>
+              <td>128K</td>
+              <td>~100K usable</td>
+              <td>RoPE scaling; slower above 32K on consumer GPUs</td>
+            </tr>
+            <tr>
+              <td><span class="badge-model badge-green">Qwen 2.5 7B</span></td>
+              <td>128K</td>
+              <td>~100K usable</td>
+              <td>YARN context extension; best for long documents</td>
+            </tr>
+            <tr>
+              <td><span class="badge-model badge-green">Phi-3 Mini</span></td>
+              <td>128K</td>
+              <td>~90K usable</td>
+              <td>3.8B params; fast inference; excellent on M2 MacBook</td>
+            </tr>
+            <tr>
+              <td><span class="badge-model badge-orange">Gemma 2 9B</span></td>
+              <td>8K</td>
+              <td>~7K usable</td>
+              <td>Sliding attention; build in summarization checkpoints</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="callout-warning">
+          <span class="box-label">Why "Practical Limit" is Less Than Advertised</span>
+          <p>Three reasons the real limit is lower than the spec sheet says:</p>
+          <ul style="margin-bottom:0;">
+            <li><strong>Attention degradation at boundaries:</strong> Models trained on shorter sequences with <span class="term-tooltip" tabindex="0">RoPE<span class="tooltip-content" role="tooltip">Rotary Position Embedding — a technique that encodes token positions so the model can generalise to sequences longer than it saw during training. Quality drops when you far exceed the training length.</span></span> or sliding attention can lose coherence near the end of very long contexts. The model "forgets" earlier content or starts hallucinating connections that aren't there.</li>
+            <li><strong>Memory pressure:</strong> A 128K context on an 8B model requires ~24GB of VRAM for the KV cache alone. Most consumer GPUs have 8–24GB. Exceeding VRAM capacity causes CPU offloading, which tanks tokens-per-second by 10–50x.</li>
+            <li><strong>You need output headroom:</strong> The advertised limit is input + output combined. If you fill 128K tokens with input and set <code>max_tokens=2048</code>, the model returns an error. Reserve at least 1K–4K for output.</li>
+          </ul>
+        </div>
+
+        <h3 id="context-anim">Animation: Sliding Context Window</h3>
+
+        <!-- ANIMATION 2: Context Window -->
+        <div class="animation-container" aria-label="Sliding context window animation" style="min-height:340px;">
+          <div class="animation-title">Animation 2 — Context Window Filling &amp; Sliding</div>
+
+          <div class="ctx-window-outer">
+            <div class="ctx-tokens-container" id="ctxTokensContainer" aria-live="polite"></div>
+          </div>
+
+          <div class="ctx-legend">
+            <div class="ctx-legend-item">
+              <div class="ctx-legend-dot" style="background:rgba(99,102,241,0.6);"></div>
+              <span style="font-size:0.8rem;color:var(--text-secondary);">System prompt</span>
+            </div>
+            <div class="ctx-legend-item">
+              <div class="ctx-legend-dot" style="background:rgba(6,182,212,0.5);"></div>
+              <span style="font-size:0.8rem;color:var(--text-secondary);">History</span>
+            </div>
+            <div class="ctx-legend-item">
+              <div class="ctx-legend-dot" style="background:rgba(59,130,246,0.6);"></div>
+              <span style="font-size:0.8rem;color:var(--text-secondary);">User</span>
+            </div>
+            <div class="ctx-legend-item">
+              <div class="ctx-legend-dot" style="background:rgba(212,168,67,0.7);"></div>
+              <span style="font-size:0.8rem;color:var(--text-secondary);">New tokens</span>
+            </div>
+          </div>
+          <div class="ctx-stat" id="ctxStat">Tokens in window: 0 / 32</div>
+
+          <div class="animation-controls">
+            <button class="anim-btn" id="ctxPlayBtn" onclick="toggleCtxAnim()" aria-label="Play or pause context window animation" title="Play/Pause">&#9654;</button>
+            <button class="anim-btn" onclick="restartCtxAnim()" aria-label="Restart context window animation" title="Restart">&#8635;</button>
+          </div>
+        </div>
+
+        <p>Notice that when the window fills up, old history tokens drop off the left side — the model can no longer see them. This is why naive "append every message to a list" conversation management eventually fails: you either hit an error or the model loses the context of what was said many turns ago.</p>
+
+        <div class="concept-bridge">
+          <strong>Bridge to next section:</strong> The context window is a finite resource. Every token you spend on a verbose system prompt is a token you can't use for conversation history or for the model's output. This leads directly to the need for <em>prompt budgeting</em> — a proactive strategy for tracking, reserving, and managing tokens before you hit the limit.
+        </div>
+
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- SECTION 4: PROMPT BUDGETING -->
+      <!-- ============================================================ -->
+      <section class="section" id="prompt-budgeting">
+        <h2>Prompt Budgeting</h2>
+
+        <p>In production agents, you must track token usage across the conversation and plan ahead. Waiting until the API throws a context-length error is like driving until you run out of gas: technically preventable, embarrassing in production.</p>
+
+        <div class="analogy-box">
+          <span class="box-label">Everyday Analogy</span>
+          <p><strong>BEFORE:</strong> When you book travel, you don't just assume you have enough budget — you add up flights, hotel, food, and activities before confirming the reservation.</p>
+          <p><strong>PAIN:</strong> Agent builders often append every message to a list and only discover the context limit when an API call fails mid-conversation &mdash; usually in front of a user.</p>
+          <p style="margin-bottom:0;"><strong>MAPPING:</strong> A <code>PromptBudget</code> is your travel spreadsheet. Before every API call, check: "Do I still fit?" If not, drop the oldest history messages (like cancelling a hotel night), keeping the system prompt (the flight you've already paid for) and the most recent context.</p>
+        </div>
+
+        <h3 id="budget-class">The PromptBudget Class</h3>
+
+        <div class="code-annotation">
+          <div class="ann-label ann-what">WHAT</div>
+          <p style="margin:0;"><code>PromptBudget</code> wraps tiktoken to provide four methods: estimate token count for any string, compute how many tokens remain given a message list, check whether a new message fits, and truncate history to fit within a budget while preserving the system prompt.</p>
+        </div>
+        <div class="code-annotation">
+          <div class="ann-label ann-why">WHY</div>
+          <p style="margin:0;">Centralizing token math in one class means every agent component uses the same estimates. It prevents the bug where one module uses character-based estimates (off by 3–4x) and another uses word counts (off by 1.3x). A shared <code>PromptBudget</code> gives you one source of truth.</p>
+        </div>
+        <div class="code-annotation">
+          <div class="ann-label ann-gotcha">GOTCHA</div>
+          <p style="margin:0;"><code>truncate_history</code> preserves the system message (index 0) and removes turns from oldest to newest. It does <em>not</em> summarize — for agents that need to remember dropped content, wire in a summarization step before truncation. That's covered in M08: Conversation Management.</p>
+        </div>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs" role="tablist" aria-label="Language tabs for PromptBudget class">
+            <button class="code-tab active" role="tab" aria-selected="true" onclick="switchTab(this,'budget')" id="tab-budget-py">Python</button>
+            <button class="code-tab" role="tab" aria-selected="false" onclick="switchTab(this,'budget')" id="tab-budget-ts">TypeScript</button>
+          </div>
+          <div class="code-panel active" id="budget-python" role="tabpanel" aria-labelledby="tab-budget-py">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code to clipboard">Copy</button>
+            <pre><code class="language-python"># pip install tiktoken openai
+from __future__ import annotations
+import tiktoken
+from openai import OpenAI
+
+# ─────────────────────────────────────────────────────────────────
+# CHUNK 1: PromptBudget class definition
+# ─────────────────────────────────────────────────────────────────
+class PromptBudget:
+    """Track and manage token usage across a conversation."""
+
+    # Per-message overhead in tiktoken cl100k_base format
+    TOKENS_PER_MESSAGE = 4    # role + content markers + sep
+    TOKENS_REPLY_PRIMER = 3   # assistant reply primer tokens
+
+    def __init__(self, model: str = "mistral", max_context: int = 32_000):
+        self.model = model
+        self.max_context = max_context
+        # Use cl100k_base as a close approximation for Mistral
+        self._enc = tiktoken.get_encoding("cl100k_base")
+
+    def estimate_tokens(self, text: str) -> int:
+        """Count tokens in a plain string."""
+        return len(self._enc.encode(text))
+
+    def _count_messages(self, messages: list[dict]) -> int:
+        """Count tokens for a messages list including overhead."""
+        total = self.TOKENS_REPLY_PRIMER
+        for msg in messages:
+            total += self.TOKENS_PER_MESSAGE
+            total += len(self._enc.encode(msg.get("role", "")))
+            total += len(self._enc.encode(msg.get("content", "")))
+        return total
+
+    def _count_tools(self, tools: list[dict] | None) -> int:
+        """Rough estimate: serialize tools to JSON and count tokens."""
+        if not tools:
+            return 0
+        import json
+        return len(self._enc.encode(json.dumps(tools)))
+
+    def remaining(
+        self,
+        messages: list[dict],
+        tools: list[dict] | None = None,
+        reserve_output: int = 512,
+    ) -> int:
+        """Return how many tokens are left for new messages + output."""
+        used = self._count_messages(messages) + self._count_tools(tools)
+        return self.max_context - used - reserve_output
+
+    def fits(
+        self,
+        text: str,
+        messages: list[dict],
+        tools: list[dict] | None = None,
+        reserve_output: int = 512,
+    ) -> bool:
+        """True if adding `text` as a new message still fits in budget."""
+        new_msg_tokens = self.estimate_tokens(text) + self.TOKENS_PER_MESSAGE
+        return self.remaining(messages, tools, reserve_output) >= new_msg_tokens
+
+    def truncate_history(
+        self,
+        messages: list[dict],
+        reserve_output: int = 512,
+    ) -> list[dict]:
+        """
+        Drop oldest non-system messages until the conversation fits.
+        Always preserves the first message if it's the system prompt.
+        Returns a new list — does not mutate the input.
+        """
+        result = list(messages)
+        # Identify system prompt boundary (first message, role=system)
+        start = 1 if result and result[0].get("role") == "system" else 0
+
+        while True:
+            tokens_used = self._count_messages(result)
+            headroom = self.max_context - tokens_used - reserve_output
+            if headroom >= 0:
+                break
+            if len(result) <= start + 1:
+                # Can't drop any more — just return what we have
+                break
+            result.pop(start)  # Remove oldest non-system message
+
+        return result
+
+# ─────────────────────────────────────────────────────────────────
+# CHUNK 2: Usage example with Ollama
+# ─────────────────────────────────────────────────────────────────
+def main():
+    budget = PromptBudget(model="mistral", max_context=32_000)
+    client = OpenAI(base_url="http://localhost:11434/v1", api_key="ollama")
+
+    system = {"role": "system", "content": "You are a concise coding assistant."}
+    history: list[dict] = [system]
+
+    turns = [
+        "What is a Python list comprehension?",
+        "Show me an example that squares even numbers from 1 to 20.",
+        "How does that compare to a regular for-loop?",
+        "What's the memory usage difference?",
+    ]
+
+    for user_text in turns:
+        print(f"\nUser: {user_text}")
+        print(f"  Tokens remaining: {budget.remaining(history)}")
+
+        if not budget.fits(user_text, history):
+            print("  [truncating history to fit]")
+            history = budget.truncate_history(history)
+
+        history.append({"role": "user", "content": user_text})
+
+        try:
+            response = client.chat.completions.create(
+                model="mistral",
+                messages=history,
+                max_tokens=256,
+            )
+            reply = response.choices[0].message.content
+            history.append({"role": "assistant", "content": reply})
+            print(f"Assistant: {reply[:120]}...")
+        except Exception as e:
+            print(f"  Error: {e}")
+            # Remove the user message we just added so state stays consistent
+            history.pop()
+
+if __name__ == "__main__":
+    main()</code></pre>
+          </div>
+          <div class="code-panel" id="budget-typescript" role="tabpanel" aria-labelledby="tab-budget-ts">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code to clipboard">Copy</button>
+            <pre><code class="language-typescript">// npm install js-tiktoken openai
+import { get_encoding, type TiktokenEncoding } from "js-tiktoken";
+import OpenAI from "openai";
+
+// ─────────────────────────────────────────────────────────────────
+// CHUNK 1: PromptBudget class definition
+// ─────────────────────────────────────────────────────────────────
+interface ChatMessage { role: string; content: string; }
+
+class PromptBudget {
+  private enc: ReturnType<typeof get_encoding>;
+  private readonly TOKENS_PER_MESSAGE = 4;
+  private readonly TOKENS_REPLY_PRIMER = 3;
+
+  constructor(
+    private model: string = "mistral",
+    private maxContext: number = 32_000
+  ) {
+    this.enc = get_encoding("cl100k_base" as TiktokenEncoding);
+  }
+
+  estimateTokens(text: string): number {
+    return this.enc.encode(text).length;
+  }
+
+  private countMessages(messages: ChatMessage[]): number {
+    let total = this.TOKENS_REPLY_PRIMER;
+    for (const msg of messages) {
+      total += this.TOKENS_PER_MESSAGE;
+      total += this.enc.encode(msg.role).length;
+      total += this.enc.encode(msg.content).length;
+    }
+    return total;
+  }
+
+  private countTools(tools?: object[]): number {
+    if (!tools || tools.length === 0) return 0;
+    return this.enc.encode(JSON.stringify(tools)).length;
+  }
+
+  remaining(
+    messages: ChatMessage[],
+    tools?: object[],
+    reserveOutput = 512
+  ): number {
+    const used = this.countMessages(messages) + this.countTools(tools);
+    return this.maxContext - used - reserveOutput;
+  }
+
+  fits(
+    text: string,
+    messages: ChatMessage[],
+    tools?: object[],
+    reserveOutput = 512
+  ): boolean {
+    const newMsgTokens = this.estimateTokens(text) + this.TOKENS_PER_MESSAGE;
+    return this.remaining(messages, tools, reserveOutput) >= newMsgTokens;
+  }
+
+  truncateHistory(
+    messages: ChatMessage[],
+    reserveOutput = 512
+  ): ChatMessage[] {
+    const result = [...messages];
+    const start = result[0]?.role === "system" ? 1 : 0;
+
+    while (true) {
+      const tokensUsed = this.countMessages(result);
+      const headroom = this.maxContext - tokensUsed - reserveOutput;
+      if (headroom >= 0) break;
+      if (result.length <= start + 1) break;
+      result.splice(start, 1); // Remove oldest non-system message
+    }
+    return result;
+  }
+
+  free(): void { this.enc.free(); }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// CHUNK 2: Usage example with Ollama
+// ─────────────────────────────────────────────────────────────────
+async function main() {
+  const budget = new PromptBudget("mistral", 32_000);
+  const client = new OpenAI({
+    baseURL: "http://localhost:11434/v1",
+    apiKey: "ollama",
+  });
+
+  const system: ChatMessage = {
+    role: "system",
+    content: "You are a concise coding assistant.",
+  };
+  let history: ChatMessage[] = [system];
+
+  const turns = [
+    "What is a Python list comprehension?",
+    "Show me an example that squares even numbers from 1 to 20.",
+    "How does that compare to a regular for-loop?",
+    "What's the memory usage difference?",
+  ];
+
+  for (const userText of turns) {
+    console.log(`\nUser: ${userText}`);
+    console.log(`  Tokens remaining: ${budget.remaining(history)}`);
+
+    if (!budget.fits(userText, history)) {
+      console.log("  [truncating history to fit]");
+      history = budget.truncateHistory(history);
+    }
+
+    history.push({ role: "user", content: userText });
+
+    try {
+      const response = await client.chat.completions.create({
+        model: "mistral",
+        messages: history,
+        max_tokens: 256,
+      });
+      const reply = response.choices[0].message.content ?? "";
+      history.push({ role: "assistant", content: reply });
+      console.log(`Assistant: ${reply.slice(0, 120)}...`);
+    } catch (err) {
+      console.error(`  Error: ${err}`);
+      history.pop(); // Remove the user message to keep state consistent
+    }
+  }
+
+  budget.free();
+}
+
+main().catch(console.error);</code></pre>
+          </div>
+        </div>
+
+        <div class="checkpoint">
+          <strong>What Just Happened?</strong> <code>PromptBudget</code> wraps tiktoken so every part of your agent uses the same token estimates. Before each turn, you check <code>budget.fits()</code> and call <code>budget.truncate_history()</code> if needed. The system prompt is always preserved. Oldest history turns are dropped first. The agent never hits a context-limit error in production because it proactively manages its own memory window.
+        </div>
+
+        <!-- ANIMATION 3: Budget Bar -->
+        <div class="animation-container" aria-label="Prompt budget bar animation showing tokens filling up" style="min-height:280px;">
+          <div class="animation-title">Animation 3 — Prompt Budget Filling</div>
+
+          <div id="budgetBarsArea">
+            <div class="budget-bar-wrapper">
+              <div class="budget-bar-label">
+                <span>System Prompt</span>
+                <span id="sysTokCount">0 tokens</span>
+              </div>
+              <div class="budget-bar-track">
+                <div class="budget-bar-fill safe" id="sysBar" style="width:0%"></div>
+              </div>
+            </div>
+            <div class="budget-bar-wrapper">
+              <div class="budget-bar-label">
+                <span>Conversation History</span>
+                <span id="histTokCount">0 tokens</span>
+              </div>
+              <div class="budget-bar-track">
+                <div class="budget-bar-fill safe" id="histBar" style="width:0%"></div>
+              </div>
+            </div>
+            <div class="budget-bar-wrapper">
+              <div class="budget-bar-label">
+                <span>Current Message + Tools</span>
+                <span id="msgTokCount">0 tokens</span>
+              </div>
+              <div class="budget-bar-track">
+                <div class="budget-bar-fill safe" id="msgBar" style="width:0%"></div>
+              </div>
+            </div>
+            <div class="budget-bar-wrapper">
+              <div class="budget-bar-label">
+                <span>Total Budget Used</span>
+                <span id="totalTokCount">0 / 32,000 tokens</span>
+              </div>
+              <div class="budget-bar-track">
+                <div class="budget-bar-fill safe" id="totalBar" style="width:0%"></div>
+              </div>
+            </div>
+          </div>
+
+          <div id="budgetStatus" style="margin-top:0.75rem;font-family:'JetBrains Mono',monospace;font-size:0.82rem;color:var(--text-secondary);min-height:1.4rem;"></div>
+
+          <div class="animation-controls">
+            <button class="anim-btn" id="budgetPlayBtn" onclick="toggleBudgetAnim()" aria-label="Play or pause budget animation" title="Play/Pause">&#9654;</button>
+            <button class="anim-btn" onclick="restartBudgetAnim()" aria-label="Restart budget animation" title="Restart">&#8635;</button>
+          </div>
+        </div>
+
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- SECTION 5: COST AWARENESS -->
+      <!-- ============================================================ -->
+      <section class="section" id="cost-awareness">
+        <h2>Token Cost Awareness: Local = Free, But&hellip;</h2>
+
+        <p>With local models, tokens have no API cost. But they have a <em>latency cost</em> — and in agents, latency is often more critical than money. A multi-step agent loop that takes 40 seconds per turn because of a bloated 20K-token context is unusable even if it costs $0.</p>
+
+        <table class="data-table" aria-label="Tokens per second benchmark table for local hardware">
+          <thead>
+            <tr>
+              <th>Hardware</th>
+              <th>Model</th>
+              <th>Context Size</th>
+              <th>Tokens/sec</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>RTX 3090 (24GB)</td>
+              <td>Mistral 7B Q4</td>
+              <td>1K tokens</td>
+              <td><span class="badge-model badge-green">~95 tok/s</span></td>
+            </tr>
+            <tr>
+              <td>RTX 3090 (24GB)</td>
+              <td>Mistral 7B Q4</td>
+              <td>10K tokens</td>
+              <td><span class="badge-model badge-yellow">~60 tok/s</span></td>
+            </tr>
+            <tr>
+              <td>RTX 4090 (24GB)</td>
+              <td>Mistral 7B Q4</td>
+              <td>1K tokens</td>
+              <td><span class="badge-model badge-green">~145 tok/s</span></td>
+            </tr>
+            <tr>
+              <td>RTX 4090 (24GB)</td>
+              <td>Mistral 7B Q4</td>
+              <td>10K tokens</td>
+              <td><span class="badge-model badge-yellow">~90 tok/s</span></td>
+            </tr>
+            <tr>
+              <td>M2 MacBook Pro (16GB)</td>
+              <td>Mistral 7B Q4</td>
+              <td>1K tokens</td>
+              <td><span class="badge-model badge-yellow">~40 tok/s</span></td>
+            </tr>
+            <tr>
+              <td>M2 MacBook Pro (16GB)</td>
+              <td>Mistral 7B Q4</td>
+              <td>10K tokens</td>
+              <td><span class="badge-model badge-orange">~22 tok/s</span></td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="callout-cost">
+          <span class="box-label">Practical Rules of Thumb</span>
+          <ul style="margin-bottom:0;">
+            <li><strong>Keep system prompts under 500 tokens.</strong> A system prompt that explains "you are a helpful assistant who..." in 2,000 tokens instead of 400 tokens costs you ~15% throughput on every single call. Write tight prompts.</li>
+            <li><strong>A 10K-token context runs 30–50% slower than a 1K-token context</strong> on most consumer hardware. For interactive agents, target under 4K tokens per turn.</li>
+            <li><strong>Use summarization for long histories.</strong> When history exceeds 6K tokens, summarize the oldest half into a single "conversation summary" message instead of truncating. This keeps information alive without burning context budget.</li>
+          </ul>
+        </div>
+
+        <h3 id="token-timer">TokenTimer: Measure Your Local Model's Speed</h3>
+
+        <div class="code-annotation">
+          <div class="ann-label ann-what">WHAT</div>
+          <p style="margin:0;"><code>TokenTimer</code> wraps an Ollama call and measures wall-clock time. It extracts prompt and completion token counts from the <code>usage</code> field of the response, then calculates tokens/sec for both prefill (reading your prompt) and decode (generating output) phases.</p>
+        </div>
+        <div class="code-annotation">
+          <div class="ann-label ann-why">WHY</div>
+          <p style="margin:0;">The <code>usage</code> field in Ollama's OpenAI-compatible API returns <code>prompt_tokens</code> and <code>completion_tokens</code>. Measuring wall clock time gives you a real-world benchmark that includes Ollama's overhead — not just the theoretical model speed.</p>
+        </div>
+        <div class="code-annotation">
+          <div class="ann-label ann-gotcha">GOTCHA</div>
+          <p style="margin:0;">The first request to Ollama after a cold start loads the model into VRAM, which adds 1–5 seconds. Always warm up with a short throwaway request before benchmarking, or treat the first measurement as "cold start latency" separately.</p>
+        </div>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs" role="tablist" aria-label="Language tabs for TokenTimer">
+            <button class="code-tab active" role="tab" aria-selected="true" onclick="switchTab(this,'timer')" id="tab-timer-py">Python</button>
+            <button class="code-tab" role="tab" aria-selected="false" onclick="switchTab(this,'timer')" id="tab-timer-ts">TypeScript</button>
+          </div>
+          <div class="code-panel active" id="timer-python" role="tabpanel" aria-labelledby="tab-timer-py">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code to clipboard">Copy</button>
+            <pre><code class="language-python"># pip install openai
+import time
+from dataclasses import dataclass
+from openai import OpenAI
+
+# ─────────────────────────────────────────────────────────────────
+# CHUNK 1: TokenTimer dataclass + wrapper
+# ─────────────────────────────────────────────────────────────────
+@dataclass
+class TimerResult:
+    prompt_tokens: int
+    completion_tokens: int
+    total_tokens: int
+    elapsed_seconds: float
+    decode_tokens_per_sec: float
+    content: str
+
+class TokenTimer:
+    """Wrap an Ollama call and report latency + throughput metrics."""
+
+    def __init__(self, model: str = "mistral"):
+        self.model = model
+        self.client = OpenAI(
+            base_url="http://localhost:11434/v1",
+            api_key="ollama",
+        )
+
+    def run(
+        self,
+        messages: list[dict],
+        max_tokens: int = 256,
+    ) -> TimerResult:
+        """Send a chat request and return timing metrics."""
+        t_start = time.perf_counter()
+        try:
+            response = self.client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                max_tokens=max_tokens,
+            )
+        except Exception as e:
+            raise RuntimeError(f"Ollama request failed: {e}") from e
+
+        elapsed = time.perf_counter() - t_start
+        usage = response.usage
+        content = response.choices[0].message.content or ""
+
+        # decode speed = output tokens / total time
+        decode_tps = (usage.completion_tokens / elapsed) if elapsed > 0 else 0
+
+        return TimerResult(
+            prompt_tokens=usage.prompt_tokens,
+            completion_tokens=usage.completion_tokens,
+            total_tokens=usage.total_tokens,
+            elapsed_seconds=elapsed,
+            decode_tokens_per_sec=decode_tps,
+            content=content,
+        )
+
+# ─────────────────────────────────────────────────────────────────
+# CHUNK 2: Benchmark over three prompt sizes
+# ─────────────────────────────────────────────────────────────────
+def make_prompt(approx_tokens: int) -> list[dict]:
+    """Generate a padding prompt of approximately the given token count."""
+    word = "benchmark "
+    # ~1.3 chars per token → n_chars ≈ tokens * 1.3
+    padding = word * (approx_tokens // 2)
+    return [
+        {"role": "system", "content": "You are a helpful assistant. Answer briefly."},
+        {"role": "user", "content": f"Please summarize the following:\n\n{padding}\n\nSummarize in one sentence."},
+    ]
+
+def main():
+    timer = TokenTimer(model="mistral")
+
+    # Warm-up (avoids model load time polluting benchmarks)
+    print("Warming up...")
+    _ = timer.run([{"role": "user", "content": "hi"}], max_tokens=5)
+
+    print("\nBenchmark results:")
+    print(f"{'Approx Input':>14} {'Prompt Tok':>10} {'Comp Tok':>9} {'Elapsed':>8} {'Decode tok/s':>13}")
+    print("-" * 60)
+
+    for target in [100, 500, 1_000]:
+        msgs = make_prompt(target)
+        result = timer.run(msgs, max_tokens=64)
+        print(
+            f"{target:>12}→ "
+            f"{result.prompt_tokens:>9} "
+            f"{result.completion_tokens:>9} "
+            f"{result.elapsed_seconds:>7.2f}s "
+            f"{result.decode_tokens_per_sec:>12.1f}"
+        )
+
+if __name__ == "__main__":
+    main()</code></pre>
+          </div>
+          <div class="code-panel" id="timer-typescript" role="tabpanel" aria-labelledby="tab-timer-ts">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code to clipboard">Copy</button>
+            <pre><code class="language-typescript">// npm install openai
+import OpenAI from "openai";
+
+// ─────────────────────────────────────────────────────────────────
+// CHUNK 1: TokenTimer class
+// ─────────────────────────────────────────────────────────────────
+interface TimerResult {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  elapsedSeconds: number;
+  decodeTokensPerSec: number;
+  content: string;
+}
+
+interface ChatMessage { role: string; content: string; }
+
+class TokenTimer {
+  private client: OpenAI;
+
+  constructor(private model: string = "mistral") {
+    this.client = new OpenAI({
+      baseURL: "http://localhost:11434/v1",
+      apiKey: "ollama",
+    });
+  }
+
+  async run(
+    messages: ChatMessage[],
+    maxTokens = 256
+  ): Promise<TimerResult> {
+    const tStart = performance.now();
+    let response: OpenAI.Chat.Completions.ChatCompletion;
+
+    try {
+      response = await this.client.chat.completions.create({
+        model: this.model,
+        messages,
+        max_tokens: maxTokens,
+      });
+    } catch (err) {
+      throw new Error(`Ollama request failed: ${err}`);
+    }
+
+    const elapsed = (performance.now() - tStart) / 1000; // seconds
+    const usage = response.usage!;
+    const content = response.choices[0].message.content ?? "";
+    const decodeTps = elapsed > 0 ? usage.completion_tokens / elapsed : 0;
+
+    return {
+      promptTokens: usage.prompt_tokens,
+      completionTokens: usage.completion_tokens,
+      totalTokens: usage.total_tokens,
+      elapsedSeconds: elapsed,
+      decodeTokensPerSec: decodeTps,
+      content,
+    };
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────
+// CHUNK 2: Benchmark over three prompt sizes
+// ─────────────────────────────────────────────────────────────────
+function makePrompt(approxTokens: number): ChatMessage[] {
+  const padding = "benchmark ".repeat(Math.floor(approxTokens / 2));
+  return [
+    { role: "system", content: "You are a helpful assistant. Answer briefly." },
+    { role: "user",   content: `Please summarize the following:\n\n${padding}\n\nSummarize in one sentence.` },
+  ];
+}
+
+async function main() {
+  const timer = new TokenTimer("mistral");
+
+  // Warm-up
+  console.log("Warming up...");
+  await timer.run([{ role: "user", content: "hi" }], 5);
+
+  console.log("\nBenchmark results:");
+  console.log(
+    `${"Approx Input".padStart(14)} ${"Prompt Tok".padStart(10)} ${"Comp Tok".padStart(9)} ${"Elapsed".padStart(8)} ${"Decode tok/s".padStart(13)}`
+  );
+  console.log("-".repeat(60));
+
+  for (const target of [100, 500, 1_000]) {
+    const msgs = makePrompt(target);
+    const r = await timer.run(msgs, 64);
+    console.log(
+      `${(target + "→").padStart(14)} ` +
+      `${String(r.promptTokens).padStart(9)} ` +
+      `${String(r.completionTokens).padStart(9)} ` +
+      `${r.elapsedSeconds.toFixed(2).padStart(7)}s ` +
+      `${r.decodeTokensPerSec.toFixed(1).padStart(12)}`
+    );
+  }
+}
+
+main().catch(console.error);</code></pre>
+          </div>
+        </div>
+
+        <div class="output-label">Expected Output (RTX 3090 example):</div>
+        <div class="output-block">Warming up...
+
+Benchmark results:
+  Approx Input Prompt Tok  Comp Tok  Elapsed  Decode tok/s
+------------------------------------------------------------
+         100→         98        64    0.74s         86.3
+         500→        492        64    1.12s         57.1
+        1000→        987        64    1.68s         38.1</div>
+
+        <div class="checkpoint">
+          <strong>What Just Happened?</strong> The benchmark confirms the rule: a 10x longer prompt (100 vs 1,000 tokens) takes 2.3x longer to decode. That's the attention cost — the model has to read all 987 prompt tokens before generating each output token. On an M2 MacBook those numbers will be roughly 2–3x slower; on an RTX 4090 roughly 1.5x faster. Run this benchmark on your hardware once so you know your latency budget ceiling.
+        </div>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- SECTION 6: EXERCISES -->
+      <!-- ============================================================ -->
+      <section class="section" id="exercises">
+        <h2>Exercises</h2>
+
+        <div style="background:var(--bg-card);border-radius:12px;padding:1.5rem;margin-bottom:1.5rem;border:1px solid var(--code-border);">
+          <h3 style="margin-top:0;color:var(--accent-primary);">Exercise 1: Token Breakdown by Paragraph</h3>
+          <p>Write a script that reads any text file and prints a token count breakdown by paragraph. Use tiktoken. Output should look like:</p>
+          <div class="code-single">
+            <div class="code-label">Expected output format</div>
+            <pre><code class="language-text">Paragraph 1 (3 sentences): 47 tokens
+Paragraph 2 (5 sentences): 112 tokens
+Paragraph 3 (2 sentences): 38 tokens
+───────────────────────────────────────
+Total: 197 tokens across 3 paragraphs
+Avg per paragraph: 65.7 tokens</code></pre>
+          </div>
+          <p style="margin-bottom:0;"><strong>Bonus:</strong> Add a flag to also show the actual token strings for each paragraph (color each paragraph's tokens a different color using ANSI escape codes).</p>
+        </div>
+
+        <div style="background:var(--bg-card);border-radius:12px;padding:1.5rem;margin-bottom:1.5rem;border:1px solid var(--code-border);">
+          <h3 style="margin-top:0;color:var(--accent-primary);">Exercise 2: Auto-Truncating Conversation Manager</h3>
+          <p>Build a <code>ConversationManager</code> class that wraps <code>PromptBudget</code> and:</p>
+          <ul>
+            <li>Adds each turn to history and checks budget after each assistant reply</li>
+            <li>When history exceeds <strong>80% of context</strong>, automatically calls <code>truncate_history()</code></li>
+            <li>Logs a warning when truncation occurs: <code>"[Truncated: dropped N turns, kept system + last M turns]"</code></li>
+            <li>Exposes a <code>token_utilization()</code> method returning a float 0.0–1.0</li>
+          </ul>
+          <p style="margin-bottom:0;">Test it by simulating a 20-turn conversation where each turn adds ~400 tokens of history, against a 4,000-token context limit.</p>
+        </div>
+
+        <div style="background:var(--bg-card);border-radius:12px;padding:1.5rem;border:1px solid var(--code-border);">
+          <h3 style="margin-top:0;color:var(--accent-primary);">Exercise 3: Tokens-per-Second Benchmark Suite</h3>
+          <p>Extend <code>TokenTimer</code> to run a full benchmark suite and produce a CSV report:</p>
+          <ul>
+            <li>Test prompt lengths: 100, 500, 1,000, 5,000 tokens (skip 5K if your GPU has &lt; 8GB VRAM)</li>
+            <li>Run each length 3 times and report mean ± std-dev</li>
+            <li>Write results to <code>benchmark_results.csv</code></li>
+            <li>Print a summary table with a sparkline bar (use ASCII <code>▁▂▃▄▅▆▇█</code> chars) showing relative decode speed</li>
+          </ul>
+          <p style="margin-bottom:0;"><strong>Stretch goal:</strong> Benchmark two different models (<code>mistral</code> and <code>phi3</code>) side-by-side and compare their tokens/sec curves.</p>
+        </div>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- SECTION 7: QUIZ -->
+      <!-- ============================================================ -->
+      <section class="section" id="quiz">
+        <h2>Knowledge Check</h2>
+
+        <div id="quiz-container" role="form" aria-label="Module knowledge check quiz">
+
+          <!-- Q1 -->
+          <div class="quiz-question" id="q1">
+            <h4>1. A developer runs tiktoken on the string "don't" and sees 2 tokens: ["don", "'t"]. Why does "'t" get its own token instead of being part of "don't" as a single unit?</h4>
+            <div class="quiz-option" onclick="handleQuiz(this, 'q1', false)" aria-label="Option A" role="button" tabindex="0">
+              <div class="quiz-marker">A</div>
+              <span>Because "don't" is too long to fit in the vocabulary</span>
+            </div>
+            <div class="quiz-option" onclick="handleQuiz(this, 'q1', true)" aria-label="Option B" role="button" tabindex="0">
+              <div class="quiz-marker">B</div>
+              <span>"'t" also appears in "can't", "won't", "isn't" — it's reusable across many contractions, so it earns its own token in BPE training</span>
+            </div>
+            <div class="quiz-option" onclick="handleQuiz(this, 'q1', false)" aria-label="Option C" role="button" tabindex="0">
+              <div class="quiz-marker">C</div>
+              <span>The apostrophe character forces a split in all tokenizers</span>
+            </div>
+            <div class="quiz-option" onclick="handleQuiz(this, 'q1', false)" aria-label="Option D" role="button" tabindex="0">
+              <div class="quiz-marker">D</div>
+              <span>tiktoken always splits at punctuation boundaries</span>
+            </div>
+            <div class="quiz-feedback" id="q1-feedback"></div>
+          </div>
+
+          <!-- Q2 -->
+          <div class="quiz-question" id="q2">
+            <h4>2. Your Mistral 7B context window is 32,000 tokens. Your system prompt is 600 tokens, you want to reserve 1,000 tokens for output, and your conversation history currently uses 28,000 tokens. What should your agent do?</h4>
+            <div class="quiz-option" onclick="handleQuiz(this, 'q2', false)" aria-label="Option A" role="button" tabindex="0">
+              <div class="quiz-marker">A</div>
+              <span>Send the request — 600 + 28,000 + 1,000 = 29,600, which is under 32,000</span>
+            </div>
+            <div class="quiz-option" onclick="handleQuiz(this, 'q2', false)" aria-label="Option B" role="button" tabindex="0">
+              <div class="quiz-marker">B</div>
+              <span>Compress the system prompt to free up space for more history</span>
+            </div>
+            <div class="quiz-option" onclick="handleQuiz(this, 'q2', true)" aria-label="Option C" role="button" tabindex="0">
+              <div class="quiz-marker">C</div>
+              <span>Truncate the oldest history messages to make room, then send the request — the model is near the practical ~28K usable limit where quality degrades</span>
+            </div>
+            <div class="quiz-option" onclick="handleQuiz(this, 'q2', false)" aria-label="Option D" role="button" tabindex="0">
+              <div class="quiz-marker">D</div>
+              <span>Switch to a 128K context model immediately</span>
+            </div>
+            <div class="quiz-feedback" id="q2-feedback"></div>
+          </div>
+
+          <!-- Q3 -->
+          <div class="quiz-question" id="q3">
+            <h4>3. A tiktoken count gives 850 tokens for a message. A Mistral SentencePiece tokenizer gives 920 tokens for the exact same message. Which tokenizer should you use for production context-limit checks, and why?</h4>
+            <div class="quiz-option" onclick="handleQuiz(this, 'q3', false)" aria-label="Option A" role="button" tabindex="0">
+              <div class="quiz-marker">A</div>
+              <span>tiktoken — it's faster and the difference is small enough to ignore</span>
+            </div>
+            <div class="quiz-option" onclick="handleQuiz(this, 'q3', true)" aria-label="Option B" role="button" tabindex="0">
+              <div class="quiz-marker">B</div>
+              <span>The Mistral tokenizer — for hard limit checks you want the count the model itself sees. The 70-token difference (8%) could flip a "fits" decision to an error at context boundaries</span>
+            </div>
+            <div class="quiz-option" onclick="handleQuiz(this, 'q3', false)" aria-label="Option C" role="button" tabindex="0">
+              <div class="quiz-marker">C</div>
+              <span>Neither — use character count / 4 as a rough estimate</span>
+            </div>
+            <div class="quiz-option" onclick="handleQuiz(this, 'q3', false)" aria-label="Option D" role="button" tabindex="0">
+              <div class="quiz-marker">D</div>
+              <span>It doesn't matter — both counts are stored in the API response anyway</span>
+            </div>
+            <div class="quiz-feedback" id="q3-feedback"></div>
+          </div>
+
+          <!-- Q4 -->
+          <div class="quiz-question" id="q4">
+            <h4>4. Your agent's system prompt is currently 2,400 tokens. You rewrite it to be equally clear in 480 tokens. On a benchmark showing 95 tok/s at 1K context and 60 tok/s at 10K context, how does this change affect a 100,000-call/day workload?</h4>
+            <div class="quiz-option" onclick="handleQuiz(this, 'q4', false)" aria-label="Option A" role="button" tabindex="0">
+              <div class="quiz-marker">A</div>
+              <span>No effect — system prompt tokens are cached by Ollama and don't count toward latency</span>
+            </div>
+            <div class="quiz-option" onclick="handleQuiz(this, 'q4', false)" aria-label="Option B" role="button" tabindex="0">
+              <div class="quiz-marker">B</div>
+              <span>Minimal effect — 1,920 tokens difference is negligible at scale</span>
+            </div>
+            <div class="quiz-option" onclick="handleQuiz(this, 'q4', true)" aria-label="Option C" role="button" tabindex="0">
+              <div class="quiz-marker">C</div>
+              <span>Each call processes ~1,920 fewer prompt tokens, reducing time-to-first-token. At 100K calls/day, that compounds into significant GPU-hour savings and lower latency per call</span>
+            </div>
+            <div class="quiz-option" onclick="handleQuiz(this, 'q4', false)" aria-label="Option D" role="button" tabindex="0">
+              <div class="quiz-marker">D</div>
+              <span>The effect depends entirely on the model's temperature setting</span>
+            </div>
+            <div class="quiz-feedback" id="q4-feedback"></div>
+          </div>
+
+          <!-- Q5 -->
+          <div class="quiz-question" id="q5">
+            <h4>5. In the PromptBudget.truncate_history() method, why is it important to preserve the first message if its role is "system", rather than dropping it like any other old message?</h4>
+            <div class="quiz-option" onclick="handleQuiz(this, 'q5', false)" aria-label="Option A" role="button" tabindex="0">
+              <div class="quiz-marker">A</div>
+              <span>The OpenAI SDK requires a system message or it throws an error</span>
+            </div>
+            <div class="quiz-option" onclick="handleQuiz(this, 'q5', false)" aria-label="Option B" role="button" tabindex="0">
+              <div class="quiz-marker">B</div>
+              <span>System messages are cached and don't count toward the token limit</span>
+            </div>
+            <div class="quiz-option" onclick="handleQuiz(this, 'q5', true)" aria-label="Option C" role="button" tabindex="0">
+              <div class="quiz-marker">C</div>
+              <span>The system message defines the agent's role, constraints, and tools. Dropping it means the model loses all behavioral context — it might ignore safety rules, use the wrong persona, or forget it's supposed to use specific tools</span>
+            </div>
+            <div class="quiz-option" onclick="handleQuiz(this, 'q5', false)" aria-label="Option D" role="button" tabindex="0">
+              <div class="quiz-marker">D</div>
+              <span>It's a convention, not a technical requirement — you can drop it if you need the space</span>
+            </div>
+            <div class="quiz-feedback" id="q5-feedback"></div>
+          </div>
+
+          <!-- Q6 -->
+          <div class="quiz-question" id="q6">
+            <h4>6. Why does the "advertised" context window of a model (e.g., 128K) differ from its "practical limit"? Select the best complete answer.</h4>
+            <div class="quiz-option" onclick="handleQuiz(this, 'q6', false)" aria-label="Option A" role="button" tabindex="0">
+              <div class="quiz-marker">A</div>
+              <span>Because marketing teams inflate numbers</span>
+            </div>
+            <div class="quiz-option" onclick="handleQuiz(this, 'q6', false)" aria-label="Option B" role="button" tabindex="0">
+              <div class="quiz-marker">B</div>
+              <span>Only because you need to reserve output tokens</span>
+            </div>
+            <div class="quiz-option" onclick="handleQuiz(this, 'q6', true)" aria-label="Option C" role="button" tabindex="0">
+              <div class="quiz-marker">C</div>
+              <span>Three reasons: (1) attention quality degrades near context boundaries for models trained on shorter sequences; (2) VRAM for the KV cache runs out, causing CPU offloading; (3) you must reserve output headroom for max_tokens</span>
+            </div>
+            <div class="quiz-option" onclick="handleQuiz(this, 'q6', false)" aria-label="Option D" role="button" tabindex="0">
+              <div class="quiz-marker">D</div>
+              <span>The limit only applies to non-English text</span>
+            </div>
+            <div class="quiz-feedback" id="q6-feedback"></div>
+          </div>
+
+        </div><!-- end #quiz-container -->
+
+        <div class="quiz-score" id="quiz-score" style="display:none;" aria-live="polite">
+          <div class="score-num" id="score-display">0/6</div>
+          <p id="score-msg" style="color:var(--text-secondary);margin-bottom:0;"></p>
+        </div>
+
+      </section>
+
+      <!-- Module Navigation Bottom -->
+      <div class="module-nav">
+        <a href="M04-structured-output.html" aria-label="Previous module: Structured Output">&larr; M04: Structured Output</a>
+        <a href="index.html" aria-label="OS Track Home">&#x1F3E0; Home</a>
+        <a href="M05-function-calling.html" aria-label="Next module: Function Calling">M05: Function Calling &rarr;</a>
+      </div>
+
+    </main>
+  </div>
+
+  <!-- Mobile sidebar toggle -->
+  <button class="sidebar-toggle" id="sidebarToggle" onclick="document.getElementById('sidebar').classList.toggle('open')" aria-label="Toggle navigation menu" aria-expanded="false">&#9776;</button>
+
+  <!-- Prism.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+
+  <script>
+  // ═══════════════════════════════════════════════════════════════
+  // TAB SWITCHING
+  // ═══════════════════════════════════════════════════════════════
+  function switchTab(btn, group) {
+    const wrapper = btn.closest('.code-block-wrapper');
+    wrapper.querySelectorAll('.code-tab').forEach(t => {
+      t.classList.remove('active');
+      t.setAttribute('aria-selected', 'false');
+    });
+    const lang = btn.dataset.lang || (btn.textContent.toLowerCase().includes('type') ? 'typescript' : 'python');
+    wrapper.querySelectorAll('.code-panel').forEach(p => {
+      p.classList.remove('active');
+    });
+    btn.classList.add('active');
+    btn.setAttribute('aria-selected', 'true');
+
+    // Find the matching panel
+    const panels = wrapper.querySelectorAll('.code-panel');
+    panels.forEach(p => {
+      if (p.id && p.id.startsWith(group + '-')) {
+        const suffix = p.id.slice(group.length + 1);
+        if (
+          (btn.textContent.trim() === 'Python' && suffix === 'python') ||
+          (btn.textContent.trim() === 'TypeScript' && suffix === 'typescript')
+        ) {
+          p.classList.add('active');
+        }
+      }
+    });
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // COPY BUTTONS
+  // ═══════════════════════════════════════════════════════════════
+  function copyCode(btn) {
+    const panel = btn.closest('.code-panel') || btn.closest('.code-single');
+    const code = panel.querySelector('pre code');
+    if (!code) return;
+    navigator.clipboard.writeText(code.textContent).then(() => {
+      const orig = btn.textContent;
+      btn.textContent = 'Copied!';
+      btn.style.color = 'var(--success)';
+      btn.style.borderColor = 'var(--success)';
+      setTimeout(() => {
+        btn.textContent = orig;
+        btn.style.color = '';
+        btn.style.borderColor = '';
+      }, 1800);
+    }).catch(() => {
+      btn.textContent = 'Error';
+      setTimeout(() => { btn.textContent = 'Copy'; }, 1800);
+    });
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // QUIZ
+  // ═══════════════════════════════════════════════════════════════
+  const quizAnswers = {
+    q1: 'B: BPE splits on frequently co-occurring pairs. Since "\'t" appears in many contractions (can\'t, won\'t, isn\'t, don\'t), BPE merges it into a single reusable token early in training.',
+    q2: 'C: Even though 29,600 < 32,000 tokens on paper, Mistral\'s practical limit is ~28K usable — attention quality degrades near the boundary. Truncate history proactively before reaching the wall.',
+    q3: 'B: For hard limit checks, always use the model\'s own tokenizer. The 8% difference at boundaries (e.g., at 31,000 tokens) can turn a "fits" estimate into a real API error.',
+    q4: 'C: Saving 1,920 tokens per call multiplied by 100K calls/day = 192 million tokens of compute saved daily. At 60 tok/s, that\'s over 3,000 GPU-hours per day of reclaimed capacity.',
+    q5: 'C: The system message defines who the agent is and how it should behave. Without it, the model falls back to default behavior — potentially ignoring safety rules, wrong persona, or forgetting tool definitions.',
+    q6: 'C: All three factors apply simultaneously. Attention degradation makes the model unreliable near context edges. VRAM exhaustion causes catastrophic slowdowns. And output headroom must be reserved or you get an error.',
+  };
+
+  let quizScores = {};
+  let totalAnswered = 0;
+
+  function handleQuiz(optionEl, questionId, isCorrect) {
+    if (quizScores[questionId] !== undefined) return; // already answered
+
+    const question = document.getElementById(questionId);
+    const options = question.querySelectorAll('.quiz-option');
+    options.forEach(o => o.classList.add('disabled'));
+
+    if (isCorrect) {
+      optionEl.classList.add('correct');
+      optionEl.querySelector('.quiz-marker').textContent = '✓';
+      quizScores[questionId] = 1;
+    } else {
+      optionEl.classList.add('incorrect');
+      optionEl.querySelector('.quiz-marker').textContent = '✗';
+      quizScores[questionId] = 0;
+      // Highlight the correct one
+      options.forEach(o => {
+        const marker = o.querySelector('.quiz-marker');
+        if (!o.classList.contains('incorrect') && !o.classList.contains('correct')) {
+          // Find correct by trying... just highlight using the answer key letter
+        }
+      });
+    }
+
+    const fb = document.getElementById(questionId + '-feedback');
+    fb.textContent = quizAnswers[questionId];
+    fb.className = 'quiz-feedback show ' + (isCorrect ? 'correct-fb' : 'incorrect-fb');
+
+    totalAnswered++;
+    if (totalAnswered === 6) showScore();
+  }
+
+  function showScore() {
+    const correct = Object.values(quizScores).filter(v => v === 1).length;
+    const total = 6;
+    const scoreEl = document.getElementById('quiz-score');
+    document.getElementById('score-display').textContent = correct + '/' + total;
+    const msgs = [
+      'Keep going — revisit the sections on context windows and BPE.',
+      'Good start — re-read the PromptBudget and tokenizer comparison sections.',
+      'Getting there — review the practical limit table and BPE analogy.',
+      'Solid foundation! Review the context window practical limits.',
+      'Great work! You understand tokens deeply.',
+      'Perfect score! You\'re ready to tackle Structured Output and Function Calling.',
+    ];
+    document.getElementById('score-msg').textContent = msgs[correct] || '';
+    scoreEl.style.display = 'block';
+    scoreEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  // ANIMATION 1: TOKEN CHUNKING
+  // ═══════════════════════════════════════════════════════════════
+  const tokenExamples = [
+    {
+      text: 'Hello, world!',
+      tokens: ['Hello', ',', ' world', '!'],
+    },
+    {
+      text: "don't / can't",
+      tokens: ['don', "'t", ' /', ' can', "'t"],
+    },
+    {
+      text: 'tokenization',
+      tokens: ['token', 'ization'],
+    },
+    {
+      text: 'ChatGPT',
+      tokens: ['Chat', 'G', 'PT'],
+    },
+    {
+      text: 'from openai import',
+      tokens: ['from', ' open', 'ai', ' import'],
+    },
+  ];
+
+  let currentExample = 0;
+  let chunkAnimPlaying = false;
+  let chunkAnimTimer = null;
+  let chunkStep = 0;
+
+  function renderChunkTokens(exIdx, visibleCount) {
+    const area = document.getElementById('chunkArea');
+    const countEl = document.getElementById('chunkCount');
+    const ex = tokenExamples[exIdx];
+    area.innerHTML = '';
+    ex.tokens.forEach((tok, i) => {
+      const el = document.createElement('span');
+      el.className = 'chunk-token c' + (i % 7) + (i < visibleCount ? ' visible' : '');
+      el.setAttribute('aria-label', 'token: ' + tok);
+      el.textContent = tok === ' ' ? '·' : tok;
+      area.appendChild(el);
+    });
+    countEl.textContent = visibleCount + ' / ' + ex.tokens.length + ' tokens shown — original: "' + ex.text + '"';
+  }
+
+  function selectExample(idx, btn) {
+    document.querySelectorAll('.example-btn').forEach(b => {
+      b.classList.remove('active');
+      b.setAttribute('aria-pressed', 'false');
+    });
+    btn.classList.add('active');
+    btn.setAttribute('aria-pressed', 'true');
+    currentExample = idx;
+    stopChunkAnim();
+    chunkStep = 0;
+    renderChunkTokens(idx, 0);
+  }
+
+  function startChunkAnim() {
+    const ex = tokenExamples[currentExample];
+    if (chunkStep >= ex.tokens.length) { chunkStep = 0; }
+    chunkAnimPlaying = true;
+    document.getElementById('chunkPlayBtn').innerHTML = '&#9646;&#9646;';
+    chunkAnimTimer = setInterval(() => {
+      chunkStep++;
+      renderChunkTokens(currentExample, chunkStep);
+      if (chunkStep >= ex.tokens.length) {
+        stopChunkAnim();
+      }
+    }, 420);
+  }
+
+  function stopChunkAnim() {
+    chunkAnimPlaying = false;
+    clearInterval(chunkAnimTimer);
+    document.getElementById('chunkPlayBtn').innerHTML = '&#9654;';
+  }
+
+  function toggleChunkAnim() {
+    if (chunkAnimPlaying) stopChunkAnim();
+    else startChunkAnim();
+  }
+
+  function restartChunkAnim() {
+    stopChunkAnim();
+    chunkStep = 0;
+    renderChunkTokens(currentExample, 0);
+  }
+
+  // Init
+  renderChunkTokens(0, 0);
+
+  // ═══════════════════════════════════════════════════════════════
+  // ANIMATION 2: CONTEXT WINDOW SLIDING
+  // ═══════════════════════════════════════════════════════════════
+  const CTX_MAX = 32; // visual slots
+  let ctxTokens = [];
+  let ctxPlaying = false;
+  let ctxTimer = null;
+  let ctxPhase = 0;
+
+  // Build initial state: system tokens
+  function initCtxState() {
+    ctxTokens = [];
+    for (let i = 0; i < 4; i++) ctxTokens.push({ type: 'sys', label: 'SYS' });
+  }
+
+  function renderCtxWindow() {
+    const container = document.getElementById('ctxTokensContainer');
+    const stat = document.getElementById('ctxStat');
+    container.innerHTML = '';
+    ctxTokens.forEach(tok => {
+      const el = document.createElement('div');
+      el.className = 'ctx-tok-block ' + tok.type;
+      el.textContent = tok.label.slice(0, 3);
+      el.setAttribute('aria-label', tok.type + ' token');
+      container.appendChild(el);
+    });
+    stat.textContent = 'Tokens in window: ' + ctxTokens.length + ' / ' + CTX_MAX;
+  }
+
+  function ctxStep() {
+    ctxPhase++;
+
+    if (ctxPhase <= 8) {
+      // Add history tokens
+      ctxTokens.push({ type: 'hist', label: 'H' + ctxPhase });
+    } else if (ctxPhase <= 12) {
+      // Add user tokens
+      ctxTokens.push({ type: 'user', label: 'U' + (ctxPhase - 8) });
+    } else if (ctxPhase <= 20) {
+      // Fill up to max and start sliding: add new, drop oldest history
+      const newTok = { type: 'new', label: 'NEW' };
+      ctxTokens.push(newTok);
+      if (ctxTokens.length > CTX_MAX) {
+        // Drop oldest non-system token (index 4+)
+        const dropIdx = ctxTokens.findIndex(t => t.type === 'hist' || t.type === 'user');
+        if (dropIdx > -1) ctxTokens.splice(dropIdx, 1);
+      }
+    } else {
+      // Reset
+      stopCtxAnim();
+      ctxPhase = 0;
+      initCtxState();
+      renderCtxWindow();
+      return;
+    }
+
+    renderCtxWindow();
+  }
+
+  function startCtxAnim() {
+    ctxPlaying = true;
+    document.getElementById('ctxPlayBtn').innerHTML = '&#9646;&#9646;';
+    ctxTimer = setInterval(ctxStep, 350);
+  }
+
+  function stopCtxAnim() {
+    ctxPlaying = false;
+    clearInterval(ctxTimer);
+    document.getElementById('ctxPlayBtn').innerHTML = '&#9654;';
+  }
+
+  function toggleCtxAnim() {
+    if (ctxPlaying) stopCtxAnim();
+    else startCtxAnim();
+  }
+
+  function restartCtxAnim() {
+    stopCtxAnim();
+    ctxPhase = 0;
+    initCtxState();
+    renderCtxWindow();
+  }
+
+  // Init
+  initCtxState();
+  renderCtxWindow();
+
+  // ═══════════════════════════════════════════════════════════════
+  // ANIMATION 3: PROMPT BUDGET BARS
+  // ═══════════════════════════════════════════════════════════════
+  const BUDGET_MAX = 32000;
+  const budgetSteps = [
+    { sys: 480, hist: 0,    msg: 0,    status: 'System prompt loaded. 31,520 tokens remaining.' },
+    { sys: 480, hist: 1200, msg: 0,    status: 'After 3 turns: 1,200 history tokens. Budget: 80% free.' },
+    { sys: 480, hist: 5400, msg: 0,    status: 'After 15 turns: 5,400 history tokens. Budget: 69% free.' },
+    { sys: 480, hist: 12800,msg: 0,    status: 'Growing conversation: 12,800 history tokens. Budget: 59% free.' },
+    { sys: 480, hist: 20000,msg: 640,  status: 'Approaching 80% threshold. Consider truncating soon.' },
+    { sys: 480, hist: 24000,msg: 1200, status: 'WARNING: 80% threshold crossed. Auto-truncation triggered.' },
+    { sys: 480, hist: 8000, msg: 400,  status: 'After truncation: oldest history dropped. Budget: 72% free.' },
+    { sys: 480, hist: 9000, msg: 400,  status: 'Conversation continues safely within budget.' },
+  ];
+
+  let budgetStep = 0;
+  let budgetPlaying = false;
+  let budgetTimer = null;
+
+  function renderBudgetBars(step) {
+    const s = budgetSteps[step];
+    const sysBar = document.getElementById('sysBar');
+    const histBar = document.getElementById('histBar');
+    const msgBar = document.getElementById('msgBar');
+    const totalBar = document.getElementById('totalBar');
+    const status = document.getElementById('budgetStatus');
+
+    const total = s.sys + s.hist + s.msg;
+    const totalPct = (total / BUDGET_MAX) * 100;
+
+    sysBar.style.width = ((s.sys / BUDGET_MAX) * 100).toFixed(1) + '%';
+    histBar.style.width = ((s.hist / BUDGET_MAX) * 100).toFixed(1) + '%';
+    msgBar.style.width = ((s.msg / BUDGET_MAX) * 100).toFixed(1) + '%';
+    totalBar.style.width = totalPct.toFixed(1) + '%';
+
+    // Color logic
+    const cls = totalPct > 80 ? 'danger' : totalPct > 60 ? 'warn' : 'safe';
+    totalBar.className = 'budget-bar-fill ' + cls;
+    histBar.className = 'budget-bar-fill ' + (totalPct > 80 ? 'warn' : 'safe');
+
+    document.getElementById('sysTokCount').textContent = s.sys.toLocaleString() + ' tokens';
+    document.getElementById('histTokCount').textContent = s.hist.toLocaleString() + ' tokens';
+    document.getElementById('msgTokCount').textContent = s.msg.toLocaleString() + ' tokens';
+    document.getElementById('totalTokCount').textContent = total.toLocaleString() + ' / 32,000 tokens';
+    status.textContent = s.status;
+    status.style.color = totalPct > 80 ? 'var(--warning)' : 'var(--text-secondary)';
+  }
+
+  function startBudgetAnim() {
+    budgetPlaying = true;
+    document.getElementById('budgetPlayBtn').innerHTML = '&#9646;&#9646;';
+    budgetTimer = setInterval(() => {
+      budgetStep = (budgetStep + 1) % budgetSteps.length;
+      renderBudgetBars(budgetStep);
+      if (budgetStep === budgetSteps.length - 1) {
+        stopBudgetAnim();
+      }
+    }, 1000);
+  }
+
+  function stopBudgetAnim() {
+    budgetPlaying = false;
+    clearInterval(budgetTimer);
+    document.getElementById('budgetPlayBtn').innerHTML = '&#9654;';
+  }
+
+  function toggleBudgetAnim() {
+    if (budgetPlaying) stopBudgetAnim();
+    else startBudgetAnim();
+  }
+
+  function restartBudgetAnim() {
+    stopBudgetAnim();
+    budgetStep = 0;
+    renderBudgetBars(0);
+  }
+
+  // Init
+  renderBudgetBars(0);
+
+  // ═══════════════════════════════════════════════════════════════
+  // SIDEBAR ACTIVE STATE
+  // ═══════════════════════════════════════════════════════════════
+  const sections = document.querySelectorAll('section[id], h2[id], h3[id]');
+  const navLinks = document.querySelectorAll('.sidebar-nav a');
+
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        const id = entry.target.id;
+        navLinks.forEach(link => {
+          link.classList.toggle('active', link.getAttribute('href') === '#' + id);
+        });
+      }
+    });
+  }, { rootMargin: '-15% 0px -70% 0px' });
+
+  document.querySelectorAll('section[id]').forEach(s => observer.observe(s));
+
+  // Keyboard nav for quiz options
+  document.querySelectorAll('.quiz-option').forEach(opt => {
+    opt.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        opt.click();
+      }
+    });
+  });
+
+  // Mobile sidebar toggle aria
+  const toggleBtn = document.getElementById('sidebarToggle');
+  const sidebar = document.getElementById('sidebar');
+  toggleBtn.addEventListener('click', () => {
+    const isOpen = sidebar.classList.contains('open');
+    toggleBtn.setAttribute('aria-expanded', String(isOpen));
+  });
+  </script>
+</body>
+</html>

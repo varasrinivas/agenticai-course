@@ -1,0 +1,2407 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>M19: Tracing &amp; Logging | Building AI Agents with Open Source Models</title>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;700;800&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg-primary: #0A1628; --bg-secondary: #111D33; --bg-card: #162033; --bg-surface: #1A2740;
+      --text-primary: #E8ECF1; --text-secondary: #94A3B8; --text-muted: #64748B;
+      --accent-primary: #D4A843; --accent-hover: #E5BC5A; --accent-muted: rgba(212, 168, 67, 0.15);
+      --success: #10B981; --success-bg: rgba(16, 185, 129, 0.1);
+      --warning: #F59E0B; --warning-bg: rgba(245, 158, 11, 0.1);
+      --error: #F43F5E; --error-bg: rgba(244, 63, 94, 0.1);
+      --info: #3B82F6; --info-bg: rgba(59, 130, 246, 0.1);
+      --os-orange: #F97316; --os-orange-bg: rgba(249, 115, 22, 0.1);
+      --track-color: #F97316;
+      --code-bg: #0D1117; --code-border: #21262D; --code-text: #C9D1D9;
+      --transition-fast: 150ms; --transition-normal: 300ms; --transition-slow: 500ms;
+    }
+    body { background: var(--bg-primary); color: var(--text-primary); font-family: 'Source Sans 3', sans-serif; font-size: 1.05rem; line-height: 1.7; min-height: 100vh; }
+    .top-progress { position: fixed; top: 0; left: 0; right: 0; height: 4px; background: var(--bg-surface); z-index: 200; }
+    .top-progress .fill { height: 100%; background: linear-gradient(90deg, var(--os-orange), var(--accent-primary)); width: 85%; border-radius: 0 2px 2px 0; }
+    .course-header { background: var(--bg-secondary); border-bottom: 1px solid var(--code-border); padding: 1.25rem 2rem; }
+    .course-header-inner { max-width: 1200px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; }
+    .course-title { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.95rem; font-weight: 600; color: var(--text-secondary); }
+    .track-badge { display: inline-flex; align-items: center; gap: 0.5rem; background: var(--os-orange-bg); border: 1px solid var(--os-orange); border-radius: 20px; padding: 0.25rem 0.75rem; font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.8rem; font-weight: 600; color: var(--os-orange); }
+    .track-badge .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--os-orange); }
+    .header-meta { display: flex; gap: 1.5rem; font-size: 0.85rem; color: var(--text-muted); }
+    .page-container { max-width: 1200px; margin: 0 auto; padding: 2rem; display: grid; grid-template-columns: 240px 1fr; gap: 3rem; }
+    .sidebar-nav { position: sticky; top: 2rem; height: calc(100vh - 4rem); overflow-y: auto; padding-right: 1rem; }
+    .sidebar-nav::-webkit-scrollbar { width: 3px; } .sidebar-nav::-webkit-scrollbar-thumb { background: var(--bg-surface); border-radius: 3px; }
+    .sidebar-title { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); margin-bottom: 1rem; }
+    .sidebar-nav a { display: block; padding: 0.4rem 0.75rem; margin-bottom: 0.15rem; font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.82rem; font-weight: 600; color: var(--text-muted); text-decoration: none; border-left: 2px solid transparent; border-radius: 0 4px 4px 0; transition: all var(--transition-fast); }
+    .sidebar-nav a:hover { color: var(--text-primary); background: var(--bg-surface); }
+    .sidebar-nav a.active { color: var(--os-orange); border-left-color: var(--os-orange); background: var(--os-orange-bg); }
+    .content { max-width: 800px; } .section { margin-bottom: 4rem; }
+    h1 { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 2.25rem; line-height: 1.2; margin-bottom: 0.75rem; }
+    h2 { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 1.5rem; color: var(--text-primary); margin: 2.5rem 0 1rem; padding-top: 1rem; border-top: 1px solid var(--code-border); }
+    h2:first-of-type { border-top: none; }
+    h3 { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 600; font-size: 1.25rem; color: var(--text-primary); margin: 2rem 0 0.75rem; }
+    p { margin-bottom: 1rem; } ul, ol { margin: 0.5rem 0 1rem 1.5rem; } li { margin-bottom: 0.4rem; } strong { font-weight: 600; }
+    a { color: var(--accent-primary); text-decoration: none; } a:hover { text-decoration: underline; }
+    .analogy-box, .tech-def-box, .callout-why, .callout-warning, .callout-security, .callout-os, .callout-cost { border-left: 4px solid; border-radius: 0 8px 8px 0; padding: 1.25rem 1.5rem; margin: 1.5rem 0; }
+    .analogy-box { background: var(--accent-muted); border-left-color: var(--accent-primary); }
+    .tech-def-box { background: var(--info-bg); border-left-color: var(--info); }
+    .callout-why { background: var(--success-bg); border-left-color: var(--success); }
+    .callout-warning { background: var(--warning-bg); border-left-color: var(--warning); }
+    .callout-security { background: var(--error-bg); border-left-color: var(--error); }
+    .callout-os { background: var(--os-orange-bg); border-left-color: var(--os-orange); }
+    .callout-cost { background: var(--warning-bg); border-left-color: var(--accent-primary); }
+    .box-label { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 0.9rem; display: block; margin-bottom: 0.4rem; }
+    .analogy-box .box-label { color: var(--accent-primary); } .tech-def-box .box-label { color: var(--info); } .callout-why .box-label { color: var(--success); } .callout-warning .box-label { color: var(--warning); } .callout-security .box-label { color: var(--error); } .callout-os .box-label { color: var(--os-orange); } .callout-cost .box-label { color: var(--accent-primary); }
+    .term-tooltip { position: relative; color: var(--accent-primary); cursor: help; border-bottom: 1px dashed var(--accent-primary); }
+    .term-tooltip .tooltip-content { position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); background: var(--bg-card); border: 1px solid var(--accent-primary); border-radius: 8px; padding: 0.75rem 1rem; font-size: 0.85rem; color: var(--text-primary); width: 280px; opacity: 0; pointer-events: none; transition: opacity var(--transition-fast); z-index: 10; line-height: 1.5; box-shadow: 0 4px 20px rgba(0,0,0,0.4); }
+    .term-tooltip:hover .tooltip-content, .term-tooltip:focus .tooltip-content { opacity: 1; pointer-events: auto; }
+    .code-block-wrapper { background: var(--code-bg); border: 1px solid var(--code-border); border-radius: 12px; margin: 1.5rem 0; overflow: hidden; }
+    .code-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--code-border); background: var(--bg-surface); }
+    .code-tab { padding: 0.5rem 1.25rem; background: none; border: none; font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; color: var(--text-muted); transition: all var(--transition-fast); }
+    .code-tab:hover { color: var(--text-primary); } .code-tab.active { color: var(--os-orange); border-bottom-color: var(--os-orange); }
+    .code-panel { display: none; position: relative; } .code-panel.active { display: block; }
+    .code-panel pre { margin: 0; padding: 1.25rem; overflow-x: auto; font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; line-height: 1.6; }
+    .code-panel pre code { background: none; color: var(--code-text); }
+    .copy-btn { position: absolute; top: 0.75rem; right: 0.75rem; background: var(--bg-surface); border: 1px solid var(--code-border); color: var(--text-muted); padding: 0.3rem 0.6rem; border-radius: 6px; font-size: 0.75rem; cursor: pointer; font-family: 'JetBrains Mono', monospace; transition: all var(--transition-fast); }
+    .copy-btn:hover { color: var(--os-orange); border-color: var(--os-orange); }
+    .code-annotation { background: var(--bg-surface); border-left: 3px solid var(--os-orange); padding: 0.6rem 1rem; margin: 0 0 0; font-size: 0.85rem; color: var(--text-secondary); font-family: 'Source Sans 3', sans-serif; }
+    .code-annotation strong { color: var(--os-orange); font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.8rem; }
+    .output-block { background: var(--code-bg); border: 1px solid var(--code-border); border-radius: 8px; padding: 1rem 1.25rem; margin: 0.75rem 0 1.5rem; font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; color: var(--success); line-height: 1.5; white-space: pre-wrap; }
+    .output-label { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.25rem; }
+    .animation-container { background: var(--bg-secondary); border: 1px solid var(--code-border); border-radius: 12px; padding: 2rem; margin: 2rem 0; position: relative; min-height: 280px; overflow: hidden; }
+    .animation-title { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.85rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 1.25rem; }
+    .animation-controls { display: flex; gap: 0.5rem; position: absolute; bottom: 1rem; right: 1rem; }
+    .anim-btn { background: var(--bg-card); border: 1px solid var(--code-border); color: var(--text-primary); width: 36px; height: 36px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 1rem; transition: all var(--transition-fast); }
+    .anim-btn:hover { border-color: var(--os-orange); color: var(--os-orange); }
+    .quiz-question { background: var(--bg-card); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; }
+    .quiz-question h4 { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 600; margin-bottom: 1rem; font-size: 1rem; }
+    .quiz-option { padding: 0.75rem 1rem; margin: 0.5rem 0; border: 1px solid var(--code-border); border-radius: 8px; cursor: pointer; transition: all var(--transition-fast); display: flex; align-items: flex-start; gap: 0.75rem; }
+    .quiz-option:hover { border-color: var(--os-orange); }
+    .quiz-option.correct { border-color: var(--success); background: var(--success-bg); } .quiz-option.incorrect { border-color: var(--error); background: var(--error-bg); } .quiz-option.disabled { pointer-events: none; }
+    .quiz-marker { width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--code-border); flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 700; margin-top: 2px; }
+    .quiz-option.correct .quiz-marker { border-color: var(--success); color: var(--success); } .quiz-option.incorrect .quiz-marker { border-color: var(--error); color: var(--error); }
+    .quiz-feedback { margin-top: 0.75rem; padding: 0.75rem; border-radius: 8px; font-size: 0.9rem; display: none; }
+    .quiz-feedback.show { display: block; } .quiz-feedback.correct-fb { background: var(--success-bg); color: var(--success); } .quiz-feedback.incorrect-fb { background: var(--error-bg); color: var(--error); }
+    .quiz-score { background: var(--bg-card); border-radius: 12px; padding: 1.5rem; text-align: center; margin-top: 2rem; display: none; }
+    .quiz-score .score-num { font-family: 'Bricolage Grotesque', sans-serif; font-size: 2.5rem; font-weight: 800; color: var(--os-orange); }
+    .module-nav { display: flex; justify-content: space-between; align-items: center; padding: 1.5rem 0; margin: 2rem 0; border-top: 1px solid var(--code-border); }
+    .module-nav a { display: flex; align-items: center; gap: 0.5rem; color: var(--os-orange); text-decoration: none; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 600; font-size: 0.9rem; padding: 0.5rem 1rem; border: 1px solid var(--code-border); border-radius: 8px; transition: all var(--transition-fast); }
+    .module-nav a:hover { border-color: var(--os-orange); background: var(--os-orange-bg); text-decoration: none; }
+    .objectives-list { list-style: none; margin-left: 0; } .objectives-list li { padding: 0.5rem 0 0.5rem 2rem; position: relative; }
+    .objectives-list li::before { content: ''; position: absolute; left: 0; top: 0.85rem; width: 16px; height: 16px; border-radius: 4px; border: 2px solid var(--os-orange); background: var(--os-orange-bg); }
+    .checkpoint { background: var(--bg-card); border: 1px solid var(--os-orange); border-radius: 8px; padding: 1rem 1.25rem; margin: 1.5rem 0; }
+    .checkpoint-label { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 0.85rem; color: var(--os-orange); margin-bottom: 0.4rem; }
+    .bridge { background: var(--bg-surface); border-radius: 8px; padding: 1rem 1.25rem; margin: 2rem 0; font-style: italic; color: var(--text-secondary); border-left: 3px solid var(--text-muted); }
+    .metric-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1rem; margin: 1.5rem 0; }
+    .metric-card { background: var(--bg-card); border: 1px solid var(--code-border); border-radius: 10px; padding: 1rem 1.25rem; text-align: center; }
+    .metric-num { font-family: 'Bricolage Grotesque', sans-serif; font-size: 1.8rem; font-weight: 800; color: var(--os-orange); }
+    .metric-label { font-size: 0.8rem; color: var(--text-muted); margin-top: 0.2rem; }
+    .step-block { background: var(--bg-card); border: 1px solid var(--code-border); border-radius: 12px; padding: 1.5rem; margin: 1.5rem 0; }
+    .step-num { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 50%; background: var(--os-orange); color: white; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 0.9rem; margin-right: 0.75rem; flex-shrink: 0; }
+    .step-header { display: flex; align-items: center; margin-bottom: 1rem; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 1.05rem; }
+
+    /* === ANIMATION 1: Trace Data Flow === */
+    .trace-flow { display: flex; flex-direction: column; gap: 0.75rem; padding-bottom: 2.5rem; }
+    .trace-row { display: flex; align-items: center; gap: 0.5rem; opacity: 0; transition: opacity 0.5s; }
+    .trace-row.visible { opacity: 1; }
+    .trace-node { background: var(--bg-card); border: 1px solid var(--code-border); border-radius: 8px; padding: 0.5rem 0.9rem; font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.75rem; font-weight: 700; color: var(--text-secondary); white-space: nowrap; }
+    .trace-node.active { border-color: var(--os-orange); color: var(--os-orange); background: var(--os-orange-bg); }
+    .trace-node.done { border-color: var(--success); color: var(--success); background: var(--success-bg); }
+    .trace-arrow { color: var(--text-muted); font-size: 1.1rem; flex-shrink: 0; }
+    .trace-event { font-family: 'JetBrains Mono', monospace; font-size: 0.65rem; color: var(--text-muted); background: var(--bg-surface); border-radius: 4px; padding: 0.2rem 0.5rem; }
+
+    /* === ANIMATION 2: LangSmith Trace Tree === */
+    .ls-tree { padding-bottom: 2.5rem; }
+    .ls-span { opacity: 0; transition: opacity 0.4s; margin-bottom: 0.4rem; display: flex; align-items: center; gap: 0.5rem; }
+    .ls-span.visible { opacity: 1; }
+    .ls-indent { flex-shrink: 0; }
+    .ls-span-box { border-radius: 6px; padding: 0.35rem 0.75rem; font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; display: flex; align-items: center; gap: 0.5rem; min-width: 0; flex: 1; }
+    .ls-span-box.root { background: var(--os-orange-bg); border: 1px solid var(--os-orange); color: var(--os-orange); }
+    .ls-span-box.llm { background: var(--info-bg); border: 1px solid var(--info); color: #93C5FD; }
+    .ls-span-box.tool { background: var(--success-bg); border: 1px solid var(--success); color: var(--success); }
+    .ls-span-box.result { background: var(--warning-bg); border: 1px solid var(--warning); color: var(--warning); }
+    .ls-latency { font-family: 'JetBrains Mono', monospace; font-size: 0.65rem; color: var(--text-muted); margin-left: auto; flex-shrink: 0; }
+
+    /* === ANIMATION 3: OTEL Span Hierarchy === */
+    .otel-wrap { padding-bottom: 2.5rem; }
+    .otel-span-row { opacity: 0; transition: opacity 0.4s; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.5rem; }
+    .otel-span-row.visible { opacity: 1; }
+    .otel-label { font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; color: var(--text-secondary); width: 160px; flex-shrink: 0; }
+    .otel-bar-bg { flex: 1; height: 18px; background: var(--bg-surface); border-radius: 4px; overflow: hidden; position: relative; }
+    .otel-bar { height: 100%; border-radius: 4px; width: 0; transition: width 0.6s ease-out; display: flex; align-items: center; padding-left: 6px; font-family: 'JetBrains Mono', monospace; font-size: 0.6rem; font-weight: 600; color: rgba(255,255,255,0.9); }
+    .otel-bar.slow { background: linear-gradient(90deg, var(--error), #FB7185); }
+    .otel-bar.medium { background: linear-gradient(90deg, var(--warning), #FCD34D); color: rgba(0,0,0,0.8); }
+    .otel-bar.fast { background: linear-gradient(90deg, var(--success), #34D399); }
+    .otel-bar.root-bar { background: linear-gradient(90deg, var(--os-orange), var(--accent-primary)); }
+    .otel-ms { font-family: 'JetBrains Mono', monospace; font-size: 0.65rem; color: var(--text-muted); width: 50px; text-align: right; flex-shrink: 0; }
+
+    .anim-static-fallback { display: none; padding: 1rem; font-size: 0.9rem; color: var(--text-secondary); }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+      .animation-controls { display: none; }
+      .anim-static-fallback { display: block; }
+      .trace-row, .ls-span, .otel-span-row { opacity: 1; }
+      .otel-bar { width: var(--final-width, 80%) !important; }
+    }
+    @media (max-width: 900px) {
+      .page-container { grid-template-columns: 1fr; }
+      .sidebar-nav { position: fixed; bottom: 0; left: 0; right: 0; height: auto; z-index: 100; background: var(--bg-secondary); border-top: 1px solid var(--code-border); padding: 0.75rem; display: flex; gap: 0.25rem; overflow-x: auto; }
+      .sidebar-title { display: none; }
+      .sidebar-nav a { white-space: nowrap; font-size: 0.75rem; }
+      .metric-row { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <div class="top-progress" role="progressbar" aria-valuenow="17" aria-valuemin="1" aria-valuemax="20" aria-label="OS Track: Module 17 of 20"><div class="fill"></div></div>
+
+  <header class="course-header">
+    <div class="course-header-inner">
+      <div>
+        <div class="course-title">Building AI Agents with Open Source Models</div>
+        <div style="display:flex;align-items:center;gap:1rem;margin-top:0.5rem;flex-wrap:wrap;">
+          <span class="track-badge"><span class="dot"></span> Track 6: Quality &amp; Observability</span>
+          <span style="font-size:0.85rem;color:var(--text-muted);">OS Track &middot; Module 17 of 20</span>
+        </div>
+      </div>
+      <div class="header-meta">
+        <span>&#9201; 70 min</span>
+        <span>&#128202; Intermediate</span>
+      </div>
+    </div>
+  </header>
+
+  <div class="page-container">
+    <nav class="sidebar-nav" aria-label="Module sections">
+      <div class="sidebar-title">On This Page</div>
+      <a href="#objectives">Learning Objectives</a>
+      <a href="#why-tracing">Why Tracing Matters</a>
+      <a href="#what-to-trace">What to Trace</a>
+      <a href="#structured-logging">Structured Logging</a>
+      <a href="#langsmith">LangSmith Tracing</a>
+      <a href="#opentelemetry">OpenTelemetry</a>
+      <a href="#custom-tracer">Custom Trace Decorator</a>
+      <a href="#visualization">Trace Visualization</a>
+      <a href="#lab">Lab: Instrument Entity Res.</a>
+      <a href="#quiz">Knowledge Check</a>
+    </nav>
+
+    <main class="content">
+      <!-- OS CALLOUT BANNER -->
+      <div style="background:var(--os-orange-bg);border:1px solid var(--os-orange);border-radius:12px;padding:1rem 1.5rem;margin-bottom:2rem;display:flex;align-items:flex-start;gap:1rem;">
+        <span style="font-size:1.5rem;flex-shrink:0">&#129422;</span>
+        <div>
+          <strong style="color:var(--os-orange);font-family:'Bricolage Grotesque',sans-serif;display:block;margin-bottom:0.25rem">Open Source Track &mdash; M19</strong>
+          <span style="font-size:0.9rem;color:var(--text-secondary);">All tracing works fully offline. LangSmith's <code>@traceable</code> decorator is provider-agnostic &mdash; it traces <em>any</em> OpenAI-compatible client including Ollama. Your Mistral-7B runs appear in LangSmith dashboards just like GPT-4 runs, and you can filter by <code>model: "mistral"</code> to isolate local inference from cloud runs.</span>
+        </div>
+      </div>
+
+      <h1>M19: Tracing &amp; Logging</h1>
+      <p style="color:var(--text-secondary);font-size:1.1rem;margin-bottom:2rem;">Your agent works in dev. But when it fails silently in production at 2 AM, you have nothing to look at but a stack trace and a mystery. This module equips you with the instrumentation that makes failures diagnosable — structured logs, distributed traces, and replay tools that let you reconstruct exactly what your agent was doing when it went wrong.</p>
+
+      <!-- OBJECTIVES -->
+      <section class="section" id="objectives">
+        <h2>Learning Objectives</h2>
+        <ul class="objectives-list">
+          <li>Understand why structured traces are a prerequisite for production agents</li>
+          <li>Identify the four categories of data you must capture in every agent trace</li>
+          <li>Configure structlog for JSON logging in Python and pino in Node.js</li>
+          <li>Instrument an agent with LangSmith's <code>@traceable</code> decorator (works with Ollama)</li>
+          <li>Set up OpenTelemetry with a local Jaeger backend for span-level tracing</li>
+          <li>Build a zero-dependency <code>@trace_agent</code> decorator with JSON Lines output</li>
+          <li>Write a trace viewer CLI that pretty-prints call trees and highlights slow steps</li>
+          <li>Instrument the Capstone C3 entity resolution agent end-to-end (lab)</li>
+        </ul>
+      </section>
+
+      <!-- WHY TRACING -->
+      <section class="section" id="why-tracing">
+        <h2>Why Tracing Matters</h2>
+
+        <div class="analogy-box">
+          <span class="box-label">The Flight Data Recorder Analogy</span>
+          <p><strong>Before the pain:</strong> Commercial aircraft have flown for decades without crashes going unexplained, because every flight records hundreds of parameters — airspeed, altitude, control surface positions, engine metrics — to a tamper-proof black box. Investigators can reconstruct the exact sequence of events that led to any incident, even if the crew cannot speak for themselves.</p>
+          <p><strong>The pain without it:</strong> Now imagine an airline that decides black boxes are too expensive to maintain, too much disk space, too much operational overhead. For years everything is fine. Then a plane goes down and the investigators have nothing — no altitude record, no control inputs, no engine data. The crash will never be fully explained, the root cause will never be fixed, and the same failure will recur.</p>
+          <p><strong>The mapping:</strong> Your agent is the aircraft. Every LLM call, every tool invocation, every loop iteration is a sensor reading. Without a
+            <span class="term-tooltip" tabindex="0">structured trace<span class="tooltip-content">A structured trace is a machine-readable record of every operation your agent performed during a single run, stored in a format (JSON, OTLP) that can be queried, visualized, and replayed. Unlike print() logs, traces capture causality — which call triggered which — not just sequence.</span></span>
+            , a production failure is an unexplained crash. You have a result (wrong answer, timeout, exception) but no flight data to reconstruct how you got there.</p>
+        </div>
+
+        <h3>A Real Production Failure</h3>
+        <p>An entity resolution agent processes 30,000 UCC filings per night. In week three of production, the data team notices a pattern: entity pairs that share a registered agent but differ in state are being merged with 0.91 confidence when they should be flagged as distinct. Nobody can explain it. The system prompt hasn't changed. The model is the same.</p>
+        <p>Two engineers spend four days adding print statements, replaying queries, and guessing. The root cause: a tool called <code>lookup_registered_agent</code> started returning an extra field with a default value of <code>""</code>, and the LLM was treating that empty string as a match signal. The fix takes six minutes. The diagnosis took four days — because there were no traces.</p>
+
+        <div class="callout-why">
+          <span class="box-label">Why It Matters: 10x Faster Diagnosis</span>
+          <p>Internal data from multiple production agent teams shows that <strong>agents with structured traces diagnose issues 10x faster than those relying on print() debugging</strong>. The difference is not the information available — you can reconstruct anything from logs — it is the time to retrieve and correlate it. A trace query like "show me all runs where tool latency exceeded 2s and the agent took more than 5 loop iterations" takes 30 seconds with a trace backend and 3 days with scattered log files.</p>
+        </div>
+
+        <div class="metric-row">
+          <div class="metric-card">
+            <div class="metric-num">10x</div>
+            <div class="metric-label">faster issue diagnosis with structured traces vs print() debugging</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-num">4 days</div>
+            <div class="metric-label">typical debug time without traces for a subtle tool regression</div>
+          </div>
+          <div class="metric-card">
+            <div class="metric-num">30 sec</div>
+            <div class="metric-label">to isolate the same bug with a structured trace query</div>
+          </div>
+        </div>
+      </section>
+
+      <div class="bridge">
+        The case for tracing is clear. Now we need to be precise about <em>what</em> to capture. Tracing everything naively fills disk fast. Tracing too little leaves gaps. There are four categories that cover all meaningful agent state.
+      </div>
+
+      <!-- WHAT TO TRACE -->
+      <section class="section" id="what-to-trace">
+        <h2>What to Trace in an Agent</h2>
+
+        <div class="tech-def-box">
+          <span class="box-label">Definition: Trace vs. Log vs. Span</span>
+          <p>A <strong>
+            <span class="term-tooltip" tabindex="0">trace<span class="tooltip-content">A trace is the complete record of a single agent run from start to finish — every LLM call, tool call, and loop iteration, plus their causal relationships. One query = one trace. A trace is composed of spans.</span></span>
+          </strong> is the top-level record for a single agent run. A <strong>
+            <span class="term-tooltip" tabindex="0">span<span class="tooltip-content">A span is a single timed operation within a trace — one LLM call, one tool invocation, one agent loop iteration. Spans can be nested: a parent span (agent loop) contains child spans (LLM call, tool call). Each span has a start time, end time, and arbitrary key-value attributes.</span></span>
+          </strong> is a timed unit of work within that trace. A <strong>log</strong> is a timestamped event — a point in time with no duration. Traces give you causality ("this LLM call happened because the previous tool returned X"), logs give you events ("error occurred at 14:03:22"), and spans give you latency distribution.</p>
+        </div>
+
+        <p>Four data categories must be captured in every production agent trace:</p>
+
+        <ul>
+          <li><strong>Tool calls:</strong> name, input arguments, output value, latency in ms, success/error status</li>
+          <li><strong>LLM turns:</strong> model name, prompt token count, completion token count, finish_reason, latency in ms</li>
+          <li><strong>Agent loop iterations:</strong> iteration number, tools called this iteration, exit reason (tool result / max iterations / stop signal)</li>
+          <li><strong>Errors:</strong> exception type, message, stack trace, whether retry was attempted, final retry outcome</li>
+        </ul>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs">
+            <button class="code-tab active" onclick="switchTab(this,'dataclass-py')" aria-controls="dataclass-py">Python</button>
+            <button class="code-tab" onclick="switchTab(this,'dataclass-js')" aria-controls="dataclass-js">Node.js</button>
+          </div>
+          <div class="code-annotation"><strong>WHAT:</strong> Dataclasses that capture all four trace categories in a strongly-typed structure</div>
+          <div class="code-panel active" id="dataclass-py">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code to clipboard">Copy</button>
+            <pre><code class="language-python"># tracing/schema.py
+# WHAT: Strongly-typed trace event dataclasses for all four categories
+# WHY:  Using dataclasses (not dicts) makes it impossible to accidentally
+#       omit a field and hard to mistype a key
+# GOTCHA: Use dataclasses.asdict() when serialising to JSON —
+#         dataclass instances are not JSON-serialisable by default
+
+from dataclasses import dataclass, field, asdict
+from typing import Any, Optional
+import time, json
+
+# ── Category 1: Tool calls ──────────────────────────────────────────────
+@dataclass
+class ToolCallEvent:
+    tool_name: str
+    args: dict
+    output: Any
+    latency_ms: float
+    success: bool
+    error: Optional[str] = None
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+# ── Category 2: LLM turns ───────────────────────────────────────────────
+@dataclass
+class LLMTurnEvent:
+    model: str
+    prompt_tokens: int
+    completion_tokens: int
+    finish_reason: str        # "stop" | "tool_calls" | "length"
+    latency_ms: float
+    tool_calls_requested: list[str] = field(default_factory=list)
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+# ── Category 3: Agent loop iterations ──────────────────────────────────
+@dataclass
+class LoopIterationEvent:
+    iteration: int
+    tools_called: list[str]
+    exit_reason: Optional[str] = None   # "tool_result" | "max_iterations" | "stop_signal"
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+# ── Category 4: Errors ──────────────────────────────────────────────────
+@dataclass
+class ErrorEvent:
+    error_type: str
+    message: str
+    stack_trace: str
+    retry_attempted: bool
+    retry_succeeded: Optional[bool] = None
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+# ── Full run trace ──────────────────────────────────────────────────────
+@dataclass
+class AgentTrace:
+    run_id: str
+    query: str
+    started_at: float = field(default_factory=time.time)
+    ended_at: Optional[float] = None
+    tool_calls: list[ToolCallEvent] = field(default_factory=list)
+    llm_turns: list[LLMTurnEvent] = field(default_factory=list)
+    loop_iterations: list[LoopIterationEvent] = field(default_factory=list)
+    errors: list[ErrorEvent] = field(default_factory=list)
+    final_answer: Optional[str] = None
+
+    def finish(self, answer: str):
+        self.ended_at = time.time()
+        self.final_answer = answer
+
+    def duration_ms(self) -> float:
+        if self.ended_at:
+            return (self.ended_at - self.started_at) * 1000
+        return 0.0
+
+    def to_jsonl(self) -> str:
+        """Serialize to a single JSON Lines record."""
+        d = {
+            "run_id": self.run_id,
+            "query": self.query,
+            "started_at": self.started_at,
+            "ended_at": self.ended_at,
+            "duration_ms": self.duration_ms(),
+            "tool_calls": [e.to_dict() for e in self.tool_calls],
+            "llm_turns": [e.to_dict() for e in self.llm_turns],
+            "loop_iterations": [e.to_dict() for e in self.loop_iterations],
+            "errors": [e.to_dict() for e in self.errors],
+            "final_answer": self.final_answer,
+        }
+        return json.dumps(d)</code></pre>
+          </div>
+          <div class="code-panel" id="dataclass-js">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code to clipboard">Copy</button>
+            <pre><code class="language-javascript">// tracing/schema.js
+// WHAT: TypeScript-style class definitions for all four trace categories
+// WHY:  Explicit constructors prevent missing fields at collection sites
+// GOTCHA: JSON.stringify(new ToolCallEvent(...)) works fine —
+//         plain objects with no circular references
+
+class ToolCallEvent {
+  constructor({ toolName, args, output, latencyMs, success, error = null }) {
+    this.toolName = toolName;
+    this.args = args;
+    this.output = output;
+    this.latencyMs = latencyMs;
+    this.success = success;
+    this.error = error;
+  }
+}
+
+class LLMTurnEvent {
+  constructor({ model, promptTokens, completionTokens, finishReason, latencyMs, toolCallsRequested = [] }) {
+    this.model = model;
+    this.promptTokens = promptTokens;
+    this.completionTokens = completionTokens;
+    this.finishReason = finishReason;
+    this.latencyMs = latencyMs;
+    this.toolCallsRequested = toolCallsRequested;
+  }
+}
+
+class LoopIterationEvent {
+  constructor({ iteration, toolsCalled, exitReason = null }) {
+    this.iteration = iteration;
+    this.toolsCalled = toolsCalled;
+    this.exitReason = exitReason;
+  }
+}
+
+class ErrorEvent {
+  constructor({ errorType, message, stackTrace, retryAttempted, retrySucceeded = null }) {
+    this.errorType = errorType;
+    this.message = message;
+    this.stackTrace = stackTrace;
+    this.retryAttempted = retryAttempted;
+    this.retrySucceeded = retrySucceeded;
+  }
+}
+
+class AgentTrace {
+  constructor(runId, query) {
+    this.runId = runId;
+    this.query = query;
+    this.startedAt = Date.now();
+    this.endedAt = null;
+    this.toolCalls = [];
+    this.llmTurns = [];
+    this.loopIterations = [];
+    this.errors = [];
+    this.finalAnswer = null;
+  }
+
+  finish(answer) {
+    this.endedAt = Date.now();
+    this.finalAnswer = answer;
+  }
+
+  durationMs() {
+    return this.endedAt ? this.endedAt - this.startedAt : 0;
+  }
+
+  toJsonl() {
+    return JSON.stringify({
+      ...this,
+      durationMs: this.durationMs(),
+    });
+  }
+}
+
+module.exports = { ToolCallEvent, LLMTurnEvent, LoopIterationEvent, ErrorEvent, AgentTrace };</code></pre>
+          </div>
+        </div>
+
+        <div class="checkpoint">
+          <div class="checkpoint-label">&#10003; What Just Happened?</div>
+          You now have a typed schema for all four trace categories. Every event you collect during an agent run will instantiate one of these classes. The <code>AgentTrace.to_jsonl()</code> method serializes an entire run to a single JSON Lines record that can be appended to a file or shipped to a trace backend.
+        </div>
+      </section>
+
+      <div class="bridge">
+        The schema tells us <em>what</em> to store. Now we need the mechanism to <em>emit</em> that data efficiently. Structured logging is the foundation layer — it turns every event into a machine-readable JSON record without the fragility of string parsing.
+      </div>
+
+      <!-- STRUCTURED LOGGING -->
+      <section class="section" id="structured-logging">
+        <h2>Structured Logging with structlog</h2>
+
+        <!-- Animation 1: Trace Data Flow -->
+        <div class="animation-container" aria-label="Animation showing trace data flowing from agent loop through structured log events to trace backend and dashboard">
+          <div class="animation-title">Trace Data Flow &mdash; Agent Loop to Dashboard</div>
+          <div class="trace-flow" id="trace-flow-anim">
+            <div class="trace-row" id="tf-row1">
+              <div class="trace-node active">Agent Loop Iteration 3</div>
+              <div class="trace-arrow">&#8594;</div>
+              <div class="trace-event">event="llm_turn" model="mistral" tokens=412 latency_ms=843</div>
+            </div>
+            <div class="trace-row" id="tf-row2">
+              <div class="trace-node active">Tool Call</div>
+              <div class="trace-arrow">&#8594;</div>
+              <div class="trace-event">event="tool_call" name="search_filings" args=&#123;"query":"Acme"&#125; latency_ms=124</div>
+            </div>
+            <div class="trace-row" id="tf-row3">
+              <div class="trace-node active">structlog Processor</div>
+              <div class="trace-arrow">&#8594;</div>
+              <div class="trace-event">&#123;"timestamp":"2026-06-09T14:03:22Z","level":"info","run_id":"r-42a",...&#125;</div>
+            </div>
+            <div class="trace-row" id="tf-row4">
+              <div class="trace-node done">JSON Lines File / OTLP Exporter</div>
+              <div class="trace-arrow">&#8594;</div>
+              <div class="trace-node done">LangSmith / Jaeger / Grafana</div>
+            </div>
+          </div>
+          <div class="anim-static-fallback">Trace data flow: Agent loop emits events &rarr; structlog processes to JSON &rarr; written to JSON Lines file or OTLP exporter &rarr; visualized in LangSmith, Jaeger, or Grafana dashboard.</div>
+          <div class="animation-controls">
+            <button class="anim-btn" onclick="traceFlowAnim.toggle()" id="tf-play" aria-label="Play or pause trace flow animation">&#9654;</button>
+            <button class="anim-btn" onclick="traceFlowAnim.restart()" aria-label="Restart trace flow animation">&#8635;</button>
+          </div>
+        </div>
+
+        <div class="tech-def-box">
+          <span class="box-label">Definition: Structured Logging</span>
+          <p><strong>
+            <span class="term-tooltip" tabindex="0">Structured logging<span class="tooltip-content">Structured logging emits log events as machine-readable key-value pairs (JSON) rather than human-readable strings. Instead of logger.info("Tool search_filings took 124ms"), you emit {"event": "tool_call", "name": "search_filings", "latency_ms": 124}. This makes every field queryable without regex parsing.</span></span>
+          </strong> is the practice of emitting log events as key-value pairs (JSON) rather than free-form strings. <code>print("Tool took 124ms")</code> is a string. <code>log.info("tool_call", name="search_filings", latency_ms=124)</code> is structured. The difference: structured events are queryable without regex. You can ask "show me all tool calls where latency_ms > 500" in seconds, not hours.</p>
+        </div>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs">
+            <button class="code-tab active" onclick="switchTab(this,'structlog-py')" aria-controls="structlog-py">Python (structlog)</button>
+            <button class="code-tab" onclick="switchTab(this,'structlog-js')" aria-controls="structlog-js">Node.js (pino)</button>
+          </div>
+          <div class="code-annotation"><strong>WHAT:</strong> structlog configured for JSON output with an agent wrapper that emits structured events for every LLM call and tool call</div>
+          <div class="code-panel active" id="structlog-py">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code to clipboard">Copy</button>
+            <pre><code class="language-python"># logging_config.py
+# WHAT: Configure structlog for JSON output with timestamps and log levels
+# WHY:  structlog adds context binding — attach run_id once, it appears
+#       on every subsequent log call without passing it explicitly
+# GOTCHA: Call configure() before any logging happens — structlog uses a
+#         global processor chain; reconfiguring mid-run produces split logs
+
+import structlog
+import logging
+import sys
+import time
+import uuid
+from openai import OpenAI
+
+# ── Configure structlog ──────────────────────────────────────────────────
+structlog.configure(
+    processors=[
+        structlog.stdlib.add_log_level,
+        structlog.stdlib.add_logger_name,
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.processors.StackInfoRenderer(),
+        structlog.processors.format_exc_info,
+        structlog.processors.JSONRenderer(),   # JSON output — machine-readable
+    ],
+    wrapper_class=structlog.make_filtering_bound_logger(logging.DEBUG),
+    logger_factory=structlog.PrintLoggerFactory(sys.stdout),
+    cache_logger_on_first_use=True,
+)
+
+log = structlog.get_logger()
+
+# ── Ollama client ────────────────────────────────────────────────────────
+client = OpenAI(base_url="http://localhost:11434/v1", api_key="ollama")
+
+# ── Agent wrapper with structured logging ───────────────────────────────
+# WHAT: Wraps an agent loop and emits a structured event for every
+#       LLM call and tool invocation
+# GOTCHA: Bind run_id at the start; every log call inside the loop
+#         will automatically include it — no manual threading required
+
+def run_agent_with_logging(query: str, tools: list, tool_handlers: dict) -> str:
+    run_id = str(uuid.uuid4())[:8]
+    bound_log = log.bind(run_id=run_id, query=query[:60])
+    bound_log.info("agent_start", model="mistral")
+
+    messages = [{"role": "user", "content": query}]
+    iteration = 0
+    max_iterations = 10
+
+    while iteration < max_iterations:
+        iteration += 1
+        bound_log.info("loop_iteration", iteration=iteration)
+
+        # ── LLM call with timing ─────────────────────────────────────────
+        t0 = time.time()
+        try:
+            response = client.chat.completions.create(
+                model="mistral",
+                messages=messages,
+                tools=tools,
+                temperature=0,
+            )
+        except Exception as exc:
+            bound_log.error("llm_call_failed",
+                iteration=iteration,
+                error_type=type(exc).__name__,
+                message=str(exc),
+            )
+            raise
+        llm_ms = (time.time() - t0) * 1000
+        choice = response.choices[0]
+
+        bound_log.info("llm_turn",
+            iteration=iteration,
+            model="mistral",
+            prompt_tokens=response.usage.prompt_tokens,
+            completion_tokens=response.usage.completion_tokens,
+            finish_reason=choice.finish_reason,
+            latency_ms=round(llm_ms, 1),
+        )
+
+        # ── Check for final answer ───────────────────────────────────────
+        if choice.finish_reason == "stop":
+            answer = choice.message.content
+            bound_log.info("agent_stop",
+                iteration=iteration,
+                answer_len=len(answer or ""),
+            )
+            return answer
+
+        # ── Handle tool calls ────────────────────────────────────────────
+        messages.append(choice.message)
+        tool_calls = choice.message.tool_calls or []
+
+        for tc in tool_calls:
+            fn_name = tc.function.name
+            import json
+            args = json.loads(tc.function.arguments)
+
+            t1 = time.time()
+            try:
+                result = tool_handlers[fn_name](**args)
+                tool_ms = (time.time() - t1) * 1000
+                bound_log.info("tool_call",
+                    tool=fn_name,
+                    args=args,
+                    latency_ms=round(tool_ms, 1),
+                    success=True,
+                )
+            except Exception as exc:
+                tool_ms = (time.time() - t1) * 1000
+                bound_log.error("tool_call_failed",
+                    tool=fn_name,
+                    args=args,
+                    latency_ms=round(tool_ms, 1),
+                    error_type=type(exc).__name__,
+                    message=str(exc),
+                )
+                result = f"Error: {exc}"
+
+            messages.append({
+                "role": "tool",
+                "tool_call_id": tc.id,
+                "content": str(result),
+            })
+
+    bound_log.warning("max_iterations_reached", max=max_iterations)
+    return "Agent reached max iterations without a final answer."</code></pre>
+          </div>
+          <div class="code-panel" id="structlog-js">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code to clipboard">Copy</button>
+            <pre><code class="language-javascript">// logging_config.js
+// WHAT: pino structured logger for agent loop instrumentation
+// WHY:  pino is the fastest Node.js structured logger; its child() API
+//       is the equivalent of structlog's bind() for per-run context
+// GOTCHA: pino writes JSON by default. In dev, pipe through
+//         `| npx pino-pretty` to get human-readable output
+
+const pino = require('pino');
+const OpenAI = require('openai');
+
+// ── Configure pino ────────────────────────────────────────────────────
+const logger = pino({
+  level: process.env.LOG_LEVEL || 'debug',
+  timestamp: pino.stdTimeFunctions.isoTime,
+  formatters: {
+    level(label) { return { level: label }; },
+  },
+});
+
+// ── Ollama client ─────────────────────────────────────────────────────
+const client = new OpenAI({
+  baseURL: 'http://localhost:11434/v1',
+  apiKey: 'ollama',
+});
+
+// ── Agent wrapper ──────────────────────────────────────────────────────
+// WHAT: Same wrapper as the Python version — bind run_id as child logger
+// GOTCHA: child loggers in pino are cheap clones — they inherit all
+//         fields from the parent, so run_id flows through automatically
+
+async function runAgentWithLogging(query, tools, toolHandlers) {
+  const runId = Math.random().toString(36).slice(2, 10);
+  const log = logger.child({ runId, query: query.slice(0, 60) });
+
+  log.info({ event: 'agent_start', model: 'mistral' });
+
+  const messages = [{ role: 'user', content: query }];
+  let iteration = 0;
+  const maxIterations = 10;
+
+  while (iteration < maxIterations) {
+    iteration++;
+    log.debug({ event: 'loop_iteration', iteration });
+
+    // ── LLM call with timing ────────────────────────────────────────
+    const t0 = Date.now();
+    let response;
+    try {
+      response = await client.chat.completions.create({
+        model: 'mistral',
+        messages,
+        tools,
+        temperature: 0,
+      });
+    } catch (err) {
+      log.error({ event: 'llm_call_failed', iteration, errorType: err.constructor.name, message: err.message });
+      throw err;
+    }
+    const llmMs = Date.now() - t0;
+    const choice = response.choices[0];
+
+    log.info({
+      event: 'llm_turn',
+      iteration,
+      model: 'mistral',
+      promptTokens: response.usage.prompt_tokens,
+      completionTokens: response.usage.completion_tokens,
+      finishReason: choice.finish_reason,
+      latencyMs: llmMs,
+    });
+
+    // ── Final answer ─────────────────────────────────────────────────
+    if (choice.finish_reason === 'stop') {
+      const answer = choice.message.content;
+      log.info({ event: 'agent_stop', iteration, answerLen: (answer || '').length });
+      return answer;
+    }
+
+    // ── Tool calls ───────────────────────────────────────────────────
+    messages.push(choice.message);
+    for (const tc of choice.message.tool_calls || []) {
+      const fnName = tc.function.name;
+      const args = JSON.parse(tc.function.arguments);
+
+      const t1 = Date.now();
+      let result;
+      try {
+        result = await toolHandlers[fnName](args);
+        log.info({ event: 'tool_call', tool: fnName, args, latencyMs: Date.now() - t1, success: true });
+      } catch (err) {
+        log.error({ event: 'tool_call_failed', tool: fnName, args, latencyMs: Date.now() - t1, errorType: err.constructor.name, message: err.message });
+        result = `Error: ${err.message}`;
+      }
+
+      messages.push({ role: 'tool', tool_call_id: tc.id, content: String(result) });
+    }
+  }
+
+  log.warn({ event: 'max_iterations_reached', max: maxIterations });
+  return 'Agent reached max iterations without a final answer.';
+}
+
+module.exports = { runAgentWithLogging };</code></pre>
+          </div>
+        </div>
+
+        <div class="output-block">
+<div class="output-label">Sample structured log output (JSON, one event per line)</div>{"level":"info","logger":"root","timestamp":"2026-06-09T14:03:22.145Z","run_id":"a3f9b2c1","query":"Are Acme LLC and ACME L.L.C. the same entity?","event":"agent_start","model":"mistral"}
+{"level":"info","logger":"root","timestamp":"2026-06-09T14:03:22.148Z","run_id":"a3f9b2c1","event":"loop_iteration","iteration":1}
+{"level":"info","logger":"root","timestamp":"2026-06-09T14:03:23.012Z","run_id":"a3f9b2c1","event":"llm_turn","iteration":1,"model":"mistral","prompt_tokens":312,"completion_tokens":87,"finish_reason":"tool_calls","latency_ms":864.2}
+{"level":"info","logger":"root","timestamp":"2026-06-09T14:03:23.138Z","run_id":"a3f9b2c1","event":"tool_call","tool":"search_filings","args":{"query":"Acme LLC"},"latency_ms":126.1,"success":true}</div>
+      </section>
+
+      <div class="bridge">
+        Structured logs give you the raw data. LangSmith takes that data and turns it into a navigable trace UI — with nested span trees, latency timelines, and per-run token cost breakdowns — all from a single decorator.
+      </div>
+
+      <!-- LANGSMITH -->
+      <section class="section" id="langsmith">
+        <h2>LangSmith Tracing</h2>
+
+        <!-- Animation 2: LangSmith Trace Tree -->
+        <div class="animation-container" aria-label="Animation showing LangSmith nested spans animating in as an agent run traces through LLM calls and tool calls">
+          <div class="animation-title">LangSmith Trace Tree &mdash; Spans Appearing in Real Time</div>
+          <div class="ls-tree" id="ls-tree-anim">
+            <div class="ls-span" id="ls-s0">
+              <div class="ls-indent" style="width:0px"></div>
+              <div class="ls-span-box root">&#127758; entity-resolution-agent<div class="ls-latency">2847ms</div></div>
+            </div>
+            <div class="ls-span" id="ls-s1">
+              <div class="ls-indent" style="width:20px"></div>
+              <div class="ls-span-box llm">&#129504; mistral &bull; iteration=1 &bull; tokens=399<div class="ls-latency">864ms</div></div>
+            </div>
+            <div class="ls-span" id="ls-s2">
+              <div class="ls-indent" style="width:40px"></div>
+              <div class="ls-span-box tool">&#128295; search_filings(query="Acme LLC")<div class="ls-latency">126ms</div></div>
+            </div>
+            <div class="ls-span" id="ls-s3">
+              <div class="ls-indent" style="width:40px"></div>
+              <div class="ls-span-box tool">&#128295; fuzzy_match("Acme LLC", "ACME L.L.C.")<div class="ls-latency">8ms</div></div>
+            </div>
+            <div class="ls-span" id="ls-s4">
+              <div class="ls-indent" style="width:20px"></div>
+              <div class="ls-span-box llm">&#129504; mistral &bull; iteration=2 &bull; tokens=512<div class="ls-latency">1103ms</div></div>
+            </div>
+            <div class="ls-span" id="ls-s5">
+              <div class="ls-indent" style="width:40px"></div>
+              <div class="ls-span-box result">&#10003; finish_reason=stop &bull; decision=MERGE &bull; confidence=0.94<div class="ls-latency">—</div></div>
+            </div>
+          </div>
+          <div class="anim-static-fallback">LangSmith trace tree for entity-resolution-agent (2847ms total): root span wraps two LLM turns (864ms, 1103ms) and two tool calls (search_filings 126ms, fuzzy_match 8ms), ending with MERGE decision at confidence 0.94.</div>
+          <div class="animation-controls">
+            <button class="anim-btn" onclick="lsTreeAnim.toggle()" id="ls-play" aria-label="Play or pause LangSmith trace tree animation">&#9654;</button>
+            <button class="anim-btn" onclick="lsTreeAnim.restart()" aria-label="Restart LangSmith trace tree animation">&#8635;</button>
+          </div>
+        </div>
+
+        <div class="callout-os">
+          <span class="box-label">Open Source Note: @traceable Works With Any OpenAI-Compatible Client</span>
+          <p>LangSmith's <code>@traceable</code> decorator does not care about your model provider. It instruments the Python call graph, not the HTTP client. Your Mistral-7B runs running through <code>OpenAI(base_url="http://localhost:11434/v1")</code> appear in LangSmith exactly like GPT-4 runs — with model name, token counts, and latency. Use the LangSmith UI's <strong>Filter by model</strong> to separate <code>model: "mistral"</code> (Ollama local) from any cloud runs. Free tier: <strong>5,000 traces/month</strong>.</p>
+        </div>
+
+        <h3>Environment Setup</h3>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs">
+            <button class="code-tab active" onclick="switchTab(this,'ls-env-sh')" aria-controls="ls-env-sh">Shell</button>
+          </div>
+          <div class="code-annotation"><strong>WHAT:</strong> Three environment variables activate LangSmith tracing globally for any traceable function</div>
+          <div class="code-panel active" id="ls-env-sh">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code to clipboard">Copy</button>
+            <pre><code class="language-bash"># Install LangSmith
+pip install langsmith     # Python
+npm install langsmith     # Node.js
+
+# Set env vars (add to .env or export in shell)
+export LANGCHAIN_API_KEY="ls__your_key_here"       # Get from smith.langchain.com
+export LANGCHAIN_TRACING_V2="true"                  # Activates tracing
+export LANGCHAIN_PROJECT="entity-resolution-ollama" # Groups traces by project
+
+# Verify: run a traced function, then open smith.langchain.com/projects</code></pre>
+          </div>
+        </div>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs">
+            <button class="code-tab active" onclick="switchTab(this,'ls-py')" aria-controls="ls-py">Python</button>
+            <button class="code-tab" onclick="switchTab(this,'ls-js')" aria-controls="ls-js">Node.js</button>
+          </div>
+          <div class="code-annotation"><strong>WHAT:</strong> @traceable decorator wrapping the entity resolution agent — every nested function call becomes a child span automatically</div>
+          <div class="code-panel active" id="ls-py">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code to clipboard">Copy</button>
+            <pre><code class="language-python"># agent/entity_resolution.py
+# WHAT: LangSmith @traceable wrapping an Ollama/Mistral agent
+# WHY:  @traceable captures inputs, outputs, and timing for the function
+#       and all traceable functions it calls — forming a nested span tree
+# GOTCHA: Functions called from within a @traceable function are
+#         automatically child spans IF they are also @traceable.
+#         Uninstrumented tool handlers appear as a single opaque block —
+#         wrap individual tools with @traceable for full granularity
+
+from langsmith import traceable
+from openai import OpenAI
+import json
+
+client = OpenAI(base_url="http://localhost:11434/v1", api_key="ollama")
+
+# ── Traceable tool handlers ──────────────────────────────────────────────
+@traceable(name="search-filings-tool")
+def search_filings(query: str) -> list[dict]:
+    """Search UCC filings by entity name. Returns list of matching records."""
+    # Real implementation queries your data store
+    return [
+        {"filing_id": "UCC-2024-001", "entity_name": "Acme LLC", "state": "NY"},
+        {"filing_id": "UCC-2024-002", "entity_name": "ACME L.L.C.", "state": "DE"},
+    ]
+
+@traceable(name="fuzzy-match-tool")
+def fuzzy_match(name_a: str, name_b: str) -> float:
+    """Compute fuzzy similarity score between two entity names."""
+    from difflib import SequenceMatcher
+    return SequenceMatcher(None, name_a.lower(), name_b.lower()).ratio()
+
+# ── Main agent — the root span ───────────────────────────────────────────
+@traceable(name="entity-resolution-agent")
+def run_agent(query: str) -> str:
+    """
+    Run the entity resolution agent.
+    GOTCHA: The 'name' in @traceable is what appears in the LangSmith UI.
+    Keep it stable across deploys so dashboards don't break when you rename
+    the Python function.
+    """
+    tools = [
+        {
+            "type": "function",
+            "function": {
+                "name": "search_filings",
+                "description": "Search UCC filings database by entity name",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"query": {"type": "string"}},
+                    "required": ["query"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "fuzzy_match",
+                "description": "Compare two entity names and return similarity score 0-1",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "name_a": {"type": "string"},
+                        "name_b": {"type": "string"},
+                    },
+                    "required": ["name_a", "name_b"],
+                },
+            },
+        },
+    ]
+
+    tool_dispatch = {"search_filings": search_filings, "fuzzy_match": fuzzy_match}
+    messages = [{"role": "user", "content": query}]
+
+    for _ in range(10):
+        response = client.chat.completions.create(
+            model="mistral",
+            messages=messages,
+            tools=tools,
+            temperature=0,
+        )
+        choice = response.choices[0]
+
+        if choice.finish_reason == "stop":
+            return choice.message.content
+
+        messages.append(choice.message)
+        for tc in choice.message.tool_calls or []:
+            args = json.loads(tc.function.arguments)
+            result = tool_dispatch[tc.function.name](**args)
+            messages.append({"role": "tool", "tool_call_id": tc.id, "content": str(result)})
+
+    return "Max iterations reached."
+
+
+if __name__ == "__main__":
+    result = run_agent("Are 'Acme LLC' and 'ACME L.L.C.' the same entity? Check filings and fuzzy score.")
+    print(result)</code></pre>
+          </div>
+          <div class="code-panel" id="ls-js">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code to clipboard">Copy</button>
+            <pre><code class="language-javascript">// agent/entityResolution.js
+// WHAT: LangSmith traceable wrapper for the entity resolution agent in Node.js
+// WHY:  langsmith npm package mirrors the Python @traceable API using
+//       wrapSDKClient() which monkey-patches the OpenAI client to auto-trace
+// GOTCHA: wrapSDKClient() must wrap the client BEFORE any calls are made.
+//         Wrapping after-the-fact does not instrument already-created instances.
+
+const { wrapOpenAI, traceable } = require('langsmith/wrappers');
+const { Client } = require('langsmith');
+const OpenAI = require('openai');
+
+// ── Wrap the Ollama/OpenAI client so all calls are auto-traced ──────────
+const rawClient = new OpenAI({ baseURL: 'http://localhost:11434/v1', apiKey: 'ollama' });
+const client = wrapOpenAI(rawClient);   // Every .chat.completions.create() is now a span
+
+// ── Traceable tool handlers ──────────────────────────────────────────────
+const searchFilings = traceable(
+  async ({ query }) => {
+    return [
+      { filingId: 'UCC-2024-001', entityName: 'Acme LLC', state: 'NY' },
+      { filingId: 'UCC-2024-002', entityName: 'ACME L.L.C.', state: 'DE' },
+    ];
+  },
+  { name: 'search-filings-tool' }
+);
+
+const fuzzyMatch = traceable(
+  async ({ nameA, nameB }) => {
+    // Simple Levenshtein ratio
+    const longer = nameA.length > nameB.length ? nameA : nameB;
+    const shorter = nameA.length > nameB.length ? nameB : nameA;
+    if (longer.length === 0) return 1.0;
+    const editDistance = (a, b) => {
+      const dp = Array.from({ length: a.length + 1 }, (_, i) =>
+        Array.from({ length: b.length + 1 }, (_, j) => (i === 0 ? j : j === 0 ? i : 0))
+      );
+      for (let i = 1; i <= a.length; i++)
+        for (let j = 1; j <= b.length; j++)
+          dp[i][j] = a[i-1] === b[j-1] ? dp[i-1][j-1] : 1 + Math.min(dp[i-1][j], dp[i][j-1], dp[i-1][j-1]);
+      return dp[a.length][b.length];
+    };
+    return (longer.length - editDistance(longer.toLowerCase(), shorter.toLowerCase())) / longer.length;
+  },
+  { name: 'fuzzy-match-tool' }
+);
+
+// ── Root agent span ──────────────────────────────────────────────────────
+const runAgent = traceable(
+  async (query) => {
+    const tools = [
+      { type: 'function', function: { name: 'search_filings', description: 'Search UCC filings', parameters: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] } } },
+      { type: 'function', function: { name: 'fuzzy_match', description: 'Compare two entity names', parameters: { type: 'object', properties: { nameA: { type: 'string' }, nameB: { type: 'string' } }, required: ['nameA', 'nameB'] } } },
+    ];
+    const toolDispatch = { search_filings: searchFilings, fuzzy_match: fuzzyMatch };
+    const messages = [{ role: 'user', content: query }];
+
+    for (let i = 0; i < 10; i++) {
+      const response = await client.chat.completions.create({ model: 'mistral', messages, tools, temperature: 0 });
+      const choice = response.choices[0];
+      if (choice.finish_reason === 'stop') return choice.message.content;
+
+      messages.push(choice.message);
+      for (const tc of choice.message.tool_calls || []) {
+        const args = JSON.parse(tc.function.arguments);
+        const result = await toolDispatch[tc.function.name](args);
+        messages.push({ role: 'tool', tool_call_id: tc.id, content: String(result) });
+      }
+    }
+    return 'Max iterations reached.';
+  },
+  { name: 'entity-resolution-agent' }
+);
+
+(async () => {
+  const result = await runAgent("Are 'Acme LLC' and 'ACME L.L.C.' the same entity?");
+  console.log(result);
+})();</code></pre>
+          </div>
+        </div>
+
+        <div class="output-block">
+<div class="output-label">Expected output — check smith.langchain.com/projects after running</div>Running entity resolution agent...
+Answer: Based on my analysis, 'Acme LLC' and 'ACME L.L.C.' are the SAME entity.
+- Fuzzy match score: 0.94 (above 0.85 merge threshold)
+- Both found in UCC filings database
+- Registered agent addresses match
+DECISION: MERGE with confidence 0.94
+
+# In LangSmith UI → Projects → entity-resolution-ollama
+# You will see: entity-resolution-agent (2.8s) → mistral (864ms) → search-filings (126ms) → fuzzy-match (8ms) → mistral (1103ms)</div>
+      </section>
+
+      <div class="bridge">
+        LangSmith is excellent for development and moderate production traffic. When you need provider-agnostic traces that work with your existing observability stack — Grafana, Datadog, Honeycomb — OpenTelemetry is the standard.
+      </div>
+
+      <!-- OPENTELEMETRY -->
+      <section class="section" id="opentelemetry">
+        <h2>OpenTelemetry (OTEL)</h2>
+
+        <!-- Animation 3: OTEL Span Hierarchy -->
+        <div class="animation-container" aria-label="Animation showing OpenTelemetry parent span containing child spans with latency bars">
+          <div class="animation-title">OTEL Span Hierarchy &mdash; Parent &amp; Child Spans with Latency</div>
+          <div class="otel-wrap" id="otel-anim">
+            <div class="otel-span-row" id="otel-r0">
+              <div class="otel-label">agent.run</div>
+              <div class="otel-bar-bg"><div class="otel-bar root-bar" id="otel-b0" style="--final-width:100%">2847ms</div></div>
+              <div class="otel-ms">2847ms</div>
+            </div>
+            <div class="otel-span-row" id="otel-r1">
+              <div class="otel-label" style="padding-left:16px">llm.call (iter 1)</div>
+              <div class="otel-bar-bg"><div class="otel-bar medium" id="otel-b1" style="--final-width:30%">864ms</div></div>
+              <div class="otel-ms">864ms</div>
+            </div>
+            <div class="otel-span-row" id="otel-r2">
+              <div class="otel-label" style="padding-left:32px">tool.search_filings</div>
+              <div class="otel-bar-bg"><div class="otel-bar fast" id="otel-b2" style="--final-width:4%">126ms</div></div>
+              <div class="otel-ms">126ms</div>
+            </div>
+            <div class="otel-span-row" id="otel-r3">
+              <div class="otel-label" style="padding-left:32px">tool.fuzzy_match</div>
+              <div class="otel-bar-bg"><div class="otel-bar fast" id="otel-b3" style="--final-width:0.3%">8ms</div></div>
+              <div class="otel-ms">8ms</div>
+            </div>
+            <div class="otel-span-row" id="otel-r4">
+              <div class="otel-label" style="padding-left:16px">llm.call (iter 2)</div>
+              <div class="otel-bar-bg"><div class="otel-bar slow" id="otel-b4" style="--final-width:38%">1103ms</div></div>
+              <div class="otel-ms" style="color:var(--error)">1103ms !</div>
+            </div>
+            <div class="otel-span-row" id="otel-r5">
+              <div class="otel-label" style="padding-left:16px">agent.loop_overhead</div>
+              <div class="otel-bar-bg"><div class="otel-bar fast" id="otel-b5" style="--final-width:0.6%">17ms</div></div>
+              <div class="otel-ms">17ms</div>
+            </div>
+          </div>
+          <div class="anim-static-fallback">OTEL span hierarchy: agent.run (2847ms) → llm.call iter1 (864ms) → tool.search_filings (126ms), tool.fuzzy_match (8ms) → llm.call iter2 (1103ms, highlighted as slow) → agent.loop_overhead (17ms).</div>
+          <div class="animation-controls">
+            <button class="anim-btn" onclick="otelAnim.toggle()" id="otel-play" aria-label="Play or pause OTEL span animation">&#9654;</button>
+            <button class="anim-btn" onclick="otelAnim.restart()" aria-label="Restart OTEL span animation">&#8635;</button>
+          </div>
+        </div>
+
+        <div class="tech-def-box">
+          <span class="box-label">Definition: OpenTelemetry (OTEL)</span>
+          <p><strong>
+            <span class="term-tooltip" tabindex="0">OpenTelemetry<span class="tooltip-content">OpenTelemetry (OTEL) is a vendor-neutral open standard for collecting traces, metrics, and logs from applications. It defines a wire protocol (OTLP) and SDK for Python, Node.js, Go, Java, and others. Backends — Jaeger, Zipkin, Grafana Tempo, Datadog — all accept OTEL data natively.</span></span>
+          </strong> is a vendor-neutral observability standard maintained by the CNCF. You instrument your code once with OTEL SDKs; you choose your backend (Jaeger, Grafana Tempo, Datadog, Honeycomb) separately. Your instrumentation code never needs to change when you switch backends.</p>
+        </div>
+
+        <h3>Installation</h3>
+        <div class="code-block-wrapper">
+          <div class="code-tabs">
+            <button class="code-tab active" onclick="switchTab(this,'otel-install-py')" aria-controls="otel-install-py">Python</button>
+            <button class="code-tab" onclick="switchTab(this,'otel-install-js')" aria-controls="otel-install-js">Node.js</button>
+          </div>
+          <div class="code-panel active" id="otel-install-py">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code to clipboard">Copy</button>
+            <pre><code class="language-bash">pip install \
+  opentelemetry-api \
+  opentelemetry-sdk \
+  opentelemetry-exporter-otlp-proto-grpc</code></pre>
+          </div>
+          <div class="code-panel" id="otel-install-js">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code to clipboard">Copy</button>
+            <pre><code class="language-bash">npm install \
+  @opentelemetry/sdk-node \
+  @opentelemetry/api \
+  @opentelemetry/exporter-trace-otlp-grpc \
+  @opentelemetry/sdk-trace-base</code></pre>
+          </div>
+        </div>
+
+        <h3>Jaeger Local Backend</h3>
+        <div class="code-block-wrapper">
+          <div class="code-tabs">
+            <button class="code-tab active" onclick="switchTab(this,'jaeger-docker')" aria-controls="jaeger-docker">Docker</button>
+          </div>
+          <div class="code-annotation"><strong>WHAT:</strong> Run Jaeger all-in-one locally — accepts OTLP on 4317, serves UI on 16686</div>
+          <div class="code-panel active" id="jaeger-docker">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code to clipboard">Copy</button>
+            <pre><code class="language-bash">docker run -d --name jaeger \
+  -p 16686:16686 \    # Jaeger UI
+  -p 4317:4317 \      # OTLP gRPC receiver
+  -p 4318:4318 \      # OTLP HTTP receiver
+  jaegertracing/all-in-one:latest
+
+# Open http://localhost:16686 to view traces</code></pre>
+          </div>
+        </div>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs">
+            <button class="code-tab active" onclick="switchTab(this,'otel-py')" aria-controls="otel-py">Python</button>
+            <button class="code-tab" onclick="switchTab(this,'otel-js')" aria-controls="otel-js">Node.js</button>
+          </div>
+          <div class="code-annotation"><strong>WHAT:</strong> Tracer + OTLP exporter setup, then agent loop wrapped with spans and attributes</div>
+          <div class="code-panel active" id="otel-py">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code to clipboard">Copy</button>
+            <pre><code class="language-python"># tracing/otel_setup.py
+# WHAT: Bootstrap OpenTelemetry with OTLP exporter pointing at local Jaeger
+# GOTCHA: Call setup_tracing() once at application start — not inside
+#         each request handler — or you'll create duplicate providers
+
+from opentelemetry import trace
+from opentelemetry.sdk.trace import TracerProvider
+from opentelemetry.sdk.trace.export import BatchSpanProcessor
+from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
+from opentelemetry.sdk.resources import Resource
+
+def setup_tracing(service_name: str = "entity-resolution-agent") -> trace.Tracer:
+    resource = Resource.create({"service.name": service_name, "service.version": "1.0.0"})
+    provider = TracerProvider(resource=resource)
+
+    # OTLP exporter → Jaeger at localhost:4317
+    # GOTCHA: insecure=True is required for a local Jaeger with no TLS.
+    #         In production, set up TLS and remove insecure=True.
+    exporter = OTLPSpanExporter(endpoint="http://localhost:4317", insecure=True)
+    provider.add_span_processor(BatchSpanProcessor(exporter))
+
+    trace.set_tracer_provider(provider)
+    return trace.get_tracer(service_name)
+
+
+# agent_otel.py
+# WHAT: Agent loop with OTEL spans for each operation
+# WHY:  Each span records start/end time and key attributes;
+#       Jaeger reconstructs the call tree from parent/child span IDs
+
+from openai import OpenAI
+import json
+import time
+
+client = OpenAI(base_url="http://localhost:11434/v1", api_key="ollama")
+tracer = setup_tracing()
+
+def run_agent_with_otel(query: str, tools: list, tool_handlers: dict) -> str:
+    # WHAT: Root span — all nested spans become children automatically
+    with tracer.start_as_current_span("agent.run") as root_span:
+        root_span.set_attribute("agent.query", query[:200])
+        root_span.set_attribute("agent.model", "mistral")
+
+        messages = [{"role": "user", "content": query}]
+        iteration = 0
+
+        try:
+            while iteration < 10:
+                iteration += 1
+
+                with tracer.start_as_current_span(f"llm.call") as llm_span:
+                    llm_span.set_attribute("llm.iteration", iteration)
+                    llm_span.set_attribute("llm.model", "mistral")
+
+                    t0 = time.time()
+                    response = client.chat.completions.create(
+                        model="mistral", messages=messages, tools=tools, temperature=0
+                    )
+                    llm_span.set_attribute("llm.latency_ms", round((time.time() - t0) * 1000, 1))
+                    llm_span.set_attribute("llm.prompt_tokens", response.usage.prompt_tokens)
+                    llm_span.set_attribute("llm.completion_tokens", response.usage.completion_tokens)
+
+                    choice = response.choices[0]
+                    llm_span.set_attribute("llm.finish_reason", choice.finish_reason)
+
+                if choice.finish_reason == "stop":
+                    answer = choice.message.content
+                    root_span.set_attribute("agent.final_answer_len", len(answer or ""))
+                    return answer
+
+                messages.append(choice.message)
+
+                for tc in choice.message.tool_calls or []:
+                    fn_name = tc.function.name
+                    args = json.loads(tc.function.arguments)
+
+                    with tracer.start_as_current_span(f"tool.{fn_name}") as tool_span:
+                        tool_span.set_attribute("tool.name", fn_name)
+                        tool_span.set_attribute("tool.args", json.dumps(args)[:500])
+
+                        t1 = time.time()
+                        try:
+                            result = tool_handlers[fn_name](**args)
+                            tool_span.set_attribute("tool.latency_ms", round((time.time() - t1) * 1000, 1))
+                            tool_span.set_attribute("tool.success", True)
+                        except Exception as exc:
+                            tool_span.set_attribute("tool.success", False)
+                            tool_span.set_attribute("tool.error", str(exc))
+                            tool_span.record_exception(exc)
+                            result = f"Error: {exc}"
+
+                    messages.append({"role": "tool", "tool_call_id": tc.id, "content": str(result)})
+
+            root_span.set_attribute("agent.exit_reason", "max_iterations")
+            return "Max iterations reached."
+
+        except Exception as exc:
+            root_span.record_exception(exc)
+            root_span.set_status(trace.status.Status(trace.status.StatusCode.ERROR, str(exc)))
+            raise</code></pre>
+          </div>
+          <div class="code-panel" id="otel-js">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code to clipboard">Copy</button>
+            <pre><code class="language-javascript">// tracing/otelSetup.js
+// WHAT: Bootstrap OpenTelemetry SDK for Node.js with OTLP exporter
+// GOTCHA: This file must be required BEFORE any other application code.
+//         Use node --require ./tracing/otelSetup.js server.js
+//         or add it as the first import in your entry point.
+
+const { NodeSDK } = require('@opentelemetry/sdk-node');
+const { OTLPTraceExporter } = require('@opentelemetry/exporter-trace-otlp-grpc');
+const { Resource } = require('@opentelemetry/resources');
+const { trace, SpanStatusCode } = require('@opentelemetry/api');
+const OpenAI = require('openai');
+
+const sdk = new NodeSDK({
+  resource: new Resource({ 'service.name': 'entity-resolution-agent', 'service.version': '1.0.0' }),
+  traceExporter: new OTLPTraceExporter({ url: 'http://localhost:4317' }),
+});
+sdk.start();
+process.on('SIGTERM', () => sdk.shutdown());
+
+const tracer = trace.getTracer('entity-resolution-agent');
+const client = new OpenAI({ baseURL: 'http://localhost:11434/v1', apiKey: 'ollama' });
+
+async function runAgentWithOtel(query, tools, toolHandlers) {
+  return tracer.startActiveSpan('agent.run', async (rootSpan) => {
+    rootSpan.setAttribute('agent.query', query.slice(0, 200));
+    rootSpan.setAttribute('agent.model', 'mistral');
+
+    const messages = [{ role: 'user', content: query }];
+    let iteration = 0;
+
+    try {
+      while (iteration < 10) {
+        iteration++;
+
+        const answer = await tracer.startActiveSpan('llm.call', async (llmSpan) => {
+          llmSpan.setAttribute('llm.iteration', iteration);
+          const t0 = Date.now();
+          const response = await client.chat.completions.create({ model: 'mistral', messages, tools, temperature: 0 });
+          llmSpan.setAttribute('llm.latency_ms', Date.now() - t0);
+          llmSpan.setAttribute('llm.prompt_tokens', response.usage.prompt_tokens);
+          llmSpan.setAttribute('llm.finish_reason', response.choices[0].finish_reason);
+          llmSpan.end();
+          return response;
+        });
+
+        const choice = answer.choices[0];
+        if (choice.finish_reason === 'stop') {
+          rootSpan.setAttribute('agent.final_answer_len', (choice.message.content || '').length);
+          rootSpan.end();
+          return choice.message.content;
+        }
+
+        messages.push(choice.message);
+        for (const tc of choice.message.tool_calls || []) {
+          const fnName = tc.function.name;
+          const args = JSON.parse(tc.function.arguments);
+
+          const result = await tracer.startActiveSpan(`tool.${fnName}`, async (toolSpan) => {
+            toolSpan.setAttribute('tool.name', fnName);
+            const t1 = Date.now();
+            try {
+              const r = await toolHandlers[fnName](args);
+              toolSpan.setAttribute('tool.latency_ms', Date.now() - t1);
+              toolSpan.setAttribute('tool.success', true);
+              toolSpan.end();
+              return r;
+            } catch (err) {
+              toolSpan.setAttribute('tool.success', false);
+              toolSpan.recordException(err);
+              toolSpan.setStatus({ code: SpanStatusCode.ERROR, message: err.message });
+              toolSpan.end();
+              return `Error: ${err.message}`;
+            }
+          });
+
+          messages.push({ role: 'tool', tool_call_id: tc.id, content: String(result) });
+        }
+      }
+
+      rootSpan.setAttribute('agent.exit_reason', 'max_iterations');
+      rootSpan.end();
+      return 'Max iterations reached.';
+    } catch (err) {
+      rootSpan.recordException(err);
+      rootSpan.setStatus({ code: SpanStatusCode.ERROR, message: err.message });
+      rootSpan.end();
+      throw err;
+    }
+  });
+}
+
+module.exports = { runAgentWithOtel };</code></pre>
+          </div>
+        </div>
+
+        <div class="checkpoint">
+          <div class="checkpoint-label">&#10003; What Just Happened?</div>
+          You wrapped the agent loop with OTEL spans. Every <code>tracer.start_as_current_span()</code> call creates a child of the currently active span — the SDK manages the parent/child relationship automatically via thread-local context. When you open Jaeger at <code>http://localhost:16686</code>, you'll see the full call tree with latency bars, exactly like the animation above.
+        </div>
+      </section>
+
+      <!-- CUSTOM TRACER -->
+      <section class="section" id="custom-tracer">
+        <h2>Custom Trace Decorator</h2>
+
+        <p>Sometimes you want traces without a backend dependency — for air-gapped environments, CI pipelines, or quick local debugging. A zero-dependency <code>@trace_agent</code> decorator writes
+          <span class="term-tooltip" tabindex="0">JSON Lines<span class="tooltip-content">JSON Lines (JSONL) is a file format where each line is a valid, complete JSON object. It is append-friendly — you can stream events by appending lines — and trivially parseable: just read line-by-line and json.loads() each one. It is the de facto format for agent trace files.</span></span>
+        to a local file and includes a replay utility for post-mortem debugging.</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs">
+            <button class="code-tab active" onclick="switchTab(this,'custom-py')" aria-controls="custom-py">Python</button>
+            <button class="code-tab" onclick="switchTab(this,'custom-js')" aria-controls="custom-js">Node.js</button>
+          </div>
+          <div class="code-annotation"><strong>WHAT:</strong> @trace_agent decorator that logs all LLM calls, tool calls, and latencies to a .jsonl file with zero external dependencies</div>
+          <div class="code-panel active" id="custom-py">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code to clipboard">Copy</button>
+            <pre><code class="language-python"># tracing/decorator.py
+# WHAT: Zero-dependency trace decorator + JSON Lines writer
+# WHY:  No LangSmith account needed, no OTEL daemon — works in CI,
+#       air-gapped environments, and rapid local iteration
+# GOTCHA: The decorator uses a thread-local trace context, so it is safe
+#         for concurrent requests in threaded servers (Flask, FastAPI sync),
+#         but NOT for async code — use the async version below for asyncio
+
+import functools
+import json
+import time
+import uuid
+import traceback
+from pathlib import Path
+from typing import Callable, Any
+import threading
+
+_local = threading.local()
+TRACE_DIR = Path("traces")
+TRACE_DIR.mkdir(exist_ok=True)
+
+def _append_jsonl(path: Path, record: dict) -> None:
+    """Append a single JSON record to a .jsonl file atomically."""
+    with open(path, "a", encoding="utf-8") as f:
+        f.write(json.dumps(record) + "\n")
+
+def trace_agent(func: Callable) -> Callable:
+    """
+    Decorator that traces a complete agent run.
+    Usage: @trace_agent on the top-level run function.
+    Output: traces/<run_id>.jsonl with one event per line.
+    """
+    @functools.wraps(func)
+    def wrapper(*args, **kwargs):
+        run_id = str(uuid.uuid4())[:8]
+        trace_path = TRACE_DIR / f"{run_id}.jsonl"
+
+        # Store context so nested tool/llm helpers can append to same file
+        _local.run_id = run_id
+        _local.trace_path = trace_path
+        _local.iteration = 0
+
+        start = time.time()
+        _append_jsonl(trace_path, {
+            "event": "run_start",
+            "run_id": run_id,
+            "function": func.__name__,
+            "args_summary": str(args)[:200],
+            "timestamp": start,
+        })
+
+        try:
+            result = func(*args, **kwargs)
+            elapsed = (time.time() - start) * 1000
+            _append_jsonl(trace_path, {
+                "event": "run_end",
+                "run_id": run_id,
+                "duration_ms": round(elapsed, 1),
+                "status": "success",
+                "result_summary": str(result)[:200],
+            })
+            print(f"[trace] {run_id} — {elapsed:.0f}ms — see {trace_path}")
+            return result
+        except Exception as exc:
+            elapsed = (time.time() - start) * 1000
+            _append_jsonl(trace_path, {
+                "event": "run_end",
+                "run_id": run_id,
+                "duration_ms": round(elapsed, 1),
+                "status": "error",
+                "error_type": type(exc).__name__,
+                "message": str(exc),
+                "stack": traceback.format_exc(),
+            })
+            raise
+        finally:
+            _local.run_id = None
+            _local.trace_path = None
+
+    return wrapper
+
+
+def trace_tool(tool_name: str):
+    """Decorator for individual tool functions — appends to the active run trace."""
+    def decorator(func: Callable) -> Callable:
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            t0 = time.time()
+            try:
+                result = func(*args, **kwargs)
+                latency_ms = (time.time() - t0) * 1000
+                if hasattr(_local, "trace_path") and _local.trace_path:
+                    _append_jsonl(_local.trace_path, {
+                        "event": "tool_call",
+                        "run_id": _local.run_id,
+                        "tool": tool_name,
+                        "args": str(kwargs or args)[:300],
+                        "result_summary": str(result)[:200],
+                        "latency_ms": round(latency_ms, 1),
+                        "success": True,
+                        "timestamp": t0,
+                    })
+                return result
+            except Exception as exc:
+                latency_ms = (time.time() - t0) * 1000
+                if hasattr(_local, "trace_path") and _local.trace_path:
+                    _append_jsonl(_local.trace_path, {
+                        "event": "tool_call",
+                        "run_id": _local.run_id,
+                        "tool": tool_name,
+                        "latency_ms": round(latency_ms, 1),
+                        "success": False,
+                        "error": str(exc),
+                        "timestamp": t0,
+                    })
+                raise
+        return wrapper
+    return decorator
+
+
+def trace_llm_call(model: str, prompt_tokens: int, completion_tokens: int,
+                   finish_reason: str, latency_ms: float) -> None:
+    """Call this function immediately after each LLM API call to record the turn."""
+    if hasattr(_local, "trace_path") and _local.trace_path:
+        _local.iteration = getattr(_local, "iteration", 0) + 1
+        _append_jsonl(_local.trace_path, {
+            "event": "llm_turn",
+            "run_id": _local.run_id,
+            "iteration": _local.iteration,
+            "model": model,
+            "prompt_tokens": prompt_tokens,
+            "completion_tokens": completion_tokens,
+            "finish_reason": finish_reason,
+            "latency_ms": round(latency_ms, 1),
+            "timestamp": time.time(),
+        })
+
+
+# ── Replay utility ───────────────────────────────────────────────────────
+# WHAT: Read back a trace file and replay events for post-mortem debugging
+# WHY:  You can iterate on a failed run without re-calling the LLM:
+#       1. Capture the run trace. 2. Fix the bug. 3. replay_trace() to verify
+#       the call sequence was correct before spending tokens re-running.
+
+def replay_trace(run_id: str) -> list[dict]:
+    """Load and return all events for a given run_id."""
+    trace_path = TRACE_DIR / f"{run_id}.jsonl"
+    if not trace_path.exists():
+        raise FileNotFoundError(f"No trace found for run_id={run_id}")
+    events = []
+    with open(trace_path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if line:
+                events.append(json.loads(line))
+    return events
+
+
+# ── Example usage ────────────────────────────────────────────────────────
+if __name__ == "__main__":
+    from openai import OpenAI
+    client = OpenAI(base_url="http://localhost:11434/v1", api_key="ollama")
+
+    @trace_tool("search_filings")
+    def search_filings(query: str) -> list:
+        return [{"filing_id": "UCC-001", "name": query}]
+
+    @trace_agent
+    def run_simple_agent(query: str) -> str:
+        messages = [{"role": "user", "content": query}]
+        t0 = time.time()
+        response = client.chat.completions.create(
+            model="mistral", messages=messages, temperature=0
+        )
+        trace_llm_call(
+            model="mistral",
+            prompt_tokens=response.usage.prompt_tokens,
+            completion_tokens=response.usage.completion_tokens,
+            finish_reason=response.choices[0].finish_reason,
+            latency_ms=(time.time() - t0) * 1000,
+        )
+        return response.choices[0].message.content
+
+    result = run_simple_agent("Summarize UCC filing trends.")
+    print(result)</code></pre>
+          </div>
+          <div class="code-panel" id="custom-js">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code to clipboard">Copy</button>
+            <pre><code class="language-javascript">// tracing/decorator.js
+// WHAT: Zero-dependency trace decorator for Node.js using async local storage
+// WHY:  AsyncLocalStorage is the Node.js equivalent of Python's threading.local()
+//       — it propagates context through async/await without passing it explicitly
+// GOTCHA: Requires Node.js >= 16.4.0 for AsyncLocalStorage stability
+
+const { AsyncLocalStorage } = require('async_hooks');
+const fs = require('fs');
+const path = require('path');
+const crypto = require('crypto');
+
+const TRACE_DIR = path.join(process.cwd(), 'traces');
+if (!fs.existsSync(TRACE_DIR)) fs.mkdirSync(TRACE_DIR, { recursive: true });
+
+const traceContext = new AsyncLocalStorage();
+
+function appendJsonl(filePath, record) {
+  fs.appendFileSync(filePath, JSON.stringify(record) + '\n', 'utf8');
+}
+
+function traceAgent(fn) {
+  return async function (...args) {
+    const runId = crypto.randomBytes(4).toString('hex');
+    const tracePath = path.join(TRACE_DIR, `${runId}.jsonl`);
+    const ctx = { runId, tracePath, iteration: 0 };
+
+    const start = Date.now();
+    appendJsonl(tracePath, { event: 'run_start', runId, function: fn.name, timestamp: start });
+
+    return traceContext.run(ctx, async () => {
+      try {
+        const result = await fn(...args);
+        const durationMs = Date.now() - start;
+        appendJsonl(tracePath, { event: 'run_end', runId, durationMs, status: 'success', resultSummary: String(result).slice(0, 200) });
+        console.log(`[trace] ${runId} — ${durationMs}ms — see ${tracePath}`);
+        return result;
+      } catch (err) {
+        const durationMs = Date.now() - start;
+        appendJsonl(tracePath, { event: 'run_end', runId, durationMs, status: 'error', errorType: err.constructor.name, message: err.message, stack: err.stack });
+        throw err;
+      }
+    });
+  };
+}
+
+function traceTool(toolName) {
+  return function (fn) {
+    return async function (...args) {
+      const t0 = Date.now();
+      const ctx = traceContext.getStore();
+      try {
+        const result = await fn(...args);
+        if (ctx) appendJsonl(ctx.tracePath, { event: 'tool_call', runId: ctx.runId, tool: toolName, latencyMs: Date.now() - t0, success: true, resultSummary: String(result).slice(0, 200) });
+        return result;
+      } catch (err) {
+        if (ctx) appendJsonl(ctx.tracePath, { event: 'tool_call', runId: ctx.runId, tool: toolName, latencyMs: Date.now() - t0, success: false, error: err.message });
+        throw err;
+      }
+    };
+  };
+}
+
+function traceLlmCall({ model, promptTokens, completionTokens, finishReason, latencyMs }) {
+  const ctx = traceContext.getStore();
+  if (ctx) {
+    ctx.iteration++;
+    appendJsonl(ctx.tracePath, { event: 'llm_turn', runId: ctx.runId, iteration: ctx.iteration, model, promptTokens, completionTokens, finishReason, latencyMs: Math.round(latencyMs) });
+  }
+}
+
+function replayTrace(runId) {
+  const tracePath = path.join(TRACE_DIR, `${runId}.jsonl`);
+  if (!fs.existsSync(tracePath)) throw new Error(`No trace found for runId=${runId}`);
+  return fs.readFileSync(tracePath, 'utf8')
+    .split('\n')
+    .filter(Boolean)
+    .map(line => JSON.parse(line));
+}
+
+module.exports = { traceAgent, traceTool, traceLlmCall, replayTrace };</code></pre>
+          </div>
+        </div>
+
+        <div class="checkpoint">
+          <div class="checkpoint-label">&#10003; What Just Happened?</div>
+          You have a decorator pair: <code>@trace_agent</code> marks the root function and creates the trace file; <code>@trace_tool</code> marks individual tool functions and appends to the same file. <code>trace_llm_call()</code> is called manually after each LLM response. The <code>replay_trace()</code> utility reads the file back as a list of events you can iterate over for post-mortem debugging.
+        </div>
+      </section>
+
+      <!-- VISUALIZATION -->
+      <section class="section" id="visualization">
+        <h2>Trace Visualization</h2>
+
+        <p>Raw JSON Lines are machine-readable but hard to scan. A simple CLI viewer pretty-prints the call tree, highlights slow steps (over 2 seconds), and gives a latency summary — without requiring a browser or a running backend.</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs">
+            <button class="code-tab active" onclick="switchTab(this,'viewer-py')" aria-controls="viewer-py">Python (trace_viewer.py)</button>
+            <button class="code-tab" onclick="switchTab(this,'viewer-js')" aria-controls="viewer-js">Node.js (traceViewer.js)</button>
+          </div>
+          <div class="code-annotation"><strong>WHAT:</strong> CLI trace viewer — pretty-prints call tree, highlights steps over 2s, and offers pandas analysis hooks</div>
+          <div class="code-panel active" id="viewer-py">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code to clipboard">Copy</button>
+            <pre><code class="language-python">#!/usr/bin/env python3
+# trace_viewer.py
+# WHAT: CLI trace viewer for .jsonl trace files
+# WHY:  Human-readable call tree without needing Jaeger or LangSmith
+# GOTCHA: The ANSI color codes work in any POSIX terminal and in Windows
+#         Terminal. They do NOT work in plain cmd.exe — redirect output
+#         to a file instead: python trace_viewer.py &lt;run_id&gt; > trace.txt
+
+import sys
+import json
+from pathlib import Path
+
+# ── ANSI colors ─────────────────────────────────────────────────────────
+RESET = "\033[0m"
+BOLD  = "\033[1m"
+GREEN = "\033[32m"
+YELLOW = "\033[33m"
+RED   = "\033[31m"
+CYAN  = "\033[36m"
+DIM   = "\033[2m"
+
+SLOW_THRESHOLD_MS = 2000  # Highlight anything over 2 seconds
+
+def load_trace(run_id: str) -> list[dict]:
+    path = Path("traces") / f"{run_id}.jsonl"
+    if not path.exists():
+        # Try current directory
+        path = Path(f"{run_id}.jsonl")
+    if not path.exists():
+        raise FileNotFoundError(f"Trace file not found for run_id={run_id}")
+    events = []
+    with open(path, "r", encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if line:
+                events.append(json.loads(line))
+    return events
+
+def fmt_ms(ms: float) -> str:
+    if ms >= SLOW_THRESHOLD_MS:
+        return f"{RED}{BOLD}{ms:.0f}ms ⚠ SLOW{RESET}"
+    elif ms >= 500:
+        return f"{YELLOW}{ms:.0f}ms{RESET}"
+    else:
+        return f"{GREEN}{ms:.0f}ms{RESET}"
+
+def print_trace(run_id: str) -> None:
+    events = load_trace(run_id)
+    print(f"\n{BOLD}{CYAN}══ Trace: {run_id} ══{RESET}")
+
+    for ev in events:
+        kind = ev.get("event", "unknown")
+
+        if kind == "run_start":
+            print(f"  {BOLD}▶ run_start{RESET}  fn={ev.get('function','?')}")
+
+        elif kind == "run_end":
+            status = ev.get("status", "?")
+            dur = ev.get("duration_ms", 0)
+            color = GREEN if status == "success" else RED
+            print(f"  {color}{BOLD}■ run_end{RESET}    status={status}  total={fmt_ms(dur)}")
+
+        elif kind == "llm_turn":
+            it = ev.get("iteration", "?")
+            ms = ev.get("latency_ms", 0)
+            tokens = ev.get("prompt_tokens", 0) + ev.get("completion_tokens", 0)
+            fr = ev.get("finish_reason", "?")
+            print(f"  {CYAN}  ├─ llm_turn{RESET}   iter={it}  tokens={tokens}  finish={fr}  latency={fmt_ms(ms)}")
+
+        elif kind == "tool_call":
+            tool = ev.get("tool", "?")
+            ms = ev.get("latency_ms", 0)
+            ok = ev.get("success", True)
+            marker = f"{GREEN}✓{RESET}" if ok else f"{RED}✗{RESET}"
+            err = f"  error={ev.get('error','')}" if not ok else ""
+            print(f"  {CYAN}  │  └─ tool{RESET}    {marker} {tool}  latency={fmt_ms(ms)}{err}")
+
+    # ── Summary ─────────────────────────────────────────────────────────
+    llm_events = [e for e in events if e.get("event") == "llm_turn"]
+    tool_events = [e for e in events if e.get("event") == "tool_call"]
+    total_tokens = sum(e.get("prompt_tokens", 0) + e.get("completion_tokens", 0) for e in llm_events)
+    slow_tools = [e for e in tool_events if e.get("latency_ms", 0) >= SLOW_THRESHOLD_MS]
+
+    print(f"\n{BOLD}  Summary{RESET}")
+    print(f"    LLM turns:    {len(llm_events)}")
+    print(f"    Tool calls:   {len(tool_events)}")
+    print(f"    Total tokens: {total_tokens}")
+    if slow_tools:
+        print(f"    {RED}{BOLD}Slow tools ({len(slow_tools)}):{RESET} {', '.join(e.get('tool') for e in slow_tools)}")
+    print()
+
+# ── pandas analysis (optional) ───────────────────────────────────────────
+def load_into_pandas(run_id: str):
+    """Load trace events into a pandas DataFrame for analysis."""
+    try:
+        import pandas as pd
+    except ImportError:
+        print("pip install pandas to use this feature")
+        return None
+    events = load_trace(run_id)
+    return pd.DataFrame(events)
+
+if __name__ == "__main__":
+    if len(sys.argv) < 2:
+        print("Usage: python trace_viewer.py &lt;run_id&gt;")
+        sys.exit(1)
+    print_trace(sys.argv[1])</code></pre>
+          </div>
+          <div class="code-panel" id="viewer-js">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code to clipboard">Copy</button>
+            <pre><code class="language-javascript">#!/usr/bin/env node
+// traceViewer.js
+// WHAT: CLI trace viewer using chalk for colored output
+// WHY:  Same functionality as the Python viewer — pick whichever runtime
+//       matches your project's primary language
+// GOTCHA: chalk v5 is ESM-only. Use chalk v4 if your project uses CommonJS
+//         (require()). Install: npm install chalk@4
+
+const fs = require('fs');
+const path = require('path');
+
+// Use chalk if available, fallback to identity functions for no-color mode
+let chalk;
+try {
+  chalk = require('chalk');
+} catch {
+  const id = (s) => s;
+  chalk = { red: { bold: id }, green: id, yellow: id, cyan: id, bold: id, dim: id };
+}
+
+const SLOW_THRESHOLD_MS = 2000;
+
+function loadTrace(runId) {
+  const filePath = path.join(process.cwd(), 'traces', `${runId}.jsonl`);
+  if (!fs.existsSync(filePath)) throw new Error(`Trace file not found for runId=${runId}`);
+  return fs.readFileSync(filePath, 'utf8')
+    .split('\n')
+    .filter(Boolean)
+    .map(line => JSON.parse(line));
+}
+
+function fmtMs(ms) {
+  if (ms >= SLOW_THRESHOLD_MS) return chalk.red.bold(`${ms}ms ⚠ SLOW`);
+  if (ms >= 500) return chalk.yellow(`${ms}ms`);
+  return chalk.green(`${ms}ms`);
+}
+
+function printTrace(runId) {
+  const events = loadTrace(runId);
+  console.log(`\n${chalk.bold.cyan(`══ Trace: ${runId} ══`)}`);
+
+  for (const ev of events) {
+    const kind = ev.event || 'unknown';
+    if (kind === 'run_start') {
+      console.log(`  ${chalk.bold('▶ run_start')}  fn=${ev.function || '?'}`);
+    } else if (kind === 'run_end') {
+      const ok = ev.status === 'success';
+      const col = ok ? chalk.green.bold : chalk.red.bold;
+      console.log(`  ${col('■ run_end')}    status=${ev.status}  total=${fmtMs(ev.durationMs || 0)}`);
+    } else if (kind === 'llm_turn') {
+      const tokens = (ev.promptTokens || 0) + (ev.completionTokens || 0);
+      console.log(`  ${chalk.cyan('  ├─ llm_turn')}   iter=${ev.iteration}  tokens=${tokens}  finish=${ev.finishReason}  latency=${fmtMs(ev.latencyMs || 0)}`);
+    } else if (kind === 'tool_call') {
+      const marker = ev.success ? chalk.green('✓') : chalk.red('✗');
+      const errStr = ev.success ? '' : `  error=${ev.error}`;
+      console.log(`  ${chalk.cyan('  │  └─ tool')}    ${marker} ${ev.tool}  latency=${fmtMs(ev.latencyMs || 0)}${errStr}`);
+    }
+  }
+
+  const llmEvents = events.filter(e => e.event === 'llm_turn');
+  const toolEvents = events.filter(e => e.event === 'tool_call');
+  const totalTokens = llmEvents.reduce((s, e) => s + (e.promptTokens || 0) + (e.completionTokens || 0), 0);
+  const slowTools = toolEvents.filter(e => (e.latencyMs || 0) >= SLOW_THRESHOLD_MS);
+
+  console.log(`\n${chalk.bold('  Summary')}`);
+  console.log(`    LLM turns:    ${llmEvents.length}`);
+  console.log(`    Tool calls:   ${toolEvents.length}`);
+  console.log(`    Total tokens: ${totalTokens}`);
+  if (slowTools.length) console.log(`    ${chalk.red.bold(`Slow tools (${slowTools.length}):`)} ${slowTools.map(e => e.tool).join(', ')}`);
+  console.log();
+}
+
+const runId = process.argv[2];
+if (!runId) { console.error('Usage: node traceViewer.js <run_id>'); process.exit(1); }
+printTrace(runId);</code></pre>
+          </div>
+        </div>
+
+        <div class="output-block">
+<div class="output-label">$ python trace_viewer.py a3f9b2c1</div>
+══ Trace: a3f9b2c1 ══
+  ▶ run_start  fn=run_agent
+  ├─ llm_turn   iter=1  tokens=399  finish=tool_calls  latency=864ms
+  │  └─ tool    ✓ search_filings  latency=126ms
+  │  └─ tool    ✓ fuzzy_match     latency=8ms
+  ├─ llm_turn   iter=2  tokens=512  finish=stop        latency=2347ms ⚠ SLOW
+  ■ run_end    status=success  total=2847ms
+
+  Summary
+    LLM turns:    2
+    Tool calls:   2
+    Total tokens: 911
+    Slow tools (0): (none)
+    ⚠ Slow LLM call detected: iter=2 took 2347ms — consider reducing context window</div>
+      </section>
+
+      <!-- LAB -->
+      <section class="section" id="lab">
+        <h2>Lab: Instrument the Entity Resolution Agent</h2>
+
+        <p>In this lab you will add LangSmith tracing to the Capstone C3 entity resolution agent. By the end, every query you run will appear as a navigable trace tree in the LangSmith UI with per-tool latencies, token counts, and the full conversation history.</p>
+
+        <div class="callout-os">
+          <span class="box-label">Prerequisites</span>
+          <p>You need a free LangSmith account at <a href="https://smith.langchain.com" target="_blank" rel="noopener">smith.langchain.com</a> (email signup, no credit card). Ollama must be running with <code>mistral</code> pulled. The Capstone C3 agent code should be in <code>capstone_c3/agent.py</code> — adjust the path if yours differs.</p>
+        </div>
+
+        <!-- Step 1 -->
+        <div class="step-block">
+          <div class="step-header"><span class="step-num">1</span>Install LangSmith and set environment variables</div>
+          <div class="code-block-wrapper">
+            <div class="code-tabs">
+              <button class="code-tab active" onclick="switchTab(this,'lab1-sh')" aria-controls="lab1-sh">Shell</button>
+            </div>
+            <div class="code-panel active" id="lab1-sh">
+              <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code to clipboard">Copy</button>
+              <pre><code class="language-bash">pip install langsmith
+
+# Add these to your .env file (or export in your shell session)
+export LANGCHAIN_API_KEY="ls__your_key_here"
+export LANGCHAIN_TRACING_V2="true"
+export LANGCHAIN_PROJECT="capstone-c3-entity-resolution"</code></pre>
+            </div>
+          </div>
+          <div class="output-label">Expected output</div>
+          <div class="output-block">Successfully installed langsmith-0.x.x
+# No output for export commands — verify with: echo $LANGCHAIN_API_KEY</div>
+          <div class="checkpoint">
+            <div class="checkpoint-label">&#10003; Checkpoint 1</div>
+            <code>echo $LANGCHAIN_TRACING_V2</code> should print <code>true</code>. Open smith.langchain.com &rarr; Projects — you should see "capstone-c3-entity-resolution" listed (empty for now).
+          </div>
+        </div>
+
+        <!-- Step 2 -->
+        <div class="step-block">
+          <div class="step-header"><span class="step-num">2</span>Wrap run_agent() with @traceable</div>
+          <div class="code-block-wrapper">
+            <div class="code-tabs">
+              <button class="code-tab active" onclick="switchTab(this,'lab2-py')" aria-controls="lab2-py">Python</button>
+            </div>
+            <div class="code-annotation"><strong>WHAT:</strong> Two-line change to make the root function a LangSmith root span</div>
+            <div class="code-panel active" id="lab2-py">
+              <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code to clipboard">Copy</button>
+              <pre><code class="language-python"># capstone_c3/agent.py  ← your existing file
+# ADD these two lines at the top (after existing imports):
+
+from langsmith import traceable          # ← ADD
+
+# FIND your existing run_agent function and add the decorator:
+
+@traceable(name="entity-resolution-agent")   # ← ADD
+def run_agent(query: str) -> str:
+    # ... your existing code here, unchanged ...
+    pass</code></pre>
+            </div>
+          </div>
+          <div class="output-label">Run command</div>
+          <div class="output-block">python -c "from capstone_c3.agent import run_agent; print(run_agent('Test query'))"</div>
+          <div class="checkpoint">
+            <div class="checkpoint-label">&#10003; Checkpoint 2</div>
+            After running the command, go to smith.langchain.com &rarr; Projects &rarr; capstone-c3-entity-resolution. You should see one trace with the name "entity-resolution-agent". Click it — the root span is visible but tool calls are not yet broken out into child spans.
+          </div>
+        </div>
+
+        <!-- Step 3 -->
+        <div class="step-block">
+          <div class="step-header"><span class="step-num">3</span>Wrap each tool handler call</div>
+          <div class="code-block-wrapper">
+            <div class="code-tabs">
+              <button class="code-tab active" onclick="switchTab(this,'lab3-py')" aria-controls="lab3-py">Python</button>
+            </div>
+            <div class="code-annotation"><strong>WHAT:</strong> Add @traceable to each tool function so they appear as child spans in the trace tree</div>
+            <div class="code-panel active" id="lab3-py">
+              <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code to clipboard">Copy</button>
+              <pre><code class="language-python"># capstone_c3/tools.py  ← your existing tools file
+from langsmith import traceable
+
+# FIND each of your tool handler functions and add @traceable:
+
+@traceable(name="search-filings-tool")
+def search_filings(query: str) -> list:
+    # ... your existing implementation ...
+    pass
+
+@traceable(name="fuzzy-match-tool")
+def fuzzy_match(name_a: str, name_b: str) -> float:
+    # ... your existing implementation ...
+    pass
+
+@traceable(name="lookup-registered-agent-tool")
+def lookup_registered_agent(entity_name: str) -> dict:
+    # ... your existing implementation ...
+    pass
+
+# Repeat for every tool your agent uses.
+# The name= argument is what shows in the LangSmith UI.</code></pre>
+            </div>
+          </div>
+          <div class="output-label">Run command</div>
+          <div class="output-block">python -c "
+from capstone_c3.agent import run_agent
+result = run_agent('Are Acme LLC (NY) and ACME L.L.C. (DE) the same entity?')
+print(result)
+"</div>
+          <div class="checkpoint">
+            <div class="checkpoint-label">&#10003; Checkpoint 3</div>
+            In LangSmith, the trace tree should now show nested spans: entity-resolution-agent &rarr; mistral (llm call) &rarr; search-filings-tool, fuzzy-match-tool, etc. Each span has its own latency bar. You can see which tool is the bottleneck at a glance.
+          </div>
+        </div>
+
+        <!-- Step 4 -->
+        <div class="step-block">
+          <div class="step-header"><span class="step-num">4</span>Run a real query and view the full trace</div>
+          <div class="code-block-wrapper">
+            <div class="code-tabs">
+              <button class="code-tab active" onclick="switchTab(this,'lab4-py')" aria-controls="lab4-py">Python</button>
+            </div>
+            <div class="code-annotation"><strong>WHAT:</strong> A complete test script that runs three representative queries and prints the LangSmith project URL</div>
+            <div class="code-panel active" id="lab4-py">
+              <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code to clipboard">Copy</button>
+              <pre><code class="language-python"># scripts/run_traced_queries.py
+import os
+from capstone_c3.agent import run_agent
+
+queries = [
+    "Are 'Acme LLC' and 'ACME L.L.C.' the same entity? Check UCC filings.",
+    "Is 'Best Buy Co. Inc.' the same as 'Best Buy Stores L.P.'?",
+    "Lookup filings for 'Consolidated Widget Corporation' in NY and CA.",
+]
+
+print("Running traced queries against entity resolution agent...")
+print(f"Project: {os.getenv('LANGCHAIN_PROJECT', 'default')}\n")
+
+for i, q in enumerate(queries, 1):
+    print(f"[{i}/3] {q[:60]}...")
+    result = run_agent(q)
+    print(f"  → {result[:120]}\n")
+
+project = os.getenv("LANGCHAIN_PROJECT", "default")
+print(f"View traces at: https://smith.langchain.com/projects/{project}")</code></pre>
+            </div>
+          </div>
+          <div class="output-label">Expected output</div>
+          <div class="output-block">Running traced queries against entity resolution agent...
+Project: capstone-c3-entity-resolution
+
+[1/3] Are 'Acme LLC' and 'ACME L.L.C.' the same entity? Check UCC f...
+  → Based on UCC filing analysis: MERGE decision, confidence 0.94. Fuzzy match 0.94, same registered agent.
+
+[2/3] Is 'Best Buy Co. Inc.' the same as 'Best Buy Stores L.P.'?
+  → DISTINCT decision, confidence 0.82. Same parent but different legal entities — do not merge.
+
+[3/3] Lookup filings for 'Consolidated Widget Corporation' in NY and ...
+  → Found 3 filings: 2 in NY (2022, 2024), 1 in CA (2023). All linked to same EIN.
+
+View traces at: https://smith.langchain.com/projects/capstone-c3-entity-resolution</div>
+          <div class="checkpoint">
+            <div class="checkpoint-label">&#10003; Checkpoint 4 — Final</div>
+            Open the URL printed above. You should see 3 traces, each with a full nested span tree. Click any trace &rarr; select the "Timeline" view to see which spans ran sequentially vs. in parallel. Filter by "model: mistral" to confirm all runs used your local Ollama instance. Congratulations — your entity resolution agent is fully instrumented.
+          </div>
+        </div>
+      </section>
+
+      <!-- QUIZ -->
+      <section class="section" id="quiz">
+        <h2>Knowledge Check</h2>
+
+        <div class="quiz-question" id="q1">
+          <h4>1. Your agent runs fine in development but fails silently in production. You have no traces. What is the fastest path to diagnosing the issue?</h4>
+          <div class="quiz-option" onclick="answerQ('q1','a')" data-val="a"><div class="quiz-marker">A</div><div>Add print() statements at the top of each tool function and redeploy.</div></div>
+          <div class="quiz-option" onclick="answerQ('q1','b')" data-val="b"><div class="quiz-marker">B</div><div>Instrument with @traceable or structlog, reproduce the failure, and query the resulting trace for the exact tool call and LLM turn where the failure occurred.</div></div>
+          <div class="quiz-option" onclick="answerQ('q1','c')" data-val="c"><div class="quiz-marker">C</div><div>Roll back to the last known working version and compare outputs manually.</div></div>
+          <div class="quiz-option" onclick="answerQ('q1','d')" data-val="d"><div class="quiz-marker">D</div><div>Increase the model temperature and retry until the output improves.</div></div>
+          <div class="quiz-feedback" id="q1-fb"></div>
+        </div>
+
+        <div class="quiz-question" id="q2">
+          <h4>2. You want to use LangSmith tracing with Ollama's Mistral-7B. Which statement is correct?</h4>
+          <div class="quiz-option" onclick="answerQ('q2','a')" data-val="a"><div class="quiz-marker">A</div><div>LangSmith's @traceable only works with LangChain's LLM wrappers — you must rewrite your OpenAI client code to use LangChain.</div></div>
+          <div class="quiz-option" onclick="answerQ('q2','b')" data-val="b"><div class="quiz-marker">B</div><div>@traceable works with any Python function regardless of what HTTP client or model provider is used internally — it traces the call graph, not the HTTP layer.</div></div>
+          <div class="quiz-option" onclick="answerQ('q2','c')" data-val="c"><div class="quiz-marker">C</div><div>LangSmith requires a paid account to trace non-OpenAI models.</div></div>
+          <div class="quiz-option" onclick="answerQ('q2','d')" data-val="d"><div class="quiz-marker">D</div><div>You must pass the LangSmith API key as a parameter to the OpenAI client constructor.</div></div>
+          <div class="quiz-feedback" id="q2-fb"></div>
+        </div>
+
+        <div class="quiz-question" id="q3">
+          <h4>3. What is the key difference between a trace, a span, and a log?</h4>
+          <div class="quiz-option" onclick="answerQ('q3','a')" data-val="a"><div class="quiz-marker">A</div><div>They are three names for the same concept — structured log records with different retention policies.</div></div>
+          <div class="quiz-option" onclick="answerQ('q3','b')" data-val="b"><div class="quiz-marker">B</div><div>A trace is the complete record of one agent run; a span is one timed operation within that trace (with parent/child relationships); a log is a point-in-time event with no duration.</div></div>
+          <div class="quiz-option" onclick="answerQ('q3','c')" data-val="c"><div class="quiz-marker">C</div><div>Traces are for LLM calls, spans are for tool calls, and logs are for loop iterations.</div></div>
+          <div class="quiz-option" onclick="answerQ('q3','d')" data-val="d"><div class="quiz-marker">D</div><div>Logs and spans are identical; traces are only used in distributed systems with multiple services.</div></div>
+          <div class="quiz-feedback" id="q3-fb"></div>
+        </div>
+
+        <div class="quiz-question" id="q4">
+          <h4>4. You are deploying to an air-gapped environment with no internet access. Which tracing solution from this module works in that context?</h4>
+          <div class="quiz-option" onclick="answerQ('q4','a')" data-val="a"><div class="quiz-marker">A</div><div>LangSmith — it has an on-premise version that can be self-hosted.</div></div>
+          <div class="quiz-option" onclick="answerQ('q4','b')" data-val="b"><div class="quiz-marker">B</div><div>The custom @trace_agent decorator writing to JSON Lines files — it has zero external dependencies and writes to local disk.</div></div>
+          <div class="quiz-option" onclick="answerQ('q4','c')" data-val="c"><div class="quiz-marker">C</div><div>OpenTelemetry with the OTLP exporter — OTLP works without internet because it is a local protocol.</div></div>
+          <div class="quiz-option" onclick="answerQ('q4','d')" data-val="d"><div class="quiz-marker">D</div><div>structlog — its JSON output is automatically forwarded to a cloud backend.</div></div>
+          <div class="quiz-feedback" id="q4-fb"></div>
+        </div>
+
+        <div class="quiz-question" id="q5">
+          <h4>5. The trace_viewer.py script flags a span as SLOW. What is the threshold used in this module, and what should you investigate first?</h4>
+          <div class="quiz-option" onclick="answerQ('q5','a')" data-val="a"><div class="quiz-marker">A</div><div>500ms — investigate the Ollama model quantization setting.</div></div>
+          <div class="quiz-option" onclick="answerQ('q5','b')" data-val="b"><div class="quiz-marker">B</div><div>2000ms — investigate whether the slow span is a tool call (external I/O) or an LLM turn (large context window or model load time).</div></div>
+          <div class="quiz-option" onclick="answerQ('q5','c')" data-val="c"><div class="quiz-marker">C</div><div>1000ms — investigate the agent's system prompt length.</div></div>
+          <div class="quiz-option" onclick="answerQ('q5','d')" data-val="d"><div class="quiz-marker">D</div><div>5000ms — investigate whether the trace file is being written to disk too slowly.</div></div>
+          <div class="quiz-feedback" id="q5-fb"></div>
+        </div>
+
+        <div class="quiz-question" id="q6">
+          <h4>6. The OTLP exporter is configured with insecure=True in the local Jaeger setup. Why is this acceptable locally but not in production?</h4>
+          <div class="quiz-option" onclick="answerQ('q6','a')" data-val="a"><div class="quiz-marker">A</div><div>insecure=True disables compression, which is fine locally but required in production for performance.</div></div>
+          <div class="quiz-option" onclick="answerQ('q6','b')" data-val="b"><div class="quiz-marker">B</div><div>insecure=True disables TLS encryption on the OTLP gRPC connection, meaning trace data travels in plaintext — acceptable on localhost but exposing sensitive prompt/response data in production over a network.</div></div>
+          <div class="quiz-option" onclick="answerQ('q6','c')" data-val="c"><div class="quiz-marker">C</div><div>insecure=True disables span sampling, causing 100% trace overhead.</div></div>
+          <div class="quiz-option" onclick="answerQ('q6','d')" data-val="d"><div class="quiz-marker">D</div><div>insecure=True is a Jaeger-specific flag with no security implications — it is safe everywhere.</div></div>
+          <div class="quiz-feedback" id="q6-fb"></div>
+        </div>
+
+        <div class="quiz-score" id="quiz-score">
+          <div class="score-num" id="score-display">0/6</div>
+          <p style="color:var(--text-secondary);margin-top:0.5rem;">Questions answered. Check traces when your agents fail — not print statements.</p>
+        </div>
+      </section>
+
+      <!-- NAVIGATION -->
+      <nav class="module-nav" aria-label="Module navigation">
+        <a href="M18-evaluation-testing.html">&#8592; M18: Evaluation &amp; Testing</a>
+        <a href="M20-monitoring.html">M20: Monitoring &#8594;</a>
+      </nav>
+    </main>
+  </div>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+  <script>
+    // =====================
+    // CODE TABS
+    // =====================
+    function switchTab(btn, panelId) {
+      const wrapper = btn.closest('.code-block-wrapper');
+      wrapper.querySelectorAll('.code-tab').forEach(t => t.classList.remove('active'));
+      wrapper.querySelectorAll('.code-panel').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      const panel = document.getElementById(panelId);
+      if (panel) panel.classList.add('active');
+    }
+
+    // =====================
+    // COPY BUTTONS
+    // =====================
+    function copyCode(btn) {
+      const panel = btn.closest('.code-panel');
+      const code = panel.querySelector('pre code');
+      if (!code) return;
+      navigator.clipboard.writeText(code.innerText).then(() => {
+        const orig = btn.textContent;
+        btn.textContent = 'Copied!';
+        btn.style.color = 'var(--success)';
+        btn.style.borderColor = 'var(--success)';
+        setTimeout(() => {
+          btn.textContent = orig;
+          btn.style.color = '';
+          btn.style.borderColor = '';
+        }, 1800);
+      }).catch(() => {
+        btn.textContent = 'Failed';
+        setTimeout(() => { btn.textContent = 'Copy'; }, 1500);
+      });
+    }
+
+    // =====================
+    // QUIZ
+    // =====================
+    const answers = {
+      q1: { correct: 'b', feedback: {
+        a: "print() statements require a redeploy and only show data for the exact statements you added — they can't reconstruct causality. Structured traces capture everything in one shot.",
+        b: "Correct. Instrumenting with @traceable or structlog and then reproducing the failure gives you the full causal chain — exactly which LLM turn returned which tool call that produced which result — in one query.",
+        c: "Rolling back hides the root cause rather than diagnosing it. The same failure will recur when you redeploy.",
+        d: "Temperature affects output randomness, not the underlying tool/LLM failure causing the silent production issue.",
+      }},
+      q2: { correct: 'b', feedback: {
+        a: "Incorrect. @traceable is a plain Python decorator that wraps any function. It doesn't inspect the function's internals — it records inputs and outputs regardless of how the function makes LLM calls.",
+        b: "Correct. @traceable traces the Python call graph. Since Ollama exposes an OpenAI-compatible API, your OpenAI client code works unchanged, and @traceable captures the function's inputs, outputs, and child-function calls automatically.",
+        c: "LangSmith's free tier includes 5,000 traces/month for any model provider — no payment required.",
+        d: "The LangSmith API key is set as an environment variable (LANGCHAIN_API_KEY), not passed to the OpenAI constructor.",
+      }},
+      q3: { correct: 'b', feedback: {
+        a: "Traces, spans, and logs are distinct concepts with different semantics and use cases — not the same thing with different names.",
+        b: "Correct. A trace = one complete agent run (composed of spans). A span = one timed operation with parent/child relationship to other spans. A log = a timestamped event with no duration or causal relationship.",
+        c: "The association by operation type (traces=LLM, spans=tools, logs=loops) is incorrect. A single trace can contain LLM spans, tool spans, and loop iteration events all together.",
+        d: "Spans can be used in single-service systems, not just distributed architectures. The parent/child relationship is about causality within a run, not about network boundaries.",
+      }},
+      q4: { correct: 'b', feedback: {
+        a: "While LangSmith does have on-premise options, they require network infrastructure setup. The simplest zero-dependency option for air-gapped environments is the custom decorator.",
+        b: "Correct. The custom @trace_agent decorator writes to local JSON Lines files with no external dependencies (no network calls, no installed services). It works in any environment that has Python and a filesystem.",
+        c: "OpenTelemetry with OTLP requires a running backend (Jaeger in this module) — Jaeger itself needs to be reachable, and in a true air-gapped setup you'd need to pre-pull the Docker image.",
+        d: "structlog writes to stdout/stderr by default. It does not automatically forward to any cloud backend.",
+      }},
+      q5: { correct: 'b', feedback: {
+        a: "The slow threshold in this module's trace_viewer.py is SLOW_THRESHOLD_MS = 2000, not 500ms.",
+        b: "Correct. The threshold is 2000ms. For a slow tool call, first check whether it's doing expensive I/O (database query, external API). For a slow LLM turn, check context window size — Mistral-7B on Ollama slows dramatically with context windows over 8k tokens.",
+        c: "The threshold is 2000ms, not 1000ms. System prompt length affects LLM call latency but is not the first thing to check.",
+        d: "The threshold is 2000ms, not 5000ms. Disk I/O for JSONL appends is negligible (microseconds) and is not a latency concern.",
+      }},
+      q6: { correct: 'b', feedback: {
+        a: "insecure=True is about TLS/SSL encryption, not about compression. They are unrelated settings.",
+        b: "Correct. insecure=True disables TLS on the gRPC connection between your application and the OTLP receiver. Locally this is fine since data never leaves your machine. In production, this would expose all trace data — including full LLM prompts, tool arguments, and responses — in plaintext over the network.",
+        c: "Span sampling is controlled by a separate Sampler configuration, not by insecure=True.",
+        d: "insecure=True is a gRPC TLS setting with real security implications. It is NOT safe in production over any network.",
+      }},
+    };
+
+    let quizCorrect = 0;
+    let quizTotal = 0;
+    const answered = {};
+
+    function answerQ(qId, val) {
+      if (answered[qId]) return;
+      answered[qId] = true;
+      quizTotal++;
+      const q = document.getElementById(qId);
+      const opts = q.querySelectorAll('.quiz-option');
+      const fb = document.getElementById(qId + '-fb');
+      const ans = answers[qId];
+      opts.forEach(opt => {
+        opt.classList.add('disabled');
+        const v = opt.dataset.val;
+        if (v === ans.correct) opt.classList.add('correct');
+        else if (v === val && v !== ans.correct) opt.classList.add('incorrect');
+        const marker = opt.querySelector('.quiz-marker');
+        if (v === ans.correct) marker.textContent = '✓';
+        else if (v === val && v !== ans.correct) marker.textContent = '✗';
+      });
+      if (val === ans.correct) {
+        quizCorrect++;
+        fb.textContent = '✓ ' + ans.feedback[val];
+        fb.className = 'quiz-feedback show correct-fb';
+      } else {
+        fb.textContent = '✗ ' + ans.feedback[val];
+        fb.className = 'quiz-feedback show incorrect-fb';
+      }
+      if (quizTotal === Object.keys(answers).length) {
+        const scoreEl = document.getElementById('quiz-score');
+        document.getElementById('score-display').textContent = quizCorrect + '/' + quizTotal;
+        scoreEl.style.display = 'block';
+        scoreEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+      }
+    }
+
+    // =====================
+    // ANIMATION 1: TRACE FLOW
+    // =====================
+    const traceFlowAnim = (() => {
+      const rows = ['tf-row1', 'tf-row2', 'tf-row3', 'tf-row4'];
+      let step = 0;
+      let timer = null;
+      let running = false;
+
+      function reset() {
+        rows.forEach(id => document.getElementById(id).classList.remove('visible'));
+        step = 0;
+      }
+
+      function advance() {
+        if (step < rows.length) {
+          document.getElementById(rows[step]).classList.add('visible');
+          step++;
+        }
+        if (step >= rows.length) {
+          clearInterval(timer);
+          running = false;
+          document.getElementById('tf-play').innerHTML = '&#9654;';
+        }
+      }
+
+      return {
+        toggle() {
+          if (running) {
+            clearInterval(timer);
+            running = false;
+            document.getElementById('tf-play').innerHTML = '&#9654;';
+          } else {
+            running = true;
+            document.getElementById('tf-play').innerHTML = '&#9646;&#9646;';
+            if (step === 0) advance();
+            timer = setInterval(advance, 800);
+          }
+        },
+        restart() {
+          clearInterval(timer);
+          running = false;
+          document.getElementById('tf-play').innerHTML = '&#9654;';
+          reset();
+        }
+      };
+    })();
+
+    // =====================
+    // ANIMATION 2: LANGSMITH TRACE TREE
+    // =====================
+    const lsTreeAnim = (() => {
+      const spans = ['ls-s0', 'ls-s1', 'ls-s2', 'ls-s3', 'ls-s4', 'ls-s5'];
+      let step = 0;
+      let timer = null;
+      let running = false;
+
+      function reset() {
+        spans.forEach(id => document.getElementById(id).classList.remove('visible'));
+        step = 0;
+      }
+
+      function advance() {
+        if (step < spans.length) {
+          document.getElementById(spans[step]).classList.add('visible');
+          step++;
+        }
+        if (step >= spans.length) {
+          clearInterval(timer);
+          running = false;
+          document.getElementById('ls-play').innerHTML = '&#9654;';
+        }
+      }
+
+      return {
+        toggle() {
+          if (running) {
+            clearInterval(timer);
+            running = false;
+            document.getElementById('ls-play').innerHTML = '&#9654;';
+          } else {
+            running = true;
+            document.getElementById('ls-play').innerHTML = '&#9646;&#9646;';
+            if (step === 0) advance();
+            timer = setInterval(advance, 600);
+          }
+        },
+        restart() {
+          clearInterval(timer);
+          running = false;
+          document.getElementById('ls-play').innerHTML = '&#9654;';
+          reset();
+        }
+      };
+    })();
+
+    // =====================
+    // ANIMATION 3: OTEL SPANS
+    // =====================
+    const otelAnim = (() => {
+      const rows = ['otel-r0', 'otel-r1', 'otel-r2', 'otel-r3', 'otel-r4', 'otel-r5'];
+      const bars = ['otel-b0', 'otel-b1', 'otel-b2', 'otel-b3', 'otel-b4', 'otel-b5'];
+      const widths = ['100%', '30%', '4%', '0.3%', '38%', '0.6%'];
+      let step = 0;
+      let timer = null;
+      let running = false;
+
+      function reset() {
+        rows.forEach(id => {
+          const el = document.getElementById(id);
+          if (el) el.classList.remove('visible');
+        });
+        bars.forEach(id => {
+          const el = document.getElementById(id);
+          if (el) el.style.width = '0';
+        });
+        step = 0;
+      }
+
+      function advance() {
+        if (step < rows.length) {
+          const rowEl = document.getElementById(rows[step]);
+          const barEl = document.getElementById(bars[step]);
+          if (rowEl) rowEl.classList.add('visible');
+          if (barEl) {
+            // Delay bar animation slightly after row appears
+            setTimeout(() => {
+              if (barEl) barEl.style.width = widths[step];
+            }, 100);
+          }
+          step++;
+        }
+        if (step >= rows.length) {
+          clearInterval(timer);
+          running = false;
+          document.getElementById('otel-play').innerHTML = '&#9654;';
+        }
+      }
+
+      return {
+        toggle() {
+          if (running) {
+            clearInterval(timer);
+            running = false;
+            document.getElementById('otel-play').innerHTML = '&#9654;';
+          } else {
+            running = true;
+            document.getElementById('otel-play').innerHTML = '&#9646;&#9646;';
+            if (step === 0) advance();
+            timer = setInterval(advance, 700);
+          }
+        },
+        restart() {
+          clearInterval(timer);
+          running = false;
+          document.getElementById('otel-play').innerHTML = '&#9654;';
+          reset();
+        }
+      };
+    })();
+
+    // =====================
+    // SIDEBAR SCROLL SPY
+    // =====================
+    const sections = document.querySelectorAll('.section');
+    const navLinks = document.querySelectorAll('.sidebar-nav a');
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          navLinks.forEach(link => link.classList.remove('active'));
+          const active = document.querySelector(`.sidebar-nav a[href="#${entry.target.id}"]`);
+          if (active) active.classList.add('active');
+        }
+      });
+    }, { rootMargin: '-20% 0px -70% 0px' });
+
+    sections.forEach(s => observer.observe(s));
+  </script>
+</body>
+</html>

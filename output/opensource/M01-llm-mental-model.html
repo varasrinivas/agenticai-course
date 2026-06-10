@@ -1,0 +1,2580 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>M01: The LLM Mental Model | Building AI Agents with Open Source Models</title>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;700;800&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+  <style>
+    /* === CSS RESET & ROOT === */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg-primary: #0A1628;
+      --bg-secondary: #111D33;
+      --bg-card: #162033;
+      --bg-surface: #1A2740;
+      --text-primary: #E8ECF1;
+      --text-secondary: #94A3B8;
+      --text-muted: #64748B;
+      --accent-primary: #D4A843;
+      --accent-hover: #E5BC5A;
+      --accent-muted: rgba(212, 168, 67, 0.15);
+      --success: #10B981;
+      --success-bg: rgba(16, 185, 129, 0.1);
+      --warning: #F59E0B;
+      --warning-bg: rgba(245, 158, 11, 0.1);
+      --error: #F43F5E;
+      --error-bg: rgba(244, 63, 94, 0.1);
+      --info: #3B82F6;
+      --info-bg: rgba(59, 130, 246, 0.1);
+      --track-foundations: #6366F1;
+      --track-color: var(--track-foundations);
+      --track-capstones: #D4A843;
+      --code-bg: #0D1117;
+      --code-border: #21262D;
+      --code-text: #C9D1D9;
+      --transition-fast: 150ms;
+      --transition-normal: 300ms;
+      --transition-slow: 500ms;
+    }
+
+    body {
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      font-family: 'Source Sans 3', sans-serif;
+      font-size: 1.05rem;
+      line-height: 1.7;
+      min-height: 100vh;
+    }
+
+    /* === PROGRESS BAR (top of page) === */
+    .top-progress {
+      position: fixed; top: 0; left: 0; right: 0;
+      height: 4px; background: var(--bg-surface); z-index: 200;
+    }
+    .top-progress .fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--track-color), var(--accent-primary));
+      width: 7.14%; /* 2/28 */
+      border-radius: 0 2px 2px 0;
+    }
+
+    /* === COURSE HEADER === */
+    .course-header {
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--code-border);
+      padding: 1.25rem 2rem;
+    }
+    .course-header-inner {
+      max-width: 1200px; margin: 0 auto;
+      display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem;
+    }
+    .course-title {
+      font-family: 'Bricolage Grotesque', sans-serif;
+      font-size: 0.95rem; font-weight: 600; color: var(--text-secondary);
+    }
+    .track-badge {
+      display: inline-flex; align-items: center; gap: 0.5rem;
+      background: rgba(99, 102, 241, 0.15);
+      border: 1px solid var(--track-color);
+      border-radius: 20px; padding: 0.25rem 0.75rem;
+      font-family: 'Bricolage Grotesque', sans-serif;
+      font-size: 0.8rem; font-weight: 600; color: var(--track-color);
+    }
+    .track-badge .dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--track-color);
+    }
+    .header-meta {
+      display: flex; gap: 1.5rem; font-size: 0.85rem; color: var(--text-muted);
+    }
+
+    /* === PAGE LAYOUT === */
+    .page-container {
+      max-width: 1200px; margin: 0 auto; padding: 2rem;
+      display: grid; grid-template-columns: 240px 1fr; gap: 3rem;
+    }
+
+    /* === SIDEBAR === */
+    .sidebar-nav {
+      position: sticky; top: 2rem;
+      height: calc(100vh - 4rem);
+      overflow-y: auto;
+      padding-right: 1rem;
+    }
+    .sidebar-nav::-webkit-scrollbar { width: 3px; }
+    .sidebar-nav::-webkit-scrollbar-thumb { background: var(--bg-surface); border-radius: 3px; }
+    .sidebar-title {
+      font-family: 'Bricolage Grotesque', sans-serif;
+      font-size: 0.75rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.1em;
+      color: var(--text-muted); margin-bottom: 1rem;
+    }
+    .sidebar-nav a {
+      display: block; padding: 0.4rem 0.75rem; margin-bottom: 0.15rem;
+      font-family: 'Bricolage Grotesque', sans-serif;
+      font-size: 0.82rem; font-weight: 600;
+      color: var(--text-muted); text-decoration: none;
+      border-left: 2px solid transparent; border-radius: 0 4px 4px 0;
+      transition: all var(--transition-fast);
+    }
+    .sidebar-nav a:hover { color: var(--text-primary); background: var(--bg-surface); }
+    .sidebar-nav a.active {
+      color: var(--accent-primary); border-left-color: var(--accent-primary);
+      background: var(--accent-muted);
+    }
+    .sidebar-nav a.sub { padding-left: 1.5rem; font-size: 0.78rem; font-weight: 400; }
+
+    /* === CONTENT === */
+    .content { max-width: 800px; }
+    .section { margin-bottom: 4rem; }
+    .subsection { margin-bottom: 2.5rem; }
+
+    h1 {
+      font-family: 'Bricolage Grotesque', sans-serif;
+      font-weight: 800; font-size: 2.25rem; line-height: 1.2;
+      margin-bottom: 0.75rem;
+    }
+    h2 {
+      font-family: 'Bricolage Grotesque', sans-serif;
+      font-weight: 700; font-size: 1.5rem;
+      color: var(--text-primary); margin: 2.5rem 0 1rem; padding-top: 1rem;
+      border-top: 1px solid var(--code-border);
+    }
+    h2:first-of-type { border-top: none; }
+    h3 {
+      font-family: 'Bricolage Grotesque', sans-serif;
+      font-weight: 600; font-size: 1.25rem;
+      color: var(--text-primary); margin: 2rem 0 0.75rem;
+    }
+    p { margin-bottom: 1rem; }
+    ul, ol { margin: 0.5rem 0 1rem 1.5rem; }
+    li { margin-bottom: 0.4rem; }
+    strong { font-weight: 600; }
+
+    /* === COMPONENT BOXES === */
+    .analogy-box, .tech-def-box, .callout-why, .callout-warning, .callout-security, .callout-cost, .callout-cert {
+      border-left: 4px solid; border-radius: 0 8px 8px 0;
+      padding: 1.25rem 1.5rem; margin: 1.5rem 0;
+    }
+    .analogy-box { background: var(--accent-muted); border-left-color: var(--accent-primary); }
+    .tech-def-box { background: var(--info-bg); border-left-color: var(--info); }
+    .callout-why { background: var(--success-bg); border-left-color: var(--success); }
+    .callout-warning { background: var(--warning-bg); border-left-color: var(--warning); }
+    .callout-security { background: var(--error-bg); border-left-color: var(--error); }
+    .callout-cost { background: var(--warning-bg); border-left-color: var(--accent-primary); }
+    .callout-cert { background: rgba(212, 168, 67, 0.06); border-left-color: var(--accent-primary); }
+    .box-label {
+      font-family: 'Bricolage Grotesque', sans-serif;
+      font-weight: 700; font-size: 0.9rem;
+      display: block; margin-bottom: 0.4rem;
+    }
+    .analogy-box .box-label { color: var(--accent-primary); }
+    .tech-def-box .box-label { color: var(--info); }
+    .callout-why .box-label { color: var(--success); }
+    .callout-warning .box-label { color: var(--warning); }
+    .callout-security .box-label { color: var(--error); }
+    .callout-cert .box-label { color: var(--accent-primary); }
+
+    /* === TOOLTIPS === */
+    .term-tooltip {
+      position: relative; color: var(--accent-primary);
+      cursor: help; border-bottom: 1px dashed var(--accent-primary);
+    }
+    .term-tooltip .tooltip-content {
+      position: absolute; bottom: calc(100% + 8px); left: 50%;
+      transform: translateX(-50%);
+      background: var(--bg-card); border: 1px solid var(--accent-primary);
+      border-radius: 8px; padding: 0.75rem 1rem;
+      font-size: 0.85rem; color: var(--text-primary);
+      width: 280px; opacity: 0; pointer-events: none;
+      transition: opacity var(--transition-fast);
+      z-index: 10; line-height: 1.5;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.4);
+    }
+    .term-tooltip:hover .tooltip-content,
+    .term-tooltip:focus .tooltip-content { opacity: 1; pointer-events: auto; }
+
+    /* === CODE BLOCKS === */
+    .code-block-wrapper {
+      background: var(--code-bg); border: 1px solid var(--code-border);
+      border-radius: 12px; margin: 1.5rem 0; overflow: hidden;
+    }
+    .code-tabs {
+      display: flex; gap: 0; border-bottom: 1px solid var(--code-border);
+      background: var(--bg-surface);
+    }
+    .code-tab {
+      padding: 0.5rem 1.25rem; background: none; border: none;
+      font-family: 'JetBrains Mono', monospace; font-size: 0.8rem;
+      cursor: pointer; border-bottom: 2px solid transparent;
+      margin-bottom: -1px; color: var(--text-muted);
+      transition: all var(--transition-fast);
+    }
+    .code-tab:hover { color: var(--text-primary); }
+    .code-tab.active { color: var(--accent-primary); border-bottom-color: var(--accent-primary); }
+    .code-panel { display: none; position: relative; }
+    .code-panel.active { display: block; }
+    .code-panel pre {
+      margin: 0; padding: 1.25rem; overflow-x: auto;
+      font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; line-height: 1.6;
+    }
+    .code-panel pre code { background: none; color: var(--code-text); }
+    .copy-btn {
+      position: absolute; top: 0.75rem; right: 0.75rem;
+      background: var(--bg-surface); border: 1px solid var(--code-border);
+      color: var(--text-muted); padding: 0.3rem 0.6rem;
+      border-radius: 6px; font-size: 0.75rem; cursor: pointer;
+      font-family: 'JetBrains Mono', monospace;
+      transition: all var(--transition-fast);
+    }
+    .copy-btn:hover { color: var(--accent-primary); border-color: var(--accent-primary); }
+
+    /* single-language code block */
+    .code-single {
+      background: var(--code-bg); border: 1px solid var(--code-border);
+      border-radius: 12px; margin: 1.5rem 0; overflow: hidden; position: relative;
+    }
+    .code-single pre {
+      margin: 0; padding: 1.25rem; overflow-x: auto;
+      font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; line-height: 1.6;
+    }
+    .code-single .copy-btn { top: 0.5rem; right: 0.5rem; }
+    .code-label {
+      display: inline-block; padding: 0.25rem 0.75rem;
+      background: var(--bg-surface); border-bottom: 1px solid var(--code-border);
+      border-right: 1px solid var(--code-border);
+      font-family: 'JetBrains Mono', monospace; font-size: 0.75rem;
+      color: var(--text-muted); border-radius: 0 0 8px 0;
+    }
+    .output-block {
+      background: var(--code-bg); border: 1px solid var(--code-border);
+      border-radius: 8px; padding: 1rem 1.25rem; margin: 0.75rem 0 1.5rem;
+      font-family: 'JetBrains Mono', monospace; font-size: 0.85rem;
+      color: var(--success); line-height: 1.5;
+    }
+    .output-label {
+      font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.8rem;
+      font-weight: 600; color: var(--text-muted); margin-bottom: 0.25rem;
+    }
+
+    /* === ANIMATION CONTAINER === */
+    .animation-container {
+      background: var(--bg-secondary); border: 1px solid var(--code-border);
+      border-radius: 12px; padding: 2rem; margin: 2rem 0;
+      position: relative; min-height: 300px; overflow: hidden;
+    }
+    .animation-title {
+      font-family: 'Bricolage Grotesque', sans-serif;
+      font-size: 0.85rem; font-weight: 700; color: var(--text-muted);
+      text-transform: uppercase; letter-spacing: 0.05em;
+      margin-bottom: 1.25rem;
+    }
+    .animation-controls {
+      display: flex; gap: 0.5rem;
+      position: absolute; bottom: 1rem; right: 1rem;
+    }
+    .anim-btn {
+      background: var(--bg-card); border: 1px solid var(--code-border);
+      color: var(--text-primary); width: 36px; height: 36px;
+      border-radius: 8px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1rem; transition: all var(--transition-fast);
+    }
+    .anim-btn:hover { border-color: var(--accent-primary); color: var(--accent-primary); }
+
+    /* === QUIZ === */
+    .quiz-question {
+      background: var(--bg-card); border-radius: 12px;
+      padding: 1.5rem; margin-bottom: 1.5rem;
+    }
+    .quiz-question h4 {
+      font-family: 'Bricolage Grotesque', sans-serif;
+      font-weight: 600; margin-bottom: 1rem; font-size: 1rem;
+    }
+    .quiz-option {
+      padding: 0.75rem 1rem; margin: 0.5rem 0;
+      border: 1px solid var(--code-border); border-radius: 8px;
+      cursor: pointer; transition: all var(--transition-fast);
+      display: flex; align-items: center; gap: 0.75rem;
+    }
+    .quiz-option:hover { border-color: var(--accent-primary); }
+    .quiz-option.correct { border-color: var(--success); background: var(--success-bg); }
+    .quiz-option.incorrect { border-color: var(--error); background: var(--error-bg); }
+    .quiz-option.disabled { pointer-events: none; }
+    .quiz-marker {
+      width: 24px; height: 24px; border-radius: 50%;
+      border: 2px solid var(--code-border); flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.75rem; font-weight: 700;
+    }
+    .quiz-option.correct .quiz-marker { border-color: var(--success); color: var(--success); }
+    .quiz-option.incorrect .quiz-marker { border-color: var(--error); color: var(--error); }
+    .quiz-feedback {
+      margin-top: 0.75rem; padding: 0.75rem; border-radius: 8px;
+      font-size: 0.9rem; display: none;
+    }
+    .quiz-feedback.show { display: block; }
+    .quiz-feedback.correct-fb { background: var(--success-bg); color: var(--success); }
+    .quiz-feedback.incorrect-fb { background: var(--error-bg); color: var(--error); }
+    .quiz-score {
+      background: var(--bg-card); border-radius: 12px; padding: 1.5rem;
+      text-align: center; margin-top: 2rem;
+    }
+    .quiz-score .score-num {
+      font-family: 'Bricolage Grotesque', sans-serif;
+      font-size: 2.5rem; font-weight: 800; color: var(--accent-primary);
+    }
+
+    /* === MODULE NAV === */
+    .module-nav {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 1.5rem 0; margin: 2rem 0;
+      border-top: 1px solid var(--code-border);
+    }
+    .module-nav a {
+      display: flex; align-items: center; gap: 0.5rem;
+      color: var(--accent-primary); text-decoration: none;
+      font-family: 'Bricolage Grotesque', sans-serif; font-weight: 600;
+      font-size: 0.9rem; padding: 0.5rem 1rem;
+      border: 1px solid var(--code-border); border-radius: 8px;
+      transition: all var(--transition-fast);
+    }
+    .module-nav a:hover { border-color: var(--accent-primary); background: var(--accent-muted); }
+    .module-nav .disabled {
+      color: var(--text-muted); pointer-events: none; opacity: 0.5;
+    }
+
+    /* === LEARNING OBJECTIVES === */
+    .objectives-list {
+      list-style: none; margin-left: 0;
+    }
+    .objectives-list li {
+      padding: 0.5rem 0 0.5rem 2rem; position: relative;
+    }
+    .objectives-list li::before {
+      content: ''; position: absolute; left: 0; top: 0.85rem;
+      width: 16px; height: 16px; border-radius: 4px;
+      border: 2px solid var(--track-color); background: rgba(99, 102, 241, 0.1);
+    }
+
+    /* === TOKEN FLOW ANIMATION === */
+    .token-flow-area {
+      display: flex; align-items: center; gap: 1rem;
+      min-height: 200px; flex-wrap: wrap; justify-content: center;
+    }
+    .token-block {
+      display: inline-flex; flex-direction: column; align-items: center;
+      background: var(--bg-card); border: 1px solid var(--code-border);
+      border-radius: 8px; padding: 0.5rem 0.75rem; min-width: 50px;
+      opacity: 0; transform: translateY(20px);
+      transition: all 0.4s ease;
+    }
+    .token-block.visible { opacity: 1; transform: translateY(0); }
+    .token-text {
+      font-family: 'JetBrains Mono', monospace; font-size: 0.9rem;
+      color: var(--text-primary); font-weight: 600;
+    }
+    .token-id {
+      font-family: 'JetBrains Mono', monospace; font-size: 0.65rem;
+      color: var(--text-muted); margin-top: 0.2rem;
+    }
+    .prob-bar-container { width: 100%; margin-top: 0.3rem; }
+    .prob-bar {
+      height: 4px; border-radius: 2px;
+      background: var(--track-color); transition: width 0.3s ease;
+    }
+
+    /* === PROCESSING ANIMATION === */
+    .process-flow {
+      display: flex; align-items: center; justify-content: center;
+      gap: 0.5rem; flex-wrap: wrap; min-height: 200px;
+    }
+    .process-stage {
+      display: flex; flex-direction: column; align-items: center;
+      padding: 1rem; border-radius: 12px;
+      border: 1px solid var(--code-border); background: var(--bg-card);
+      min-width: 120px; text-align: center; opacity: 0.3;
+      transition: all 0.5s ease;
+    }
+    .process-stage.active { opacity: 1; border-color: var(--track-color); box-shadow: 0 0 20px rgba(99,102,241,0.2); }
+    .process-stage .icon { font-size: 1.5rem; margin-bottom: 0.5rem; }
+    .process-stage .label {
+      font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.8rem;
+      font-weight: 600; color: var(--text-secondary);
+    }
+    .process-arrow { color: var(--text-muted); font-size: 1.2rem; opacity: 0.3; transition: opacity 0.5s; }
+    .process-arrow.active { opacity: 1; color: var(--track-color); }
+
+    /* === TEMPERATURE INTERACTIVE === */
+    .temp-controls {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem;
+      margin-bottom: 1.5rem;
+    }
+    .slider-group label {
+      display: block; font-family: 'Bricolage Grotesque', sans-serif;
+      font-weight: 600; font-size: 0.9rem; margin-bottom: 0.5rem;
+    }
+    .slider-group input[type="range"] {
+      width: 100%; accent-color: var(--accent-primary);
+    }
+    .slider-value {
+      font-family: 'JetBrains Mono', monospace; font-size: 0.85rem;
+      color: var(--accent-primary); float: right;
+    }
+    .prob-display {
+      display: flex; gap: 0.4rem; flex-wrap: wrap;
+      align-items: flex-end; min-height: 180px;
+      padding: 1rem; background: var(--bg-card);
+      border-radius: 8px; border: 1px solid var(--code-border);
+    }
+    .prob-word {
+      display: flex; flex-direction: column; align-items: center;
+      gap: 0.25rem; flex: 1; min-width: 50px;
+    }
+    .prob-word .bar {
+      width: 100%; max-width: 40px; border-radius: 4px 4px 0 0;
+      background: var(--track-color); transition: height 0.3s ease;
+      min-height: 2px;
+    }
+    .prob-word .word {
+      font-family: 'JetBrains Mono', monospace; font-size: 0.7rem;
+      color: var(--text-secondary); writing-mode: vertical-rl;
+      text-orientation: mixed; max-height: 60px; overflow: hidden;
+    }
+    .prob-word .pct {
+      font-family: 'JetBrains Mono', monospace; font-size: 0.65rem;
+      color: var(--text-muted);
+    }
+    .generated-output {
+      margin-top: 1rem; padding: 1rem;
+      background: var(--bg-card); border-radius: 8px;
+      border: 1px solid var(--code-border);
+      font-family: 'JetBrains Mono', monospace; font-size: 0.9rem;
+      min-height: 60px; color: var(--text-primary); line-height: 1.6;
+    }
+    .gen-label {
+      font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.8rem;
+      font-weight: 600; color: var(--text-muted); margin-bottom: 0.4rem;
+    }
+    .generate-btn {
+      margin-top: 0.75rem; padding: 0.6rem 1.5rem;
+      background: var(--accent-primary); color: var(--bg-primary);
+      border: none; border-radius: 8px; cursor: pointer;
+      font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700;
+      font-size: 0.9rem; transition: background var(--transition-fast);
+    }
+    .generate-btn:hover { background: var(--accent-hover); }
+
+    /* === RESPONSIVE === */
+    @media (max-width: 900px) {
+      .page-container { grid-template-columns: 1fr; padding: 1rem; }
+      .sidebar-nav {
+        position: fixed; bottom: 0; left: 0; right: 0;
+        height: auto; max-height: 40vh; background: var(--bg-secondary);
+        border-top: 1px solid var(--code-border); z-index: 100;
+        padding: 1rem; display: none;
+      }
+      .sidebar-nav.open { display: block; }
+      .sidebar-toggle {
+        display: flex; position: fixed; bottom: 1rem; right: 1rem;
+        z-index: 101; background: var(--accent-primary); color: var(--bg-primary);
+        border: none; width: 48px; height: 48px; border-radius: 50%;
+        align-items: center; justify-content: center; cursor: pointer;
+        font-size: 1.25rem; box-shadow: 0 4px 15px rgba(0,0,0,0.3);
+      }
+      .temp-controls { grid-template-columns: 1fr; }
+      h1 { font-size: 1.75rem; }
+    }
+    @media (min-width: 901px) {
+      .sidebar-toggle { display: none; }
+    }
+
+    /* === REDUCED MOTION === */
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+      }
+      .token-block { opacity: 1; transform: none; }
+      .process-stage { opacity: 1; }
+    }
+
+    /* === FOCUS STYLES === */
+    :focus-visible {
+      outline: 2px solid var(--accent-primary);
+      outline-offset: 2px; border-radius: 4px;
+    }
+  </style>
+</head>
+<body>
+  <!-- Top progress bar -->
+  <div class="top-progress" role="progressbar" aria-label="Course progress: OS Track &middot; Module 1 of 12" aria-valuenow="1" aria-valuemin="1" aria-valuemax="12">
+    <div class="fill"></div>
+  </div>
+
+  <!-- Course Header -->
+  <header class="course-header">
+    <div class="course-header-inner">
+      <div>
+        <div class="course-title">Building AI Agents with Open Source Models</div>
+      </div>
+      <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;">
+        <span class="track-badge"><span class="dot"></span>Track 1: Foundations</span>
+        <div class="header-meta">
+          <span>OS Track &middot; Module 1 of 12</span>
+          <span>45-60 min</span>
+          <span>Beginner</span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <div class="page-container">
+    <!-- Sidebar Navigation -->
+    <nav class="sidebar-nav" id="sidebar" aria-label="Module sections">
+      <div class="sidebar-title">On this page</div>
+      <a href="#objectives">Learning Objectives</a>
+      <a href="#what-is-llm">What Is an LLM?</a>
+      <a href="#model-zoo" class="sub">The Model Zoo</a>
+      <a href="#how-claude-processes" class="sub">How the model Processes Text</a>
+      <a href="#how-inference-works">How Inference Actually Works</a>
+      <a href="#sampling-mechanics" class="sub">Sampling &amp; Logits</a>
+      <a href="#latency-anatomy" class="sub">Latency Anatomy</a>
+      <a href="#streaming-vs-batch" class="sub">Streaming vs Batch</a>
+      <a href="#temperature">Temperature &amp; Sampling</a>
+      <a href="#calculator-vs-thinker" class="sub">Calculator vs. Thinker</a>
+      <a href="#code-walkthrough">Code Walkthrough</a>
+      <a href="#hands-on">Hands-On Exercise</a>
+      <a href="#step6-heading" class="sub">Bonus: Multimodal</a>
+      <a href="#open-source-swap">Open Source Swap</a>
+      <a href="#quiz">Knowledge Check</a>
+      <a href="#summary">Summary</a>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="content" role="main">
+      <div style="background:rgba(249,115,22,0.1);border:1px solid #F97316;border-radius:12px;padding:1rem 1.5rem;margin-bottom:2rem;display:flex;align-items:flex-start;gap:1rem;">
+  <span style="font-size:1.5rem;flex-shrink:0">&#x1F999;</span>
+  <div>
+    <strong style="color:#F97316;font-family:&#39;Bricolage Grotesque&#39;,sans-serif;display:block;margin-bottom:0.25rem">Open Source Track &mdash; Mistral/Ollama Version</strong>
+    <span style="font-size:0.9rem;color:#94A3B8;">All code examples use the <code style="font-family:&#39;JetBrains Mono&#39;,monospace;background:#1A2740;padding:0.1rem 0.4rem;border-radius:4px">openai</code> SDK pointing at a local Ollama server (no Anthropic API key required). <a href="../M01-llm-mental-model.html" style="color:#D4A843;">View Claude version &rarr;</a> &middot; <a href="index.html" style="color:#D4A843;">OS Track Index &rarr;</a></span>
+  </div>
+</div>
+      <!-- Module Title -->
+      <section class="section" style="margin-bottom:2rem;">
+        <div class="module-nav" style="border-top:none;margin-top:0;">
+          <a href="index.html" aria-label="OS Track Index">&larr; OS Track Index</a>
+          <a href="index.html" aria-label="Course Home" title="Course Home" style="font-size:1.2rem;">&#x1F3E0; Home</a>
+          <a href="M03-prompts.html" aria-label="Next module: Prompts">M03: Prompts &rarr;</a>
+        </div>
+        <h1>M01: The LLM Mental Model</h1>
+        <p style="color:var(--text-secondary);font-size:1.1rem;">
+          Understand what a Large Language Model really is, how the model processes your text, and why the right mental model changes everything you'll build in this course.
+        </p>
+      </section>
+
+      <!-- Learning Objectives -->
+      <section class="section" id="objectives">
+        <h2 id="objectives-heading">Learning Objectives</h2>
+        <ul class="objectives-list" aria-label="Learning objectives for this module">
+          <li>Explain what a Large Language Model is and how it generates text one token at a time</li>
+          <li>Describe the difference between how the model reads input (all at once) and writes output (one token at a time)</li>
+          <li>Use temperature, top-p, and top-k controls and predict how they change output</li>
+          <li>Make your first the model API call using Python and Node.js</li>
+          <li>Identify the four major LLM specializations &mdash; generative, embedding, reranker, multimodal &mdash; and when each is used in an agent pipeline</li>
+          <li>Adopt the "thinker, not calculator" mental model for working with LLMs</li>
+        </ul>
+      </section>
+
+      <!-- ======================== CONCEPT 1 ======================== -->
+      <section class="section" id="what-is-llm">
+        <h2 id="what-is-llm-heading">What Is a Large Language Model?</h2>
+
+        <div class="analogy-box">
+          <span class="box-label">Everyday Analogy</span>
+          <p><strong>BEFORE:</strong> Before LLMs, if you wanted a computer to answer a question, someone had to explicitly program every possible answer &mdash; think of old-school chatbots with giant lists of if/then rules, or search engines that could only find pages containing your exact keywords.</p>
+          <p><strong>PAIN:</strong> That approach broke down constantly. Ask the chatbot something the programmer didn't anticipate, and you'd get "I don't understand." Ask a search engine a nuanced question, and you'd sift through ten blue links hoping one had your answer.</p>
+          <p style="margin-bottom:0;"><strong>MAPPING:</strong> An LLM like the model is <strong>the world's most well-read autocomplete</strong>. Your phone's autocomplete has read your messages; the model has read billions of documents &mdash; books, code, conversations, scientific papers &mdash; and uses all of that to predict what comes next. Instead of following hand-written rules, it learned patterns from that mountain of text, so it can handle questions and tasks nobody explicitly programmed it for. It's autocomplete that went to every university, read every manual, and practiced every writing style.</p>
+        </div>
+
+        <p><strong>What this actually looks like:</strong> When you type "The capital of France is", the model doesn't look up "France" in a table. Instead, it computes a probability for every possible next token. Here's a simplified version of what that prediction looks like internally:</p>
+
+        <div class="code-single">
+          <div class="code-label">Simplified next-token probabilities</div>
+          <pre><code>Input: "The capital of France is"
+
+Next token predictions:
+  " Paris"    → 0.92  (92% probability)
+  " the"      → 0.03  (3%)
+  " located"  → 0.02  (2%)
+  " a"        → 0.01  (1%)
+  " Lyon"     → 0.005 (0.5%)
+  ... thousands more tokens with tiny probabilities</code></pre>
+        </div>
+
+        <div class="tech-def-box">
+          <span class="box-label">Technical Definition</span>
+          A <span class="term-tooltip" tabindex="0" aria-describedby="tt-llm">Large Language Model (LLM)<span class="tooltip-content" role="tooltip" id="tt-llm">A neural network with billions of parameters, trained on massive text datasets to predict the next token in a sequence. "Large" refers to both the training data and the number of parameters.</span></span> is a <span class="term-tooltip" tabindex="0" aria-describedby="tt-nn">neural network<span class="tooltip-content" role="tooltip" id="tt-nn">A computing system inspired by biological neurons. It learns patterns by adjusting millions or billions of numerical weights during training.</span></span> trained on vast amounts of text data. Let's unpack that piece by piece.</p>
+
+          <p>First, "neural network" means a mathematical system that learns by example rather than by following hand-written rules. You show it billions of text samples, and it gradually adjusts billions of internal numbers (called <em>parameters</em>) until it gets good at one specific job.</p>
+
+          <p>That one job is: given a sequence of <span class="term-tooltip" tabindex="0" aria-describedby="tt-token">tokens<span class="tooltip-content" role="tooltip" id="tt-token">The smallest units of text that an LLM works with. A token can be a word, part of a word, or a punctuation mark. We'll explore tokens deeply in Module 2.</span></span> (small chunks of text &mdash; roughly words or word-pieces), predict the most likely next token. That's it. Every impressive thing an LLM does &mdash; writing code, answering questions, translating languages &mdash; is a side effect of getting extremely good at next-token prediction.</p>
+
+          <p>Now for the "Large" part. The model-class models have hundreds of billions of parameters and were trained on terabytes of text. It doesn't "understand" language the way humans do &mdash; it finds statistical patterns at a scale that produces remarkably useful results. The reason this matters for you as a builder is that the model's power <em>and</em> its failure modes both come from this prediction mechanism.
+        </div>
+
+        <!-- SVG Diagram: How an LLM Generates Text -->
+        <div class="animation-container" style="min-height:auto;padding:1.5rem;">
+          <div class="animation-title" style="margin-bottom:1rem;">Diagram: How an LLM Generates Text</div>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 260" style="width:100%;max-width:600px;display:block;margin:0 auto;" aria-label="Diagram showing how an LLM generates text: input tokens flow through transformer layers to a probability distribution, the highest-probability token is selected as output, and that token feeds back as new input for the next prediction step.">
+            <style>
+              .svg-box { fill: var(--bg-card, #162033); stroke: var(--track-foundations, #6366F1); stroke-width: 1.5; rx: 8; }
+              .svg-box-accent { fill: var(--accent-muted, rgba(212,168,67,0.15)); stroke: var(--accent-primary, #D4A843); stroke-width: 1.5; rx: 8; }
+              .svg-box-success { fill: var(--success-bg, rgba(16,185,129,0.1)); stroke: var(--success, #10B981); stroke-width: 1.5; rx: 8; }
+              .svg-label { fill: var(--text-primary, #E8ECF1); font-family: 'Source Sans 3', sans-serif; font-size: 12px; text-anchor: middle; }
+              .svg-label-sm { fill: var(--text-secondary, #94A3B8); font-family: 'Source Sans 3', sans-serif; font-size: 10px; text-anchor: middle; }
+              .svg-arrow { stroke: var(--text-muted, #64748B); stroke-width: 1.5; fill: none; marker-end: url(#arrowM01a); }
+              .svg-loop { stroke: var(--accent-primary, #D4A843); stroke-width: 1.5; fill: none; stroke-dasharray: 5,3; marker-end: url(#arrowLoopM01); }
+              @media (prefers-reduced-motion: reduce) { .svg-loop { stroke-dasharray: none; } }
+            </style>
+            <defs>
+              <marker id="arrowM01a" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6" fill="var(--text-muted, #64748B)"/></marker>
+              <marker id="arrowLoopM01" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6" fill="var(--accent-primary, #D4A843)"/></marker>
+            </defs>
+            <!-- Step 1: Input Tokens -->
+            <rect class="svg-box" x="10" y="60" width="100" height="55"/>
+            <text class="svg-label" x="60" y="83">Input Tokens</text>
+            <text class="svg-label-sm" x="60" y="101">"The capital of"</text>
+            <!-- Arrow 1 -->
+            <line class="svg-arrow" x1="112" y1="87" x2="138" y2="87"/>
+            <!-- Step 2: Transformer Layers -->
+            <rect class="svg-box" x="140" y="45" width="115" height="85"/>
+            <text class="svg-label" x="197" y="72">Transformer</text>
+            <text class="svg-label" x="197" y="88">Layers</text>
+            <text class="svg-label-sm" x="197" y="108">Attention +</text>
+            <text class="svg-label-sm" x="197" y="120">Feed-forward</text>
+            <!-- Arrow 2 -->
+            <line class="svg-arrow" x1="257" y1="87" x2="283" y2="87"/>
+            <!-- Step 3: Probability Distribution -->
+            <rect class="svg-box-accent" x="285" y="40" width="120" height="95"/>
+            <text class="svg-label" x="345" y="62">Probability</text>
+            <text class="svg-label" x="345" y="78">Distribution</text>
+            <!-- Mini bar chart -->
+            <rect x="305" y="90" width="55" height="8" rx="2" fill="var(--success, #10B981)" opacity="0.8"/>
+            <text class="svg-label-sm" x="390" y="98">" Paris" 92%</text>
+            <rect x="305" y="102" width="8" height="8" rx="2" fill="var(--info, #3B82F6)" opacity="0.6"/>
+            <text class="svg-label-sm" x="374" y="110">" the" 3%</text>
+            <rect x="305" y="114" width="5" height="8" rx="2" fill="var(--text-muted, #64748B)" opacity="0.5"/>
+            <text class="svg-label-sm" x="378" y="122">" located" 2%</text>
+            <!-- Arrow 3 -->
+            <line class="svg-arrow" x1="407" y1="87" x2="433" y2="87"/>
+            <!-- Step 4: Selected Token -->
+            <rect class="svg-box-success" x="435" y="60" width="100" height="55"/>
+            <text class="svg-label" x="485" y="83">Output Token</text>
+            <text class="svg-label-sm" x="485" y="101">" Paris" &#10003;</text>
+            <!-- Feedback loop arrow -->
+            <path class="svg-loop" d="M 485,117 L 485,200 L 60,200 L 60,117"/>
+            <text class="svg-label-sm" x="275" y="218">Feeds back as next input (autoregressive loop)</text>
+            <!-- Step labels at top -->
+            <text class="svg-label-sm" x="60" y="30">Step 1</text>
+            <text class="svg-label-sm" x="197" y="30">Step 2</text>
+            <text class="svg-label-sm" x="345" y="30">Step 3</text>
+            <text class="svg-label-sm" x="485" y="30">Step 4</text>
+            <!-- Repeat label -->
+            <text class="svg-label-sm" x="485" y="240">Repeat until stop</text>
+          </svg>
+        </div>
+
+        <!-- Animation: Token Flow -->
+        <div class="animation-container" aria-label="Token generation animation showing text being generated one token at a time">
+          <div class="animation-title">Animation: Token-by-Token Generation</div>
+          <div class="token-flow-area" id="tokenFlowArea">
+            <!-- Tokens injected by JS -->
+          </div>
+          <div class="annotation" id="tokenAnnotation" style="text-align:center;margin-top:1rem;font-size:0.85rem;color:var(--text-secondary);min-height:1.5rem;"></div>
+          <div class="animation-controls">
+            <button class="anim-btn" onclick="tokenFlowPlay()" aria-label="Play animation" title="Play">&#9654;</button>
+            <button class="anim-btn" onclick="tokenFlowPause()" aria-label="Pause animation" title="Pause">&#9208;</button>
+            <button class="anim-btn" onclick="tokenFlowRestart()" aria-label="Restart animation" title="Restart">&#8635;</button>
+          </div>
+        </div>
+
+        <div class="callout-why">
+          <span class="box-label">Why It Matters</span>
+          Understanding that LLMs predict tokens &mdash; not "think" about answers &mdash; is the foundation for everything in this course. Here's a concrete example: a production agent processing 10,000 customer support tickets per day at temperature 0.0 will still produce roughly 2&ndash;5% hallucinated facts (200&ndash;500 tickets with incorrect information) if it has no tool access or guardrails. When your agent gives a wrong answer, it's because token prediction chose a plausible-but-incorrect continuation, not because it's "confused." This distinction shapes how you write prompts, design tools, and build guardrails &mdash; and it's why Modules 5 (Tool Use) and 16&ndash;17 (Guardrails) exist in this course.
+        </div>
+      </section>
+
+      <!-- ======================== CONCEPT 1B — MODEL ZOO ======================== -->
+      <section class="section" id="model-zoo">
+        <h2 id="model-zoo-heading">The Model Zoo: Not All AI Models Do the Same Job</h2>
+
+        <div class="analogy-box">
+          <span class="box-label">Everyday Analogy</span>
+          <p><strong>BEFORE:</strong> When most people say "AI" or "LLM," they picture one thing: a chatbot that takes questions and gives answers. It feels natural to assume there&rsquo;s a single model powering all of AI.</p>
+          <p><strong>PAIN:</strong> That assumption causes a recurring architectural mistake. Developers try to use a generative model like the model to do semantic search by comparing long text responses &mdash; when a purpose-built embedding model does it orders of magnitude faster and cheaper. They skip reranking and wonder why their RAG pipeline retrieves the wrong documents. The wrong model type for the job produces wrong results at higher cost, and the fix isn&rsquo;t a better prompt &mdash; it&rsquo;s reaching for a different kind of model entirely.</p>
+          <p style="margin-bottom:0;"><strong>MAPPING:</strong> Think of AI models like kitchen knives. A chef&rsquo;s knife is the versatile workhorse you reach for most &mdash; that&rsquo;s a generative/chat model like the model. A bread knife has serrations for one specific job &mdash; that&rsquo;s an embedding model, converting text to compact numeric vectors for search. A paring knife does precise, fast scoring work &mdash; that&rsquo;s a reranker, ordering retrieved results by relevance before handing them off. And some knives handle fish, vegetables, and meat simultaneously &mdash; that&rsquo;s a multimodal model, accepting text, images, and documents at once. Agent pipelines routinely chain 2&ndash;3 of these model types in a single request flow.</p>
+        </div>
+
+        <table class="info-table" style="width:100%;border-collapse:collapse;font-size:0.88rem;margin:1.25rem 0;" aria-label="Comparison of the four major LLM model types">
+          <thead>
+            <tr style="background:var(--bg-surface);">
+              <th style="padding:0.5rem 0.75rem;text-align:left;border-bottom:2px solid var(--track-color);font-family:'Bricolage Grotesque',sans-serif;">Type</th>
+              <th style="padding:0.5rem 0.75rem;text-align:left;border-bottom:2px solid var(--track-color);">Input &rarr; Output</th>
+              <th style="padding:0.5rem 0.75rem;text-align:left;border-bottom:2px solid var(--track-color);">When to Use</th>
+              <th style="padding:0.5rem 0.75rem;text-align:left;border-bottom:2px solid var(--track-color);">Common Models</th>
+              <th style="padding:0.5rem 0.75rem;text-align:left;border-bottom:2px solid var(--track-color);">In This Course</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td style="padding:0.5rem 0.75rem;border-bottom:1px solid var(--code-border);font-weight:700;color:var(--track-color);">Generative</td>
+              <td style="padding:0.5rem 0.75rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Text &rarr; Text</td>
+              <td style="padding:0.5rem 0.75rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Conversation, reasoning, writing, code generation, tool use &mdash; the general-purpose workhorse</td>
+              <td style="padding:0.5rem 0.75rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">The model Sonnet, GPT-4o, Gemini Flash</td>
+              <td style="padding:0.5rem 0.75rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">All of M01&ndash;M27</td>
+            </tr>
+            <tr style="background:rgba(16,185,129,0.04);">
+              <td style="padding:0.5rem 0.75rem;border-bottom:1px solid var(--code-border);font-weight:700;color:var(--success);">Embedding</td>
+              <td style="padding:0.5rem 0.75rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Text &rarr; Vector<br><span style="font-size:0.8rem;color:var(--text-muted);">(1024&ndash;3072 floats)</span></td>
+              <td style="padding:0.5rem 0.75rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Semantic search, RAG indexing, similarity matching, clustering</td>
+              <td style="padding:0.5rem 0.75rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Voyage-3, text-embedding-3-large, Cohere Embed</td>
+              <td style="padding:0.5rem 0.75rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">M09, M10, M11</td>
+            </tr>
+            <tr>
+              <td style="padding:0.5rem 0.75rem;border-bottom:1px solid var(--code-border);font-weight:700;color:var(--warning);">Reranker</td>
+              <td style="padding:0.5rem 0.75rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">(Query + [Doc&sub;1&hellip;Doc&sub;n]) &rarr; Scores</td>
+              <td style="padding:0.5rem 0.75rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Second-stage RAG filtering: score retrieved chunks by relevance before sending to LLM</td>
+              <td style="padding:0.5rem 0.75rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Cohere Rerank, Voyage Rerank, BGE-Reranker</td>
+              <td style="padding:0.5rem 0.75rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">M10</td>
+            </tr>
+            <tr style="background:rgba(59,130,246,0.04);">
+              <td style="padding:0.5rem 0.75rem;font-weight:700;color:var(--info);">Multimodal</td>
+              <td style="padding:0.5rem 0.75rem;color:var(--text-secondary);">Text + Images / PDFs / Audio &rarr; Text</td>
+              <td style="padding:0.5rem 0.75rem;color:var(--text-secondary);">Document parsing, vision Q&amp;A, chart reading, computer use &mdash; when input isn&rsquo;t just text</td>
+              <td style="padding:0.5rem 0.75rem;color:var(--text-secondary);">The model 3+ (all tiers), GPT-4o, Gemini 1.5</td>
+              <td style="padding:0.5rem 0.75rem;color:var(--text-secondary);">M09, M24</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <!-- Pipeline diagram -->
+        <div class="animation-container" style="min-height:auto;padding:1.5rem;" aria-label="Diagram showing where each model type appears in a RAG agent pipeline">
+          <div class="animation-title" style="margin-bottom:1rem;">Where Each Model Type Lives in an Agent Pipeline</div>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 210" style="width:100%;max-width:680px;display:block;margin:0 auto;" aria-label="Pipeline: user query is embedded by an embedding model, retrieved from a vector DB, reranked by a reranker, then fed to a generative model (optionally with image input via the multimodal path), producing a response.">
+            <defs>
+              <marker id="arrowMZ" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6" fill="var(--text-muted,#64748B)"/></marker>
+              <marker id="arrowMZg" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6" fill="var(--success,#10B981)"/></marker>
+              <marker id="arrowMZw" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6" fill="var(--warning,#F59E0B)"/></marker>
+              <marker id="arrowMZi" markerWidth="8" markerHeight="6" refX="8" refY="3" orient="auto"><path d="M0,0 L8,3 L0,6" fill="var(--info,#3B82F6)"/></marker>
+            </defs>
+            <!-- User Query box -->
+            <rect x="8" y="78" width="78" height="38" rx="6" fill="var(--bg-card,#162033)" stroke="var(--text-muted,#64748B)" stroke-width="1.5"/>
+            <text x="47" y="95" text-anchor="middle" font-family="Source Sans 3,sans-serif" font-size="10" fill="var(--text-primary,#E8ECF1)">User Query</text>
+            <text x="47" y="108" text-anchor="middle" font-family="Source Sans 3,sans-serif" font-size="9" fill="var(--text-muted,#64748B)">"best way to..."</text>
+            <!-- arrow -->
+            <line x1="88" y1="97" x2="110" y2="97" stroke="var(--text-muted,#64748B)" stroke-width="1.5" marker-end="url(#arrowMZ)"/>
+            <!-- Embedding Model box -->
+            <rect x="112" y="70" width="90" height="54" rx="6" fill="rgba(16,185,129,0.1)" stroke="var(--success,#10B981)" stroke-width="1.5"/>
+            <text x="157" y="88" text-anchor="middle" font-family="Bricolage Grotesque,sans-serif" font-size="9" font-weight="700" fill="var(--success,#10B981)">EMBEDDING</text>
+            <text x="157" y="101" text-anchor="middle" font-family="Source Sans 3,sans-serif" font-size="9" fill="var(--text-secondary,#94A3B8)">Query &rarr; Vector</text>
+            <text x="157" y="114" text-anchor="middle" font-family="Source Sans 3,sans-serif" font-size="8" fill="var(--text-muted,#64748B)">[0.21, -0.84, ...]</text>
+            <!-- arrow -->
+            <line x1="204" y1="97" x2="222" y2="97" stroke="var(--success,#10B981)" stroke-width="1.5" marker-end="url(#arrowMZg)"/>
+            <!-- Vector DB box -->
+            <rect x="224" y="78" width="82" height="38" rx="6" fill="var(--bg-surface,#1A2740)" stroke="var(--code-border,#21262D)" stroke-width="1.5"/>
+            <text x="265" y="95" text-anchor="middle" font-family="Source Sans 3,sans-serif" font-size="10" fill="var(--text-primary,#E8ECF1)">Vector DB</text>
+            <text x="265" y="108" text-anchor="middle" font-family="Source Sans 3,sans-serif" font-size="9" fill="var(--text-muted,#64748B)">top-50 candidates</text>
+            <!-- arrow -->
+            <line x1="308" y1="97" x2="326" y2="97" stroke="var(--text-muted,#64748B)" stroke-width="1.5" marker-end="url(#arrowMZ)"/>
+            <!-- Reranker box -->
+            <rect x="328" y="70" width="84" height="54" rx="6" fill="rgba(245,158,11,0.1)" stroke="var(--warning,#F59E0B)" stroke-width="1.5"/>
+            <text x="370" y="88" text-anchor="middle" font-family="Bricolage Grotesque,sans-serif" font-size="9" font-weight="700" fill="var(--warning,#F59E0B)">RERANKER</text>
+            <text x="370" y="101" text-anchor="middle" font-family="Source Sans 3,sans-serif" font-size="9" fill="var(--text-secondary,#94A3B8)">Score relevance</text>
+            <text x="370" y="114" text-anchor="middle" font-family="Source Sans 3,sans-serif" font-size="8" fill="var(--text-muted,#64748B)">keep top-5</text>
+            <!-- arrow -->
+            <line x1="414" y1="97" x2="432" y2="97" stroke="var(--warning,#F59E0B)" stroke-width="1.5" marker-end="url(#arrowMZw)"/>
+            <!-- Generative / Multimodal box -->
+            <rect x="434" y="70" width="96" height="54" rx="6" fill="rgba(99,102,241,0.1)" stroke="var(--track-color,#6366F1)" stroke-width="1.5"/>
+            <text x="482" y="87" text-anchor="middle" font-family="Bricolage Grotesque,sans-serif" font-size="9" font-weight="700" fill="var(--track-color,#6366F1)">GENERATIVE</text>
+            <text x="482" y="99" text-anchor="middle" font-family="Source Sans 3,sans-serif" font-size="9" fill="var(--text-secondary,#94A3B8)">+ MULTIMODAL</text>
+            <text x="482" y="114" text-anchor="middle" font-family="Source Sans 3,sans-serif" font-size="8" fill="var(--text-muted,#64748B)">The model / GPT-4o</text>
+            <!-- arrow to response -->
+            <line x1="532" y1="97" x2="550" y2="97" stroke="var(--track-color,#6366F1)" stroke-width="1.5" marker-end="url(#arrowMZ)"/>
+            <!-- Response box -->
+            <rect x="552" y="78" width="80" height="38" rx="6" fill="var(--bg-card,#162033)" stroke="var(--text-muted,#64748B)" stroke-width="1.5"/>
+            <text x="592" y="95" text-anchor="middle" font-family="Source Sans 3,sans-serif" font-size="10" fill="var(--text-primary,#E8ECF1)">Response</text>
+            <text x="592" y="108" text-anchor="middle" font-family="Source Sans 3,sans-serif" font-size="9" fill="var(--text-muted,#64748B)">grounded answer</text>
+            <!-- Multimodal image input branch -->
+            <rect x="434" y="158" width="96" height="36" rx="6" fill="rgba(59,130,246,0.1)" stroke="var(--info,#3B82F6)" stroke-width="1.5" stroke-dasharray="5,3"/>
+            <text x="482" y="174" text-anchor="middle" font-family="Bricolage Grotesque,sans-serif" font-size="9" font-weight="700" fill="var(--info,#3B82F6)">IMAGE INPUT</text>
+            <text x="482" y="187" text-anchor="middle" font-family="Source Sans 3,sans-serif" font-size="8" fill="var(--text-muted,#64748B)">optional multimodal path</text>
+            <line x1="482" y1="156" x2="482" y2="126" stroke="var(--info,#3B82F6)" stroke-width="1.5" stroke-dasharray="4,3" marker-end="url(#arrowMZi)"/>
+            <!-- Legend -->
+            <rect x="112" y="14" width="10" height="10" rx="2" fill="rgba(16,185,129,0.3)" stroke="var(--success,#10B981)" stroke-width="1"/>
+            <text x="126" y="23" font-family="Source Sans 3,sans-serif" font-size="9" fill="var(--text-muted,#64748B)">Embedding</text>
+            <rect x="220" y="14" width="10" height="10" rx="2" fill="rgba(245,158,11,0.3)" stroke="var(--warning,#F59E0B)" stroke-width="1"/>
+            <text x="234" y="23" font-family="Source Sans 3,sans-serif" font-size="9" fill="var(--text-muted,#64748B)">Reranker</text>
+            <rect x="316" y="14" width="10" height="10" rx="2" fill="rgba(99,102,241,0.3)" stroke="var(--track-color,#6366F1)" stroke-width="1"/>
+            <text x="330" y="23" font-family="Source Sans 3,sans-serif" font-size="9" fill="var(--text-muted,#64748B)">Generative</text>
+            <rect x="406" y="14" width="10" height="10" rx="2" fill="rgba(59,130,246,0.3)" stroke="var(--info,#3B82F6)" stroke-width="1"/>
+            <text x="420" y="23" font-family="Source Sans 3,sans-serif" font-size="9" fill="var(--text-muted,#64748B)">Multimodal input</text>
+          </svg>
+        </div>
+
+        <div class="tech-def-box">
+          <span class="box-label">Technical Definitions</span>
+          <p><span class="term-tooltip" tabindex="0" aria-describedby="tt-embed-model"><strong>Embedding model</strong><span class="tooltip-content" role="tooltip" id="tt-embed-model">A neural network that converts text into a dense numeric vector — a list of floating-point numbers. Similar texts land near each other in vector space. Embedding models never generate text; they only encode meaning into a compact, searchable format.</span></span> &mdash; A specialized neural network that converts a piece of text into a dense numeric vector (e.g., 1024 numbers). Unlike generative models, it never produces text output. You call it once per document when building an index, and once per query at search time. The resulting vectors can be compared instantly across millions of documents using cosine similarity or dot-product search &mdash; something that would take hundreds of thousands of LLM calls if you used a generative model instead. We&rsquo;ll build with these in M09.</p>
+          <p><span class="term-tooltip" tabindex="0" aria-describedby="tt-rerank-model"><strong>Reranker model</strong><span class="tooltip-content" role="tooltip" id="tt-rerank-model">A cross-encoder model that takes a query and a candidate document together and scores how relevant the document is. Because it sees both at once, it is significantly more accurate than vector similarity — but it only scales to dozens of candidates, not millions, so it runs after vector search narrows the field.</span></span> &mdash; A cross-encoder that scores (query, document) pairs jointly rather than comparing pre-computed vectors. Because it sees both at once it is dramatically more accurate than vector similarity &mdash; but it only scales to tens of candidates, not millions. That&rsquo;s why reranking runs <em>after</em> the fast vector search narrows the field: vector search finds the top-50, reranker promotes the truly relevant ones to the top-5. We&rsquo;ll add reranking in M10.</p>
+          <p><span class="term-tooltip" tabindex="0" aria-describedby="tt-mm-model"><strong>Multimodal model</strong><span class="tooltip-content" role="tooltip" id="tt-mm-model">An LLM trained to accept inputs beyond text — images, PDFs, audio, video frames — alongside text. The model 3+ accepts text and images/PDFs. The output is still text; "multimodal" describes the input space, not the output space.</span></span> &mdash; An LLM whose input layer accepts more than text. The model 3+ accepts text plus images and PDFs natively. The output is still text &mdash; &ldquo;multimodal&rdquo; describes the input modalities, not the output. This means you can pass screenshots, charts, and scanned forms directly to the model without a separate vision pipeline, which matters for document-heavy agent use cases.</p>
+        </div>
+
+        <div class="callout-why">
+          <span class="box-label">Why It Matters</span>
+          <p>A production RAG pipeline that skips reranking typically retrieves the right document in its top-50 results but places it at rank 23 &mdash; so the generative model never sees it. Adding a reranker typically promotes it to rank 2. That quality jump has nothing to do with prompting the model differently. Similarly: doing semantic search by calling the model and comparing long text responses costs 50&ndash;100&times; more than calling an embedding model and comparing vectors &mdash; and it&rsquo;s also less accurate. Choosing the right model type for each job isn&rsquo;t just cleaner architecture; it&rsquo;s often the difference between a $10/day agent and a $500/day one.</p>
+        </div>
+
+        <div style="background:rgba(99,102,241,0.07);border-left:3px solid var(--accent-primary);padding:0.9rem 1.25rem;margin-top:1.25rem;border-radius:0 6px 6px 0;">
+          <strong>&#128270; Hands-On Preview:</strong> The Bonus Step at the end of this module&rsquo;s lab sends an image to the model so you can experience the multimodal mode directly &mdash; no extra API key required.
+          Embedding and reranker calls require a third-party key (Voyage or Cohere) and are covered in depth starting in <strong>M09</strong>. For now, the taxonomy above is all the mental model you need.
+        </div>
+        <p style="margin-top:1rem;">The model &mdash; the model powering the rest of this course &mdash; is a <strong>generative + multimodal</strong> model. The RAG track (M09&ndash;M11) introduces embedding and reranker models and shows you how to compose all three. For now, let&rsquo;s zoom in on exactly how the model processes text.</p>
+      </section>
+
+      <!-- ======================== CONCEPT 2 ======================== -->
+      <section class="section" id="how-claude-processes">
+        <h3 id="how-claude-processes-heading">How the model Processes Text</h3>
+
+        <div class="analogy-box">
+          <span class="box-label">Everyday Analogy</span>
+          <p><strong>BEFORE:</strong> Before transformer-based models, older AI systems (like recurrent neural networks) had to read text word-by-word in order, like a person reading a sentence while covering up the words ahead of them. This made them slow and forgetful &mdash; by the time they reached the end of a long paragraph, they'd already started "forgetting" the beginning.</p>
+          <p><strong>PAIN:</strong> That sequential reading created a bottleneck: longer inputs meant worse comprehension, because the model couldn't hold everything in mind at once.</p>
+          <p style="margin-bottom:0;"><strong>MAPPING:</strong> the model works like a speed reader who absorbs an entire page <strong>in one glance</strong> &mdash; every word attended to simultaneously, related to every other word. Then it writes its response <strong>one word at a time</strong>, each word influenced by everything it read plus everything it has written so far. The reading is instant and parallel; the writing is careful and sequential.</p>
+        </div>
+
+        <p><strong>What this actually looks like:</strong> Here's a real API response showing the timing asymmetry. Notice how the input (your prompt) is processed almost instantly, but the output tokens trickle out one by one:</p>
+
+        <div class="code-single">
+          <div class="code-label">API timing example</div>
+          <pre><code>Request: 850 tokens of input
+Response: 120 tokens of output
+
+Timeline:
+  0ms    → Request sent
+  180ms  → First output token arrives (all 850 input tokens processed)
+  180ms  → "The"
+  210ms  → " best"
+  240ms  → " approach"
+  ...      (each token ~30ms apart)
+  3780ms → Final token generated
+
+Input processing:  180ms  (850 tokens, all at once)
+Output generation: 3600ms (120 tokens, one at a time)</code></pre>
+        </div>
+
+        <div class="tech-def-box">
+          <span class="box-label">Technical Definition</span>
+          the model processes input using <strong>parallel attention</strong> through the <span class="term-tooltip" tabindex="0" aria-describedby="tt-transformer">transformer architecture<span class="tooltip-content" role="tooltip" id="tt-transformer">The neural network design behind all modern LLMs. It uses an "attention mechanism" to relate every word to every other word in the input. Introduced in the 2017 paper "Attention Is All You Need."</span></span>. Here's what that means in plain English: every token in your prompt is compared against every other token at the same time. The model doesn't read left-to-right &mdash; it sees the whole message at once.</p>
+
+          <p>This is why sending a 1,000-token prompt to the model is nearly as fast as sending a 100-token prompt: the input processing step happens in parallel.</p>
+
+          <p>Output generation, however, works completely differently. It's <span class="term-tooltip" tabindex="0" aria-describedby="tt-auto">autoregressive<span class="tooltip-content" role="tooltip" id="tt-auto">A process where each output depends on all previous outputs. the model generates token 5 by looking at tokens 1-4 plus the entire input. This is why generation is slower than reading.</span></span>, meaning "each step feeds into the next." Each new token is predicted based on all input tokens plus all previously generated output tokens. This is why output is the slow part &mdash; each token must wait for the previous one to be generated first.
+        </div>
+
+        <!-- Animation: Processing Flow -->
+        <div class="animation-container" aria-label="Animation showing how the model reads input all at once and generates output one token at a time">
+          <div class="animation-title">Animation: Input Processing vs. Output Generation</div>
+          <div class="process-flow" id="processFlow">
+            <div class="process-stage" id="stage-input">
+              <div class="icon">&#128196;</div>
+              <div class="label">Your Message</div>
+            </div>
+            <div class="process-arrow" id="arrow1">&rarr;</div>
+            <div class="process-stage" id="stage-tokenize">
+              <div class="icon">&#9999;</div>
+              <div class="label">Tokenize</div>
+            </div>
+            <div class="process-arrow" id="arrow2">&rarr;</div>
+            <div class="process-stage" id="stage-attention">
+              <div class="icon">&#129504;</div>
+              <div class="label">Attention<br><small style="color:var(--text-muted)">(all at once)</small></div>
+            </div>
+            <div class="process-arrow" id="arrow3">&rarr;</div>
+            <div class="process-stage" id="stage-generate">
+              <div class="icon">&#9997;</div>
+              <div class="label">Generate<br><small style="color:var(--text-muted)">(one by one)</small></div>
+            </div>
+            <div class="process-arrow" id="arrow4">&rarr;</div>
+            <div class="process-stage" id="stage-output">
+              <div class="icon">&#128172;</div>
+              <div class="label">Response</div>
+            </div>
+          </div>
+          <div class="animation-controls">
+            <button class="anim-btn" onclick="processPlay()" aria-label="Play animation" title="Play">&#9654;</button>
+            <button class="anim-btn" onclick="processPause()" aria-label="Pause animation" title="Pause">&#9208;</button>
+            <button class="anim-btn" onclick="processRestart()" aria-label="Restart animation" title="Restart">&#8635;</button>
+          </div>
+        </div>
+      </section>
+
+      <!-- ======================== CONCEPT 2.5 &mdash; INFERENCE ======================== -->
+      <section class="section" id="how-inference-works">
+        <h2 id="how-inference-works-heading">How Inference Actually Works</h2>
+
+        <div class="analogy-box">
+          <span class="box-label">Everyday Analogy</span>
+          <p><strong>BEFORE:</strong> You probably picture an LLM as a function: question goes in, full answer comes out. That mental model is wrong in a specific way that matters once you start optimizing latency and cost.</p>
+          <p><strong>PAIN:</strong> Without the right picture, you can&rsquo;t reason about why the first token takes 800 ms but the next 200 tokens stream out at 60 ms each. You can&rsquo;t explain why a 50K-token prompt is expensive even before the model writes a single word back. You can&rsquo;t budget for production.</p>
+          <p style="margin-bottom:0;"><strong>MAPPING:</strong> Inference is <strong>autoregressive</strong> &mdash; the model generates output <em>one token at a time</em>, and each new token is conditioned on every token before it (yours and its own). Picture someone typing a long reply on a phone: they read what they&rsquo;ve typed so far, pick the most likely next letter, append it, re-read, pick the next letter, append, and so on. That&rsquo;s inference. There&rsquo;s no &ldquo;full answer&rdquo; sitting in the model waiting to be unwrapped &mdash; the answer is constructed token-by-token, in real time, in the same call.</p>
+        </div>
+
+        <div class="tech-def-box">
+          <span class="box-label">Technical Definition</span>
+          <p><span class="term-tooltip" tabindex="0">Inference<span class="tooltip-content" role="tooltip">The process of running a trained LLM to produce output. As opposed to training (which adjusts the model&rsquo;s weights), inference uses the frozen weights to predict tokens. The cost you pay per API call is inference cost.</span></span> is what happens when the model is running, not learning. Every call to the API kicks off two distinct phases:</p>
+          <p><strong>1. Prefill (a.k.a. the &ldquo;forward pass&rdquo; over your prompt).</strong> Your prompt &mdash; system + messages + tool definitions &mdash; is tokenized (M02), converted to <span class="term-tooltip" tabindex="0">embeddings<span class="tooltip-content" role="tooltip">High-dimensional vectors (4096 numbers, in many models) that represent a token in a meaning-space. Tokens that are semantically related land near each other in that space. We&rsquo;ll dig into embeddings in M09.</span></span>, and pushed through every transformer layer <em>in parallel</em>. The model computes attention across all input tokens at once, which is fast per-token but heavy: cost is roughly O(N&sup2;) in prompt length. The output of prefill is one set of logits &mdash; a probability distribution over the entire vocabulary &mdash; for the next token to generate.</p>
+          <p><strong>2. Decode (a.k.a. token-by-token generation).</strong> The model samples one token from the prefill logits, appends it to the running sequence, and runs <em>just that new token</em> through the transformer (reusing cached attention values for everything before it &mdash; the <span class="term-tooltip" tabindex="0">KV cache<span class="tooltip-content" role="tooltip">Key/Value cache. During decode, the attention computations for already-processed tokens are kept in memory so each new token only needs to compute its own attention against the cache, not re-run the whole prompt. This is what makes streaming cheap per-token after the first one.</span></span>). That produces the next set of logits. Sample, append, repeat &mdash; until the model emits a stop token or hits <code>max_tokens</code>. Decode is sequential by construction: token <em>N</em> can&rsquo;t start until token <em>N&minus;1</em> exists.</p>
+          <p><strong>Two phases, two costs.</strong> Prefill latency is paid <em>once</em> per request and dominates &ldquo;time to first token.&rdquo; Decode latency is paid <em>per output token</em> and dominates &ldquo;tokens per second.&rdquo; This split is why a 50K-token prompt with a 100-token answer feels slow to start but finishes quickly &mdash; and why a 200-token prompt with a 4000-token answer feels snappy at first but takes forever.</p>
+        </div>
+
+        <div class="animation-container" aria-label="Inference loop: prefill once, decode N times" style="padding:1rem;">
+          <div class="animation-title">Prefill (once) &rarr; Decode (token-by-token, N times)</div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:1rem; font-size:0.85rem;">
+            <div style="background:var(--bg-surface); border:1px solid var(--code-border); border-radius:8px; padding:0.85rem;">
+              <div style="font-family:'Bricolage Grotesque',sans-serif; font-weight:700; color:var(--text-secondary); margin-bottom:0.5rem;">1. PREFILL &mdash; runs once</div>
+              <ol style="margin:0 0 0 1rem; padding:0; color:var(--text-secondary);">
+                <li>Tokenize prompt (N tokens)</li>
+                <li>Embed all N tokens</li>
+                <li>Run through every transformer layer <em>in parallel</em></li>
+                <li>Build the KV cache for every token</li>
+                <li>Output: logits for token N+1</li>
+              </ol>
+              <p style="margin:0.6rem 0 0; font-size:0.78rem; color:var(--text-muted);">Cost: ~O(N&sup2;) compute, but parallelizable. Latency: drives <strong>time-to-first-token</strong>.</p>
+            </div>
+            <div style="background:rgba(184,134,11,0.08); border:1px solid var(--accent-primary); border-radius:8px; padding:0.85rem;">
+              <div style="font-family:'Bricolage Grotesque',sans-serif; font-weight:700; color:var(--accent-primary); margin-bottom:0.5rem;">2. DECODE &mdash; runs N times</div>
+              <ol style="margin:0 0 0 1rem; padding:0; color:var(--text-secondary);">
+                <li>Sample one token from current logits</li>
+                <li>Append it to the running sequence</li>
+                <li>Run just the new token through layers, reading KV cache</li>
+                <li>Get logits for the next token</li>
+                <li>Stop if token == &lt;end&gt; or budget hit; else go to step 1</li>
+              </ol>
+              <p style="margin:0.6rem 0 0; font-size:0.78rem; color:var(--text-muted);">Cost: ~O(1) per token (memory-bound). Latency: drives <strong>tokens-per-second</strong>.</p>
+            </div>
+          </div>
+        </div>
+
+        <h3 id="sampling-mechanics" style="margin-top:1.5rem;">Sampling &mdash; What &ldquo;Logits&rdquo; Become a Token</h3>
+        <p>The transformer doesn&rsquo;t pick a token; it outputs <strong>logits</strong> &mdash; a raw score per token in the vocabulary (~200K entries for the model). To turn logits into a chosen token, three steps run:</p>
+        <ol>
+          <li><strong>Softmax with temperature.</strong> Logits &mdash; divide by temperature <em>T</em> &mdash; then softmax to a probability distribution. <em>T</em>&nbsp;=&nbsp;0 collapses to one-hot (always pick the argmax); <em>T</em>&nbsp;=&nbsp;1 keeps the model&rsquo;s native distribution; <em>T</em>&nbsp;&gt;&nbsp;1 flattens it (more surprise).</li>
+          <li><strong>Top-k / Top-p filter.</strong> Optionally truncate the distribution to either the top-<em>k</em> highest-probability tokens, or the smallest set whose cumulative probability exceeds <em>p</em> (nucleus sampling). This blocks the long tail of nonsense tokens.</li>
+          <li><strong>Sample.</strong> Draw one token from the (renormalized) filtered distribution. This single token becomes the &ldquo;next token,&rdquo; gets appended, and the loop continues.</li>
+        </ol>
+        <p>Important consequence: <em>the model&rsquo;s output is non-deterministic even at <code>temperature=1</code></em> because of the sampling step. Set <code>temperature=0</code> if you need reproducibility &mdash; that picks the argmax with no sampling. The next H2 on Temperature/Top-p/Top-k goes deeper on when to use each.</p>
+
+        <h3 id="latency-anatomy" style="margin-top:1.5rem;">Latency Anatomy &mdash; Where Your Seconds Go</h3>
+        <p>Real numbers, on the model Sonnet 4.6 (typical 2026 production load, single-region):</p>
+        <table class="info-table" style="width:100%;border-collapse:collapse;font-size:0.88rem;margin-top:0.5rem;">
+          <thead><tr style="background:var(--bg-surface);">
+            <th style="padding:0.45rem 0.6rem;text-align:left;border-bottom:1px solid var(--code-border);">Phase</th>
+            <th style="padding:0.45rem 0.6rem;text-align:left;border-bottom:1px solid var(--code-border);">What dominates</th>
+            <th style="padding:0.45rem 0.6rem;text-align:left;border-bottom:1px solid var(--code-border);">Order of magnitude</th>
+          </tr></thead>
+          <tbody>
+            <tr><td style="padding:0.45rem 0.6rem;border-bottom:1px solid var(--code-border);"><strong>Network</strong></td><td style="padding:0.45rem 0.6rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">TLS, request routing, region distance</td><td style="padding:0.45rem 0.6rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">30&ndash;150 ms</td></tr>
+            <tr><td style="padding:0.45rem 0.6rem;border-bottom:1px solid var(--code-border);"><strong>Prefill (TTFT)</strong></td><td style="padding:0.45rem 0.6rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Prompt length; quadratic-ish in N</td><td style="padding:0.45rem 0.6rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">~50 ms / 1K tokens (uncached); &lt;5 ms / 1K cached</td></tr>
+            <tr><td style="padding:0.45rem 0.6rem;border-bottom:1px solid var(--code-border);"><strong>Decode</strong></td><td style="padding:0.45rem 0.6rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Output length; linear in tokens generated</td><td style="padding:0.45rem 0.6rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">~50&ndash;100 tokens/s (Sonnet); higher with speculative decoding</td></tr>
+            <tr><td style="padding:0.45rem 0.6rem;"><strong>Server queue</strong></td><td style="padding:0.45rem 0.6rem;color:var(--text-secondary);">Concurrent traffic, rate-limit tier</td><td style="padding:0.45rem 0.6rem;color:var(--text-secondary);">0&ndash;500 ms p99</td></tr>
+          </tbody>
+        </table>
+
+        <div class="callout-cost" style="margin-top:1rem;">
+          <span class="box-label">Practical Consequences</span>
+          <ul style="margin-bottom:0;">
+            <li><strong>Time-to-first-token (TTFT)</strong> is set almost entirely by prompt length and whether the prefix is cached. Prompt caching (M22) turns &ldquo;5 seconds of prefill&rdquo; into &ldquo;200 ms of prefill&rdquo; on repeat-heavy prompts.</li>
+            <li><strong>Tokens-per-second (TPS)</strong> is set by the decode step. Output length is the cost driver here &mdash; doubling <code>max_tokens</code> doubles decode time, regardless of how long the prompt was.</li>
+            <li><strong>Streaming</strong> (next subsection) doesn&rsquo;t change total wall-clock latency; it just delivers tokens as they&rsquo;re produced so users see something happening at TTFT instead of waiting for the full decode.</li>
+            <li><strong>Extended thinking</strong> (M22) and <strong>reasoning models</strong> add a hidden third phase &mdash; thinking tokens are decoded before any visible response. We&rsquo;ll connect the dots in M22.</li>
+          </ul>
+        </div>
+
+        <h3 id="streaming-vs-batch" style="margin-top:1.5rem;">Streaming vs Batch &mdash; Same Inference, Different Delivery</h3>
+        <p>One request, two ways to receive the answer:</p>
+        <ul>
+          <li><strong>Non-streaming</strong> &mdash; you wait for the full decode, then receive the entire response in one chunk. Simple; the agent code in M05&ndash;M07 uses this shape.</li>
+          <li><strong>Streaming</strong> &mdash; the server sends each decoded token (or small group) as Server-Sent Events. Same total time, but the user sees the first tokens immediately. Essential for chat UIs and any agent loop where you want to surface progress before the response is complete.</li>
+        </ul>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs">
+            <button class="code-tab active" onclick="switchTab(this, 'inf-stream-py')" aria-label="Python streaming">Python</button>
+            <button class="code-tab" onclick="switchTab(this, 'inf-stream-ts')" aria-label="Node.js streaming">Node.js</button>
+          </div>
+          <div class="code-panel active" id="inf-stream-py">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code class="language-python">from openai import OpenAI
+import time
+
+client = OpenAI(base_url="http://localhost:11434/v1", api_key="ollama")
+
+# Streaming: each token (or small chunk) arrives as it&rsquo;s decoded.
+t0 = time.perf_counter()
+first_token_t = None
+total_tokens = 0
+
+with client.messages.stream(
+    model="mistral",
+    messages=[{"role": "user", "content": "Explain inference in one paragraph."}],
+) as stream:
+    for chunk in stream.text_stream:
+        if first_token_t is None:
+            first_token_t = time.perf_counter() - t0
+            print(f"[TTFT: {first_token_t*1000:.0f} ms]")
+        print(chunk, end="", flush=True)
+        total_tokens += 1   # text chunks, not perfect token counts &mdash; close enough for ops
+
+elapsed = time.perf_counter() - t0
+print(f"\n[total: {elapsed:.2f}s, decode rate ~ {total_tokens/max(elapsed-first_token_t, 0.001):.0f} chunks/s]")</code></pre>
+          </div>
+          <div class="code-panel" id="inf-stream-ts">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code class="language-typescript">import OpenAI from "openai";
+
+const client = new OpenAI({ baseURL: 'http://localhost:11434/v1', apiKey: 'ollama' });
+const t0 = performance.now();
+let firstTokenMs: number | null = null;
+let chunks = 0;
+
+const stream = client.messages.stream({
+  model: "mistral",
+  messages: [{ role: "user", content: "Explain inference in one paragraph." }],
+});
+
+for await (const event of stream) {
+  if (event.type === "content_block_delta" &amp;&amp; event.delta.type === "text_delta") {
+    if (firstTokenMs === null) {
+      firstTokenMs = performance.now() - t0;
+      console.log(`[TTFT: ${firstTokenMs.toFixed(0)} ms]`);
+    }
+    process.stdout.write(event.delta.text);
+    chunks++;
+  }
+}
+
+const elapsed = performance.now() - t0;
+console.log(`\n[total: ${(elapsed / 1000).toFixed(2)}s, decode rate ~ ${(chunks / Math.max((elapsed - (firstTokenMs ?? 0)) / 1000, 0.001)).toFixed(0)} chunks/s]`);</code></pre>
+          </div>
+        </div>
+
+        <div class="checkpoint">
+          <div class="checkpoint-label">&#x2714; What Just Happened?</div>
+          <p>You watched the two-phase model in real time. The <code>TTFT</code> print fires exactly when prefill finishes (and the first decoded token lands); the &ldquo;decode rate&rdquo; reports how fast subsequent tokens stream in. Run this against a short prompt and a 10K-token prompt back-to-back &mdash; you&rsquo;ll see TTFT scale roughly with prompt length while decode rate stays roughly constant. That&rsquo;s the prefill/decode split made visible.</p>
+        </div>
+
+        <div class="callout-warning">
+          <span class="box-label">Common Misconceptions</span>
+          <p><strong>&ldquo;Inference and training are the same thing.&rdquo;</strong> &mdash; They&rsquo;re not. Training updates billions of weights using gradient descent across millions of examples; inference reads those frozen weights to predict the next token. You only ever do inference when calling the API; training happened at Anthropic before the model shipped.</p>
+          <p><strong>&ldquo;Streaming is faster than non-streaming.&rdquo;</strong> &mdash; Same total time. Streaming just <em>shows</em> tokens as they decode rather than buffering them. Use streaming for UX (perceived latency); use non-streaming when you need the full response before doing anything (parsing JSON, tool dispatch).</p>
+          <p><strong>&ldquo;Big prompts are slow because the model has to read them all.&rdquo;</strong> &mdash; Half-right. Prefill processes the prompt in parallel, but the work scales roughly with N&sup2; due to attention. Long prompts hurt TTFT, not decode rate. Prompt caching (M22) collapses that cost on repeat-heavy prompts.</p>
+          <p><strong>&ldquo;<code>temperature=0</code> means deterministic.&rdquo;</strong> &mdash; Mostly true, with caveats. At 0 the sampling step becomes argmax (no randomness in the model). But tie-breaking, server-side batching, and floating-point non-determinism on GPUs can still produce different outputs across runs. For strict reproducibility, also pin the model snapshot and seed if the API supports it.</p>
+        </div>
+
+        <div class="bridge">Now that you know <em>how</em> the model turns logits into tokens, the next section explains <em>why</em> the temperature knob exists and when to turn it.</div>
+      </section>
+
+      <!-- ======================== CONCEPT 3 ======================== -->
+      <section class="section" id="temperature">
+        <h2 id="temperature-heading">Temperature, Top-p &amp; Top-k</h2>
+
+        <div class="analogy-box">
+          <span class="box-label">Everyday Analogy</span>
+          <p><strong>BEFORE:</strong> Without sampling controls, a language model would always pick the single highest-probability next word &mdash; like a restaurant that only ever serves the most popular dish, regardless of what you're in the mood for. Every sentence would sound the same, mechanical and repetitive.</p>
+          <p><strong>PAIN:</strong> That's terrible for creative tasks (bland writing), but also bad for technical tasks where multiple phrasings are equally correct &mdash; the model would get stuck in ruts, always producing identical outputs.</p>
+          <p style="margin-bottom:0;"><strong>MAPPING:</strong> Temperature is a <strong>creativity dial</strong>. At 0, the model always picks the safest, most predictable next word &mdash; like a cautious writer sticking to cliches. At 1.0, the model is willing to take risks and surprise you, choosing less-probable but more interesting words. Top-p and top-k are like narrowing the menu of options the model considers before making a choice &mdash; top-p says "only consider words that make up the top 90% of the probability," and top-k says "only consider the top 50 most likely words."</p>
+        </div>
+
+        <p><strong>What this actually looks like:</strong> Here's the same set of next-token probabilities at three different temperature settings. Watch how the distribution shifts:</p>
+
+        <div class="code-single">
+          <div class="code-label">Temperature effect on probabilities</div>
+          <pre><code>Prompt: "The best way to learn programming is"
+
+Temperature 0.0 (greedy — always pick the top word):
+  " to"       → 99.8%  ← always chosen
+  " by"       →  0.1%
+  " through"  →  0.1%
+
+Temperature 0.5 (moderate — top words dominate but others have a chance):
+  " to"       → 58%
+  " by"       → 22%
+  " through"  → 12%
+  " with"     →  5%
+  " from"     →  3%
+
+Temperature 1.0 (creative — spread across many options):
+  " to"       → 30%
+  " by"       → 22%
+  " through"  → 15%
+  " with"     → 10%
+  " from"     →  6%
+  " when"     →  4%
+  ... more words now have a real chance</code></pre>
+        </div>
+
+        <div class="tech-def-box">
+          <span class="box-label">Technical Definition</span>
+          Here's how these three controls work under the hood, step by step.</p>
+
+          <p><strong>Step 1 &mdash; Temperature:</strong> The model produces <span class="term-tooltip" tabindex="0" aria-describedby="tt-logits">logits<span class="tooltip-content" role="tooltip" id="tt-logits">The raw, unnormalized scores the model assigns to every possible next token before converting them into probabilities. Higher logits = higher probability.</span></span> &mdash; raw prediction scores, think of them as "confidence points" for every possible next word. <span class="term-tooltip" tabindex="0" aria-describedby="tt-temp">Temperature<span class="tooltip-content" role="tooltip" id="tt-temp">A number (0 to 1) that scales the model's confidence scores before picking the next token. Lower = more deterministic, higher = more random/creative.</span></span> divides all logits by the temperature value before they're converted to probabilities via <span class="term-tooltip" tabindex="0" aria-describedby="tt-softmax">softmax<span class="tooltip-content" role="tooltip" id="tt-softmax">A mathematical function that converts a list of numbers into probabilities (all positive, summing to 1). The bigger the input number, the bigger its share of the probability.</span></span> (a function that turns numbers into percentages that add up to 100%). A low temperature like 0.1 makes the top word's probability dominate (say, 95%). A high temperature like 1.0 keeps the distribution spread out (maybe 30%, 20%, 15%...).</p>
+
+          <p><strong>Step 2 &mdash; Top-p:</strong> <span class="term-tooltip" tabindex="0" aria-describedby="tt-topp">Top-p<span class="tooltip-content" role="tooltip" id="tt-topp">Also called nucleus sampling. Instead of considering all possible next tokens, the model only considers the smallest set whose combined probability exceeds p (e.g., 0.9 = top 90% of probability mass).</span></span> (also called nucleus sampling) then trims the menu. It sorts words by probability and keeps only the smallest set whose probabilities add up to p. For example, 0.9 means "keep the top 90% of probability mass, discard the rest."</p>
+
+          <p><strong>Step 3 &mdash; Top-k:</strong> <span class="term-tooltip" tabindex="0" aria-describedby="tt-topk">Top-k<span class="tooltip-content" role="tooltip" id="tt-topk">Limits the model to only consider the k most likely next tokens. For example, top-k=50 means the model only picks from its top 50 predictions, ignoring all others.</span></span> is a simpler filter &mdash; it limits consideration to the k most likely tokens regardless of their probabilities. For example, top-k=50 means only the top 50 words can be chosen.</p>
+
+          <p>In practice, temperature is the one you'll adjust most often. Top-p and top-k are fine-tuning knobs for when you need precise control.
+        </div>
+
+        <!-- Interactive: Temperature Playground -->
+        <div class="animation-container" aria-label="Interactive temperature and sampling controls">
+          <div class="animation-title">Interactive: Temperature &amp; Sampling Playground</div>
+          <div class="temp-controls">
+            <div class="slider-group">
+              <label for="tempSlider">Temperature <span class="slider-value" id="tempValue">0.5</span></label>
+              <input type="range" id="tempSlider" min="0" max="100" value="50" aria-label="Temperature: controls randomness of output">
+            </div>
+            <div class="slider-group">
+              <label for="toppSlider">Top-p <span class="slider-value" id="toppValue">0.9</span></label>
+              <input type="range" id="toppSlider" min="0" max="100" value="90" aria-label="Top-p: controls nucleus sampling threshold">
+            </div>
+          </div>
+          <p style="font-size:0.85rem;color:var(--text-muted);margin-bottom:0.75rem;">Prompt: <strong>"The best way to learn programming is"</strong></p>
+          <div class="prob-display" id="probDisplay" aria-label="Token probability distribution visualization"></div>
+          <div>
+            <div class="gen-label">Sampled output:</div>
+            <div class="generated-output" id="generatedOutput">Click "Generate" to see a response at the current settings.</div>
+          </div>
+          <button class="generate-btn" onclick="generateSample()" aria-label="Generate sample text with current settings">Generate</button>
+        </div>
+
+        <div class="callout-why">
+          <span class="box-label">Why It Matters</span>
+          For agent work, you'll almost always want <strong>low temperature</strong> (0.0&ndash;0.3). Here's a real scenario: imagine an agent that routes 5,000 customer emails per day to 8 different tool functions (refund, escalate, FAQ lookup, etc.). At temperature 0.0, the same email consistently triggers the same tool &mdash; you get reproducible behavior that's easy to test and debug. At temperature 0.8, about 3&ndash;8% of borderline emails will randomly route to different tools on each run (150&ndash;400 unpredictable decisions per day), making your system unreliable and your logs a nightmare to audit. Save higher temperatures for creative writing tasks where variety is the goal, not a bug.
+        </div>
+      </section>
+
+      <!-- ======================== CONCEPT 4 ======================== -->
+      <section class="section" id="calculator-vs-thinker">
+        <h3 id="calculator-vs-thinker-heading">The "Calculator vs. Thinker" Mental Model</h3>
+
+        <div class="analogy-box">
+          <span class="box-label">Everyday Analogy</span>
+          <p><strong>BEFORE:</strong> Before LLMs, most software was deterministic &mdash; a calculator gives you the same answer every time: 2 + 2 = 4, always. Developers built their entire workflow around this certainty: write code, run tests, expect exact outputs.</p>
+          <p><strong>PAIN:</strong> When teams first adopt LLMs, they instinctively treat the model like a calculator. They write a prompt, get a great answer, ship it &mdash; then are shocked when the same prompt gives a subtly different (or wrong) answer the next day. Bug reports pile up, tests fail intermittently, and trust erodes.</p>
+          <p style="margin-bottom:0;"><strong>MAPPING:</strong> The fix is a mental model shift: the model is a <strong>thinker</strong>, not a calculator. A thinker gives you their best answer, which can vary, can be wrong, and can surprise you with insight. Treat it like a very knowledgeable colleague who sometimes needs to be double-checked, not a database that returns exact facts. Once you internalize this, you'll naturally build verification steps, add guardrails, and design your agent for graceful handling of imperfect outputs.</p>
+        </div>
+
+        <p><strong>What this actually looks like:</strong> Here's a real-world example of why the "thinker" model matters. Same prompt, two runs, both at temperature 0.0:</p>
+
+        <div class="code-single">
+          <div class="code-label">Non-deterministic behavior example</div>
+          <pre><code>Prompt: "What is the population of Tokyo?"
+
+Run 1: "Tokyo has a population of approximately 13.96 million
+        people in the city proper as of 2023."
+
+Run 2: "The population of Tokyo is about 14 million in the
+        city proper, or roughly 37 million in the greater
+        metropolitan area."
+
+Both are reasonable. Neither is "wrong." But a calculator
+would give you the exact same answer every time.
+An agent that routes decisions based on this output
+needs to handle BOTH variations gracefully.</code></pre>
+        </div>
+
+        <p>This mental model is the single most important idea in this course. In plain English: a calculator always gives you 2 + 2 = 4. A thinker gives you their best reasoning, which is usually excellent but occasionally off. When you build an agent, you're building around a thinker &mdash; so you design for "usually right" rather than "always right."</p>
+
+        <p>How does this work internally? When the model generates a response, it's making thousands of probabilistic choices (one per token). Each choice has some chance of going a different direction. Even at temperature 0.0, server-side implementation details like floating-point rounding and batch scheduling can cause tiny variations. The result is that outputs are <em>highly consistent</em> but not <em>identical</em> &mdash; and when the model is uncertain (borderline cases, ambiguous questions, math), those small variations can compound into meaningfully different answers.</p>
+
+        <p>How is this different from traditional software? In conventional programming, if a function returns the wrong result, it's a bug &mdash; you fix the code and it works. With LLMs, variation isn't a bug; it's a fundamental property of how the system works. This means your job as an agent builder shifts from "make it correct" to "make it reliably useful despite occasional imperfection." That's a completely different engineering discipline, and it's what the rest of this course teaches.</p>
+
+        <p>Here's how this mental model affects every decision you'll make:</p>
+        <ul>
+          <li><strong>Prompts</strong> (M03): You're giving instructions to a thinker, not writing code for a machine</li>
+          <li><strong>Tool Use</strong> (M05): You give the thinker tools to compensate for what prediction can't do (real-time data, calculations, database lookups)</li>
+          <li><strong>Guardrails</strong> (M16&ndash;M17): You build checks because thinkers can make mistakes</li>
+          <li><strong>Evaluation</strong> (M18): You measure quality probabilistically, not as pass/fail</li>
+        </ul>
+
+        <div class="callout-warning">
+          <span class="box-label">&#9888;&#65039; Common Misconceptions</span>
+          <p><strong>"LLMs are basically a smarter search engine / database, right?"</strong> &mdash; No. A database stores facts and retrieves them exactly. The model doesn't store or retrieve anything &mdash; it <em>generates</em> new text by predicting tokens. When it gives you a correct fact, it's because its training patterns lead to that prediction, not because it "looked it up." This is why it can produce plausible-sounding facts that are completely wrong &mdash; there's no lookup step to fail; it just predicts what sounds right.</p>
+          <p><strong>"If I use temperature 0, the output is deterministic."</strong> &mdash; Almost, but not quite. Temperature 0 makes the model pick the highest-probability token each time, which is <em>highly</em> consistent. But in practice, minor server-side differences (floating-point math, batching) can occasionally produce slightly different outputs. Design your agents for "extremely consistent," not "bit-for-bit identical every time."</p>
+          <p><strong>"the model understands what I'm saying."</strong> &mdash; It's more accurate to say the model is extremely good at <em>pattern matching</em> over language. It processes the statistical relationships between tokens in ways that produce remarkably useful results, but it has no internal model of truth, no beliefs, and no comprehension in the human sense. This matters because it means the model can confidently produce incorrect information &mdash; it doesn't "know" it's wrong.</p>
+          <p><strong>"More parameters = more accurate."</strong> &mdash; Bigger models are generally more capable, but "capable" and "accurate" are different things. A larger model can handle more complex reasoning and nuanced prompts, but it can still hallucinate, and it may do so more convincingly. Size doesn't eliminate the need for verification and guardrails.</p>
+          <p><strong>"If the model gets something wrong, I should just ask again."</strong> &mdash; Retrying the same prompt is a lottery, not a strategy. If the model's training patterns lead it toward a wrong answer, it will likely give the same wrong answer again. The fix is to change the <em>approach</em>: rephrase the prompt, provide examples, add context, or use a tool to fetch the correct information. You'll learn all these techniques in Modules 3 through 5.</p>
+        </div>
+      </section>
+
+      <!-- ======================== CODE WALKTHROUGH ======================== -->
+      <section class="section" id="code-walkthrough">
+        <h2 id="code-walkthrough-heading">Code Walkthrough: Your First the model API Call</h2>
+
+        <div style="background: rgba(139,92,246,0.05); border-left: 3px solid var(--accent-primary); padding: 1rem 1.25rem; margin: 1.25rem 0; border-radius: 0 6px 6px 0;">
+          <strong>Concept &rarr; Code Bridge:</strong> You now understand the theory &mdash; LLMs predict tokens, process input in parallel, and generate output sequentially. The next step is to see this in action. The code below sends a prompt to the model's API and gets back a response, letting you observe token prediction firsthand (including how many tokens went in and came out).
+        </div>
+
+        <p>Let's make your first call to the model API. You'll need an <span class="term-tooltip" tabindex="0" aria-describedby="tt-apikey">API key<span class="tooltip-content" role="tooltip" id="tt-apikey">A secret string that authenticates your application with Anthropic's servers. Never share it, never commit it to code. Always store it as an environment variable.</span></span> from <a href="https://console.anthropic.com/" target="_blank" rel="noopener noreferrer">console.anthropic.com</a>.</p>
+
+        <h3 id="setup-heading">Setup: API Key as Environment Variable</h3>
+
+        <div class="callout-security">
+          <span class="box-label">Security: Never Hardcode API Keys</span>
+          Store your key as an environment variable. Never put it directly in code, never commit it to Git.
+        </div>
+
+        <div class="code-single">
+          <div class="code-label">bash</div>
+          <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+          <pre><code class="language-bash"># Set your API key as an environment variable
+export ANTHROPIC_API_KEY="your-key-here"</code></pre>
+        </div>
+
+        <h3 id="first-call-heading">Making the Call</h3>
+
+        <div style="background: var(--bg-card); border-radius: 8px; padding: 1rem 1.25rem; margin: 1rem 0;">
+          <p style="margin-bottom:0.5rem;">Let's start with the simplest possible the model API call. The code below creates an Anthropic client, sends a single message, and prints the response. This three-step pattern &mdash; create client, call <code>messages.create</code>, read the content &mdash; is the foundation for <em>every</em> API call you'll make in this course. Once you internalize this structure, adding tools, streaming, and multi-turn conversations in later modules will feel like natural extensions.</p>
+          <p style="margin-bottom:0;">Here's the one thing that trips up almost everyone on their first try: the response is <code>message.choices[0].message.content</code>, not <code>message.text</code>. Why the extra <code>[0]</code>? Because <code>content</code> is a list of content blocks &mdash; the model can return text, images, and tool calls in the same response. Even for a simple text reply, you need <code>[0]</code> to grab the first block. Forget this and you'll get a confusing list object instead of a string.</p>
+        </div>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs" role="tablist" aria-label="Code language tabs">
+            <button class="code-tab active" role="tab" aria-selected="true" onclick="switchTab(this, 'first-call')" data-lang="python" id="tab-first-call-py">Python</button>
+            <button class="code-tab" role="tab" aria-selected="false" onclick="switchTab(this, 'first-call')" data-lang="nodejs" id="tab-first-call-js">Node.js</button>
+            <button class="code-tab" role="tab" aria-selected="false" onclick="switchTab(this, 'first-call')" data-lang="curl" id="tab-first-call-curl">cURL</button>
+          </div>
+          <div class="code-panel active" id="first-call-python" role="tabpanel" aria-labelledby="tab-first-call-py">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy Python code">Copy</button>
+            <pre><code class="language-python"># pip install openai>=0.30.0
+from openai import OpenAI
+
+# The client reads ANTHROPIC_API_KEY from your environment
+client = OpenAI(base_url="http://localhost:11434/v1", api_key="ollama")
+
+try:
+    message = client.chat.completions.create(
+        model="mistral",
+        messages=[
+            {"role": "system", "content": "You are a helpful assistant who explains things clearly."},
+            {"role": "user", "content": "What is a large language model? Explain in 2 sentences."}
+        ]
+    )
+    # The response content is a list of content blocks
+    print(message.choices[0].message.content)
+    print(f"\nTokens used: {message.usage.input_tokens} in, {message.usage.output_tokens} out")
+except Exception:
+    print("Invalid API key. Check your ANTHROPIC_API_KEY environment variable.")
+except Exception as e:
+    print(f"API error: {e.message}")</code></pre>
+          </div>
+          <div class="code-panel" id="first-call-nodejs" role="tabpanel" aria-labelledby="tab-first-call-js">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy Node.js code">Copy</button>
+            <pre><code class="language-javascript">// npm install openai
+import OpenAI from 'openai';
+
+// The client reads ANTHROPIC_API_KEY from your environment
+const client = new OpenAI({ baseURL: 'http://localhost:11434/v1', apiKey: 'ollama' });
+
+try {
+  const message = await client.chat.completions.create({
+    model: 'mistral',
+    messages: [
+      { role: 'system', content: 'You are a helpful assistant who explains things clearly.' },
+      { role: 'user', content: 'What is a large language model? Explain in 2 sentences.' }
+    ]
+  });
+
+  // The response content is a list of content blocks
+  console.log(message.choices[0].message.content);
+  console.log(`\nTokens used: ${message.usage.input_tokens} in, ${message.usage.output_tokens} out`);
+} catch (error) {
+  if (error?.status) {
+    console.error(`API error: ${error.status} - ${error.message}`);
+  } else {
+    throw error;
+  }
+}</code></pre>
+          </div>
+          <div class="code-panel" id="first-call-curl" role="tabpanel" aria-labelledby="tab-first-call-curl">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy cURL code">Copy</button>
+            <pre><code class="language-bash">curl https://api.anthropic.com/v1/messages \
+  -H "content-type: application/json" \
+  -H "x-api-key: $ANTHROPIC_API_KEY" \
+  -H "anthropic-version: 2023-06-01" \
+  -d '{
+    "model": "mistral",
+    "max_tokens": 1024,
+    "system": "You are a helpful assistant who explains things clearly.",
+    "messages": [
+      {"role": "user", "content": "What is a large language model? Explain in 2 sentences."}
+    ]
+  }'</code></pre>
+          </div>
+        </div>
+
+        <div class="output-label">Expected Output:</div>
+        <div class="output-block">A large language model is a neural network trained on vast amounts of text data to predict and generate human-like text. It works by learning statistical patterns in language, enabling it to answer questions, write content, and assist with a wide range of language tasks.
+
+Tokens used: 35 in, 48 out</div>
+
+        <div style="background: rgba(16,185,129,0.06); border-left: 3px solid var(--success); padding: 1rem 1.25rem; margin: 1.25rem 0; border-radius: 0 6px 6px 0;">
+          <strong>What Just Happened?</strong> You sent 35 tokens of input (your prompt + system message) to the model. the model's transformer read all 35 tokens in parallel, then generated 48 tokens of output one at a time. Each output token was chosen as the most likely next token given everything before it. The <code>usage</code> object tells you exactly how many tokens were consumed &mdash; this will matter for cost tracking (Module 2) and context window management (Module 4).
+        </div>
+
+        <!-- SVG Diagram: Context Window Visualization -->
+        <div class="animation-container" style="min-height:auto;padding:1.5rem;">
+          <div class="animation-title" style="margin-bottom:1rem;">Diagram: The Context Window</div>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 300" style="width:100%;max-width:600px;display:block;margin:0 auto;" aria-label="Context window visualization showing how system prompt, conversation history, user message, and response space all share a fixed 200K token budget. System prompt uses about 500 tokens at the top, conversation history uses variable space in the middle, the user message sits below it, and response headroom is reserved at the bottom.">
+            <style>
+              .ctx-outer { fill: none; stroke: var(--text-muted, #64748B); stroke-width: 1.5; rx: 10; stroke-dasharray: 6,3; }
+              .ctx-sys { fill: rgba(99,102,241,0.2); stroke: var(--track-foundations, #6366F1); stroke-width: 1.5; rx: 6; }
+              .ctx-hist { fill: rgba(6,182,212,0.15); stroke: var(--track-memory, #06B6D4); stroke-width: 1.5; rx: 6; }
+              .ctx-user { fill: rgba(59,130,246,0.15); stroke: var(--info, #3B82F6); stroke-width: 1.5; rx: 6; }
+              .ctx-resp { fill: rgba(16,185,129,0.1); stroke: var(--success, #10B981); stroke-width: 1.5; rx: 6; stroke-dasharray: 5,3; }
+              .ctx-lbl { fill: var(--text-primary, #E8ECF1); font-family: 'Source Sans 3', sans-serif; font-size: 13px; }
+              .ctx-tok { fill: var(--text-secondary, #94A3B8); font-family: 'JetBrains Mono', monospace; font-size: 11px; text-anchor: end; }
+              .ctx-title { fill: var(--text-muted, #64748B); font-family: 'Source Sans 3', sans-serif; font-size: 11px; text-anchor: middle; }
+              @media (prefers-reduced-motion: reduce) { .ctx-resp { stroke-dasharray: none; } }
+            </style>
+            <!-- Outer context window boundary -->
+            <rect class="ctx-outer" x="40" y="15" width="520" height="268"/>
+            <text class="ctx-title" x="300" y="10">Context Window &mdash; 200,000 tokens total</text>
+            <!-- System Prompt -->
+            <rect class="ctx-sys" x="60" y="28" width="380" height="45"/>
+            <text class="ctx-lbl" x="75" y="55">System Prompt</text>
+            <text class="ctx-tok" x="540" y="55">~500 tokens</text>
+            <text style="fill:var(--text-muted,#64748B);font-family:'Source Sans 3',sans-serif;font-size:10px;" x="75" y="67">Role, rules, persona (sent every call)</text>
+            <!-- Conversation History -->
+            <rect class="ctx-hist" x="60" y="82" width="380" height="90"/>
+            <text class="ctx-lbl" x="75" y="110">Conversation History</text>
+            <text class="ctx-tok" x="540" y="110">variable</text>
+            <text style="fill:var(--text-muted,#64748B);font-family:'Source Sans 3',sans-serif;font-size:10px;" x="75" y="125">user &rarr; assistant &rarr; user &rarr; assistant ...</text>
+            <text style="fill:var(--text-muted,#64748B);font-family:'Source Sans 3',sans-serif;font-size:10px;" x="75" y="140">Grows with each turn &mdash; must be managed!</text>
+            <!-- Brace / label for variable -->
+            <line x1="455" y1="88" x2="455" y2="166" stroke="var(--track-memory, #06B6D4)" stroke-width="1" stroke-dasharray="3,2"/>
+            <!-- User Message -->
+            <rect class="ctx-user" x="60" y="180" width="380" height="40"/>
+            <text class="ctx-lbl" x="75" y="205">Current User Message</text>
+            <text class="ctx-tok" x="540" y="205">~35 tokens</text>
+            <!-- Response Headroom -->
+            <rect class="ctx-resp" x="60" y="228" width="380" height="45"/>
+            <text class="ctx-lbl" x="75" y="255">Response Headroom (max_tokens)</text>
+            <text class="ctx-tok" x="540" y="255">~1,024 tokens</text>
+            <!-- Warning note -->
+            <text style="fill:var(--error,#F43F5E);font-family:'Source Sans 3',sans-serif;font-size:10px;text-anchor:middle;" x="300" y="293">If these sections exceed 200K tokens total, the API returns an error.</text>
+          </svg>
+        </div>
+
+        <h3 id="temperature-code-heading">Experimenting with Temperature</h3>
+
+        <div style="background: var(--bg-card); border-radius: 8px; padding: 1rem 1.25rem; margin: 1rem 0;">
+          <p style="margin-bottom:0;">The interesting part of this next example is that it sends the <em>exact same prompt</em> three times, each with a different temperature value (0.0, 0.5, and 1.0). The results will be noticeably different &mdash; that's the whole point. Seeing identical input produce varied output is the fastest way to <em>feel</em> that LLMs are stochastic, not deterministic. This is the kind of experiment worth running yourself, because reading about probability distributions is one thing &mdash; watching the model give you three different answers to the same question makes it click.</p>
+        </div>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs" role="tablist" aria-label="Code language tabs">
+            <button class="code-tab active" role="tab" aria-selected="true" onclick="switchTab(this, 'temp-code')" data-lang="python" id="tab-temp-code-py">Python</button>
+            <button class="code-tab" role="tab" aria-selected="false" onclick="switchTab(this, 'temp-code')" data-lang="nodejs" id="tab-temp-code-js">Node.js</button>
+          </div>
+          <div class="code-panel active" id="temp-code-python" role="tabpanel" aria-labelledby="tab-temp-code-py">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy Python code">Copy</button>
+            <pre><code class="language-python">from openai import OpenAI
+
+client = OpenAI(base_url="http://localhost:11434/v1", api_key="ollama")
+
+prompt = "Write a one-sentence description of the moon."
+
+for temp in [0.0, 0.5, 1.0]:
+    try:
+        message = client.chat.completions.create(
+            model="mistral",
+            temperature=temp,
+            messages=[{"role": "user", "content": prompt}]
+        )
+        print(f"Temperature {temp}: {message.choices[0].message.content}")
+    except Exception as e:
+        print(f"Error at temperature {temp}: {e.message}")</code></pre>
+          </div>
+          <div class="code-panel" id="temp-code-nodejs" role="tabpanel" aria-labelledby="tab-temp-code-js">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy Node.js code">Copy</button>
+            <pre><code class="language-javascript">import OpenAI from 'openai';
+
+const client = new OpenAI({ baseURL: 'http://localhost:11434/v1', apiKey: 'ollama' });
+const prompt = 'Write a one-sentence description of the moon.';
+
+for (const temp of [0.0, 0.5, 1.0]) {
+  try {
+    const message = await client.chat.completions.create({
+      model: 'mistral',
+      temperature: temp,
+      messages: [{ role: 'user', content: prompt }]
+    });
+    console.log(`Temperature ${temp}: ${message.choices[0].message.content}`);
+  } catch (error) {
+    if (error?.status) {
+      console.error(`Error at temp ${temp}: ${error.message}`);
+    } else {
+      throw error;
+    }
+  }
+}</code></pre>
+          </div>
+        </div>
+
+        <div class="output-label">Expected Output (results will vary at higher temps):</div>
+        <div class="output-block">Temperature 0.0: The moon is Earth's only natural satellite, orbiting at an average distance of about 384,400 kilometers.
+Temperature 0.5: The moon is a celestial companion to Earth, illuminating our night sky as it reflects the sun's light.
+Temperature 1.0: Our luminous neighbor drifts through the cosmic dark, a pale stone mirror catching sunbeams for the sleeping world below.</div>
+
+        <div style="background: rgba(16,185,129,0.06); border-left: 3px solid var(--success); padding: 1rem 1.25rem; margin: 1.25rem 0; border-radius: 0 6px 6px 0;">
+          <strong>What Just Happened?</strong> At temperature 0.0, the model picked the highest-probability token at every step, producing a factual, encyclopedic sentence. At 0.5, it occasionally chose second- or third-ranked tokens, yielding a slightly more varied but still grounded response. At 1.0, the probability distribution was flattened enough that lower-probability &mdash; but more creative &mdash; words got selected, producing poetic and surprising language. Same model, same prompt, three very different outputs &mdash; all controlled by one number.
+        </div>
+      </section>
+
+      <!-- ======================== HANDS-ON EXERCISE ======================== -->
+      <section class="section" id="hands-on">
+        <h2 id="hands-on-heading">Hands-On Exercise: Hello the model</h2>
+
+        <div style="background:var(--bg-card);border-radius:12px;padding:1.25rem 1.5rem;margin-bottom:1.5rem;">
+          <h3 style="margin-top:0;color:var(--accent-primary);">What You'll Build</h3>
+          <p style="margin-bottom:0.5rem;">A series of small scripts that call the model's API, experiment with temperature, and culminate in a working CLI chatbot. By the end you'll have made your first API call, observed how temperature changes output, and built a multi-turn conversation loop.</p>
+          <p style="margin-bottom:0;"><strong>Time estimate:</strong> 20&ndash;30 minutes &bull; <strong>Prerequisites:</strong> Python 3.9+ or Node.js 18+ &bull; An Anthropic API key from <a href="https://console.anthropic.com/" target="_blank" rel="noopener noreferrer">console.anthropic.com</a></p>
+        </div>
+
+        <h3 id="env-setup-heading">Environment Setup</h3>
+        <p>Copy and paste this entire block into your terminal to create a project folder and install the SDK:</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs" role="tablist" aria-label="Code language tabs">
+            <button class="code-tab active" role="tab" aria-selected="true" onclick="switchTab(this, 'env-setup')" data-lang="python" id="tab-env-setup-py">Python</button>
+            <button class="code-tab" role="tab" aria-selected="false" onclick="switchTab(this, 'env-setup')" data-lang="nodejs" id="tab-env-setup-js">Node.js</button>
+          </div>
+          <div class="code-panel active" id="env-setup-python" role="tabpanel" aria-labelledby="tab-env-setup-py">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy Python setup">Copy</button>
+            <pre><code class="language-bash">mkdir hello-claude && cd hello-claude
+python -m venv venv
+# macOS/Linux:
+source venv/bin/activate
+# Windows:
+# venv\Scripts\activate
+pip install openai
+export ANTHROPIC_API_KEY="your-key-here"   # Windows: set ANTHROPIC_API_KEY=your-key-here</code></pre>
+          </div>
+          <div class="code-panel" id="env-setup-nodejs" role="tabpanel" aria-labelledby="tab-env-setup-js">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy Node.js setup">Copy</button>
+            <pre><code class="language-bash">mkdir hello-claude && cd hello-claude
+npm init -y
+npm install openai
+export ANTHROPIC_API_KEY="your-key-here"   # Windows: set ANTHROPIC_API_KEY=your-key-here</code></pre>
+          </div>
+        </div>
+
+        <h3 id="step1-heading">Step 1: Make Your First API Call</h3>
+        <p>This step verifies that your API key works and that you can communicate with the model. It's the "hello world" of agent development &mdash; if this works, everything else in the course will build on it.</p>
+        <p>Create a new file called <code>hello.py</code> (or <code>hello.mjs</code> for Node.js):</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs" role="tablist" aria-label="Code language tabs">
+            <button class="code-tab active" role="tab" aria-selected="true" onclick="switchTab(this, 'lab-step1')" data-lang="python" id="tab-lab-step1-py">Python</button>
+            <button class="code-tab" role="tab" aria-selected="false" onclick="switchTab(this, 'lab-step1')" data-lang="nodejs" id="tab-lab-step1-js">Node.js</button>
+          </div>
+          <div class="code-panel active" id="lab-step1-python" role="tabpanel" aria-labelledby="tab-lab-step1-py">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy Python code">Copy</button>
+            <pre><code class="language-python">from openai import OpenAI
+
+client = OpenAI(base_url="http://localhost:11434/v1", api_key="ollama")
+
+try:
+    message = client.chat.completions.create(
+        model="mistral",
+        messages=[
+            {"role": "system", "content": "You are a helpful assistant who explains things clearly."},
+            {"role": "user", "content": "What is a large language model? Explain in 2 sentences."}
+        ]
+    )
+    print(message.choices[0].message.content)
+    print(f"\nTokens used: {message.usage.input_tokens} in, {message.usage.output_tokens} out")
+except Exception:
+    print("Invalid API key. Check your ANTHROPIC_API_KEY environment variable.")
+except Exception as e:
+    print(f"API error: {e.message}")</code></pre>
+          </div>
+          <div class="code-panel" id="lab-step1-nodejs" role="tabpanel" aria-labelledby="tab-lab-step1-js">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy Node.js code">Copy</button>
+            <pre><code class="language-javascript">import OpenAI from 'openai';
+
+const client = new OpenAI({ baseURL: 'http://localhost:11434/v1', apiKey: 'ollama' });
+
+try {
+  const message = await client.chat.completions.create({
+    model: 'mistral',
+    messages: [
+      { role: 'system', content: 'You are a helpful assistant who explains things clearly.' },
+      { role: 'user', content: 'What is a large language model? Explain in 2 sentences.' }
+    ]
+  });
+  console.log(message.choices[0].message.content);
+  console.log(`\nTokens used: ${message.usage.input_tokens} in, ${message.usage.output_tokens} out`);
+} catch (error) {
+  if (error?.status) {
+    console.error(`API error: ${error.status} - ${error.message}`);
+  } else {
+    throw error;
+  }
+}</code></pre>
+          </div>
+        </div>
+
+        <p><strong>Run it:</strong> <code>python hello.py</code> (or <code>node hello.mjs</code>)</p>
+
+        <div class="output-label">Expected Output:</div>
+        <div class="output-block">A large language model is a neural network trained on vast amounts of text data to predict and generate human-like text. It works by learning statistical patterns in language, enabling it to answer questions, write content, and assist with a wide range of language tasks.
+
+Tokens used: 35 in, 48 out</div>
+
+        <div style="background: rgba(16,185,129,0.06); border-left: 3px solid var(--success); padding: 1rem 1.25rem; margin: 1rem 0; border-radius: 0 6px 6px 0;">
+          <strong>&#9989; Checkpoint:</strong> If you see a 2-sentence explanation followed by a token count, Step 1 is working. Your exact wording will differ &mdash; that's expected (remember, the model is a thinker, not a calculator).
+        </div>
+
+        <details style="margin: 1rem 0; color: var(--text-secondary);">
+          <summary style="cursor:pointer; font-weight:600;">Troubleshooting</summary>
+          <ul style="margin-top:0.5rem;">
+            <li><strong><code>AuthenticationError</code></strong> &mdash; Your API key is missing or invalid. Run <code>echo $ANTHROPIC_API_KEY</code> (or <code>echo %ANTHROPIC_API_KEY%</code> on Windows) to check it's set.</li>
+            <li><strong><code>ModuleNotFoundError: No module named 'openai'</code></strong> &mdash; You're not in the virtual environment. Run <code>source venv/bin/activate</code> first, then <code>pip install openai</code>.</li>
+            <li><strong><code>Connection error</code> / timeout</strong> &mdash; Check your internet connection. The API endpoint is <code>api.anthropic.com</code> &mdash; make sure it's not blocked by a firewall or VPN.</li>
+          </ul>
+        </details>
+
+        <h3 id="step2-heading">Step 2: Experiment with System Prompts</h3>
+        <p>System prompts shape the model's personality and behavior. This step shows you how much control a single string gives you over the output. You'll use the same user message but swap the system prompt to see wildly different responses.</p>
+        <p>Create a new file called <code>system_prompts.py</code> (or <code>system_prompts.mjs</code>):</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs" role="tablist" aria-label="Code language tabs">
+            <button class="code-tab active" role="tab" aria-selected="true" onclick="switchTab(this, 'lab-step2')" data-lang="python" id="tab-lab-step2-py">Python</button>
+            <button class="code-tab" role="tab" aria-selected="false" onclick="switchTab(this, 'lab-step2')" data-lang="nodejs" id="tab-lab-step2-js">Node.js</button>
+          </div>
+          <div class="code-panel active" id="lab-step2-python" role="tabpanel" aria-labelledby="tab-lab-step2-py">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy Python code">Copy</button>
+            <pre><code class="language-python">from openai import OpenAI
+
+client = OpenAI(base_url="http://localhost:11434/v1", api_key="ollama")
+
+prompts = [
+    "You are a pirate. Respond in pirate speak.",
+    "You are a formal academic. Use precise, scholarly language.",
+    "Respond only in haiku format (5-7-5 syllables).",
+]
+
+for system_prompt in prompts:
+    try:
+        message = client.chat.completions.create(
+            model="mistral",
+            messages=[{"role": "user", "content": "What is the moon?"}]
+        )
+        print(f"System: {system_prompt}")
+        print(f"Response: {message.choices[0].message.content}\n")
+    except Exception as e:
+        print(f"Error: {e.message}")</code></pre>
+          </div>
+          <div class="code-panel" id="lab-step2-nodejs" role="tabpanel" aria-labelledby="tab-lab-step2-js">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy Node.js code">Copy</button>
+            <pre><code class="language-javascript">import OpenAI from 'openai';
+
+const client = new OpenAI({ baseURL: 'http://localhost:11434/v1', apiKey: 'ollama' });
+
+const prompts = [
+  'You are a pirate. Respond in pirate speak.',
+  'You are a formal academic. Use precise, scholarly language.',
+  'Respond only in haiku format (5-7-5 syllables).',
+];
+
+for (const systemPrompt of prompts) {
+  try {
+    const message = await client.chat.completions.create({
+      model: 'mistral',
+      messages: [{ role: 'user', content: 'What is the moon?' }]
+    });
+    console.log(`System: ${systemPrompt}`);
+    console.log(`Response: ${message.choices[0].message.content}\n`);
+  } catch (error) {
+    console.error(`Error: ${error.message}`);
+  }
+}</code></pre>
+          </div>
+        </div>
+
+        <p><strong>Run it:</strong> <code>python system_prompts.py</code> (or <code>node system_prompts.mjs</code>)</p>
+
+        <div class="output-label">Expected Output (your wording will vary):</div>
+        <div class="output-block">System: You are a pirate. Respond in pirate speak.
+Response: Arrr, the moon be that great glowing orb in the night sky, matey! She guides us pirates across the seven seas...
+
+System: You are a formal academic. Use precise, scholarly language.
+Response: The Moon is Earth's sole natural satellite, orbiting at a mean distance of approximately 384,400 kilometres...
+
+System: Respond only in haiku format (5-7-5 syllables).
+Response: Silver orb above / Pulling tides across the sea / Night's faithful lantern</div>
+
+        <div style="background: rgba(16,185,129,0.06); border-left: 3px solid var(--success); padding: 1rem 1.25rem; margin: 1rem 0; border-radius: 0 6px 6px 0;">
+          <strong>&#9989; Checkpoint:</strong> If you see three distinctly different responses to the same question, Step 2 is working. The system prompt is the primary way you'll control agent behavior throughout this course.
+        </div>
+
+        <h3 id="step3-heading">Step 3: Temperature Experiment</h3>
+        <p>This step makes the "thinker, not calculator" concept visceral. You'll run the exact same prompt multiple times at different temperatures and compare how consistent the outputs are. This is the experiment that makes non-determinism <em>click</em>.</p>
+        <p>Create a new file called <code>temperature.py</code> (or <code>temperature.mjs</code>):</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs" role="tablist" aria-label="Code language tabs">
+            <button class="code-tab active" role="tab" aria-selected="true" onclick="switchTab(this, 'lab-step3')" data-lang="python" id="tab-lab-step3-py">Python</button>
+            <button class="code-tab" role="tab" aria-selected="false" onclick="switchTab(this, 'lab-step3')" data-lang="nodejs" id="tab-lab-step3-js">Node.js</button>
+          </div>
+          <div class="code-panel active" id="lab-step3-python" role="tabpanel" aria-labelledby="tab-lab-step3-py">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy Python code">Copy</button>
+            <pre><code class="language-python">from openai import OpenAI
+
+client = OpenAI(base_url="http://localhost:11434/v1", api_key="ollama")
+prompt = "Write a one-sentence description of the moon."
+
+for temp in [0.0, 1.0]:
+    print(f"\n--- Temperature {temp} ---")
+    for i in range(3):
+        try:
+            message = client.chat.completions.create(
+                model="mistral",
+                temperature=temp,
+                messages=[{"role": "user", "content": prompt}]
+            )
+            print(f"  Run {i+1}: {message.choices[0].message.content}")
+        except Exception as e:
+            print(f"  Error: {e.message}")</code></pre>
+          </div>
+          <div class="code-panel" id="lab-step3-nodejs" role="tabpanel" aria-labelledby="tab-lab-step3-js">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy Node.js code">Copy</button>
+            <pre><code class="language-javascript">import OpenAI from 'openai';
+
+const client = new OpenAI({ baseURL: 'http://localhost:11434/v1', apiKey: 'ollama' });
+const prompt = 'Write a one-sentence description of the moon.';
+
+for (const temp of [0.0, 1.0]) {
+  console.log(`\n--- Temperature ${temp} ---`);
+  for (let i = 0; i < 3; i++) {
+    try {
+      const message = await client.chat.completions.create({
+        model: 'mistral',
+        temperature: temp,
+        messages: [{ role: 'user', content: prompt }]
+      });
+      console.log(`  Run ${i + 1}: ${message.choices[0].message.content}`);
+    } catch (error) {
+      console.error(`  Error: ${error.message}`);
+    }
+  }
+}</code></pre>
+          </div>
+        </div>
+
+        <p><strong>Run it:</strong> <code>python temperature.py</code> (or <code>node temperature.mjs</code>)</p>
+
+        <div class="output-label">Expected Output:</div>
+        <div class="output-block">--- Temperature 0.0 ---
+  Run 1: The moon is Earth's only natural satellite, orbiting at an average distance of about 384,400 kilometers.
+  Run 2: The moon is Earth's only natural satellite, orbiting at an average distance of about 384,400 kilometers.
+  Run 3: The moon is Earth's only natural satellite, orbiting at an average distance of about 384,400 kilometers.
+
+--- Temperature 1.0 ---
+  Run 1: Our luminous neighbor drifts through the cosmic dark, a pale stone mirror catching sunbeams for the sleeping world below.
+  Run 2: The moon is a celestial companion that has silently witnessed every chapter of Earth's long story.
+  Run 3: Hanging in the night sky like a worn silver coin, the moon pulls our tides and stirs our oldest myths.</div>
+
+        <div style="background: rgba(16,185,129,0.06); border-left: 3px solid var(--success); padding: 1rem 1.25rem; margin: 1rem 0; border-radius: 0 6px 6px 0;">
+          <strong>&#9989; Checkpoint:</strong> At temperature 0.0, all three runs should be nearly or exactly identical. At temperature 1.0, each run should be noticeably different. If you see this pattern, you've just observed the core difference between deterministic and stochastic generation.
+        </div>
+
+        <h3 id="step4-heading">Step 4: Observe Token Usage</h3>
+        <p>Token counts drive API costs and context limits &mdash; two concepts you'll use throughout the entire course. This step trains you to notice how different prompts and settings affect token consumption, so it becomes instinctive. This uses the <code>message.usage</code> object from Step 1.</p>
+        <p>Create a new file called <code>token_usage.py</code> (or <code>token_usage.mjs</code>):</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs" role="tablist" aria-label="Code language tabs">
+            <button class="code-tab active" role="tab" aria-selected="true" onclick="switchTab(this, 'lab-step4')" data-lang="python" id="tab-lab-step4-py">Python</button>
+            <button class="code-tab" role="tab" aria-selected="false" onclick="switchTab(this, 'lab-step4')" data-lang="nodejs" id="tab-lab-step4-js">Node.js</button>
+          </div>
+          <div class="code-panel active" id="lab-step4-python" role="tabpanel" aria-labelledby="tab-lab-step4-py">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy Python code">Copy</button>
+            <pre><code class="language-python">from openai import OpenAI
+
+client = OpenAI(base_url="http://localhost:11434/v1", api_key="ollama")
+
+tests = [
+    ("Short prompt", "Hi!", 50),
+    ("Medium prompt", "Explain what a large language model is in detail.", 200),
+    ("Long prompt with constraint", "Write a 3-paragraph essay about the history of computing.", 1024),
+]
+
+for label, prompt, max_tok in tests:
+    try:
+        message = client.chat.completions.create(
+            model="mistral",
+            messages=[{"role": "user", "content": prompt}]
+        )
+        u = message.usage
+        print(f"{label}:")
+        print(f"  Input tokens:  {u.input_tokens}")
+        print(f"  Output tokens: {u.output_tokens}")
+        print(f"  Total tokens:  {u.input_tokens + u.output_tokens}\n")
+    except Exception as e:
+        print(f"Error: {e.message}")</code></pre>
+          </div>
+          <div class="code-panel" id="lab-step4-nodejs" role="tabpanel" aria-labelledby="tab-lab-step4-js">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy Node.js code">Copy</button>
+            <pre><code class="language-javascript">import OpenAI from 'openai';
+
+const client = new OpenAI({ baseURL: 'http://localhost:11434/v1', apiKey: 'ollama' });
+
+const tests = [
+  ['Short prompt', 'Hi!', 50],
+  ['Medium prompt', 'Explain what a large language model is in detail.', 200],
+  ['Long prompt with constraint', 'Write a 3-paragraph essay about the history of computing.', 1024],
+];
+
+for (const [label, prompt, maxTok] of tests) {
+  try {
+    const message = await client.chat.completions.create({
+      model: 'mistral',
+      max_tokens: maxTok,
+      messages: [{ role: 'user', content: prompt }]
+    });
+    const u = message.usage;
+    console.log(`${label}:`);
+    console.log(`  Input tokens:  ${u.input_tokens}`);
+    console.log(`  Output tokens: ${u.output_tokens}`);
+    console.log(`  Total tokens:  ${u.input_tokens + u.output_tokens}\n`);
+  } catch (error) {
+    console.error(`Error: ${error.message}`);
+  }
+}</code></pre>
+          </div>
+        </div>
+
+        <p><strong>Run it:</strong> <code>python token_usage.py</code> (or <code>node token_usage.mjs</code>)</p>
+
+        <div class="output-label">Expected Output (numbers will vary slightly):</div>
+        <div class="output-block">Short prompt:
+  Input tokens:  9
+  Output tokens: 32
+  Total tokens:  41
+
+Medium prompt:
+  Input tokens:  16
+  Output tokens: 187
+  Total tokens:  203
+
+Long prompt with constraint:
+  Input tokens:  18
+  Output tokens: 412
+  Total tokens:  430</div>
+
+        <div style="background: rgba(16,185,129,0.06); border-left: 3px solid var(--success); padding: 1rem 1.25rem; margin: 1rem 0; border-radius: 0 6px 6px 0;">
+          <strong>&#9989; Checkpoint:</strong> Notice how short prompts use few input tokens but the output length varies based on what you asked for. The <code>max_tokens</code> parameter is a ceiling, not a target &mdash; the model often uses fewer. You'll explore tokens deeply in M02.
+        </div>
+
+        <h3 id="stretch-heading">Step 5 (Stretch Goal): Build a CLI Chat</h3>
+
+        <div style="background: rgba(139,92,246,0.05); border-left: 3px solid var(--accent-primary); padding: 1rem 1.25rem; margin: 1.25rem 0; border-radius: 0 6px 6px 0;">
+          <strong>Concept &rarr; Code Bridge:</strong> The previous examples were single-turn: one message in, one response out. Real agents have multi-turn conversations. The key difference is the <code>conversation</code> list &mdash; you accumulate messages so the model can see the full history, just like how each output token depends on all previous tokens.
+        </div>
+
+        <div style="background: var(--bg-card); border-radius: 8px; padding: 1rem 1.25rem; margin: 1rem 0;">
+          <p style="margin-bottom:0.5rem;">Now let's build something you can actually interact with: a terminal chatbot that remembers your conversation. This matters because multi-turn conversation is the foundation of every agent &mdash; agents don't just answer one question, they maintain context across a sequence of actions. The pattern you'll see here (accumulate messages in a list, send the full list on each call, append the response) is the exact same loop that powers production agent frameworks.</p>
+          <p style="margin-bottom:0;">Here's the dilemma to watch for: what happens when an API call fails mid-conversation? Notice the <code>conversation.pop()</code> in the error handler. If you skip that, you'd have a user message sitting in the list with no assistant response after it. The next API call would fail because the model's API requires strict alternating user/assistant messages. That one line of cleanup prevents a cascade of confusing errors.</p>
+        </div>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs" role="tablist" aria-label="Code language tabs">
+            <button class="code-tab active" role="tab" aria-selected="true" onclick="switchTab(this, 'cli-code')" data-lang="python" id="tab-cli-code-py">Python</button>
+            <button class="code-tab" role="tab" aria-selected="false" onclick="switchTab(this, 'cli-code')" data-lang="nodejs" id="tab-cli-code-js">Node.js</button>
+          </div>
+          <div class="code-panel active" id="cli-code-python" role="tabpanel" aria-labelledby="tab-cli-code-py">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy Python code">Copy</button>
+            <pre><code class="language-python">from openai import OpenAI
+
+client = OpenAI(base_url="http://localhost:11434/v1", api_key="ollama")
+conversation = []
+
+print("Chat with the model! (type 'quit' to exit)\n")
+
+while True:
+    user_input = input("You: ").strip()
+    if user_input.lower() in ("quit", "exit"):
+        break
+    if not user_input:
+        continue
+
+    conversation.append({"role": "user", "content": user_input})
+
+    try:
+        response = client.chat.completions.create(
+            model="mistral",
+            messages=[{"role": "system", "content": "You are a friendly, helpful assistant."}] + conversation
+        )
+        assistant_msg = response.choices[0].message.content
+        conversation.append({"role": "assistant", "content": assistant_msg})
+        print(f"\nClaude: {assistant_msg}\n")
+    except Exception as e:
+        print(f"\nError: {e.message}\n")
+        # Remove the failed user message so conversation stays consistent
+        conversation.pop()</code></pre>
+          </div>
+          <div class="code-panel" id="cli-code-nodejs" role="tabpanel" aria-labelledby="tab-cli-code-js">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy Node.js code">Copy</button>
+            <pre><code class="language-javascript">import OpenAI from 'openai';
+import * as readline from 'readline';
+
+const client = new OpenAI({ baseURL: 'http://localhost:11434/v1', apiKey: 'ollama' });
+const conversation = [];
+
+const rl = readline.createInterface({
+  input: process.stdin,
+  output: process.stdout
+});
+
+console.log("Chat with the model! (type 'quit' to exit)\n");
+
+function ask() {
+  rl.question('You: ', async (userInput) => {
+    userInput = userInput.trim();
+    if (['quit', 'exit'].includes(userInput.toLowerCase())) {
+      rl.close();
+      return;
+    }
+    if (!userInput) { ask(); return; }
+
+    conversation.push({ role: 'user', content: userInput });
+
+    try {
+      const response = await client.chat.completions.create({
+        model: 'mistral',
+        messages: [{ role: 'system', content: 'You are a friendly, helpful assistant.' }, ...conversation],
+      });
+      const assistantMsg = response.choices[0].message.content;
+      conversation.push({ role: 'assistant', content: assistantMsg });
+      console.log(`\nClaude: ${assistantMsg}\n`);
+    } catch (error) {
+      console.error(`\nError: ${error.message}\n`);
+      conversation.pop();
+    }
+    ask();
+  });
+}
+ask();</code></pre>
+          </div>
+        </div>
+
+        <div style="background: rgba(16,185,129,0.06); border-left: 3px solid var(--success); padding: 1rem 1.25rem; margin: 1.25rem 0; border-radius: 0 6px 6px 0;">
+          <strong>What Just Happened?</strong> You built a multi-turn chat loop. Each time you type a message, it's appended to the <code>conversation</code> array, sent to the model along with the full history, and the response is appended back. the model sees every previous exchange on each call &mdash; that's how it "remembers" the conversation. This pattern (accumulate messages &rarr; send all &rarr; append response) is the exact loop that powers agent frameworks you'll see in Modules 7&ndash;9.
+        </div>
+
+        <div style="background: rgba(16,185,129,0.06); border-left: 3px solid var(--success); padding: 1rem 1.25rem; margin: 1rem 0; border-radius: 0 6px 6px 0;">
+          <strong>&#9989; Checkpoint:</strong> If you can have a multi-turn conversation where the model remembers what you said earlier (e.g., "My name is Alex" followed by "What's my name?"), Step 5 is working. Type <code>quit</code> to exit.
+        </div>
+
+        <details style="margin: 1rem 0; color: var(--text-secondary);">
+          <summary style="cursor:pointer; font-weight:600;">Troubleshooting</summary>
+          <ul style="margin-top:0.5rem;">
+            <li><strong><code>TypeError: Cannot read properties of undefined</code></strong> (Node.js) &mdash; Make sure your file has the <code>.mjs</code> extension or your <code>package.json</code> contains <code>"type": "module"</code> for ES module imports.</li>
+            <li><strong>The model doesn't remember previous messages</strong> &mdash; Check that you're appending both the user message <em>and</em> the assistant response to the <code>conversation</code> list. Both must be present.</li>
+            <li><strong>Rate limit errors after many messages</strong> &mdash; Add a short delay between calls or reduce your conversation length. Long conversations also consume more tokens per call.</li>
+          </ul>
+        </details>
+
+        <!-- ===== BONUS STEP 6: MULTIMODAL ===== -->
+        <h3 id="step6-heading">Bonus Step 6: Experience the Multimodal Mode</h3>
+        <p>The Model Zoo section introduced four model types. You&rsquo;ve been using the <strong>generative</strong> mode the whole lab. This bonus step lets you experience the <strong>multimodal</strong> mode: pass an image URL alongside a text question and the model describes what it sees. No additional API key required.</p>
+        <p>The script (<code>model_zoo_lab.py</code> / <code>model_zoo_lab.mjs</code>) is in the starter folder alongside the other labs. Fill in the two <code>TODO</code> functions, then run it:</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs" role="tablist" aria-label="Code language tabs">
+            <button class="code-tab active" role="tab" aria-selected="true" onclick="switchTab(this, 'lab-step6')" data-lang="python" id="tab-lab-step6-py">Python</button>
+            <button class="code-tab" role="tab" aria-selected="false" onclick="switchTab(this, 'lab-step6')" data-lang="nodejs" id="tab-lab-step6-js">Node.js</button>
+          </div>
+          <div class="code-panel active" id="lab-step6-python" role="tabpanel" aria-labelledby="tab-lab-step6-py">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy Python code">Copy</button>
+            <pre><code class="language-python">from openai import OpenAI
+from dotenv import load_dotenv
+
+load_dotenv()
+client = OpenAI(base_url="http://localhost:11434/v1", api_key="ollama")
+MODEL = "mistral"   # swap to "llama3" or "phi3" for other models
+
+# --- GENERATIVE (text → text) ---
+def generative_call(question: str) -> str:
+    response = client.chat.completions.create(
+        model=MODEL,
+        messages=[{"role": "user", "content": question}],
+    )
+    return response.choices[0].message.content
+
+# --- MULTIMODAL (image URL + text → text) ---
+def multimodal_call(image_url: str, question: str) -> str:
+    response = client.chat.completions.create(
+        model=MODEL,
+        messages=[{
+            "role": "user",
+            "content": [
+                # the model reads the image directly from the public URL
+                {"type": "image", "source": {"type": "url", "url": image_url}},
+                {"type": "text", "text": question},
+            ],
+        }],
+    )
+    return response.choices[0].message.content
+
+IMAGE_URL = "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3f/Bikesgray.jpg/320px-Bikesgray.jpg"
+
+print(generative_call("What is the Eiffel Tower? One sentence."))
+print(multimodal_call(IMAGE_URL, "Describe this image in one sentence."))</code></pre>
+          </div>
+          <div class="code-panel" id="lab-step6-nodejs" role="tabpanel" aria-labelledby="tab-lab-step6-js">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy Node.js code">Copy</button>
+            <pre><code class="language-javascript">import OpenAI from 'openai';
+import 'dotenv/config';
+
+const client = new OpenAI({ baseURL: 'http://localhost:11434/v1', apiKey: 'ollama' });
+const MODEL = 'mistral';
+
+async function generativeCall(question) {
+  const r = await client.chat.completions.create({
+    model: MODEL,    messages: [{ role: 'user', content: question }],
+  });
+  return r.choices[0].message.content;
+}
+
+async function multimodalCall(imageUrl, question) {
+  const r = await client.chat.completions.create({
+    model: MODEL,    messages: [{
+      role: 'user',
+      content: [
+        // the model reads the image directly from the public URL
+        { type: 'image', source: { type: 'url', url: imageUrl } },
+        { type: 'text', text: question },
+      ],
+    }],
+  });
+  return r.choices[0].message.content;
+}
+
+const IMAGE_URL = 'https://upload.wikimedia.org/wikipedia/commons/thumb/3/3f/Bikesgray.jpg/320px-Bikesgray.jpg';
+
+console.log(await generativeCall('What is the Eiffel Tower? One sentence.'));
+console.log(await multimodalCall(IMAGE_URL, 'Describe this image in one sentence.'));</code></pre>
+          </div>
+        </div>
+
+        <div style="background: rgba(16,185,129,0.06); border-left: 3px solid var(--success); padding: 1rem 1.25rem; margin: 1rem 0; border-radius: 0 6px 6px 0;">
+          <strong>&#9989; Checkpoint:</strong> You should see the model answer a text question, then produce a one-sentence description of the bicycle image. The only difference in code is the <code>content</code> array &mdash; generative passes a plain string; multimodal passes an array with an image block <em>and</em> a text block.
+        </div>
+
+        <p style="color:var(--text-secondary);font-size:0.92rem;margin-top:0.5rem;">
+          <strong>Why not call an embedding or reranker here?</strong> Those models need a separate provider key (Voyage, Cohere, or OpenAI) and only make sense once you have a document corpus to search. You&rsquo;ll build the full pipeline in <strong>M09</strong> (embedding + vector index) and <strong>M10</strong> (reranking). For now, the four-type taxonomy is your design compass.
+        </p>
+
+        <h3 id="verify-heading">Verify Everything Works</h3>
+        <p>Run all scripts in sequence to confirm your setup is complete:</p>
+
+        <div class="code-single">
+          <div class="code-label">bash</div>
+          <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+          <pre><code class="language-bash"># Python
+python hello.py && python system_prompts.py && python temperature.py && python token_usage.py
+
+# Bonus: multimodal (requires internet access for the image URL)
+python model_zoo_lab.py
+
+# Node.js
+node hello.mjs && node system_prompts.mjs && node temperature.mjs && node token_usage.mjs
+node model_zoo_lab.mjs</code></pre>
+        </div>
+
+        <div style="background: rgba(16,185,129,0.06); border-left: 3px solid var(--success); padding: 1rem 1.25rem; margin: 1rem 0; border-radius: 0 6px 6px 0;">
+          <strong>&#127881; Congratulations!</strong> If all four scripts ran without errors &mdash; and the bonus step returned an image description &mdash; you&rsquo;ve completed M01. You can make API calls, control output with system prompts and temperature, track token usage, and switch the model into multimodal mode. These are the building blocks for everything that follows. Onward to M02!
+        </div>
+      </section>
+
+      <!-- ======================== OPEN SOURCE CALLOUT ======================== -->
+      <section class="section" id="open-source-swap" style="border:1px solid rgba(212,168,67,0.3);border-radius:10px;background:rgba(212,168,67,0.04);padding:1.75rem;">
+        <h2 id="open-source-swap-heading" style="font-family:'Bricolage Grotesque',sans-serif;font-size:1.4rem;margin-bottom:0.75rem;display:flex;align-items:center;gap:0.6rem;">
+          <span aria-hidden="true">&#127970;</span> Want to Run This Without an API Key?
+        </h2>
+        <p style="margin-bottom:1rem;">You're already here — this track uses <strong>Ollama + Mistral-7B</strong> for all code examples. All the concepts apply to any LLM. The comparison below shows what the same call looks like in the main course (Claude/Anthropic SDK) vs. this track (OpenAI SDK + Ollama), so you can follow along with either version.</p>
+        <div style="background:var(--bg-card);border-radius:8px;padding:1.25rem 1.5rem;margin-bottom:1rem;">
+          <p style="font-size:0.88rem;color:var(--text-secondary);margin-bottom:0.75rem;font-weight:600;text-transform:uppercase;letter-spacing:0.05em;">Same Call, Two Providers — Python</p>
+          <pre style="margin:0;font-family:'JetBrains Mono',monospace;font-size:0.88rem;line-height:1.6;color:var(--code-text);overflow-x:auto;"><span style="color:#8b949e;"># Main course: Claude via Anthropic SDK</span>
+<span style="color:#79c0ff;">from</span> anthropic <span style="color:#79c0ff;">import</span> Anthropic
+client = Anthropic()
+response = client.messages.create(
+    model=<span style="color:#a5d6ff;">"claude-sonnet-4-6"</span>, max_tokens=<span style="color:#f8cc75;">512</span>,
+    messages=[{<span style="color:#a5d6ff;">"role"</span>: <span style="color:#a5d6ff;">"user"</span>, <span style="color:#a5d6ff;">"content"</span>: <span style="color:#a5d6ff;">"Hello!"</span>}]
+)
+text = response.content[<span style="color:#f8cc75;">0</span>].text
+
+<span style="color:#8b949e;"># This track: Mistral-7B via Ollama (ollama pull mistral)</span>
+<span style="color:#79c0ff;">from</span> openai <span style="color:#79c0ff;">import</span> OpenAI
+client = OpenAI(base_url=<span style="color:#a5d6ff;">"http://localhost:11434/v1"</span>, api_key=<span style="color:#a5d6ff;">"ollama"</span>)
+response = client.chat.completions.create(
+    model=<span style="color:#a5d6ff;">"mistral"</span>,
+    messages=[{<span style="color:#a5d6ff;">"role"</span>: <span style="color:#a5d6ff;">"user"</span>, <span style="color:#a5d6ff;">"content"</span>: <span style="color:#a5d6ff;">"Hello!"</span>}]
+)
+text = response.choices[<span style="color:#f8cc75;">0</span>].message.content</pre>
+        </div>
+        <p style="margin-bottom:0.5rem;">Three differences: client initializer, model name, and response path (<code>content[0].text</code> vs <code>choices[0].message.content</code>). Every other concept — system prompts, temperature, multi-turn history, tool use — maps directly between the two.</p>
+        <p style="color:var(--text-secondary);font-size:0.93rem;">
+          <strong>Module M28</strong> covers the full swap: Ollama setup, hardware requirements, LiteLLM for provider-agnostic agents, and an honest comparison of what Claude-specific features have no open-source equivalent. You can take M28 anytime — it&rsquo;s a standalone appendix module.
+        </p>
+      </section>
+
+      <!-- ======================== QUIZ ======================== -->
+      <section class="section" id="quiz">
+        <h2 id="quiz-heading">Knowledge Check</h2>
+        <p style="color:var(--text-secondary);margin-bottom:1.5rem;">Test your understanding of the concepts from this module. Select the best answer for each question.</p>
+
+        <!-- Q1 -->
+        <div class="quiz-question" data-correct="b">
+          <h4>Q1: What does a Large Language Model fundamentally do?</h4>
+          <div class="quiz-option" data-value="a" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option A">
+            <span class="quiz-marker">A</span>
+            <span>Searches a database of pre-written answers and returns the best match</span>
+          </div>
+          <div class="quiz-option" data-value="b" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option B">
+            <span class="quiz-marker">B</span>
+            <span>Predicts the most likely next token in a sequence based on patterns learned from training data</span>
+          </div>
+          <div class="quiz-option" data-value="c" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option C">
+            <span class="quiz-marker">C</span>
+            <span>Executes code instructions to compute the correct answer to any question</span>
+          </div>
+          <div class="quiz-option" data-value="d" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option D">
+            <span class="quiz-marker">D</span>
+            <span>Understands the meaning of text the same way humans do, then formulates a response</span>
+          </div>
+          <div class="quiz-feedback correct-fb">Correct! LLMs are next-token predictors. They don't search databases, execute code, or understand language in a human sense &mdash; they predict what text comes next based on statistical patterns.</div>
+          <div class="quiz-feedback incorrect-fb"></div>
+        </div>
+
+        <!-- Q2 -->
+        <div class="quiz-question" data-correct="c">
+          <h4>Q2: What does the temperature parameter control?</h4>
+          <div class="quiz-option" data-value="a" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option A">
+            <span class="quiz-marker">A</span>
+            <span>The maximum length of the response</span>
+          </div>
+          <div class="quiz-option" data-value="b" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option B">
+            <span class="quiz-marker">B</span>
+            <span>How fast the model generates tokens</span>
+          </div>
+          <div class="quiz-option" data-value="c" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option C">
+            <span class="quiz-marker">C</span>
+            <span>The randomness of token selection &mdash; lower means more deterministic, higher means more creative</span>
+          </div>
+          <div class="quiz-option" data-value="d" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option D">
+            <span class="quiz-marker">D</span>
+            <span>The accuracy of the model's responses</span>
+          </div>
+          <div class="quiz-feedback correct-fb">Correct! Temperature scales the probability distribution. At 0, the model always picks the highest-probability token. At higher values, lower-probability tokens get a better chance of being selected.</div>
+          <div class="quiz-feedback incorrect-fb"></div>
+        </div>
+
+        <!-- Q3 -->
+        <div class="quiz-question" data-correct="b">
+          <h4>Q3: Why is the model described as a "thinker" rather than a "calculator"?</h4>
+          <div class="quiz-option" data-value="a" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option A">
+            <span class="quiz-marker">A</span>
+            <span>Because the model is slow at math</span>
+          </div>
+          <div class="quiz-option" data-value="b" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option B">
+            <span class="quiz-marker">B</span>
+            <span>Because its outputs can vary, can be wrong, and require verification &mdash; unlike deterministic computation</span>
+          </div>
+          <div class="quiz-option" data-value="c" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option C">
+            <span class="quiz-marker">C</span>
+            <span>Because the model has consciousness and feelings</span>
+          </div>
+          <div class="quiz-option" data-value="d" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option D">
+            <span class="quiz-marker">D</span>
+            <span>Because the model cannot do any calculations at all</span>
+          </div>
+          <div class="quiz-feedback correct-fb">Correct! The "thinker" mental model reminds us that LLM outputs are probabilistic, not deterministic. This is why agents need guardrails, evaluation, and human oversight.</div>
+          <div class="quiz-feedback incorrect-fb"></div>
+        </div>
+
+        <!-- Q4 -->
+        <div class="quiz-question" data-correct="a">
+          <h4>Q4: How does the model process input differently from how it generates output?</h4>
+          <div class="quiz-option" data-value="a" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option A">
+            <span class="quiz-marker">A</span>
+            <span>Input is processed all at once (parallel); output is generated one token at a time (autoregressive)</span>
+          </div>
+          <div class="quiz-option" data-value="b" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option B">
+            <span class="quiz-marker">B</span>
+            <span>Both input and output are processed one token at a time</span>
+          </div>
+          <div class="quiz-option" data-value="c" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option C">
+            <span class="quiz-marker">C</span>
+            <span>Input is processed one word at a time; output is generated all at once</span>
+          </div>
+          <div class="quiz-option" data-value="d" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option D">
+            <span class="quiz-marker">D</span>
+            <span>Both are processed in parallel simultaneously</span>
+          </div>
+          <div class="quiz-feedback correct-fb">Correct! The transformer architecture processes all input tokens simultaneously using attention, but output must be generated one token at a time because each token depends on the ones before it.</div>
+          <div class="quiz-feedback incorrect-fb"></div>
+        </div>
+
+        <!-- Q5: Code Completion -->
+        <div class="quiz-question" data-correct="c">
+          <h4>Q5: Fill in the blank to complete a valid the model API call:</h4>
+          <div class="code-single" style="margin:0.75rem 0 1rem;">
+            <pre><code class="language-python">message = client.chat.completions.create(
+    model="mistral",
+    messages=[{"role": "user", "content": "Hello!"}]
+)
+print(message.______[0].text)</code></pre>
+          </div>
+          <div class="quiz-option" data-value="a" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option A">
+            <span class="quiz-marker">A</span>
+            <span><code>response</code></span>
+          </div>
+          <div class="quiz-option" data-value="b" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option B">
+            <span class="quiz-marker">B</span>
+            <span><code>text</code></span>
+          </div>
+          <div class="quiz-option" data-value="c" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option C">
+            <span class="quiz-marker">C</span>
+            <span><code>content</code></span>
+          </div>
+          <div class="quiz-option" data-value="d" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option D">
+            <span class="quiz-marker">D</span>
+            <span><code>choices</code></span>
+          </div>
+          <div class="quiz-feedback correct-fb">Correct! The Messages API returns a <code>content</code> array. Each element is a content block with a <code>text</code> property. So it's <code>message.choices[0].message.content</code>.</div>
+          <div class="quiz-feedback incorrect-fb"></div>
+        </div>
+
+        <!-- Q6 -->
+        <div class="quiz-question" data-correct="d">
+          <h4>Q6: What is the recommended temperature setting for an agent that calls tools and makes decisions?</h4>
+          <div class="quiz-option" data-value="a" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option A">
+            <span class="quiz-marker">A</span>
+            <span>1.0 &mdash; Maximum creativity for best results</span>
+          </div>
+          <div class="quiz-option" data-value="b" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option B">
+            <span class="quiz-marker">B</span>
+            <span>0.7 &mdash; A balanced middle ground</span>
+          </div>
+          <div class="quiz-option" data-value="c" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option C">
+            <span class="quiz-marker">C</span>
+            <span>It doesn't matter; temperature has no effect on tool use</span>
+          </div>
+          <div class="quiz-option" data-value="d" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option D">
+            <span class="quiz-marker">D</span>
+            <span>0.0&ndash;0.3 &mdash; Low temperature for reliable, consistent behavior</span>
+          </div>
+          <div class="quiz-feedback correct-fb">Correct! Agents need predictable, consistent outputs. Low temperature ensures the model picks the most likely tokens, reducing the chance of unexpected tool calls or erratic behavior.</div>
+          <div class="quiz-feedback incorrect-fb"></div>
+        </div>
+
+        <!-- Q7 -->
+        <div class="quiz-question" data-correct="b">
+          <h4>Q7: Your agent needs to search a library of 1 million documents to find relevant context. Which model type handles the search step?</h4>
+          <div class="quiz-option" data-value="a" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option A">
+            <span class="quiz-marker">A</span>
+            <span>A generative model &mdash; ask the model to compare the user&rsquo;s question against every document and judge relevance</span>
+          </div>
+          <div class="quiz-option" data-value="b" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option B">
+            <span class="quiz-marker">B</span>
+            <span>An embedding model &mdash; convert both query and documents to vectors, then find nearest neighbors in milliseconds</span>
+          </div>
+          <div class="quiz-option" data-value="c" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option C">
+            <span class="quiz-marker">C</span>
+            <span>A reranker model &mdash; score all 1 million documents against the question</span>
+          </div>
+          <div class="quiz-option" data-value="d" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option D">
+            <span class="quiz-marker">D</span>
+            <span>A multimodal model &mdash; it handles large document sets natively</span>
+          </div>
+          <div class="quiz-feedback correct-fb">Correct! Embedding models convert text to vectors once at index time, then find nearest neighbors in milliseconds across millions of documents. A generative model would cost 50&ndash;100&times; more and be slower. Rerankers are accurate but only scale to tens of candidates &mdash; they run <em>after</em> the embedding search narrows the field to a manageable set.</div>
+          <div class="quiz-feedback incorrect-fb"></div>
+        </div>
+
+        <div class="quiz-score" id="quiz-score" style="display:none;">
+          <div class="score-num" id="score-display"></div>
+          <p id="score-message" style="color:var(--text-secondary);margin-top:0.5rem;"></p>
+        </div>
+      </section>
+
+      <!-- ======================== SUMMARY ======================== -->
+      <section class="section" id="summary">
+        <h2 id="summary-heading">Module Summary</h2>
+        <div style="background:var(--bg-card);border-radius:12px;padding:1.5rem;margin-bottom:1.5rem;">
+          <h3 id="key-takeaways" style="margin-top:0;color:var(--accent-primary);">Key Takeaways</h3>
+          <ul>
+            <li><strong>LLMs are next-token predictors</strong> &mdash; they generate text by predicting the most likely continuation of a sequence.</li>
+            <li><strong>Input = parallel, Output = sequential</strong> &mdash; the model reads everything at once but writes one token at a time.</li>
+            <li><strong>Temperature controls randomness</strong> &mdash; low for agents (reliability), high for creative tasks (variety).</li>
+            <li><strong>Thinker, not calculator</strong> &mdash; outputs are probabilistic and need verification. This mental model guides every agent design decision.</li>
+            <li><strong>The API is simple</strong> &mdash; create a client, send messages, get a response with content blocks and usage stats.</li>
+            <li><strong>Four model types, four jobs</strong> &mdash; generative models reason and write; embedding models encode text as searchable vectors; rerankers score relevance; multimodal models accept images and documents. Agent pipelines chain all four.</li>
+          </ul>
+        </div>
+
+        <div style="background:var(--bg-card);border-radius:12px;padding:1.5rem;">
+          <h3 id="next-preview" style="margin-top:0;color:var(--track-color);">Next Module Preview: M02 &mdash; Tokens</h3>
+          <p style="margin-bottom:0;">Now that you know the model predicts <em>tokens</em>, the natural question is: what exactly is a token? In Module 2, you'll build an interactive tokenizer, understand how tokens affect cost and context limits, and create a token budget calculator &mdash; a tool you'll use throughout the entire course.</p>
+        </div>
+      </section>
+
+      <!-- Bottom Nav -->
+      <div class="module-nav">
+        <a href="index.html" aria-label="OS Track Index">&larr; OS Track Index</a>
+          <a href="index.html" aria-label="Course Home" title="Course Home" style="font-size:1.2rem;">&#x1F3E0; Home</a>
+        <a href="M03-prompts.html" aria-label="Next module: Prompts">M03: Prompts &rarr;</a>
+      </div>
+    </main>
+  </div>
+
+  <!-- Mobile sidebar toggle -->
+  <button class="sidebar-toggle" onclick="document.getElementById('sidebar').classList.toggle('open')" aria-label="Toggle navigation menu">&#9776;</button>
+
+  <!-- Prism.js for syntax highlighting -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+
+  <script>
+    // ============================================================
+    // CODE TABS
+    // ============================================================
+    function switchTab(btn, group) {
+      const lang = btn.dataset.lang;
+      const wrapper = btn.closest('.code-block-wrapper');
+      wrapper.querySelectorAll('.code-tab').forEach(t => { t.classList.remove('active'); t.setAttribute('aria-selected','false'); });
+      wrapper.querySelectorAll('.code-panel').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active');
+      btn.setAttribute('aria-selected','true');
+      const panel = wrapper.querySelector('#' + group + '-' + lang);
+      if (panel) panel.classList.add('active');
+    }
+
+    // ============================================================
+    // COPY BUTTON
+    // ============================================================
+    function copyCode(btn) {
+      const codeBlock = btn.parentElement.querySelector('code') || btn.closest('.code-single').querySelector('code');
+      navigator.clipboard.writeText(codeBlock.textContent).then(() => {
+        btn.textContent = 'Copied!';
+        setTimeout(() => btn.textContent = 'Copy', 2000);
+      });
+    }
+
+    // ============================================================
+    // ANIMATION 1: TOKEN FLOW
+    // ============================================================
+    const tokenData = [
+      { text: 'The', id: '487', prob: 0.82 },
+      { text: ' best', id: '1245', prob: 0.65 },
+      { text: ' way', id: '893', prob: 0.78 },
+      { text: ' to', id: '271', prob: 0.91 },
+      { text: ' learn', id: '3847', prob: 0.58 },
+      { text: ' program', id: '2910', prob: 0.44 },
+      { text: 'ming', id: '6231', prob: 0.87 },
+      { text: ' is', id: '318', prob: 0.72 },
+      { text: ' by', id: '547', prob: 0.53 },
+      { text: ' building', id: '4892', prob: 0.61 },
+      { text: ' real', id: '1738', prob: 0.49 },
+      { text: ' projects', id: '7204', prob: 0.56 },
+    ];
+    const tokenColors = ['#6366F1','#8B5CF6','#06B6D4','#F97316','#10B981','#F43F5E','#3B82F6','#D4A843','#22C55E','#EF4444','#6366F1','#8B5CF6'];
+    let tokenTimer = null, tokenIndex = 0;
+
+    function buildTokenArea() {
+      const area = document.getElementById('tokenFlowArea');
+      area.innerHTML = '';
+      tokenData.forEach((t, i) => {
+        const el = document.createElement('div');
+        el.className = 'token-block';
+        el.style.borderColor = tokenColors[i];
+        el.innerHTML = `<span class="token-text">${t.text.trim() || '&nbsp;'}</span>
+          <span class="token-id">#${t.id}</span>
+          <div class="prob-bar-container"><div class="prob-bar" style="width:${t.prob*100}%;background:${tokenColors[i]}"></div></div>`;
+        area.appendChild(el);
+      });
+      tokenIndex = 0;
+    }
+    buildTokenArea();
+
+    function tokenFlowPlay() {
+      if (tokenTimer) return;
+      const blocks = document.querySelectorAll('.token-block');
+      const annot = document.getElementById('tokenAnnotation');
+      tokenTimer = setInterval(() => {
+        if (tokenIndex >= blocks.length) { tokenFlowPause(); annot.textContent = 'Generation complete! Each block is one token with its probability.'; return; }
+        blocks[tokenIndex].classList.add('visible');
+        annot.textContent = `Token ${tokenIndex+1}: "${tokenData[tokenIndex].text.trim()}" (${Math.round(tokenData[tokenIndex].prob*100)}% probability)`;
+        tokenIndex++;
+      }, 400);
+    }
+
+    function tokenFlowPause() { clearInterval(tokenTimer); tokenTimer = null; }
+    function tokenFlowRestart() { tokenFlowPause(); buildTokenArea(); document.getElementById('tokenAnnotation').textContent = ''; }
+
+    // ============================================================
+    // ANIMATION 2: PROCESSING FLOW
+    // ============================================================
+    const stages = ['stage-input','stage-tokenize','stage-attention','stage-generate','stage-output'];
+    const arrows = ['arrow1','arrow2','arrow3','arrow4'];
+    let processTimer = null, processStep = 0;
+
+    function processPlay() {
+      if (processTimer) return;
+      processTimer = setInterval(() => {
+        if (processStep >= stages.length) { processPause(); return; }
+        document.getElementById(stages[processStep]).classList.add('active');
+        if (processStep > 0) document.getElementById(arrows[processStep-1]).classList.add('active');
+        processStep++;
+      }, 700);
+    }
+    function processPause() { clearInterval(processTimer); processTimer = null; }
+    function processRestart() {
+      processPause(); processStep = 0;
+      stages.forEach(s => document.getElementById(s).classList.remove('active'));
+      arrows.forEach(a => document.getElementById(a).classList.remove('active'));
+    }
+
+    // ============================================================
+    // ANIMATION 3: TEMPERATURE PLAYGROUND
+    // ============================================================
+    const baseWords = [
+      { word: 'to', base: 0.30 },
+      { word: 'by', base: 0.22 },
+      { word: 'through', base: 0.15 },
+      { word: 'with', base: 0.10 },
+      { word: 'from', base: 0.06 },
+      { word: 'in', base: 0.05 },
+      { word: 'when', base: 0.04 },
+      { word: 'after', base: 0.03 },
+      { word: 'alongside', base: 0.02 },
+      { word: 'beyond', base: 0.015 },
+      { word: 'amid', base: 0.01 },
+      { word: 'despite', base: 0.005 },
+    ];
+
+    const sampleOutputs = {
+      low: [
+        "to practice consistently with real-world projects and hands-on coding exercises.",
+        "to practice consistently by building projects that solve real problems you care about.",
+        "to write code every day, starting with small projects and gradually increasing complexity."
+      ],
+      mid: [
+        "by building things you actually want to use, even if they're messy at first.",
+        "through consistent daily practice combined with studying well-written open source code.",
+        "to immerse yourself in projects that stretch just beyond your current abilities."
+      ],
+      high: [
+        "by breaking things spectacularly, then piecing them back together with newfound understanding.",
+        "through the delightful chaos of building something ambitious before you feel ready.",
+        "alongside a community of curious minds who celebrate elegant failures as much as clean solutions."
+      ]
+    };
+
+    function applyTemperature(probs, temp) {
+      if (temp < 0.01) {
+        return probs.map((p, i) => i === 0 ? 1 : 0);
+      }
+      const logits = probs.map(p => Math.log(p + 1e-10) / temp);
+      const maxLogit = Math.max(...logits);
+      const exps = logits.map(l => Math.exp(l - maxLogit));
+      const sum = exps.reduce((a, b) => a + b, 0);
+      return exps.map(e => e / sum);
+    }
+
+    function applyTopP(probs, topP) {
+      const indexed = probs.map((p, i) => ({ p, i })).sort((a, b) => b.p - a.p);
+      let cum = 0;
+      const result = new Array(probs.length).fill(0);
+      for (const item of indexed) {
+        if (cum >= topP) break;
+        result[item.i] = item.p;
+        cum += item.p;
+      }
+      const s = result.reduce((a, b) => a + b, 0);
+      return result.map(p => p / s);
+    }
+
+    function updateProbDisplay() {
+      const temp = parseFloat(document.getElementById('tempSlider').value) / 100;
+      const topP = parseFloat(document.getElementById('toppSlider').value) / 100;
+      document.getElementById('tempValue').textContent = temp.toFixed(2);
+      document.getElementById('toppValue').textContent = topP.toFixed(2);
+
+      const rawProbs = baseWords.map(w => w.base);
+      let adjusted = applyTemperature(rawProbs, temp);
+      adjusted = applyTopP(adjusted, topP);
+
+      const display = document.getElementById('probDisplay');
+      display.innerHTML = '';
+      const maxProb = Math.max(...adjusted);
+      baseWords.forEach((w, i) => {
+        const barHeight = adjusted[i] > 0.001 ? Math.max(4, (adjusted[i] / maxProb) * 140) : 0;
+        const div = document.createElement('div');
+        div.className = 'prob-word';
+        div.innerHTML = `<span class="pct">${(adjusted[i]*100).toFixed(1)}%</span>
+          <div class="bar" style="height:${barHeight}px;${adjusted[i] < 0.001 ? 'opacity:0.2' : ''}"></div>
+          <span class="word">${w.word}</span>`;
+        display.appendChild(div);
+      });
+    }
+
+    document.getElementById('tempSlider').addEventListener('input', updateProbDisplay);
+    document.getElementById('toppSlider').addEventListener('input', updateProbDisplay);
+    updateProbDisplay();
+
+    function generateSample() {
+      const temp = parseFloat(document.getElementById('tempSlider').value) / 100;
+      let category = 'low';
+      if (temp > 0.6) category = 'high';
+      else if (temp > 0.25) category = 'mid';
+      const options = sampleOutputs[category];
+      const text = options[Math.floor(Math.random() * options.length)];
+      const output = document.getElementById('generatedOutput');
+      output.textContent = '';
+      let i = 0;
+      const typeTimer = setInterval(() => {
+        if (i >= text.length) { clearInterval(typeTimer); return; }
+        output.textContent += text[i];
+        i++;
+      }, 20);
+    }
+
+    // ============================================================
+    // QUIZ LOGIC
+    // ============================================================
+    let answeredCount = 0, correctCount = 0;
+    const totalQuestions = document.querySelectorAll('.quiz-question').length;
+
+    function selectQuiz(optionEl) {
+      const question = optionEl.closest('.quiz-question');
+      if (question.classList.contains('answered')) return;
+      question.classList.add('answered');
+
+      const correct = question.dataset.correct;
+      const selected = optionEl.dataset.value;
+      const isCorrect = selected === correct;
+
+      // Disable all options
+      question.querySelectorAll('.quiz-option').forEach(o => o.classList.add('disabled'));
+
+      // Mark selected
+      if (isCorrect) {
+        optionEl.classList.add('correct');
+        optionEl.querySelector('.quiz-marker').textContent = '✓';
+      } else {
+        optionEl.classList.add('incorrect');
+        optionEl.querySelector('.quiz-marker').textContent = '✗';
+        // Highlight correct
+        question.querySelectorAll('.quiz-option').forEach(o => {
+          if (o.dataset.value === correct) {
+            o.classList.add('correct');
+            o.querySelector('.quiz-marker').textContent = '✓';
+          }
+        });
+      }
+
+      // Show feedback
+      const correctFb = question.querySelector('.quiz-feedback.correct-fb');
+      const incorrectFb = question.querySelector('.quiz-feedback.incorrect-fb');
+      if (isCorrect) {
+        correctFb.classList.add('show');
+        correctCount++;
+      } else {
+        // Build specific wrong-answer feedback
+        const wrongExplanations = {
+          // Q1
+          'a': 'LLMs don\'t search a database of answers. They generate new text by predicting tokens based on learned patterns.',
+          // Generic fallbacks per question handled below
+        };
+        incorrectFb.textContent = 'Not quite. ' + correctFb.textContent.replace('Correct! ', '');
+        incorrectFb.classList.add('show');
+      }
+
+      answeredCount++;
+      if (answeredCount === totalQuestions) {
+        const scoreDiv = document.getElementById('quiz-score');
+        scoreDiv.style.display = 'block';
+        document.getElementById('score-display').textContent = correctCount + ' / ' + totalQuestions;
+        const pct = Math.round((correctCount / totalQuestions) * 100);
+        let msg = pct === 100 ? 'Perfect score! You\'re ready for Module 2.' :
+                  pct >= 67 ? 'Great job! Review the concepts you missed, then move on to Module 2.' :
+                  'Consider re-reading the module before moving on. Focus on the concepts behind the questions you missed.';
+        document.getElementById('score-message').textContent = msg;
+      }
+    }
+
+    // Keyboard support for quiz
+    document.querySelectorAll('.quiz-option').forEach(opt => {
+      opt.addEventListener('keydown', e => {
+        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectQuiz(opt); }
+      });
+    });
+
+    // ============================================================
+    // SIDEBAR ACTIVE STATE ON SCROLL
+    // ============================================================
+    const sections = document.querySelectorAll('section[id], h2[id], h3[id]');
+    const navLinks = document.querySelectorAll('.sidebar-nav a');
+
+    function updateActiveLink() {
+      let current = '';
+      sections.forEach(section => {
+        const rect = section.getBoundingClientRect();
+        if (rect.top <= 120) current = section.id;
+      });
+      navLinks.forEach(link => {
+        link.classList.remove('active');
+        if (link.getAttribute('href') === '#' + current) link.classList.add('active');
+      });
+    }
+    window.addEventListener('scroll', updateActiveLink, { passive: true });
+
+    // Smooth scroll for sidebar links
+    navLinks.forEach(link => {
+      link.addEventListener('click', e => {
+        e.preventDefault();
+        const target = document.querySelector(link.getAttribute('href'));
+        if (target) target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        // Close mobile sidebar
+        document.getElementById('sidebar').classList.remove('open');
+      });
+    });
+
+    // Auto-start first animation after a short delay
+    setTimeout(tokenFlowPlay, 1000);
+  </script>
+</body>
+</html>
