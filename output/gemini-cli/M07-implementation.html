@@ -1,0 +1,1296 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>M07: Implementation Loop | Gemini CLI SDLC Track</title>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;700;800&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg-primary: #070B14;
+      --bg-secondary: #0D1220;
+      --bg-card: #111829;
+      --bg-surface: #16202E;
+      --text-primary: #E8ECF1;
+      --text-secondary: #94A3B8;
+      --text-muted: #64748B;
+      --gemini-blue: #4285F4;
+      --gemini-purple: #8B5CF6;
+      --gemini-blue-muted: rgba(66, 133, 244, 0.15);
+      --gemini-purple-muted: rgba(139, 92, 246, 0.12);
+      --teal: #06B6D4;
+      --teal-muted: rgba(6, 182, 212, 0.12);
+      --teal-border: rgba(6, 182, 212, 0.35);
+      --success: #10B981;
+      --success-bg: rgba(16, 185, 129, 0.1);
+      --warning: #F59E0B;
+      --warning-bg: rgba(245, 158, 11, 0.1);
+      --error: #F43F5E;
+      --error-bg: rgba(244, 63, 94, 0.1);
+      --code-bg: #060A10;
+      --code-border: #1C2A3E;
+      --code-text: #C9D1D9;
+      --transition-fast: 150ms;
+      --transition-normal: 300ms;
+      --transition-slow: 500ms;
+    }
+
+    body {
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      font-family: 'Source Sans 3', sans-serif;
+      font-size: 1.05rem; line-height: 1.7; min-height: 100vh;
+    }
+
+    .top-progress {
+      position: fixed; top: 0; left: 0; right: 0;
+      height: 3px; background: var(--bg-surface); z-index: 200;
+    }
+    .top-progress .fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--teal), var(--gemini-blue));
+      width: 47.06%; /* 8/17 */
+      border-radius: 0 2px 2px 0;
+      transition: width var(--transition-slow);
+    }
+
+    .course-header {
+      background: var(--bg-secondary); border-bottom: 1px solid var(--code-border);
+      padding: 1.1rem 2rem; margin-top: 3px;
+    }
+    .course-header-inner {
+      max-width: 1200px; margin: 0 auto;
+      display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem;
+    }
+    .course-title { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.9rem; font-weight: 600; color: var(--text-secondary); }
+    .track-badge {
+      display: inline-flex; align-items: center; gap: 0.5rem;
+      background: var(--teal-muted); border: 1px solid var(--teal);
+      border-radius: 20px; padding: 0.25rem 0.75rem;
+      font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.78rem; font-weight: 600; color: var(--teal);
+    }
+    .track-badge .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--teal); box-shadow: 0 0 6px var(--teal); }
+    .header-meta { display: flex; gap: 1.5rem; font-size: 0.82rem; color: var(--text-muted); }
+    .header-meta span { display: flex; align-items: center; gap: 0.35rem; }
+
+    .page-container {
+      max-width: 1200px; margin: 0 auto; padding: 2rem;
+      display: grid; grid-template-columns: 240px 1fr; gap: 3rem;
+    }
+    @media (max-width: 900px) { .page-container { grid-template-columns: 1fr; } .sidebar-nav { display: none; } }
+
+    .sidebar-nav {
+      position: sticky; top: 2rem; height: calc(100vh - 4rem);
+      overflow-y: auto; padding-right: 1rem;
+    }
+    .sidebar-nav::-webkit-scrollbar { width: 3px; }
+    .sidebar-nav::-webkit-scrollbar-thumb { background: var(--bg-surface); border-radius: 3px; }
+    .sidebar-title {
+      font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.72rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); margin-bottom: 1rem;
+    }
+    .sidebar-nav a {
+      display: block; padding: 0.4rem 0.75rem; margin-bottom: 0.12rem;
+      font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.8rem; font-weight: 600;
+      color: var(--text-muted); text-decoration: none;
+      border-left: 2px solid transparent; border-radius: 0 4px 4px 0;
+      transition: all var(--transition-fast);
+    }
+    .sidebar-nav a:hover { color: var(--text-primary); background: var(--bg-surface); }
+    .sidebar-nav a.active { color: var(--teal); border-left-color: var(--teal); background: var(--teal-muted); }
+    .sidebar-nav a.sub { padding-left: 1.5rem; font-size: 0.76rem; font-weight: 400; }
+
+    .content { max-width: 800px; }
+    .section { margin-bottom: 4rem; }
+
+    h1 {
+      font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 2.2rem; line-height: 1.2;
+      margin-bottom: 0.75rem;
+      background: linear-gradient(135deg, var(--teal), var(--gemini-blue));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    }
+    h2 {
+      font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 1.5rem;
+      color: var(--text-primary); margin: 2.5rem 0 1rem; padding-top: 1rem;
+      border-top: 1px solid var(--code-border);
+    }
+    h2:first-of-type { border-top: none; }
+    h3 { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 600; font-size: 1.2rem; color: var(--text-primary); margin: 2rem 0 0.75rem; }
+    p { margin-bottom: 1rem; }
+    ul, ol { margin: 0.5rem 0 1rem 1.5rem; }
+    li { margin-bottom: 0.4rem; }
+    strong { font-weight: 600; color: var(--text-primary); }
+
+    .module-hero {
+      background: linear-gradient(135deg, rgba(6,182,212,0.08) 0%, rgba(66,133,244,0.08) 100%);
+      border: 1px solid var(--teal-border); border-radius: 16px; padding: 2rem; margin-bottom: 3rem;
+    }
+    .module-num { font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; color: var(--teal); letter-spacing: 0.12em; text-transform: uppercase; margin-bottom: 0.5rem; display: block; }
+    .module-hero p { color: var(--text-secondary); margin-bottom: 0; }
+
+    .objectives-list { list-style: none; margin-left: 0; }
+    .objectives-list li { padding: 0.5rem 0 0.5rem 2.25rem; position: relative; }
+    .objectives-list li::before {
+      content: ''; position: absolute; left: 0; top: 0.85rem;
+      width: 16px; height: 16px; border-radius: 4px;
+      border: 2px solid var(--teal); background: rgba(6, 182, 212, 0.08);
+    }
+
+    .analogy-box, .tech-def-box, .callout-why, .callout-warning, .callout-gotcha, .callout-tip, .callout-sdlc {
+      border-left: 4px solid; border-radius: 0 8px 8px 0; padding: 1.25rem 1.5rem; margin: 1.5rem 0;
+    }
+    .analogy-box { background: rgba(6,182,212,0.06); border-left-color: var(--teal); }
+    .tech-def-box { background: rgba(66,133,244,0.07); border-left-color: var(--gemini-purple); }
+    .callout-why { background: var(--success-bg); border-left-color: var(--success); }
+    .callout-warning { background: var(--warning-bg); border-left-color: var(--warning); }
+    .callout-gotcha { background: var(--error-bg); border-left-color: var(--error); }
+    .callout-tip { background: var(--gemini-purple-muted); border-left-color: var(--gemini-purple); }
+    .callout-sdlc { background: var(--teal-muted); border-left-color: var(--teal); }
+    .box-label { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 0.85rem; display: block; margin-bottom: 0.5rem; }
+    .analogy-box .box-label { color: var(--teal); }
+    .tech-def-box .box-label { color: var(--gemini-purple); }
+    .callout-why .box-label { color: var(--success); }
+    .callout-warning .box-label { color: var(--warning); }
+    .callout-gotcha .box-label { color: var(--error); }
+    .callout-tip .box-label { color: var(--gemini-purple); }
+    .callout-sdlc .box-label { color: var(--teal); }
+
+    .term-tooltip {
+      position: relative; color: var(--teal);
+      cursor: help; border-bottom: 1px dashed rgba(6,182,212,0.6);
+    }
+    .term-tooltip .tooltip-content {
+      position: absolute; bottom: calc(100% + 8px); left: 50%;
+      transform: translateX(-50%);
+      background: var(--bg-card); border: 1px solid var(--teal);
+      border-radius: 8px; padding: 0.75rem 1rem;
+      font-size: 0.83rem; color: var(--text-primary);
+      width: 280px; opacity: 0; pointer-events: none;
+      transition: opacity var(--transition-fast);
+      z-index: 100; line-height: 1.5; box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+    }
+    .term-tooltip:hover .tooltip-content,
+    .term-tooltip:focus .tooltip-content { opacity: 1; pointer-events: auto; }
+
+    .code-block-wrapper {
+      background: var(--code-bg); border: 1px solid var(--code-border);
+      border-radius: 12px; margin: 1.5rem 0; overflow: hidden;
+    }
+    .code-tabs { display: flex; border-bottom: 1px solid var(--code-border); background: var(--bg-surface); }
+    .code-tab {
+      padding: 0.5rem 1.25rem; background: none; border: none;
+      font-family: 'JetBrains Mono', monospace; font-size: 0.78rem;
+      cursor: pointer; border-bottom: 2px solid transparent;
+      margin-bottom: -1px; color: var(--text-muted); transition: all var(--transition-fast);
+    }
+    .code-tab:hover { color: var(--text-primary); }
+    .code-tab.active { color: var(--teal); border-bottom-color: var(--teal); }
+    .code-panel { display: none; position: relative; }
+    .code-panel.active { display: block; }
+    .code-panel pre {
+      margin: 0; padding: 1.25rem; overflow-x: auto;
+      font-family: 'JetBrains Mono', monospace; font-size: 0.83rem; line-height: 1.65;
+    }
+    .code-panel pre code { background: none; color: var(--code-text); }
+    .copy-btn {
+      position: absolute; top: 0.6rem; right: 0.6rem;
+      background: var(--bg-surface); border: 1px solid var(--code-border);
+      color: var(--text-muted); padding: 0.28rem 0.6rem;
+      border-radius: 6px; font-size: 0.72rem; cursor: pointer;
+      font-family: 'JetBrains Mono', monospace; transition: all var(--transition-fast);
+    }
+    .copy-btn:hover { color: var(--teal); border-color: var(--teal); }
+
+    .code-single {
+      background: var(--code-bg); border: 1px solid var(--code-border);
+      border-radius: 12px; margin: 1.5rem 0; overflow: hidden; position: relative;
+    }
+    .code-single pre {
+      margin: 0; padding: 1.25rem; overflow-x: auto;
+      font-family: 'JetBrains Mono', monospace; font-size: 0.83rem; line-height: 1.65;
+    }
+    .code-label {
+      display: inline-block; padding: 0.25rem 0.75rem;
+      background: var(--bg-surface); border-bottom: 1px solid var(--code-border);
+      border-right: 1px solid var(--code-border);
+      font-family: 'JetBrains Mono', monospace; font-size: 0.72rem;
+      color: var(--text-muted); border-radius: 0 0 8px 0;
+    }
+    .code-annotation {
+      background: var(--bg-surface); border-left: 3px solid var(--teal);
+      padding: 0.6rem 1rem; margin: 0; font-size: 0.82rem;
+      color: var(--text-secondary); font-style: italic;
+      border-top: 1px solid var(--code-border);
+    }
+    .code-annotation strong { color: var(--teal); font-style: normal; }
+
+    /* === ANIMATION CONTAINER === */
+    .animation-container {
+      background: var(--bg-secondary); border: 1px solid var(--code-border);
+      border-radius: 12px; padding: 1.75rem; margin: 2rem 0;
+      position: relative; overflow: hidden;
+    }
+    .animation-title {
+      font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.8rem; font-weight: 700;
+      color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.06em; margin-bottom: 1.25rem;
+    }
+    .animation-controls {
+      display: flex; gap: 0.5rem; position: absolute; bottom: 1rem; right: 1rem;
+    }
+    .anim-btn {
+      background: var(--bg-card); border: 1px solid var(--code-border);
+      color: var(--text-primary); width: 34px; height: 34px;
+      border-radius: 8px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1rem; transition: all var(--transition-fast);
+    }
+    .anim-btn:hover { border-color: var(--teal); color: var(--teal); }
+    .anim-btn:focus { outline: 2px solid var(--teal); outline-offset: 2px; }
+
+    /* === SCAFFOLD TREE === */
+    .scaffold-tree {
+      background: var(--code-bg); border: 1px solid var(--code-border);
+      border-radius: 10px; padding: 1.25rem 1.5rem;
+      font-family: 'JetBrains Mono', monospace; font-size: 0.82rem; line-height: 1.9;
+      min-height: 180px;
+    }
+    .tree-line { display: block; opacity: 0; transform: translateX(-6px); }
+    .tree-line.visible { opacity: 1; transform: translateX(0); transition: all 0.25s ease; }
+    .tree-dir { color: var(--teal); }
+    .tree-file { color: var(--code-text); }
+    .tree-stub { color: var(--text-muted); font-style: italic; }
+    .tree-new { color: var(--success); }
+
+    /* === IMPLEMENTATION LOOP === */
+    .impl-loop {
+      display: flex; flex-direction: column; gap: 0; position: relative;
+    }
+    .impl-loop::before {
+      content: ''; position: absolute; left: 22px; top: 30px; bottom: 30px;
+      width: 2px; background: linear-gradient(180deg, var(--teal), var(--gemini-blue));
+      opacity: 0.3;
+    }
+    .impl-step {
+      display: flex; align-items: flex-start; gap: 1rem;
+      padding: 0.9rem 0; opacity: 0; transform: translateX(-10px);
+      transition: all 0.4s ease;
+    }
+    .impl-step.visible { opacity: 1; transform: translateX(0); }
+    .impl-step-dot {
+      width: 46px; height: 46px; border-radius: 50%; flex-shrink: 0;
+      background: var(--bg-card); border: 2px solid var(--code-border);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.1rem; position: relative; z-index: 1;
+    }
+    .impl-step.visible .impl-step-dot {
+      border-color: var(--teal); background: var(--teal-muted);
+    }
+    .impl-step-body { padding-top: 0.4rem; flex: 1; }
+    .impl-step-title {
+      font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700;
+      font-size: 0.92rem; color: var(--text-primary); margin-bottom: 0.2rem;
+    }
+    .impl-step-desc { font-size: 0.85rem; color: var(--text-secondary); }
+
+    /* === CODE REVIEW FINDINGS === */
+    .review-item {
+      background: var(--bg-card); border: 1px solid var(--code-border);
+      border-radius: 10px; padding: 1rem 1.25rem; margin-bottom: 0.75rem;
+      opacity: 0; transform: translateY(8px); transition: all 0.35s ease;
+    }
+    .review-item.visible { opacity: 1; transform: translateY(0); }
+    .review-header { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem; }
+    .review-num {
+      font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; font-weight: 700;
+      width: 26px; height: 26px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+    }
+    .sev-critical { background: var(--error-bg); color: var(--error); border: 1px solid var(--error); }
+    .sev-medium { background: var(--warning-bg); color: var(--warning); border: 1px solid var(--warning); }
+    .sev-low { background: var(--teal-muted); color: var(--teal); border: 1px solid var(--teal); }
+    .review-category {
+      font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 0.78rem;
+      text-transform: uppercase; letter-spacing: 0.06em;
+    }
+    .cat-security { color: var(--error); }
+    .cat-error { color: var(--warning); }
+    .cat-ts { color: var(--teal); }
+    .review-finding { font-size: 0.85rem; color: var(--text-secondary); line-height: 1.6; }
+    .review-finding code {
+      font-family: 'JetBrains Mono', monospace; font-size: 0.8rem;
+      color: var(--teal); background: var(--teal-muted);
+      padding: 0.1rem 0.4rem; border-radius: 3px;
+    }
+
+    /* === BEFORE/AFTER === */
+    .before-after {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin: 1.5rem 0;
+    }
+    @media (max-width: 700px) { .before-after { grid-template-columns: 1fr; } }
+    .ba-panel { background: var(--code-bg); border: 1px solid var(--code-border); border-radius: 10px; overflow: hidden; }
+    .ba-header {
+      padding: 0.4rem 0.9rem; font-family: 'JetBrains Mono', monospace; font-size: 0.72rem;
+      font-weight: 600; letter-spacing: 0.04em;
+    }
+    .ba-before .ba-header { background: rgba(244,63,94,0.1); color: var(--error); border-bottom: 1px solid var(--code-border); }
+    .ba-after .ba-header { background: rgba(16,185,129,0.1); color: var(--success); border-bottom: 1px solid var(--code-border); }
+    .ba-panel pre {
+      margin: 0; padding: 1rem; overflow-x: auto;
+      font-family: 'JetBrains Mono', monospace; font-size: 0.78rem; line-height: 1.6;
+      color: var(--code-text);
+    }
+
+    /* === COMMIT MSG === */
+    .commit-output {
+      background: var(--code-bg); border: 1px solid var(--success);
+      border-radius: 10px; padding: 1.25rem 1.5rem;
+      font-family: 'JetBrains Mono', monospace; font-size: 0.83rem; line-height: 1.7;
+      color: var(--code-text); opacity: 0; transition: opacity 0.5s ease;
+    }
+    .commit-output.visible { opacity: 1; }
+    .commit-type { color: var(--teal); font-weight: 600; }
+    .commit-scope { color: var(--gemini-purple); }
+    .commit-body { color: var(--text-secondary); font-size: 0.8rem; margin-top: 0.5rem; padding-top: 0.5rem; border-top: 1px solid var(--code-border); }
+    .commit-footer { color: var(--text-muted); font-size: 0.75rem; margin-top: 0.35rem; }
+
+    /* === QUIZ === */
+    .quiz-question {
+      background: var(--bg-card); border: 1px solid var(--code-border);
+      border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem;
+    }
+    .quiz-question h4 {
+      font-family: 'Bricolage Grotesque', sans-serif;
+      font-weight: 600; margin-bottom: 1rem; font-size: 1rem; line-height: 1.5;
+    }
+    .quiz-option {
+      padding: 0.75rem 1rem; margin: 0.5rem 0;
+      border: 1px solid var(--code-border); border-radius: 8px;
+      cursor: pointer; transition: all var(--transition-fast);
+      display: flex; align-items: flex-start; gap: 0.75rem;
+    }
+    .quiz-option:hover { border-color: var(--teal); background: var(--teal-muted); }
+    .quiz-option.correct { border-color: var(--success); background: var(--success-bg); }
+    .quiz-option.incorrect { border-color: var(--error); background: var(--error-bg); }
+    .quiz-option.disabled { pointer-events: none; }
+    .quiz-marker {
+      width: 22px; height: 22px; border-radius: 50%;
+      border: 2px solid var(--code-border); flex-shrink: 0; margin-top: 1px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.72rem; font-weight: 700;
+    }
+    .quiz-option.correct .quiz-marker { border-color: var(--success); color: var(--success); }
+    .quiz-option.incorrect .quiz-marker { border-color: var(--error); color: var(--error); }
+    .quiz-feedback { margin-top: 0.75rem; padding: 0.75rem; border-radius: 8px; font-size: 0.88rem; display: none; line-height: 1.5; }
+    .quiz-feedback.show { display: block; }
+    .quiz-feedback.correct-fb { background: var(--success-bg); color: var(--success); }
+    .quiz-feedback.incorrect-fb { background: var(--error-bg); color: var(--error); }
+    .quiz-score {
+      background: linear-gradient(135deg, rgba(6,182,212,0.1), rgba(66,133,244,0.1));
+      border: 1px solid var(--code-border); border-radius: 12px; padding: 2rem; text-align: center; margin-top: 2rem;
+    }
+    .quiz-score .score-num {
+      font-family: 'Bricolage Grotesque', sans-serif; font-size: 3rem; font-weight: 800;
+      background: linear-gradient(135deg, var(--teal), var(--gemini-blue));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+    }
+    .quiz-score p { color: var(--text-secondary); margin-bottom: 0; }
+
+    .module-nav {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 1.5rem 0; margin: 2rem 0; border-top: 1px solid var(--code-border);
+    }
+    .module-nav a {
+      display: flex; align-items: center; gap: 0.5rem;
+      color: var(--teal); text-decoration: none;
+      font-family: 'Bricolage Grotesque', sans-serif; font-weight: 600;
+      font-size: 0.88rem; padding: 0.5rem 1.1rem;
+      border: 1px solid var(--code-border); border-radius: 8px;
+      transition: all var(--transition-fast);
+    }
+    .module-nav a:hover { border-color: var(--teal); background: var(--teal-muted); }
+
+    .checkpoint {
+      background: linear-gradient(90deg, rgba(6,182,212,0.07), rgba(66,133,244,0.05));
+      border: 1px solid var(--code-border); border-radius: 10px;
+      padding: 1rem 1.25rem; margin: 1.5rem 0; display: flex; gap: 0.75rem; align-items: flex-start;
+    }
+    .checkpoint-icon { font-size: 1.25rem; flex-shrink: 0; }
+    .checkpoint h4 { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.85rem; font-weight: 700; color: var(--teal); margin-bottom: 0.25rem; }
+    .checkpoint p { font-size: 0.88rem; color: var(--text-secondary); margin: 0; }
+
+    .what-happened {
+      background: var(--teal-muted); border: 1px solid var(--teal-border);
+      border-radius: 10px; padding: 1rem 1.25rem; margin: 1.5rem 0;
+    }
+    .what-happened h4 {
+      font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.82rem; font-weight: 700;
+      color: var(--teal); margin-bottom: 0.4rem; text-transform: uppercase; letter-spacing: 0.05em;
+    }
+    .what-happened p { font-size: 0.88rem; color: var(--text-secondary); margin: 0; }
+
+    .section-bridge {
+      text-align: center; padding: 1.5rem; margin: 2rem 0;
+      color: var(--text-muted); font-size: 0.9rem; font-style: italic;
+      border-top: 1px dashed var(--code-border); border-bottom: 1px dashed var(--code-border);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.001ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.001ms !important;
+      }
+    }
+    @media (max-width: 768px) {
+      .page-container { padding: 1rem; gap: 0; } h1 { font-size: 1.8rem; }
+      .module-nav { flex-direction: column; gap: 0.75rem; }
+    }
+  </style>
+</head>
+<body>
+
+<div class="top-progress" role="progressbar" aria-valuenow="47" aria-valuemin="0" aria-valuemax="100" aria-label="Course progress: Module 8 of 17">
+  <div class="fill"></div>
+</div>
+
+<header class="course-header">
+  <div class="course-header-inner">
+    <div class="course-title">Gemini CLI: From Zero to Production</div>
+    <div class="track-badge"><span class="dot"></span> Track 3 — SDLC</div>
+    <div class="header-meta">
+      <span>Module 8 of 17</span>
+      <span>~55 min</span>
+      <span>Intermediate</span>
+    </div>
+  </div>
+</header>
+
+<div class="page-container">
+  <nav class="sidebar-nav" aria-label="Module sections">
+    <div class="sidebar-title">In this module</div>
+    <a href="#scaffold-from-spec" class="active">Scaffold from Spec</a>
+    <a href="#project-tree" class="sub">Generated project tree</a>
+    <a href="#incremental-building">Incremental Building</a>
+    <a href="#first-endpoint" class="sub">POST /api/tasks</a>
+    <a href="#multi-file-consistency">Multi-file Consistency</a>
+    <a href="#pattern-reference" class="sub">Pattern reference</a>
+    <a href="#commit-messages">Commit Messages</a>
+    <a href="#pipe-diff" class="sub">Piping git diff</a>
+    <a href="#code-review-loop">Code Review Loop</a>
+    <a href="#review-findings" class="sub">Review findings</a>
+    <a href="#refactoring">Refactoring</a>
+    <a href="#before-after" class="sub">Before / After</a>
+    <a href="#quiz">Knowledge Check</a>
+  </nav>
+
+  <main class="content" id="main-content">
+
+    <div class="module-hero">
+      <span class="module-num">Module 07 · Track 3 — SDLC</span>
+      <h1>The Implementation Loop</h1>
+      <p>Design artifacts don't write themselves into code — but with Gemini CLI they get surprisingly close. This module teaches you the implementation rhythm: scaffold from spec, build feature by feature using <code>@</code> context, generate commit messages from staged diffs, run a code review before every merge, and refactor cleanly without losing business logic. Every pattern here uses the <code>docs/</code> artifacts you built in M05 and M06.</p>
+    </div>
+
+    <section class="section" id="objectives">
+      <h2>What You'll Learn</h2>
+      <ul class="objectives-list">
+        <li>Scaffold a complete project directory structure from your PRD and OpenAPI spec</li>
+        <li>Build features incrementally using <code>@src/</code> and <code>@docs/</code> context together</li>
+        <li>Use multiple <code>@</code> mentions to keep new code consistent with existing patterns</li>
+        <li>Generate <span class="term-tooltip" tabindex="0">conventional commits<span class="tooltip-content">A commit message standard where each message follows the format: type(scope): description. Types include feat, fix, refactor, test, docs, chore. Tools like semantic-release and conventional-changelog parse these to auto-generate changelogs and version bumps.</span></span> by piping <code>git diff --cached</code> through Gemini</li>
+        <li>Run a structured code review prompt that catches security, error handling, and TypeScript issues</li>
+        <li>Refactor route handlers to thin controllers with service layer extraction</li>
+      </ul>
+    </section>
+
+    <!-- ===== SCAFFOLD ===== -->
+    <section class="section" id="scaffold-from-spec">
+      <h2>Scaffolding from Spec</h2>
+
+      <div class="analogy-box">
+        <span class="box-label">Analogy — The General Contractor</span>
+        <p>Before any interior work begins on a building, the general contractor lays out the floor plan: rooms, doors, electrical conduit paths, and plumbing rough-in. Nothing is finished yet — just the skeleton that tells every subcontractor where their work goes. Scaffolding your project from spec does exactly this: empty directories, stub files with correct imports, and placeholder functions that make the build pass before a single line of real logic is written.</p>
+        <p>The <em>pain</em> without scaffolding: every developer invents their own file layout, exports are inconsistent, and the first PR review is half about file placement. The <em>mapping</em> to Gemini CLI: your PRD and OpenAPI spec already contain all the structural information — Gemini extracts it into a directory tree so everyone starts from the same layout.</p>
+      </div>
+
+      <div class="code-single">
+        <div class="code-label">Gemini CLI prompt</div>
+        <button class="copy-btn" aria-label="Copy code to clipboard" onclick="copyCode(this)">copy</button>
+        <pre><code class="language-bash">gemini "@docs/prd.md @docs/api-contracts/openapi.yaml Scaffold the project structure for a Hono + TypeScript backend. Create a directory tree with these layers: src/routes/ (one file per resource), src/services/ (business logic), src/schemas/ (Zod validation), src/db/ (Prisma client + migrations), src/middleware/ (auth, error handler), src/jobs/ (pg-boss workers). For each file, generate a stub with correct imports and exported function signatures but no implementation. Show the complete directory tree output."</code></pre>
+      </div>
+      <div class="code-annotation">
+        <strong>WHAT:</strong> Gemini reads the OpenAPI spec to identify resources (tasks, teams, users), then creates one file per resource-layer combination.
+      </div>
+      <div class="code-annotation" style="border-left-color: var(--gemini-blue);">
+        <strong>WHY:</strong> Starting from a spec-derived scaffold means every stub file already knows its function signatures from the OpenAPI <code>operationId</code> fields. No naming debates.
+      </div>
+      <div class="code-annotation" style="border-left-color: var(--error);">
+        <strong>GOTCHA:</strong> Gemini may generate directory-creation commands (<code>mkdir -p</code>) alongside the stubs. Review the output before pasting — don't run commands you haven't read.
+      </div>
+
+      <h3 id="project-tree">Generated Project Tree</h3>
+
+      <div class="animation-container" aria-label="Scaffold tree animation" style="min-height: 280px;">
+        <div class="animation-title">Project Scaffold — Animated Generation</div>
+        <div class="scaffold-tree" id="scaffoldTree">
+          <span class="tree-line" id="tl0"><span class="tree-dir">teampulse-api/</span></span>
+          <span class="tree-line" id="tl1">├── <span class="tree-dir">src/</span></span>
+          <span class="tree-line" id="tl2">│   ├── <span class="tree-dir">routes/</span></span>
+          <span class="tree-line" id="tl3">│   │   ├── <span class="tree-file">tasks.ts</span>       <span class="tree-stub">// GET /tasks, POST /tasks, GET /tasks/:id, PATCH /tasks/:id/status</span></span>
+          <span class="tree-line" id="tl4">│   │   ├── <span class="tree-file">teams.ts</span>       <span class="tree-stub">// GET /teams/:id/digest</span></span>
+          <span class="tree-line" id="tl5">│   │   └── <span class="tree-file">users.ts</span>       <span class="tree-stub">// GET /users/me</span></span>
+          <span class="tree-line" id="tl6">│   ├── <span class="tree-dir">services/</span></span>
+          <span class="tree-line" id="tl7">│   │   ├── <span class="tree-file">task.service.ts</span>  <span class="tree-stub">// createTask, updateStatus, getDigest</span></span>
+          <span class="tree-line" id="tl8">│   │   └── <span class="tree-file">notification.service.ts</span></span>
+          <span class="tree-line" id="tl9">│   ├── <span class="tree-dir">schemas/</span></span>
+          <span class="tree-line" id="tl10">│   │   ├── <span class="tree-file">task.schema.ts</span>   <span class="tree-stub">// CreateTaskSchema, StatusUpdateSchema</span></span>
+          <span class="tree-line" id="tl11">│   │   └── <span class="tree-file">team.schema.ts</span></span>
+          <span class="tree-line" id="tl12">│   ├── <span class="tree-dir">middleware/</span></span>
+          <span class="tree-line" id="tl13">│   │   ├── <span class="tree-file">auth.ts</span>          <span class="tree-stub">// Clerk JWT verification middleware</span></span>
+          <span class="tree-line" id="tl14">│   │   └── <span class="tree-file">error-handler.ts</span> <span class="tree-stub">// Global Hono error handler</span></span>
+          <span class="tree-line" id="tl15">│   ├── <span class="tree-dir">db/</span></span>
+          <span class="tree-line" id="tl16">│   │   └── <span class="tree-file">client.ts</span>       <span class="tree-stub">// PrismaClient singleton</span></span>
+          <span class="tree-line" id="tl17">│   └── <span class="tree-file">index.ts</span>          <span class="tree-stub">// Hono app bootstrap</span></span>
+          <span class="tree-line" id="tl18">├── <span class="tree-dir">prisma/</span></span>
+          <span class="tree-line" id="tl19">│   └── <span class="tree-file">schema.prisma</span></span>
+          <span class="tree-line" id="tl20">└── <span class="tree-file">package.json</span></span>
+        </div>
+        <div class="animation-controls">
+          <button class="anim-btn" onclick="scaffoldPlay()" aria-label="Play animation" title="Play">▶</button>
+          <button class="anim-btn" onclick="scaffoldPause()" aria-label="Pause animation" title="Pause">⏸</button>
+          <button class="anim-btn" onclick="scaffoldRestart()" aria-label="Restart animation" title="Restart">↺</button>
+        </div>
+      </div>
+
+      <div class="what-happened">
+        <h4>What Just Happened?</h4>
+        <p>Gemini extracted 5 API endpoints from the OpenAPI spec, mapped them to Hono route handlers, inferred the service layer functions from the business logic implied by each endpoint, and generated Zod schema stubs based on the OpenAPI request body definitions. The whole project compiles (with empty bodies) before implementation begins.</p>
+      </div>
+    </section>
+
+    <div class="section-bridge">Scaffold is in place. Now we build feature by feature — and the trick is always loading the right @-context so Gemini writes code that fits your actual codebase.</div>
+
+    <!-- ===== INCREMENTAL BUILDING ===== -->
+    <section class="section" id="incremental-building">
+      <h2>Incremental Building — Feature by Feature</h2>
+
+      <p>The implementation loop has a rhythm: pick one endpoint, load the spec and the existing codebase, implement, review, commit. Never try to implement more than one endpoint per session — the quality drops and so does context precision.</p>
+
+      <div class="animation-container" aria-label="Implementation loop animation" style="min-height: 320px;">
+        <div class="animation-title">The Implementation Loop — Per Endpoint</div>
+        <div class="impl-loop" id="implLoop">
+          <div class="impl-step" id="is0">
+            <div class="impl-step-dot">📋</div>
+            <div class="impl-step-body">
+              <div class="impl-step-title">Load context: spec + existing code</div>
+              <div class="impl-step-desc"><code>@docs/api-contracts/openapi.yaml @src/routes/ @src/schemas/</code></div>
+            </div>
+          </div>
+          <div class="impl-step" id="is1">
+            <div class="impl-step-dot">⚙️</div>
+            <div class="impl-step-body">
+              <div class="impl-step-title">Implement the endpoint</div>
+              <div class="impl-step-desc">Gemini writes route handler, service function, and Zod schema.</div>
+            </div>
+          </div>
+          <div class="impl-step" id="is2">
+            <div class="impl-step-dot">🔍</div>
+            <div class="impl-step-body">
+              <div class="impl-step-title">Code review prompt</div>
+              <div class="impl-step-desc">Load the new file: <code>@src/routes/tasks.ts Review for: security, error handling, types.</code></div>
+            </div>
+          </div>
+          <div class="impl-step" id="is3">
+            <div class="impl-step-dot">✅</div>
+            <div class="impl-step-body">
+              <div class="impl-step-title">Apply fixes, stage changes</div>
+              <div class="impl-step-desc"><code>git add src/routes/tasks.ts src/services/task.service.ts</code></div>
+            </div>
+          </div>
+          <div class="impl-step" id="is4">
+            <div class="impl-step-dot">📝</div>
+            <div class="impl-step-body">
+              <div class="impl-step-title">Generate commit message</div>
+              <div class="impl-step-desc"><code>git diff --cached | gemini -p "Write a conventional commit message"</code></div>
+            </div>
+          </div>
+        </div>
+        <div class="animation-controls">
+          <button class="anim-btn" onclick="loopPlay()" aria-label="Play animation" title="Play">▶</button>
+          <button class="anim-btn" onclick="loopPause()" aria-label="Pause animation" title="Pause">⏸</button>
+          <button class="anim-btn" onclick="loopRestart()" aria-label="Restart animation" title="Restart">↺</button>
+        </div>
+      </div>
+
+      <h3 id="first-endpoint">Implementing POST /api/tasks</h3>
+
+      <div class="code-single">
+        <div class="code-label">Gemini CLI prompt</div>
+        <button class="copy-btn" aria-label="Copy code to clipboard" onclick="copyCode(this)">copy</button>
+        <pre><code class="language-bash">gemini "@src/ @docs/api-contracts/openapi.yaml Implement the POST /api/tasks endpoint. Requirements: 1) Zod validation using CreateTaskSchema from src/schemas/task.schema.ts, 2) Prisma insert via task.service.ts createTask(), 3) Return 201 with the created Task object, 4) Return 400 for validation errors with structured error body, 5) Return 500 with a safe error message (no stack traces in response). Use Hono context typing throughout."</code></pre>
+      </div>
+
+      <div class="code-single">
+        <div class="code-label">src/routes/tasks.ts — POST /api/tasks</div>
+        <button class="copy-btn" aria-label="Copy code to clipboard" onclick="copyCode(this)">copy</button>
+        <pre><code class="language-typescript">import { Hono } from 'hono'
+import { zValidator } from '@hono/zod-validator'
+import { CreateTaskSchema, StatusUpdateSchema } from '../schemas/task.schema'
+import { createTask, updateTaskStatus, listTasks } from '../services/task.service'
+import type { AppEnv } from '../types'
+
+export const tasksRouter = new Hono&lt;AppEnv&gt;()
+
+// CHUNK 1 — POST /api/tasks
+// WHAT: Validate request body, insert task, return 201
+// WHY: Centralised validation prevents invalid data reaching the DB
+// GOTCHA: zValidator returns 422 by default — we override to 400 to match OpenAPI spec
+tasksRouter.post(
+  '/',
+  zValidator('json', CreateTaskSchema, (result, c) => {
+    if (!result.success) {
+      return c.json(
+        { code: 'VALIDATION_ERROR', message: 'Invalid request body', errors: result.error.flatten() },
+        400
+      )
+    }
+  }),
+  async (c) => {
+    // CHUNK 2 — Extract auth context injected by Clerk middleware
+    // WHAT: Get authenticated user's ID and team from JWT claims
+    // WHY: Every task must be associated with the caller's team at creation time
+    const { userId, teamId } = c.get('auth')
+    const body = c.req.valid('json')
+
+    try {
+      // CHUNK 3 — Service call with error boundary
+      // WHAT: Delegate DB write to service layer; never import prisma directly in routes
+      // WHY: Routes should be thin — business logic belongs in services, not HTTP handlers
+      const task = await createTask({ ...body, teamId, createdBy: userId })
+      return c.json(task, 201)
+    } catch (err) {
+      // CHUNK 4 — Safe error response
+      // WHAT: Log full error server-side; return only a safe message to the client
+      // GOTCHA: Never expose err.message to the client — it may contain SQL or stack traces
+      console.error('[POST /tasks]', err)
+      return c.json({ code: 'INTERNAL_ERROR', message: 'Failed to create task' }, 500)
+    }
+  }
+)</code></pre>
+      </div>
+      <div class="code-annotation">
+        <strong>WHAT:</strong> A complete Hono route handler with Zod validation, typed auth context, service delegation, and safe error handling.
+      </div>
+      <div class="code-annotation" style="border-left-color: var(--gemini-blue);">
+        <strong>WHY:</strong> The four CHUNK annotations mirror the prompt requirements exactly — this is what Gemini generates when you give it annotated code from the same file as context.
+      </div>
+      <div class="code-annotation" style="border-left-color: var(--error);">
+        <strong>GOTCHA:</strong> <code>zValidator</code> from <code>@hono/zod-validator</code> returns <strong>422</strong> by default. The custom callback overrides this to return <strong>400</strong> to match the OpenAPI spec. Without the callback, your spec and runtime disagree.
+      </div>
+    </section>
+
+    <div class="section-bridge">One endpoint is implemented. Now you add the next one — and the challenge is keeping the new code consistent with what you already built.</div>
+
+    <!-- ===== MULTI-FILE CONSISTENCY ===== -->
+    <section class="section" id="multi-file-consistency">
+      <h2>Multi-file Consistency with @ Mentions</h2>
+
+      <p>When Gemini implements endpoint #2, it doesn't automatically know how you implemented endpoint #1 — unless you tell it. Loading existing source files as context is the difference between a codebase that reads like one person wrote it and one that looks like a contractor switched every three files.</p>
+
+      <div class="tech-def-box">
+        <span class="box-label">Technical Definition — Pattern Reference</span>
+        <p>A <span class="term-tooltip" tabindex="0">pattern reference<span class="tooltip-content">An existing source file loaded into the prompt context specifically to serve as a style and structure guide. When Gemini sees an existing implementation, it mirrors the same import style, error handling pattern, naming conventions, and export format — without being explicitly instructed on each.</span></span> is an existing file loaded as context not for its content, but for its conventions. When you include <code>@src/routes/tasks.ts</code> while asking Gemini to implement <code>GET /tasks</code>, it infers: use the same import order, the same <code>zValidator</code> pattern, the same error shape, and the same typed auth context.</p>
+      </div>
+
+      <h3 id="pattern-reference">Using Existing Code as Style Reference</h3>
+
+      <div class="code-single">
+        <div class="code-label">Gemini CLI prompt</div>
+        <button class="copy-btn" aria-label="Copy code to clipboard" onclick="copyCode(this)">copy</button>
+        <pre><code class="language-bash">gemini "@src/routes/tasks.ts @src/schemas/task.schema.ts @docs/api-contracts/openapi.yaml Implement the GET /api/tasks endpoint. Requirements: 1) Query params: optional status filter (enum) and assigneeId (uuid), 2) Return paginated results: { tasks: Task[], total: number }, 3) Use the same error handling and auth pattern as the POST endpoint already implemented in @src/routes/tasks.ts, 4) Add the Zod query param schema to task.schema.ts, consistent with CreateTaskSchema style."</code></pre>
+      </div>
+      <div class="code-annotation">
+        <strong>WHAT:</strong> Three <code>@</code> mentions: existing route (for pattern), existing schema (for consistency), OpenAPI spec (for contract).
+      </div>
+      <div class="code-annotation" style="border-left-color: var(--gemini-blue);">
+        <strong>WHY:</strong> Phrase 3 ("same error handling and auth pattern as the POST endpoint") is the key instruction. Without it, Gemini may choose a different error format for GET vs POST.
+      </div>
+
+      <div class="callout-sdlc">
+        <span class="box-label">SDLC Pattern — The Three-File Context</span>
+        <p>For every new endpoint, load exactly: 1) <code>@src/routes/{resource}.ts</code> (existing route file), 2) <code>@src/schemas/{resource}.schema.ts</code> (existing schemas), 3) <code>@docs/api-contracts/openapi.yaml</code> (contract). This three-file pattern is the consistent context budget for the Implementation track — small enough to stay fast, large enough to keep code consistent.</p>
+      </div>
+    </section>
+
+    <div class="section-bridge">Code is written and consistent. Now let's generate commit messages that tell the story of what changed — automatically, from the diff itself.</div>
+
+    <!-- ===== COMMIT MESSAGES ===== -->
+    <section class="section" id="commit-messages">
+      <h2>Commit Messages from git diff</h2>
+
+      <p>Commit messages written by a developer who just finished three hours of implementation are almost always low quality: "fix stuff," "update route," "WIP." Gemini reads the actual diff and writes a message that explains what changed and why — in a format that <code>semantic-release</code> can parse.</p>
+
+      <div class="code-block-wrapper">
+        <div class="code-tabs" role="tablist">
+          <button class="code-tab active" role="tab" aria-selected="true" onclick="switchTab(this,'commitPs')" aria-controls="commitPs">PowerShell</button>
+          <button class="code-tab" role="tab" aria-selected="false" onclick="switchTab(this,'commitBash')" aria-controls="commitBash">Bash</button>
+        </div>
+        <div class="code-panel active" id="commitPs">
+          <button class="copy-btn" aria-label="Copy code to clipboard" onclick="copyCode(this)">copy</button>
+          <pre><code class="language-powershell"># Stage your changes first
+git add src/routes/tasks.ts src/services/task.service.ts src/schemas/task.schema.ts
+
+# Pipe the staged diff to Gemini
+git diff --cached | gemini -p "Write a conventional commit message for these changes. Format: type(scope): description (max 72 chars). Add a body explaining the why (not the what). Types: feat, fix, refactor, test, docs, chore. Be specific about what changed."</code></pre>
+        </div>
+        <div class="code-panel" id="commitBash">
+          <button class="copy-btn" aria-label="Copy code to clipboard" onclick="copyCode(this)">copy</button>
+          <pre><code class="language-bash"># Stage your changes first
+git add src/routes/tasks.ts src/services/task.service.ts src/schemas/task.schema.ts
+
+# Pipe the staged diff to Gemini
+git diff --cached | gemini -p "Write a conventional commit message for these changes. Format: type(scope): description (max 72 chars). Add a body explaining the why (not the what). Types: feat, fix, refactor, test, docs, chore. Be specific about what changed."</code></pre>
+        </div>
+      </div>
+      <div class="code-annotation">
+        <strong>WHAT:</strong> <code>git diff --cached</code> outputs only staged changes. Piping it to <code>gemini -p</code> sends the diff as the prompt body.
+      </div>
+      <div class="code-annotation" style="border-left-color: var(--gemini-blue);">
+        <strong>WHY:</strong> The <code>-p</code> flag sets the system prompt. The diff is the user message. Gemini sees exactly what's changing — no summarization needed.
+      </div>
+      <div class="code-annotation" style="border-left-color: var(--error);">
+        <strong>GOTCHA:</strong> On large diffs (&gt;500 lines), context budget becomes a concern. Prefix with <code>git diff --cached -- src/routes/tasks.ts</code> to scope the diff to a single file.
+      </div>
+
+      <div class="animation-container" aria-label="Commit message output animation" style="min-height: 180px;">
+        <div class="animation-title">Generated Conventional Commit Message</div>
+        <div class="commit-output" id="commitOutput">
+          <span class="commit-type">feat</span><span class="commit-scope">(tasks)</span>: add POST /api/tasks endpoint with Zod validation
+          <div class="commit-body">
+Implements task creation for the TeamPulse async status board. The route
+uses @hono/zod-validator with a custom 400 callback to match the OpenAPI
+spec error shape. Business logic is delegated to task.service.ts to keep
+the route handler thin. All error responses omit internal details to
+prevent information leakage.
+
+Closes #12 (PRD §4 FR-01: create task)
+          </div>
+          <div class="commit-footer">
+Signed-off-by: Alex Chen &lt;alex@teampulse.dev&gt;
+          </div>
+        </div>
+        <div class="animation-controls">
+          <button class="anim-btn" onclick="commitPlay()" aria-label="Play animation" title="Play">▶</button>
+          <button class="anim-btn" onclick="commitPause()" aria-label="Pause animation" title="Pause">⏸</button>
+          <button class="anim-btn" onclick="commitRestart()" aria-label="Restart animation" title="Restart">↺</button>
+        </div>
+      </div>
+
+      <div class="what-happened">
+        <h4>What Just Happened?</h4>
+        <p>Gemini read the actual diff — the changed files, line additions, and removals — and produced a commit message that names the specific files, explains the error handling rationale, references the PRD section, and links the GitHub issue. This is the commit message that would take 10 minutes to write manually, generated in 5 seconds from the diff alone.</p>
+      </div>
+
+      <div id="pipe-diff"></div>
+
+      <div class="callout-tip">
+        <span class="box-label">Tip — One-liner Commit Workflow</span>
+        <p>Combine the generate-and-commit steps in one pipeline (review the output before committing):</p>
+        <div class="code-block-wrapper" style="margin-top: 0.75rem;">
+          <div class="code-tabs" role="tablist">
+            <button class="code-tab active" role="tab" aria-selected="true" onclick="switchTab(this,'onelinePs')" aria-controls="onelinePs">PowerShell</button>
+            <button class="code-tab" role="tab" aria-selected="false" onclick="switchTab(this,'onelineBash')" aria-controls="onelineBash">Bash</button>
+          </div>
+          <div class="code-panel active" id="onelinePs">
+            <button class="copy-btn" aria-label="Copy code to clipboard" onclick="copyCode(this)">copy</button>
+            <pre><code class="language-powershell">$msg = git diff --cached | gemini -p "Write a conventional commit message only, no explanation."
+Write-Host "Commit message: $msg"
+# Review, then:
+git commit -m $msg</code></pre>
+          </div>
+          <div class="code-panel" id="onelineBash">
+            <button class="copy-btn" aria-label="Copy code to clipboard" onclick="copyCode(this)">copy</button>
+            <pre><code class="language-bash">msg=$(git diff --cached | gemini -p "Write a conventional commit message only, no explanation.")
+echo "Commit message: $msg"
+# Review, then:
+git commit -m "$msg"</code></pre>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div class="section-bridge">Code is committed. Before opening a PR, run the code review loop — Gemini catches four categories of issues that human reviewers miss when tired.</div>
+
+    <!-- ===== CODE REVIEW LOOP ===== -->
+    <section class="section" id="code-review-loop">
+      <h2>Code Review Loop</h2>
+
+      <p>The most valuable code review happens <em>before</em> you open a PR — when you're still the only one who has seen the code and can fix it without embarrassment. Gemini's review is not a replacement for human code review; it's a pre-flight check that eliminates the predictable issues so human reviewers can focus on architecture and product decisions.</p>
+
+      <div class="code-single">
+        <div class="code-label">Gemini CLI prompt — post-implementation review</div>
+        <button class="copy-btn" aria-label="Copy code to clipboard" onclick="copyCode(this)">copy</button>
+        <pre><code class="language-bash">gemini "@src/routes/tasks.ts Review this file for: 1) Correctness — does the implementation match the OpenAPI spec in @docs/api-contracts/openapi.yaml? 2) Error handling — are all failure modes caught? 3) Security — check for SQL injection risk, missing auth checks, and information leakage in error responses. 4) TypeScript best practices — any implicit any, missing return types, or unsafe type assertions. Format each finding as: [SEVERITY: CRITICAL|MEDIUM|LOW] [CATEGORY] — file:line — issue — recommendation."</code></pre>
+      </div>
+
+      <h3 id="review-findings">Review Findings — Sample Output</h3>
+
+      <div class="animation-container" aria-label="Code review findings animation" style="min-height: 280px;">
+        <div class="animation-title">Gemini Code Review — Numbered Findings</div>
+        <div id="reviewItems">
+          <div class="review-item" id="ri0">
+            <div class="review-header">
+              <div class="review-num sev-critical">1</div>
+              <div class="review-category cat-security">SECURITY</div>
+            </div>
+            <div class="review-finding">
+              <strong>src/routes/tasks.ts:38</strong> — The <code>teamId</code> in the task creation body is taken directly from <code>c.get('auth').teamId</code> but there is no check that the authenticated user is actually a member of that team. A user could spoof a different <code>teamId</code> in the JWT if middleware is misconfigured. <strong>Recommendation:</strong> In <code>task.service.ts createTask()</code>, add a DB lookup to verify the user is a member of the teamId before insertion.
+            </div>
+          </div>
+          <div class="review-item" id="ri1">
+            <div class="review-header">
+              <div class="review-num sev-medium">2</div>
+              <div class="review-category cat-error">ERROR HANDLING</div>
+            </div>
+            <div class="review-finding">
+              <strong>src/routes/tasks.ts:45</strong> — The Prisma insert is wrapped in try/catch, but a Prisma unique constraint violation (duplicate task title within a team, per PRD §5 NFR-03) will be caught as a generic 500 error. <strong>Recommendation:</strong> Import <code>Prisma</code> from <code>@prisma/client</code>, check for <code>err instanceof Prisma.PrismaClientKnownRequestError &amp;&amp; err.code === 'P2002'</code>, and return 409 with <code>code: "DUPLICATE_TASK_TITLE"</code>.
+            </div>
+          </div>
+          <div class="review-item" id="ri2">
+            <div class="review-header">
+              <div class="review-num sev-medium">3</div>
+              <div class="review-category cat-ts">TYPESCRIPT</div>
+            </div>
+            <div class="review-finding">
+              <strong>src/routes/tasks.ts:18</strong> — <code>const { userId, teamId } = c.get('auth')</code> — the return type of <code>c.get('auth')</code> is inferred as <code>any</code> because <code>AppEnv</code> in <code>src/types.ts</code> doesn't type the <code>'auth'</code> variable. <strong>Recommendation:</strong> Add <code>Variables: { auth: { userId: string; teamId: string } }</code> to the <code>AppEnv</code> type definition.
+            </div>
+          </div>
+          <div class="review-item" id="ri3">
+            <div class="review-header">
+              <div class="review-num sev-low">4</div>
+              <div class="review-category cat-ts">CORRECTNESS</div>
+            </div>
+            <div class="review-finding">
+              <strong>openapi.yaml vs tasks.ts:51</strong> — The OpenAPI spec defines the 201 response schema as <code>Task</code> which includes <code>createdAt</code> and <code>updatedAt</code> as ISO strings. Prisma returns these as <code>Date</code> objects. Hono's <code>c.json()</code> serializes them correctly, but the types won't match if a consumer does type-level checks. <strong>Recommendation:</strong> Add a response serializer that explicitly converts <code>Date</code> → <code>string</code> for the Task response shape.
+            </div>
+          </div>
+        </div>
+        <div class="animation-controls">
+          <button class="anim-btn" onclick="reviewPlay()" aria-label="Play animation" title="Play">▶</button>
+          <button class="anim-btn" onclick="reviewPause()" aria-label="Pause animation" title="Pause">⏸</button>
+          <button class="anim-btn" onclick="reviewRestart()" aria-label="Restart animation" title="Restart">↺</button>
+        </div>
+      </div>
+
+      <div class="callout-why">
+        <span class="box-label">Why It Matters</span>
+        <p>Finding #1 (auth bypass) is a security vulnerability. Finding #2 (unhandled Prisma error) is a correctness bug that appears in production. Both are invisible to the naked eye during implementation — they require cross-referencing the service layer with the middleware contract, which is exactly what Gemini does when you load all relevant files as context.</p>
+      </div>
+
+      <div class="checkpoint">
+        <div class="checkpoint-icon">🔒</div>
+        <div>
+          <h4>Checkpoint — Zero CRITICAL Findings Policy</h4>
+          <p>Before every commit, run the code review prompt. Do not commit with any CRITICAL findings unresolved. MEDIUM findings should be fixed before PR open. LOW findings can be tracked as tech debt tickets but should not block the PR.</p>
+        </div>
+      </div>
+    </section>
+
+    <div class="section-bridge">Routes are reviewed and correct. After a few features are in, the routes get fat — time to extract services and keep the codebase maintainable.</div>
+
+    <!-- ===== REFACTORING ===== -->
+    <section class="section" id="refactoring">
+      <h2>Refactoring — Extract Service Layer</h2>
+
+      <div class="tech-def-box">
+        <span class="box-label">Technical Definition — Thin Routes</span>
+        <p>The <span class="term-tooltip" tabindex="0">thin controller pattern<span class="tooltip-content">A design principle where HTTP route handlers (controllers) contain only: request parsing, validation, service call, and response formatting. All business logic (database queries, calculations, side effects) lives in a separate service layer. This makes routes testable without HTTP, and services testable without HTTP.</span></span> keeps route handlers responsible only for HTTP concerns: parsing the request, calling a service, formatting the response. When you find Prisma queries, business rules, or conditional logic directly in a route handler, it's time to extract it. Routes that call services are easy to unit test; routes that contain business logic are not.</p>
+      </div>
+
+      <div class="code-single">
+        <div class="code-label">Gemini CLI prompt</div>
+        <button class="copy-btn" aria-label="Copy code to clipboard" onclick="copyCode(this)">copy</button>
+        <pre><code class="language-bash">gemini "@src/routes/ Refactor all route handlers to extract business logic into @src/services/. Rules: 1) Routes keep only: request parsing, service call, response formatting. 2) All Prisma queries move to service files. 3) Services must not import from Hono — they receive plain objects, return plain objects. 4) Show the before/after for tasks.ts → task.service.ts extraction. Preserve all error handling."</code></pre>
+      </div>
+
+      <h3 id="before-after">Before / After — Route Extraction</h3>
+
+      <div class="before-after" aria-label="Refactoring before and after comparison">
+        <div class="ba-panel ba-before">
+          <div class="ba-header">BEFORE — Fat Route (Anti-pattern)</div>
+          <pre><code class="language-typescript">tasksRouter.post('/',
+  zValidator('json', CreateTaskSchema),
+  async (c) => {
+    const { userId, teamId } = c.get('auth')
+    const body = c.req.valid('json')
+    try {
+      // Business logic in route — BAD
+      const existing = await prisma.task.findFirst({
+        where: { teamId, title: body.title }
+      })
+      if (existing) {
+        return c.json({ code: 'DUPLICATE_TASK_TITLE' }, 409)
+      }
+      const task = await prisma.task.create({
+        data: { ...body, teamId, createdBy: userId }
+      })
+      // Side effect in route — BAD
+      await notifySlack(task)
+      return c.json(task, 201)
+    } catch (err) {
+      return c.json({ code: 'INTERNAL_ERROR' }, 500)
+    }
+  }
+)</code></pre>
+        </div>
+        <div class="ba-panel ba-after">
+          <div class="ba-header">AFTER — Thin Route + Service</div>
+          <pre><code class="language-typescript">// routes/tasks.ts — thin route
+tasksRouter.post('/',
+  zValidator('json', CreateTaskSchema),
+  async (c) => {
+    const { userId, teamId } = c.get('auth')
+    const body = c.req.valid('json')
+    try {
+      const task = await createTask(
+        { ...body, teamId, createdBy: userId }
+      )
+      return c.json(task, 201)
+    } catch (err) {
+      if (err instanceof DuplicateTaskError) {
+        return c.json({ code: 'DUPLICATE_TASK_TITLE' }, 409)
+      }
+      console.error('[POST /tasks]', err)
+      return c.json({ code: 'INTERNAL_ERROR' }, 500)
+    }
+  }
+)
+
+// services/task.service.ts — all logic here
+export async function createTask(data: CreateTaskInput) {
+  const existing = await prisma.task.findFirst({
+    where: { teamId: data.teamId, title: data.title }
+  })
+  if (existing) throw new DuplicateTaskError(data.title)
+  const task = await prisma.task.create({ data })
+  await notificationService.scheduleSlackNotify(task)
+  return task
+}</code></pre>
+        </div>
+      </div>
+      <div class="code-annotation">
+        <strong>WHAT:</strong> All Prisma calls, the duplicate-check logic, and the Slack side effect move to the service. The route becomes 12 lines from 22.
+      </div>
+      <div class="code-annotation" style="border-left-color: var(--gemini-blue);">
+        <strong>WHY:</strong> <code>createTask()</code> can now be unit-tested with a mock Prisma client — no HTTP setup, no Hono instance. The route test just verifies it calls the service correctly.
+      </div>
+      <div class="code-annotation" style="border-left-color: var(--error);">
+        <strong>GOTCHA:</strong> The refactored version uses a typed <code>DuplicateTaskError</code> class instead of checking Prisma error codes in the route. Create this in <code>src/errors.ts</code> and throw it from the service — routes catch named errors, not DB internals.
+      </div>
+
+      <div class="callout-sdlc">
+        <span class="box-label">SDLC Connection — Refactoring Before M08</span>
+        <p>In Module 08 (Testing), you will write unit tests for <code>task.service.ts</code> functions. If your business logic is still in the routes, you'll need a full HTTP test harness for every test. Extract services now — it makes your test suite 10x faster and more focused.</p>
+      </div>
+    </section>
+
+    <!-- ===== QUIZ ===== -->
+    <section class="section" id="quiz">
+      <h2>Knowledge Check</h2>
+      <p>Six questions covering the implementation patterns from this module.</p>
+
+      <div class="quiz-question" id="q1">
+        <h4>1. You scaffolded the project from the OpenAPI spec and now want to implement the GET /api/tasks endpoint. Which three files should you load as <code>@</code> context?</h4>
+        <div class="quiz-option" onclick="answerQ(this,'q1',false)" aria-label="Option A">
+          <div class="quiz-marker">A</div>
+          <div><code>@src/</code> (entire src directory), <code>@docs/prd.md</code>, <code>@prisma/schema.prisma</code></div>
+        </div>
+        <div class="quiz-option" onclick="answerQ(this,'q1',true)" aria-label="Option B">
+          <div class="quiz-marker">B</div>
+          <div><code>@src/routes/tasks.ts</code> (existing patterns), <code>@src/schemas/task.schema.ts</code>, <code>@docs/api-contracts/openapi.yaml</code></div>
+        </div>
+        <div class="quiz-option" onclick="answerQ(this,'q1',false)" aria-label="Option C">
+          <div class="quiz-marker">C</div>
+          <div><code>@docs/prd.md</code>, <code>@docs/user-stories.feature</code>, <code>@src/routes/tasks.ts</code></div>
+        </div>
+        <div class="quiz-option" onclick="answerQ(this,'q1',false)" aria-label="Option D">
+          <div class="quiz-marker">D</div>
+          <div><code>@src/services/task.service.ts</code>, <code>@src/db/client.ts</code>, <code>@prisma/schema.prisma</code></div>
+        </div>
+        <div class="quiz-feedback" id="q1-fb"></div>
+      </div>
+
+      <div class="quiz-question" id="q2">
+        <h4>2. <code>git diff --cached</code> differs from <code>git diff</code> in that it:</h4>
+        <div class="quiz-option" onclick="answerQ(this,'q2',false)" aria-label="Option A">
+          <div class="quiz-marker">A</div>
+          <div>Shows only deleted lines</div>
+        </div>
+        <div class="quiz-option" onclick="answerQ(this,'q2',true)" aria-label="Option B">
+          <div class="quiz-marker">B</div>
+          <div>Shows only staged (added via <code>git add</code>) changes, not unstaged working tree changes</div>
+        </div>
+        <div class="quiz-option" onclick="answerQ(this,'q2',false)" aria-label="Option C">
+          <div class="quiz-marker">C</div>
+          <div>Shows changes since the last push to the remote</div>
+        </div>
+        <div class="quiz-option" onclick="answerQ(this,'q2',false)" aria-label="Option D">
+          <div class="quiz-marker">D</div>
+          <div>Shows only renamed files</div>
+        </div>
+        <div class="quiz-feedback" id="q2-fb"></div>
+      </div>
+
+      <div class="quiz-question" id="q3">
+        <h4>3. The code review found that a Prisma unique constraint violation is being caught as a 500 error. The correct fix is to:</h4>
+        <div class="quiz-option" onclick="answerQ(this,'q3',false)" aria-label="Option A">
+          <div class="quiz-marker">A</div>
+          <div>Wrap the Prisma call in a second try/catch specifically for constraint errors</div>
+        </div>
+        <div class="quiz-option" onclick="answerQ(this,'q3',true)" aria-label="Option B">
+          <div class="quiz-marker">B</div>
+          <div>Check for <code>PrismaClientKnownRequestError</code> with code <code>P2002</code> and return a 409 with a specific error code</div>
+        </div>
+        <div class="quiz-option" onclick="answerQ(this,'q3',false)" aria-label="Option C">
+          <div class="quiz-marker">C</div>
+          <div>Add a database-level trigger that returns a user-friendly message</div>
+        </div>
+        <div class="quiz-option" onclick="answerQ(this,'q3',false)" aria-label="Option D">
+          <div class="quiz-marker">D</div>
+          <div>Remove the unique constraint from the schema to avoid the error</div>
+        </div>
+        <div class="quiz-feedback" id="q3-fb"></div>
+      </div>
+
+      <div class="quiz-question" id="q4">
+        <h4>4. In the thin controller pattern, what does a service function receive and return?</h4>
+        <div class="quiz-option" onclick="answerQ(this,'q4',false)" aria-label="Option A">
+          <div class="quiz-marker">A</div>
+          <div>The Hono Context object (<code>c</code>) and a Response</div>
+        </div>
+        <div class="quiz-option" onclick="answerQ(this,'q4',false)" aria-label="Option B">
+          <div class="quiz-marker">B</div>
+          <div>An HTTP Request and an HTTP Response</div>
+        </div>
+        <div class="quiz-option" onclick="answerQ(this,'q4',true)" aria-label="Option C">
+          <div class="quiz-marker">C</div>
+          <div>Plain typed objects (no framework imports) and returns plain typed objects or throws typed errors</div>
+        </div>
+        <div class="quiz-option" onclick="answerQ(this,'q4',false)" aria-label="Option D">
+          <div class="quiz-marker">D</div>
+          <div>A Prisma transaction object and a database result</div>
+        </div>
+        <div class="quiz-feedback" id="q4-fb"></div>
+      </div>
+
+      <div class="quiz-question" id="q5">
+        <h4>5. You run a code review prompt and see a CRITICAL security finding. According to the Zero CRITICAL Findings Policy, you should:</h4>
+        <div class="quiz-option" onclick="answerQ(this,'q5',false)" aria-label="Option A">
+          <div class="quiz-marker">A</div>
+          <div>Open the PR and add the finding as a comment for reviewers to see</div>
+        </div>
+        <div class="quiz-option" onclick="answerQ(this,'q5',false)" aria-label="Option B">
+          <div class="quiz-marker">B</div>
+          <div>Commit the code but create a security ticket for the finding</div>
+        </div>
+        <div class="quiz-option" onclick="answerQ(this,'q5',true)" aria-label="Option C">
+          <div class="quiz-marker">C</div>
+          <div>Resolve the finding before committing — do not commit with unresolved CRITICAL findings</div>
+        </div>
+        <div class="quiz-option" onclick="answerQ(this,'q5',false)" aria-label="Option D">
+          <div class="quiz-marker">D</div>
+          <div>Run the review again to see if Gemini changes its assessment</div>
+        </div>
+        <div class="quiz-feedback" id="q5-fb"></div>
+      </div>
+
+      <div class="quiz-question" id="q6">
+        <h4>6. Why is scaffolding from the OpenAPI spec better than scaffolding from scratch?</h4>
+        <div class="quiz-option" onclick="answerQ(this,'q6',false)" aria-label="Option A">
+          <div class="quiz-marker">A</div>
+          <div>OpenAPI files are smaller than PRD files, saving context budget</div>
+        </div>
+        <div class="quiz-option" onclick="answerQ(this,'q6',false)" aria-label="Option B">
+          <div class="quiz-marker">B</div>
+          <div>The OpenAPI spec contains the implementation code that Gemini copies directly</div>
+        </div>
+        <div class="quiz-option" onclick="answerQ(this,'q6',true)" aria-label="Option C">
+          <div class="quiz-marker">C</div>
+          <div>The OpenAPI spec contains operationIds, endpoint paths, request/response schemas, and resource names — all the structural information needed to generate correct file names and function signatures</div>
+        </div>
+        <div class="quiz-option" onclick="answerQ(this,'q6',false)" aria-label="Option D">
+          <div class="quiz-marker">D</div>
+          <div>Gemini can only scaffold TypeScript projects from OpenAPI, not from PRDs</div>
+        </div>
+        <div class="quiz-feedback" id="q6-fb"></div>
+      </div>
+
+      <div id="quizScoreBox" style="display:none" class="quiz-score">
+        <div class="score-num" id="scoreNum">0/6</div>
+        <p id="scoreMsg">Complete all questions to see your score.</p>
+      </div>
+    </section>
+
+    <nav class="module-nav" aria-label="Module navigation">
+      <a href="M06-design.html">← M06: Design</a>
+      <a href="M08-testing.html">M08: Testing →</a>
+    </nav>
+
+  </main>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-powershell.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+<script>
+  function switchTab(btn, panelId) {
+    const wrapper = btn.closest('.code-block-wrapper');
+    wrapper.querySelectorAll('.code-tab').forEach(t => { t.classList.remove('active'); t.setAttribute('aria-selected','false'); });
+    wrapper.querySelectorAll('.code-panel').forEach(p => p.classList.remove('active'));
+    btn.classList.add('active'); btn.setAttribute('aria-selected','true');
+    document.getElementById(panelId).classList.add('active');
+  }
+
+  function copyCode(btn) {
+    const panel = btn.closest('.code-panel, .code-single');
+    const code = panel.querySelector('code');
+    navigator.clipboard.writeText(code.innerText).then(() => {
+      btn.textContent = 'copied!'; btn.style.color = 'var(--teal)';
+      setTimeout(() => { btn.textContent = 'copy'; btn.style.color = ''; }, 2000);
+    });
+  }
+
+  // === SCAFFOLD ANIMATION ===
+  const tlEls = Array.from({length:21}, (_,i) => document.getElementById('tl'+i));
+  let tlIdx = 0, tlTimer = null;
+  function scaffoldPlay() {
+    if (tlIdx >= tlEls.length) scaffoldRestart();
+    if (tlTimer) return;
+    tlTimer = setInterval(() => {
+      if (tlIdx < tlEls.length) { if(tlEls[tlIdx]) tlEls[tlIdx].classList.add('visible'); tlIdx++; }
+      else { clearInterval(tlTimer); tlTimer = null; }
+    }, 120);
+  }
+  function scaffoldPause() { clearInterval(tlTimer); tlTimer = null; }
+  function scaffoldRestart() {
+    scaffoldPause(); tlIdx = 0; tlEls.forEach(e => { if(e) e.classList.remove('visible'); });
+  }
+
+  // === IMPL LOOP ANIMATION ===
+  const isEls = [0,1,2,3,4].map(i => document.getElementById('is'+i));
+  let isIdx = 0, isTimer = null;
+  function loopPlay() {
+    if (isIdx >= isEls.length) loopRestart();
+    if (isTimer) return;
+    isTimer = setInterval(() => {
+      if (isIdx < isEls.length) { isEls[isIdx].classList.add('visible'); isIdx++; }
+      else { clearInterval(isTimer); isTimer = null; }
+    }, 500);
+  }
+  function loopPause() { clearInterval(isTimer); isTimer = null; }
+  function loopRestart() {
+    loopPause(); isIdx = 0; isEls.forEach(e => e.classList.remove('visible'));
+  }
+
+  // === COMMIT OUTPUT ANIMATION ===
+  const commitEl = document.getElementById('commitOutput');
+  let commitTimer = null;
+  function commitPlay() {
+    commitEl.style.opacity = '0';
+    clearTimeout(commitTimer);
+    commitTimer = setTimeout(() => { commitEl.classList.add('visible'); commitEl.style.opacity = '1'; }, 100);
+  }
+  function commitPause() { clearTimeout(commitTimer); }
+  function commitRestart() {
+    clearTimeout(commitTimer);
+    commitEl.classList.remove('visible'); commitEl.style.opacity = '0';
+    setTimeout(commitPlay, 300);
+  }
+
+  // === REVIEW ANIMATION ===
+  const riEls = [0,1,2,3].map(i => document.getElementById('ri'+i));
+  let riIdx = 0, riTimer = null;
+  function reviewPlay() {
+    if (riIdx >= riEls.length) reviewRestart();
+    if (riTimer) return;
+    riTimer = setInterval(() => {
+      if (riIdx < riEls.length) { riEls[riIdx].classList.add('visible'); riIdx++; }
+      else { clearInterval(riTimer); riTimer = null; }
+    }, 450);
+  }
+  function reviewPause() { clearInterval(riTimer); riTimer = null; }
+  function reviewRestart() {
+    reviewPause(); riIdx = 0; riEls.forEach(e => e.classList.remove('visible'));
+  }
+
+  // === QUIZ ===
+  const quizAnswers = {};
+  const feedbacks = {
+    q1: { correct: 'Correct! The three-file context: existing route (for patterns), existing schema (for consistency), OpenAPI spec (for contract). Loading the entire src/ directory uses too much context budget.', incorrect: 'Not quite. The optimal context is: the existing route file (for patterns to match), the schema file (for consistency), and the OpenAPI spec (for the contract). Loading @src/ is too broad.' },
+    q2: { correct: 'Correct! git diff --cached shows staged changes only — exactly what will go into the next commit. Perfect for generating a commit message from what you\'ve actually staged.', incorrect: 'Not quite. git diff --cached (or --staged) shows only staged changes — the subset of modified files you\'ve explicitly added with git add.' },
+    q3: { correct: 'Correct! PrismaClientKnownRequestError with code P2002 is the unique constraint violation. Return 409 with a specific, named error code so clients can handle it.', incorrect: 'Not quite. The correct approach is to check for PrismaClientKnownRequestError with code P2002 (unique violation) and return a 409 status with a semantic error code.' },
+    q4: { correct: 'Correct! Service functions are framework-agnostic: plain typed input objects, plain typed output objects, typed errors thrown (no HTTP status codes or Hono context).', incorrect: 'Not quite. Services must not import from Hono or any HTTP framework. They receive plain typed objects and return plain typed objects — making them testable without any HTTP setup.' },
+    q5: { correct: 'Correct! CRITICAL findings represent security vulnerabilities or data integrity issues. They must be resolved before the code is committed.', incorrect: 'Not quite. According to the Zero CRITICAL policy, you resolve CRITICAL findings before committing — not after. Security bugs that reach a PR are visible in the repository history.' },
+    q6: { correct: 'Correct! The OpenAPI spec is the structural source of truth: operationIds become function names, paths become route strings, schemas become Zod definitions, and resources become file names.', incorrect: 'Not quite. The OpenAPI spec contains all the structural metadata — endpoint paths, operationIds, request/response schema shapes, and HTTP methods — that Gemini needs to generate accurate stubs.' }
+  };
+
+  function answerQ(optEl, qId, isCorrect) {
+    if (quizAnswers[qId] !== undefined) return;
+    quizAnswers[qId] = isCorrect;
+    const q = document.getElementById(qId);
+    q.querySelectorAll('.quiz-option').forEach(o => o.classList.add('disabled'));
+    optEl.classList.add(isCorrect ? 'correct' : 'incorrect');
+    optEl.querySelector('.quiz-marker').textContent = isCorrect ? '✓' : '✗';
+    const fb = document.getElementById(qId + '-fb');
+    fb.textContent = feedbacks[qId][isCorrect ? 'correct' : 'incorrect'];
+    fb.className = 'quiz-feedback show ' + (isCorrect ? 'correct-fb' : 'incorrect-fb');
+    updateScore();
+  }
+
+  function updateScore() {
+    const answered = Object.keys(quizAnswers).length;
+    const correct = Object.values(quizAnswers).filter(Boolean).length;
+    if (answered === 6) {
+      const box = document.getElementById('quizScoreBox');
+      box.style.display = 'block';
+      document.getElementById('scoreNum').textContent = correct + '/6';
+      const msgs = ['Review the implementation sections above.','Good progress! Re-check the concepts you missed.','Strong implementation skills!','Perfect score! You\'re ready for the Testing module.'];
+      document.getElementById('scoreMsg').textContent = msgs[correct < 3 ? 0 : correct < 5 ? 1 : correct < 6 ? 2 : 3];
+    }
+  }
+
+  // Sidebar scroll tracking
+  const sections = document.querySelectorAll('section[id], .section[id]');
+  const sidebarLinks = document.querySelectorAll('.sidebar-nav a');
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        const id = e.target.getAttribute('id');
+        sidebarLinks.forEach(a => a.classList.toggle('active', a.getAttribute('href') === '#' + id));
+      }
+    });
+  }, { threshold: 0.2, rootMargin: '-60px 0px -40% 0px' });
+  sections.forEach(s => observer.observe(s));
+
+  // Auto-start animations
+  const autoObs = new IntersectionObserver((entries) => {
+    entries.forEach(e => {
+      if (!e.isIntersecting) return;
+      const id = e.target.id;
+      if (id === 'scaffoldTree' && tlIdx === 0) scaffoldPlay();
+      if (id === 'implLoop' && isIdx === 0) loopPlay();
+      if (id === 'commitOutput') commitPlay();
+      if (id === 'reviewItems' && riIdx === 0) reviewPlay();
+    });
+  }, { threshold: 0.3 });
+  ['scaffoldTree','implLoop','commitOutput','reviewItems'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) autoObs.observe(el);
+  });
+</script>
+</body>
+</html>

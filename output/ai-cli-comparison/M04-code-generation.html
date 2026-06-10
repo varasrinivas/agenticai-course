@@ -1,0 +1,1824 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>M04: Code Generation — AI CLI Tools Compared</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css">
+<style>
+/* ============================================================
+   CSS VARIABLES & RESET
+   ============================================================ */
+:root {
+  --bg-primary: #07090F;
+  --bg-secondary: #0D1117;
+  --bg-card: #111827;
+  --bg-card-hover: #161E2E;
+  --bg-elevated: #1A2235;
+
+  --claude-gold: #D4A843;
+  --claude-gold-dim: #9A7830;
+  --claude-gold-bg: rgba(212, 168, 67, 0.08);
+  --claude-gold-border: rgba(212, 168, 67, 0.25);
+
+  --gemini-blue: #4285F4;
+  --gemini-blue-dim: #2E6BC9;
+  --gemini-blue-bg: rgba(66, 133, 244, 0.08);
+  --gemini-blue-border: rgba(66, 133, 244, 0.25);
+
+  --copilot-grey: #6E7681;
+  --copilot-grey-dim: #4A5058;
+  --copilot-grey-bg: rgba(110, 118, 129, 0.08);
+  --copilot-grey-border: rgba(110, 118, 129, 0.25);
+
+  --text-primary: #E6EDF3;
+  --text-secondary: #8B949E;
+  --text-muted: #484F58;
+  --text-accent: #D4A843;
+
+  --border-subtle: rgba(255,255,255,0.06);
+  --border-default: rgba(255,255,255,0.10);
+
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+
+  --font-body: 'Inter', -apple-system, sans-serif;
+  --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+
+  --transition-fast: 0.15s ease;
+  --transition-base: 0.25s ease;
+  --transition-slow: 0.4s ease;
+
+  --sidebar-width: 240px;
+  --content-max: 860px;
+}
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+html { scroll-behavior: smooth; font-size: 16px; }
+body {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  font-family: var(--font-body);
+  line-height: 1.7;
+  min-height: 100vh;
+}
+
+.page-wrapper { display: flex; min-height: 100vh; }
+
+/* SIDEBAR */
+.sidebar {
+  width: var(--sidebar-width);
+  flex-shrink: 0;
+  position: fixed;
+  top: 0; left: 0;
+  height: 100vh;
+  background: var(--bg-secondary);
+  border-right: 1px solid var(--border-subtle);
+  overflow-y: auto;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+}
+.sidebar-logo { padding: 20px 18px 16px; border-bottom: 1px solid var(--border-subtle); }
+.sidebar-logo .course-label { font-size: 10px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 4px; }
+.sidebar-logo .course-title { font-size: 12.5px; font-weight: 600; color: var(--text-secondary); line-height: 1.4; }
+.sidebar-logo .tri-dot { display: inline-flex; gap: 4px; margin-bottom: 6px; }
+.sidebar-logo .tri-dot span { width: 8px; height: 8px; border-radius: 50%; }
+.sidebar-logo .tri-dot span:nth-child(1) { background: var(--claude-gold); }
+.sidebar-logo .tri-dot span:nth-child(2) { background: var(--gemini-blue); }
+.sidebar-logo .tri-dot span:nth-child(3) { background: var(--copilot-grey); }
+.sidebar-nav { padding: 12px 0; flex: 1; }
+.sidebar-section { padding: 6px 18px 2px; font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-muted); }
+.sidebar-link {
+  display: flex; align-items: center; gap: 8px;
+  padding: 7px 18px; font-size: 12.5px; color: var(--text-secondary);
+  text-decoration: none; border-left: 2px solid transparent;
+  transition: all var(--transition-fast); line-height: 1.3;
+}
+.sidebar-link:hover { background: rgba(255,255,255,0.04); color: var(--text-primary); }
+.sidebar-link.active { border-left-color: var(--claude-gold); color: var(--claude-gold); background: var(--claude-gold-bg); }
+.sidebar-link .link-num { font-size: 10px; font-family: var(--font-mono); color: var(--text-muted); min-width: 18px; }
+
+/* MAIN */
+.main-content { margin-left: var(--sidebar-width); flex: 1; min-width: 0; }
+
+/* PROGRESS */
+.progress-bar-wrap {
+  position: sticky; top: 0; z-index: 90;
+  background: var(--bg-secondary); border-bottom: 1px solid var(--border-subtle);
+  padding: 10px 40px; display: flex; align-items: center; justify-content: space-between; gap: 20px;
+}
+.progress-label { font-size: 12px; color: var(--text-secondary); white-space: nowrap; font-weight: 500; }
+.progress-track { flex: 1; height: 3px; background: var(--border-subtle); border-radius: 2px; overflow: hidden; max-width: 220px; }
+.progress-fill { height: 100%; width: 40%; background: linear-gradient(90deg, var(--claude-gold), var(--gemini-blue)); border-radius: 2px; }
+.progress-pct { font-size: 11px; font-family: var(--font-mono); color: var(--text-muted); white-space: nowrap; }
+
+/* HERO */
+.hero {
+  padding: 56px 40px 44px;
+  max-width: var(--content-max);
+  position: relative; overflow: hidden;
+}
+.hero::before {
+  content: ''; position: absolute; top: -120px; right: -120px;
+  width: 400px; height: 400px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(212,168,67,0.06) 0%, transparent 70%);
+  pointer-events: none;
+}
+.hero::after {
+  content: ''; position: absolute; bottom: -80px; left: 20%;
+  width: 300px; height: 300px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(66,133,244,0.05) 0%, transparent 70%);
+  pointer-events: none;
+}
+.module-badge {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 5px 12px; border-radius: 20px; border: 1px solid var(--border-default);
+  background: var(--bg-card); font-size: 11.5px; font-weight: 600;
+  color: var(--text-secondary); margin-bottom: 20px; letter-spacing: 0.02em;
+}
+.module-badge .badge-track { color: var(--claude-gold); }
+.hero h1 { font-size: clamp(1.9rem, 3.5vw, 2.9rem); font-weight: 700; line-height: 1.15; letter-spacing: -0.02em; margin-bottom: 16px; }
+.hero h1 .title-gradient {
+  background: linear-gradient(135deg, var(--claude-gold) 0%, var(--gemini-blue) 50%, #C9D1D9 100%);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text;
+}
+.hero-desc { font-size: 1.05rem; color: var(--text-secondary); max-width: 640px; margin-bottom: 28px; line-height: 1.75; }
+.hero-tools { display: flex; gap: 12px; flex-wrap: wrap; }
+.tool-chip {
+  display: flex; align-items: center; gap: 7px;
+  padding: 7px 14px; border-radius: 8px; font-size: 13px; font-weight: 500;
+  border: 1px solid; transition: all var(--transition-base); cursor: default;
+}
+.tool-chip.claude { border-color: var(--claude-gold-border); color: var(--claude-gold); background: var(--claude-gold-bg); }
+.tool-chip.gemini { border-color: var(--gemini-blue-border); color: var(--gemini-blue); background: var(--gemini-blue-bg); }
+.tool-chip.copilot { border-color: var(--copilot-grey-border); color: var(--copilot-grey); background: var(--copilot-grey-bg); }
+.tool-chip .dot { width: 7px; height: 7px; border-radius: 50%; }
+.tool-chip.claude .dot { background: var(--claude-gold); }
+.tool-chip.gemini .dot { background: var(--gemini-blue); }
+.tool-chip.copilot .dot { background: var(--copilot-grey); }
+
+/* CONTENT */
+.content { padding: 0 40px 80px; max-width: var(--content-max); }
+.section { margin-bottom: 72px; }
+.section-header { margin-bottom: 28px; }
+.section-eyebrow { font-size: 11px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 8px; }
+.section h2 { font-size: clamp(1.35rem, 2.5vw, 1.75rem); font-weight: 700; letter-spacing: -0.02em; color: var(--text-primary); line-height: 1.25; }
+.section h2 .accent { color: var(--claude-gold); }
+.section p { color: var(--text-secondary); margin-bottom: 16px; line-height: 1.75; }
+.section p:last-child { margin-bottom: 0; }
+
+/* TOOLTIP */
+.tt {
+  position: relative; cursor: help;
+  border-bottom: 1px dashed var(--text-muted); color: inherit; text-decoration: none;
+}
+.tt::after {
+  content: attr(data-tip); position: absolute; bottom: calc(100% + 8px); left: 50%;
+  transform: translateX(-50%); background: #1C2333; border: 1px solid var(--border-default);
+  color: var(--text-primary); font-size: 12px; font-family: var(--font-body); font-weight: 400;
+  line-height: 1.5; padding: 8px 12px; border-radius: var(--radius-sm);
+  white-space: normal; width: 260px; z-index: 200; opacity: 0; pointer-events: none;
+  transition: opacity var(--transition-fast); box-shadow: 0 8px 24px rgba(0,0,0,0.4);
+}
+.tt:hover::after, .tt:focus::after { opacity: 1; }
+
+/* ANALOGY BLOCK */
+.analogy-block {
+  background: linear-gradient(135deg, rgba(212,168,67,0.06) 0%, rgba(66,133,244,0.04) 100%);
+  border: 1px solid var(--border-default); border-left: 3px solid var(--claude-gold);
+  border-radius: var(--radius-md); padding: 20px 24px; margin: 24px 0;
+}
+.analogy-block .analogy-label { font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--claude-gold); margin-bottom: 10px; }
+.analogy-block p { font-size: 14.5px; color: var(--text-secondary); margin-bottom: 10px; line-height: 1.7; }
+.analogy-block p:last-child { margin-bottom: 0; }
+.analogy-block strong { color: var(--text-primary); }
+
+/* TOOL OUTPUT PANELS */
+.output-panels { display: grid; gap: 20px; margin: 24px 0; }
+.output-panel {
+  background: var(--bg-card); border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg); overflow: hidden;
+  transition: border-color var(--transition-base);
+}
+.output-panel.claude { border-left: 3px solid var(--claude-gold); }
+.output-panel.gemini { border-left: 3px solid var(--gemini-blue); }
+.output-panel.copilot { border-left: 3px solid var(--copilot-grey); }
+.output-panel:hover { background: var(--bg-card-hover); }
+.output-panel.claude:hover { border-color: var(--claude-gold-border); }
+.output-panel.gemini:hover { border-color: var(--gemini-blue-border); }
+.output-panel.copilot:hover { border-color: var(--copilot-grey-border); }
+.panel-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 12px 18px; border-bottom: 1px solid var(--border-subtle);
+}
+.panel-title { font-size: 13.5px; font-weight: 700; }
+.panel-title.claude { color: var(--claude-gold); }
+.panel-title.gemini { color: var(--gemini-blue); }
+.panel-title.copilot { color: var(--copilot-grey); }
+.panel-badge {
+  font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 4px;
+  font-family: var(--font-mono);
+}
+.claude .panel-badge { background: var(--claude-gold-bg); color: var(--claude-gold); border: 1px solid var(--claude-gold-border); }
+.gemini .panel-badge { background: var(--gemini-blue-bg); color: var(--gemini-blue); border: 1px solid var(--gemini-blue-border); }
+.copilot .panel-badge { background: var(--copilot-grey-bg); color: var(--copilot-grey); border: 1px solid var(--copilot-grey-border); }
+.panel-body { padding: 0; }
+.panel-note {
+  padding: 12px 18px 14px;
+  font-size: 12.5px; color: var(--text-secondary); line-height: 1.6;
+  border-top: 1px solid var(--border-subtle); background: rgba(255,255,255,0.02);
+}
+
+/* CODE BLOCKS */
+.code-block-wrap {
+  margin: 20px 0; border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle); overflow: hidden;
+}
+.code-block-header {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 8px 14px; background: var(--bg-elevated); border-bottom: 1px solid var(--border-subtle);
+}
+.code-block-lang { font-size: 11px; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted); }
+.copy-btn {
+  padding: 4px 10px; font-size: 11px; font-weight: 500; font-family: var(--font-body);
+  border-radius: 4px; border: 1px solid var(--border-default); background: transparent;
+  color: var(--text-muted); cursor: pointer; transition: all var(--transition-fast);
+}
+.copy-btn:hover { background: rgba(255,255,255,0.06); color: var(--text-secondary); }
+.copy-btn.copied { color: #3FB950; border-color: #3FB950; }
+.copy-btn:focus-visible { outline: 2px solid var(--claude-gold); outline-offset: 2px; }
+.code-block-wrap pre {
+  margin: 0 !important; border-radius: 0 !important;
+  background: #0D1117 !important; padding: 16px !important;
+  font-size: 12.5px !important; line-height: 1.65 !important; overflow-x: auto;
+}
+/* Code tabs */
+.code-tabs { display: flex; background: var(--bg-elevated); border-bottom: 1px solid var(--border-subtle); }
+.code-tab {
+  padding: 8px 16px; font-size: 12px; font-weight: 600; border: none;
+  background: transparent; cursor: pointer; color: var(--text-muted);
+  font-family: var(--font-body); border-bottom: 2px solid transparent;
+  transition: all var(--transition-fast);
+}
+.code-tab.active { color: var(--claude-gold); border-bottom-color: var(--claude-gold); }
+.code-tab:hover:not(.active) { color: var(--text-secondary); }
+.code-tab:focus-visible { outline: 2px solid var(--claude-gold); outline-offset: -2px; }
+.code-pane { display: none; }
+.code-pane.active { display: block; }
+
+/* ANIMATION CONTAINER */
+.animation-container {
+  background: var(--bg-card); border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg); padding: 24px; margin: 28px 0;
+}
+.anim-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+.anim-title { font-size: 13px; font-weight: 600; color: var(--text-secondary); }
+.anim-controls { display: flex; gap: 8px; }
+.anim-btn {
+  padding: 6px 14px; font-size: 12px; font-weight: 500; font-family: var(--font-body);
+  border-radius: var(--radius-sm); border: 1px solid var(--border-default);
+  background: var(--bg-elevated); color: var(--text-secondary); cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.anim-btn:hover { background: rgba(255,255,255,0.08); color: var(--text-primary); }
+.anim-btn:focus-visible { outline: 2px solid var(--claude-gold); outline-offset: 2px; }
+
+/* COMPARISON TABLE */
+.compare-table-wrap {
+  overflow-x: auto; border-radius: var(--radius-md);
+  border: 1px solid var(--border-subtle); margin: 24px 0;
+}
+.compare-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.compare-table th {
+  padding: 12px 16px; text-align: left; font-weight: 600;
+  background: var(--bg-elevated); border-bottom: 1px solid var(--border-default); white-space: nowrap;
+}
+.compare-table th.claude-th { color: var(--claude-gold); }
+.compare-table th.gemini-th { color: var(--gemini-blue); }
+.compare-table th.copilot-th { color: var(--copilot-grey); }
+.compare-table td {
+  padding: 11px 16px; border-bottom: 1px solid var(--border-subtle);
+  color: var(--text-secondary); vertical-align: top;
+}
+.compare-table tr:last-child td { border-bottom: none; }
+.compare-table td:first-child { color: var(--text-muted); font-weight: 500; white-space: nowrap; font-size: 12.5px; }
+.compare-table tr:hover td { background: rgba(255,255,255,0.02); }
+.win { color: #3FB950; font-weight: 600; }
+.ok { color: var(--text-secondary); }
+.miss { color: var(--text-muted); }
+
+/* CALLOUT */
+.callout {
+  border-radius: var(--radius-md); padding: 16px 20px; margin: 20px 0;
+  display: flex; gap: 14px;
+}
+.callout.info { background: rgba(66,133,244,0.07); border: 1px solid rgba(66,133,244,0.2); }
+.callout.warning { background: rgba(210,153,34,0.07); border: 1px solid rgba(210,153,34,0.2); }
+.callout.success { background: rgba(63,185,80,0.07); border: 1px solid rgba(63,185,80,0.2); }
+.callout-icon { font-size: 16px; flex-shrink: 0; margin-top: 1px; }
+.callout-body { flex: 1; }
+.callout-body strong { display: block; font-size: 13px; font-weight: 600; margin-bottom: 4px; }
+.callout.info .callout-body strong { color: var(--gemini-blue); }
+.callout.warning .callout-body strong { color: #D29522; }
+.callout.success .callout-body strong { color: #3FB950; }
+.callout-body p { font-size: 13px; color: var(--text-secondary); margin: 0; line-height: 1.65; }
+
+/* INSIGHT BOX */
+.insight-box {
+  background: linear-gradient(135deg, rgba(212,168,67,0.07) 0%, rgba(66,133,244,0.05) 100%);
+  border: 1px solid var(--border-default); border-radius: var(--radius-lg);
+  padding: 24px 28px; margin: 28px 0;
+}
+.insight-label { font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--claude-gold); margin-bottom: 10px; }
+.insight-box p { font-size: 14.5px; color: var(--text-secondary); margin-bottom: 10px; line-height: 1.7; }
+.insight-box p:last-child { margin-bottom: 0; }
+.insight-box strong { color: var(--text-primary); }
+
+/* CHECKPOINT */
+.checkpoint {
+  background: linear-gradient(135deg, rgba(63,185,80,0.06) 0%, rgba(66,133,244,0.04) 100%);
+  border: 1px solid rgba(63,185,80,0.2); border-radius: var(--radius-md);
+  padding: 18px 22px; margin: 28px 0;
+}
+.checkpoint-label { font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: #3FB950; margin-bottom: 8px; }
+.checkpoint p { font-size: 13.5px; color: var(--text-secondary); margin-bottom: 8px; }
+.checkpoint ul { padding-left: 18px; }
+.checkpoint li { font-size: 13px; color: var(--text-secondary); margin-bottom: 4px; }
+
+/* SECTION DIVIDER */
+.section-divider {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--border-subtle) 20%, var(--border-subtle) 80%, transparent);
+  margin: 56px 0;
+}
+
+/* TASK PROMPT */
+.task-prompt {
+  background: var(--bg-card); border: 1px solid var(--border-default);
+  border-radius: var(--radius-md); padding: 18px 22px; margin: 24px 0;
+  display: flex; gap: 14px; align-items: flex-start;
+}
+.task-icon { font-size: 20px; flex-shrink: 0; }
+.task-body { flex: 1; }
+.task-label { font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 6px; }
+.task-text { font-size: 14px; font-weight: 600; color: var(--text-primary); line-height: 1.55; }
+
+/* QUIZ */
+.quiz-section {
+  background: var(--bg-card); border: 1px solid var(--border-default);
+  border-radius: var(--radius-xl); padding: 36px 40px; margin-bottom: 72px;
+}
+.quiz-section h2 { font-size: 1.4rem; font-weight: 700; color: var(--text-primary); margin-bottom: 6px; }
+.quiz-section .quiz-subtitle { font-size: 13.5px; color: var(--text-secondary); margin-bottom: 32px; }
+.quiz-question { margin-bottom: 28px; padding-bottom: 28px; border-bottom: 1px solid var(--border-subtle); }
+.quiz-question:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+.question-num { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 8px; }
+.question-text { font-size: 15px; font-weight: 600; color: var(--text-primary); margin-bottom: 14px; line-height: 1.5; }
+.quiz-options { display: flex; flex-direction: column; gap: 8px; }
+.quiz-option {
+  display: flex; align-items: flex-start; gap: 10px;
+  padding: 11px 14px; border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle); background: transparent;
+  cursor: pointer; text-align: left; font-family: var(--font-body);
+  font-size: 13.5px; color: var(--text-secondary); width: 100%;
+  transition: all var(--transition-fast);
+}
+.quiz-option:hover:not(:disabled) { background: rgba(255,255,255,0.04); border-color: var(--border-default); color: var(--text-primary); }
+.quiz-option:focus-visible { outline: 2px solid var(--claude-gold); outline-offset: 2px; }
+.quiz-option .opt-key {
+  font-size: 11px; font-weight: 700; font-family: var(--font-mono);
+  width: 20px; height: 20px; border-radius: 4px; background: var(--bg-elevated);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0; margin-top: 1px; color: var(--text-muted); border: 1px solid var(--border-subtle);
+}
+.quiz-option.correct { background: rgba(63,185,80,0.08); border-color: rgba(63,185,80,0.3); color: #3FB950; }
+.quiz-option.correct .opt-key { background: rgba(63,185,80,0.15); color: #3FB950; border-color: rgba(63,185,80,0.3); }
+.quiz-option.wrong { background: rgba(248,81,73,0.08); border-color: rgba(248,81,73,0.3); color: #F85149; }
+.quiz-option.wrong .opt-key { background: rgba(248,81,73,0.15); color: #F85149; border-color: rgba(248,81,73,0.3); }
+.quiz-option:disabled { cursor: default; }
+.quiz-feedback { margin-top: 10px; font-size: 13px; color: var(--text-secondary); display: none; line-height: 1.55; }
+.quiz-feedback.show { display: block; }
+.quiz-score {
+  display: none; margin-top: 24px; padding: 18px 22px;
+  background: var(--bg-elevated); border-radius: var(--radius-md);
+  border: 1px solid var(--border-default); font-size: 14px; color: var(--text-secondary);
+}
+.quiz-score.show { display: block; }
+.quiz-score strong { color: var(--text-primary); }
+
+/* NAVIGATION */
+.module-nav {
+  display: flex; justify-content: space-between;
+  padding: 24px 40px 48px; max-width: var(--content-max);
+  border-top: 1px solid var(--border-subtle);
+}
+.nav-btn {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 11px 20px; border-radius: var(--radius-md); font-size: 13.5px;
+  font-weight: 600; text-decoration: none; background: var(--bg-card);
+  border: 1px solid var(--border-default); color: var(--text-secondary);
+  transition: all var(--transition-base);
+}
+.nav-btn:hover { background: var(--claude-gold-bg); border-color: var(--claude-gold-border); color: var(--claude-gold); }
+.nav-btn .nav-label { font-size: 10px; font-weight: 500; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-muted); display: block; line-height: 1; margin-bottom: 2px; }
+.nav-btn-inner { text-align: right; }
+.nav-btn-inner.prev { text-align: left; }
+
+/* RESPONSIVE */
+@media (max-width: 768px) {
+  :root { --sidebar-width: 0px; }
+  .sidebar { display: none; }
+  .main-content { margin-left: 0; }
+  .hero, .content { padding-left: 20px; padding-right: 20px; }
+  .progress-bar-wrap { padding-left: 20px; padding-right: 20px; }
+  .module-nav { padding-left: 20px; padding-right: 20px; }
+  .quiz-section { padding: 24px 20px; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+</style>
+</head>
+<body>
+<div class="page-wrapper">
+
+  <!-- SIDEBAR -->
+  <nav class="sidebar" aria-label="Module navigation">
+    <div class="sidebar-logo">
+      <div class="tri-dot" aria-hidden="true"><span></span><span></span><span></span></div>
+      <div class="course-label">AI CLI Tools Compared</div>
+      <div class="course-title">Module 4 · Code Generation</div>
+    </div>
+    <div class="sidebar-nav">
+      <div class="sidebar-section">On this page</div>
+      <a href="#task-one" class="sidebar-link active"><span class="link-num">01</span> Task 1: TypeScript Fetch</a>
+      <a href="#claude-output-1" class="sidebar-link"><span class="link-num">02</span> Claude Code Output</a>
+      <a href="#gemini-output-1" class="sidebar-link"><span class="link-num">03</span> Gemini CLI Output</a>
+      <a href="#copilot-output-1" class="sidebar-link"><span class="link-num">04</span> Copilot CLI Output</a>
+      <a href="#quality-table-1" class="sidebar-link"><span class="link-num">05</span> Quality Comparison</a>
+      <a href="#task-two" class="sidebar-link"><span class="link-num">06</span> Task 2: Flask REST API</a>
+      <a href="#key-insight" class="sidebar-link"><span class="link-num">07</span> Key Insight</a>
+      <a href="#quiz" class="sidebar-link"><span class="link-num">08</span> Knowledge Check</a>
+    </div>
+  </nav>
+
+  <main class="main-content" id="main-content">
+
+    <!-- PROGRESS -->
+    <div class="progress-bar-wrap" role="progressbar" aria-valuenow="40" aria-valuemin="0" aria-valuemax="100" aria-label="Course progress: Module 4 of 10">
+      <span class="progress-label">Module 4 of 10 &middot; CLI Comparison Track</span>
+      <div class="progress-track"><div class="progress-fill"></div></div>
+      <span class="progress-pct">40%</span>
+    </div>
+
+    <!-- HERO -->
+    <header class="hero" id="top">
+      <div class="module-badge">
+        <span class="badge-track">AI CLI Tools Compared</span>
+        &nbsp;&middot;&nbsp; M04
+      </div>
+      <h1><span class="title-gradient">Code Generation Head-to-Head</span></h1>
+      <p class="hero-desc">
+        Same prompt. Three tools. How does each one translate "write me a TypeScript fetch function with retries" into actual production-grade code?
+        We run two real tasks, show all outputs side-by-side, and score them on the dimensions that actually matter.
+      </p>
+      <div class="hero-tools" role="list" aria-label="Tools covered in this module">
+        <div class="tool-chip claude" role="listitem"><span class="dot" aria-hidden="true"></span> Claude Code</div>
+        <div class="tool-chip gemini" role="listitem"><span class="dot" aria-hidden="true"></span> Gemini CLI</div>
+        <div class="tool-chip copilot" role="listitem"><span class="dot" aria-hidden="true"></span> GitHub Copilot CLI</div>
+      </div>
+    </header>
+
+    <div class="content">
+
+      <!-- ============================================================
+           SECTION 1: TASK 1 INTRO
+           ============================================================ -->
+      <section class="section" id="task-one" aria-labelledby="task-one-heading">
+        <div class="section-header">
+          <div class="section-eyebrow">Task 1 of 2</div>
+          <h2 id="task-one-heading">The <span class="accent">TypeScript Fetch Function</span></h2>
+        </div>
+
+        <div class="analogy-block" aria-label="Context analogy">
+          <div class="analogy-label">Why this task?</div>
+          <p><strong>BEFORE:</strong> You open a blank file. You know you need a typed HTTP utility with retry logic and exponential backoff. You could copy-paste from Stack Overflow, but the result will be un-typed, brittle, and won't match your project's error conventions.</p>
+          <p><strong>PAIN:</strong> Writing this properly — correct generics, typed error hierarchy, configurable backoff with jitter, test-friendly structure — takes 45–90 minutes even for an experienced TypeScript developer. And you'll write it slightly differently every time, making the codebase inconsistent.</p>
+          <p><strong>MAPPING:</strong> This is exactly the task where AI CLI tools should shine: a well-defined, self-contained problem with clear quality criteria. We'll see how each tool interprets "TypeScript quality" and whether it produces something you'd actually ship.</p>
+        </div>
+
+        <div class="task-prompt">
+          <span class="task-icon" aria-hidden="true">📋</span>
+          <div class="task-body">
+            <div class="task-label">Exact prompt sent to all three tools</div>
+            <div class="task-text">"Create a TypeScript function that fetches user data from an API, handles errors, retries 3 times with exponential backoff, and returns typed results."</div>
+          </div>
+        </div>
+
+        <!-- GENERATION RACE ANIMATION -->
+        <div class="animation-container" aria-label="Side-by-side code generation race animation">
+          <div class="anim-header">
+            <span class="anim-title">Generation speed comparison — lines of useful output per second</span>
+            <div class="anim-controls">
+              <button class="anim-btn" id="race-play" aria-label="Play generation race animation">Play</button>
+              <button class="anim-btn" id="race-pause" aria-label="Pause generation race animation">Pause</button>
+              <button class="anim-btn" id="race-restart" aria-label="Restart generation race animation">Restart</button>
+            </div>
+          </div>
+          <canvas id="race-canvas" width="800" height="180" style="width:100%;height:180px;display:block;" role="img" aria-label="Animation showing Claude Code generating 52 lines of clean TypeScript, Gemini CLI generating 68 lines of TypeScript, Copilot CLI generating a shell scaffold command rather than code"></canvas>
+        </div>
+
+      </section>
+
+      <div class="section-divider" aria-hidden="true"></div>
+
+      <!-- CLAUDE OUTPUT 1 -->
+      <section class="section" id="claude-output-1" aria-labelledby="claude-out-heading">
+        <div class="section-header">
+          <div class="section-eyebrow">Tool Output — Claude Code</div>
+          <h2 id="claude-out-heading"><span class="accent">Claude Code</span> — Clean, Idiomatic TypeScript</h2>
+        </div>
+
+        <p>Claude Code produces a tightly scoped solution. Notice the proper generic constraints, a typed error class hierarchy, and inline JSDoc comments that explain each parameter. No dead imports, no unnecessary abstractions.</p>
+
+        <div class="output-panel claude">
+          <div class="panel-header">
+            <span class="panel-title claude">Claude Code Output</span>
+            <span class="panel-badge">52 lines · TypeScript</span>
+          </div>
+          <div class="panel-body">
+            <div class="code-block-wrap" style="border:none;border-radius:0;margin:0;">
+              <div class="code-block-header">
+                <span class="code-block-lang">TypeScript</span>
+                <button class="copy-btn" aria-label="Copy code to clipboard" data-target="code-claude-ts">Copy</button>
+              </div>
+              <pre><code class="language-typescript" id="code-claude-ts">// WHAT: A typed HTTP client utility with retry + exponential backoff
+// WHY:  Centralises retry logic so callers never reimplement it
+// GOTCHA: jitter prevents "thundering herd" when many requests retry simultaneously
+
+export class FetchError extends Error {
+  constructor(
+    public readonly status: number,
+    public readonly url: string,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'FetchError';
+  }
+}
+
+export interface FetchOptions extends RequestInit {
+  /** Maximum number of retry attempts (default: 3) */
+  retries?: number;
+  /** Base delay in ms for exponential backoff (default: 300) */
+  baseDelayMs?: number;
+}
+
+// WHAT: Generic typed fetch wrapper — T is the shape of the JSON response
+// WHY:  Callers get full type-safety without casting
+// GOTCHA: Only 5xx and network errors trigger retries; 4xx are not retried
+export async function fetchWithRetry&lt;T&gt;(
+  url: string,
+  options: FetchOptions = {},
+): Promise&lt;T&gt; {
+  const { retries = 3, baseDelayMs = 300, ...fetchOptions } = options;
+
+  for (let attempt = 0; attempt &lt;= retries; attempt++) {
+    try {
+      const response = await fetch(url, fetchOptions);
+
+      if (!response.ok) {
+        // 4xx: do not retry — the request itself is malformed
+        if (response.status &lt; 500) {
+          throw new FetchError(response.status, url,
+            `HTTP ${response.status}: ${response.statusText}`);
+        }
+        // 5xx: retriable server error
+        throw new FetchError(response.status, url,
+          `Server error ${response.status} — attempt ${attempt + 1}/${retries + 1}`);
+      }
+
+      return response.json() as Promise&lt;T&gt;;
+
+    } catch (err) {
+      const isLastAttempt = attempt === retries;
+      if (isLastAttempt) throw err;
+
+      // WHAT: Exponential backoff with ±25% jitter
+      const delay = baseDelayMs * 2 ** attempt * (0.75 + Math.random() * 0.5);
+      await new Promise(resolve =&gt; setTimeout(resolve, delay));
+    }
+  }
+
+  // TypeScript requires an explicit throw here; the loop always throws or returns
+  throw new FetchError(0, url, 'fetchWithRetry: unreachable');
+}</code></pre>
+            </div>
+          </div>
+          <div class="panel-note">
+            Strengths: proper generic &lt;T&gt;, typed FetchError extends Error, 4xx vs 5xx distinction, jitter, JSDoc.
+            Test-ready: FetchError is exported and instanceof-checkable in test assertions.
+          </div>
+        </div>
+
+      </section>
+
+      <div class="section-divider" aria-hidden="true"></div>
+
+      <!-- GEMINI OUTPUT 1 -->
+      <section class="section" id="gemini-output-1" aria-labelledby="gemini-out-heading">
+        <div class="section-header">
+          <div class="section-eyebrow">Tool Output — Gemini CLI</div>
+          <h2 id="gemini-out-heading"><span style="color:var(--gemini-blue)">Gemini CLI</span> — Functional, Slightly More Verbose</h2>
+        </div>
+
+        <p>Gemini CLI produces a working solution with a broader feature set. It adds an <abbr class="tt" data-tip="AbortController: a Web API that lets you cancel an in-flight fetch request. Useful when you want a timeout — you abort the fetch after N milliseconds rather than waiting forever." tabindex="0">AbortController</abbr> timeout, explicit retry-on-specific-status logic, and <abbr class="tt" data-tip="fetch polyfill: a compatibility shim that provides the fetch() API in environments (like older Node.js) that don't have it built in. node-fetch is the most common polyfill for Node.js &lt;18." tabindex="0">node-fetch polyfill</abbr> handling. The trade-off is slightly more boilerplate.</p>
+
+        <div class="output-panel gemini">
+          <div class="panel-header">
+            <span class="panel-title gemini">Gemini CLI Output</span>
+            <span class="panel-badge">68 lines · TypeScript</span>
+          </div>
+          <div class="panel-body">
+            <div class="code-block-wrap" style="border:none;border-radius:0;margin:0;">
+              <div class="code-block-header">
+                <span class="code-block-lang">TypeScript</span>
+                <button class="copy-btn" aria-label="Copy code to clipboard" data-target="code-gemini-ts">Copy</button>
+              </div>
+              <pre><code class="language-typescript" id="code-gemini-ts">import fetch, { Response } from 'node-fetch'; // polyfill for Node.js &lt;18
+
+interface RetryConfig {
+  maxRetries: number;
+  baseDelay: number;
+  maxDelay: number;
+  retryOnStatus: number[];
+  timeoutMs: number;
+}
+
+const DEFAULT_CONFIG: RetryConfig = {
+  maxRetries: 3,
+  baseDelay: 300,
+  maxDelay: 10000,
+  retryOnStatus: [429, 500, 502, 503, 504],
+  timeoutMs: 30000,
+};
+
+export interface ApiResponse&lt;T&gt; {
+  data: T | null;
+  error: string | null;
+  attempts: number;
+}
+
+function sleep(ms: number): Promise&lt;void&gt; {
+  return new Promise(resolve =&gt; setTimeout(resolve, ms));
+}
+
+function getBackoffDelay(attempt: number, config: RetryConfig): number {
+  const exponential = config.baseDelay * Math.pow(2, attempt);
+  const jittered = exponential * (0.5 + Math.random() * 0.5);
+  return Math.min(jittered, config.maxDelay);
+}
+
+export async function fetchUserData&lt;T&gt;(
+  url: string,
+  options: RequestInit = {},
+  config: Partial&lt;RetryConfig&gt; = {},
+): Promise&lt;ApiResponse&lt;T&gt;&gt; {
+  const cfg: RetryConfig = { ...DEFAULT_CONFIG, ...config };
+  let lastError: string = 'Unknown error';
+
+  for (let attempt = 0; attempt &lt;= cfg.maxRetries; attempt++) {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() =&gt; controller.abort(), cfg.timeoutMs);
+
+    try {
+      const response: Response = await fetch(url, {
+        ...options,
+        signal: controller.signal,
+      });
+      clearTimeout(timeoutId);
+
+      if (!cfg.retryOnStatus.includes(response.status) &amp;&amp; !response.ok) {
+        return {
+          data: null,
+          error: `HTTP ${response.status}: ${response.statusText}`,
+          attempts: attempt + 1,
+        };
+      }
+
+      if (response.ok) {
+        const data = (await response.json()) as T;
+        return { data, error: null, attempts: attempt + 1 };
+      }
+
+      lastError = `HTTP ${response.status} — retrying (${attempt + 1}/${cfg.maxRetries + 1})`;
+    } catch (err) {
+      clearTimeout(timeoutId);
+      lastError = err instanceof Error ? err.message : 'Network error';
+      if (err instanceof Error &amp;&amp; err.name === 'AbortError') {
+        lastError = `Request timed out after ${cfg.timeoutMs}ms`;
+      }
+    }
+
+    if (attempt &lt; cfg.maxRetries) {
+      await sleep(getBackoffDelay(attempt, cfg));
+    }
+  }
+
+  return { data: null, error: lastError, attempts: cfg.maxRetries + 1 };
+}</code></pre>
+            </div>
+          </div>
+          <div class="panel-note">
+            Strengths: AbortController timeout, explicit retryOnStatus list, maxDelay cap, ApiResponse wrapper.
+            Trade-offs: ApiResponse&lt;T&gt; wraps errors instead of throwing — callers must check .error, not catch.
+          </div>
+        </div>
+
+      </section>
+
+      <div class="section-divider" aria-hidden="true"></div>
+
+      <!-- COPILOT OUTPUT 1 -->
+      <section class="section" id="copilot-output-1" aria-labelledby="copilot-out-heading">
+        <div class="section-header">
+          <div class="section-eyebrow">Tool Output — GitHub Copilot CLI</div>
+          <h2 id="copilot-out-heading"><span style="color:var(--copilot-grey)">Copilot CLI</span> — Shell Scaffold, Not Code Generation</h2>
+        </div>
+
+        <p>This is where the architectural difference becomes concrete. <code>gh copilot suggest</code> is not a code generator — it is a <abbr class="tt" data-tip="shell command translator: a tool that converts a natural language description ('list all files modified in the last 7 days') into a shell command ('find . -mtime -7'). It operates on shell semantics, not file contents or programming languages." tabindex="0">shell command translator</abbr>. When you ask it to generate TypeScript code, it suggests a shell command to scaffold the file — it does not write the TypeScript itself.</p>
+
+        <div class="output-panel copilot">
+          <div class="panel-header">
+            <span class="panel-title copilot">GitHub Copilot CLI Output</span>
+            <span class="panel-badge">gh copilot suggest</span>
+          </div>
+          <div class="panel-body">
+            <div class="code-tabs" role="tablist" aria-label="Shell tabs">
+              <button class="code-tab active" role="tab" aria-selected="true" onclick="switchTab(this,'copilot-bash-pane')" aria-controls="copilot-bash-pane">Bash</button>
+              <button class="code-tab" role="tab" aria-selected="false" onclick="switchTab(this,'copilot-ps-pane')" aria-controls="copilot-ps-pane">PowerShell</button>
+            </div>
+            <div class="code-pane active" id="copilot-bash-pane">
+              <div class="code-block-header">
+                <span class="code-block-lang">bash — what Copilot CLI actually outputs</span>
+                <button class="copy-btn" aria-label="Copy code to clipboard" data-target="code-copilot-bash">Copy</button>
+              </div>
+              <pre><code class="language-bash" id="code-copilot-bash">$ gh copilot suggest "Create a TypeScript function that fetches user data, retries 3 times with exponential backoff"
+
+? What kind of shell command?
+  1. generic shell command
+  2. git command
+  3. gh command
+> 1
+
+Suggestion:
+  npx ts-node -e "
+    async function fetchWithRetry(url, retries=3) {
+      // stub — implement logic here
+    }
+  "
+
+? Select an option
+  1. Copy command to clipboard
+  2. Explain command
+  3. Revise command
+  4. Rate response
+  5. Exit
+
+# Note: Copilot CLI does NOT generate a full .ts file.
+# It suggests a shell command that runs a ts-node stub.
+# For full code generation, use claude or gemini interactive mode.</code></pre>
+            </div>
+            <div class="code-pane" id="copilot-ps-pane">
+              <div class="code-block-header">
+                <span class="code-block-lang">PowerShell — Copilot CLI suggest</span>
+                <button class="copy-btn" aria-label="Copy code to clipboard" data-target="code-copilot-ps">Copy</button>
+              </div>
+              <pre><code class="language-powershell" id="code-copilot-ps">PS> gh copilot suggest "Create a TypeScript function that fetches user data, retries 3 times with exponential backoff"
+
+# What kind of shell command? > generic shell command
+
+Suggestion:
+  npx ts-node -e "async function fetchWithRetry(url, retries=3) { /* stub */ }"
+
+# Select an option: Copy command to clipboard
+
+# The correct way to use Copilot CLI for TypeScript is to ask for
+# the scaffolding command, then write the actual code yourself (or
+# use Claude/Gemini for the code generation step):
+gh copilot suggest "create a new TypeScript project with tsconfig and package.json"
+# → suggests: npx tsc --init &amp;&amp; npm init -y &amp;&amp; npm i typescript @types/node</code></pre>
+            </div>
+          </div>
+          <div class="panel-note">
+            This is not a weakness — it is intentional design. Copilot CLI's job is shell command translation. For code generation from the terminal, you need Claude Code or Gemini CLI's interactive mode.
+          </div>
+        </div>
+
+        <div class="callout warning">
+          <span class="callout-icon" aria-hidden="true">&#9888;</span>
+          <div class="callout-body">
+            <strong>Architectural clarification</strong>
+            <p>GitHub Copilot <em>in VS Code</em> absolutely generates full TypeScript functions — it is excellent at it. But <code>gh copilot suggest</code> in the <em>terminal</em> is a different product with a different purpose: shell command assistance. This module compares CLI tools only.</p>
+          </div>
+        </div>
+
+      </section>
+
+      <div class="section-divider" aria-hidden="true"></div>
+
+      <!-- QUALITY COMPARISON TABLE 1 -->
+      <section class="section" id="quality-table-1" aria-labelledby="quality-heading">
+        <div class="section-header">
+          <div class="section-eyebrow">Quality Analysis — Task 1</div>
+          <h2 id="quality-heading">Scoring the <span class="accent">TypeScript Function</span></h2>
+        </div>
+
+        <!-- RADAR CHART ANIMATION -->
+        <div class="animation-container" aria-label="Quality radar chart per tool">
+          <div class="anim-header">
+            <span class="anim-title">Quality radar — Correctness / TS Quality / Error Handling / Test-readiness / Conciseness</span>
+            <div class="anim-controls">
+              <button class="anim-btn" id="radar-play" aria-label="Play radar chart animation">Play</button>
+              <button class="anim-btn" id="radar-pause" aria-label="Pause radar chart animation">Pause</button>
+              <button class="anim-btn" id="radar-restart" aria-label="Restart radar chart animation">Restart</button>
+            </div>
+          </div>
+          <canvas id="radar-canvas" width="800" height="300" style="width:100%;height:300px;display:block;" role="img" aria-label="Radar chart showing Claude Code scoring highest on TypeScript quality and test-readiness, Gemini CLI scoring highest on feature richness, Copilot CLI not scored on code dimensions"></canvas>
+        </div>
+
+        <div class="compare-table-wrap">
+          <table class="compare-table" aria-label="Code quality comparison — Task 1">
+            <thead>
+              <tr>
+                <th>Dimension</th>
+                <th class="claude-th">Claude Code</th>
+                <th class="gemini-th">Gemini CLI</th>
+                <th class="copilot-th">Copilot CLI</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Correctness</td>
+                <td class="win">✓ Correct, ships as-is</td>
+                <td class="win">✓ Correct, ships as-is</td>
+                <td class="miss">N/A — no code produced</td>
+              </tr>
+              <tr>
+                <td>TypeScript quality</td>
+                <td class="win">✓ Proper generics, typed errors, no <code>any</code></td>
+                <td class="ok">Good generics, ApiResponse wrapper adds complexity</td>
+                <td class="miss">N/A</td>
+              </tr>
+              <tr>
+                <td>Error handling</td>
+                <td class="win">✓ FetchError class, 4xx vs 5xx distinction</td>
+                <td class="win">✓ Timeout via AbortController, retryOnStatus list</td>
+                <td class="miss">N/A</td>
+              </tr>
+              <tr>
+                <td>Test-readiness</td>
+                <td class="win">✓ FetchError exported, throws on failure (easy to mock)</td>
+                <td class="ok">Returns ApiResponse — callers check .error, harder to test with catch</td>
+                <td class="miss">N/A</td>
+              </tr>
+              <tr>
+                <td>Lines of code</td>
+                <td class="win">52 (lean)</td>
+                <td class="ok">68 (more features, more code)</td>
+                <td class="miss">N/A</td>
+              </tr>
+              <tr>
+                <td>Inline comments</td>
+                <td class="win">WHAT/WHY/GOTCHA per block</td>
+                <td class="ok">Minimal</td>
+                <td class="miss">N/A</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="checkpoint">
+          <div class="checkpoint-label">What Just Happened?</div>
+          <p>Both Claude Code and Gemini CLI produce correct, shippable TypeScript. The key differences:</p>
+          <ul>
+            <li>Claude Code's output is more idiomatic — it throws typed errors, which is the TypeScript convention for unexpected failures.</li>
+            <li>Gemini CLI's output is more configurable — it adds timeout, retryOnStatus list, and a wrapper type. Good choice when you need more control.</li>
+            <li>Copilot CLI is disqualified from this comparison — it is a shell tool, not a code generator.</li>
+          </ul>
+        </div>
+
+      </section>
+
+      <div class="section-divider" aria-hidden="true"></div>
+
+      <!-- TASK 2 -->
+      <section class="section" id="task-two" aria-labelledby="task-two-heading">
+        <div class="section-header">
+          <div class="section-eyebrow">Task 2 of 2</div>
+          <h2 id="task-two-heading">Python Flask REST API with <span class="accent">Full CRUD</span></h2>
+        </div>
+
+        <p>The second task tests a more substantial generation request: a multi-endpoint REST API with create, read, update, and delete operations for a blog post model. This requires understanding conventions — route naming, HTTP status codes, error response shape, and separation of concerns.</p>
+
+        <div class="task-prompt">
+          <span class="task-icon" aria-hidden="true">📋</span>
+          <div class="task-body">
+            <div class="task-label">Exact prompt sent to all three tools</div>
+            <div class="task-text">"Generate a Python Flask REST API with CRUD operations for a blog post."</div>
+          </div>
+        </div>
+
+        <!-- CLAUDE FLASK -->
+        <div class="output-panel claude" style="margin-top:24px;">
+          <div class="panel-header">
+            <span class="panel-title claude">Claude Code — Flask API</span>
+            <span class="panel-badge">78 lines · Python</span>
+          </div>
+          <div class="panel-body">
+            <div class="code-block-wrap" style="border:none;border-radius:0;margin:0;">
+              <div class="code-block-header">
+                <span class="code-block-lang">Python (Flask)</span>
+                <button class="copy-btn" aria-label="Copy code to clipboard" data-target="code-flask-claude">Copy</button>
+              </div>
+              <pre><code class="language-python" id="code-flask-claude">"""
+WHAT: Blog post CRUD REST API using Flask + in-memory store
+WHY:  Demonstrates clean route structure and proper HTTP semantics
+GOTCHA: In-memory dict resets on restart — replace with SQLAlchemy for production
+"""
+from __future__ import annotations
+from flask import Flask, jsonify, request, abort
+from dataclasses import dataclass, asdict
+from datetime import datetime, timezone
+import uuid
+
+app = Flask(__name__)
+
+# WHAT: In-memory store keyed by post UUID string
+posts: dict[str, dict] = {}
+
+
+@dataclass
+class BlogPost:
+    id: str
+    title: str
+    content: str
+    author: str
+    created_at: str
+    updated_at: str
+
+    @staticmethod
+    def create(title: str, content: str, author: str) -> BlogPost:
+        now = datetime.now(timezone.utc).isoformat()
+        return BlogPost(
+            id=str(uuid.uuid4()),
+            title=title, content=content, author=author,
+            created_at=now, updated_at=now,
+        )
+
+
+def _get_or_404(post_id: str) -> dict:
+    post = posts.get(post_id)
+    if post is None:
+        abort(404, description=f"Post '{post_id}' not found")
+    return post
+
+
+# ── CREATE ──────────────────────────────────────────────────────────
+@app.post("/posts")
+def create_post():
+    body = request.get_json(silent=True) or {}
+    required = {"title", "content", "author"}
+    missing = required - body.keys()
+    if missing:
+        return jsonify(error=f"Missing fields: {', '.join(missing)}"), 400
+
+    post = BlogPost.create(body["title"], body["content"], body["author"])
+    posts[post.id] = asdict(post)
+    return jsonify(posts[post.id]), 201
+
+
+# ── READ ALL / READ ONE ──────────────────────────────────────────────
+@app.get("/posts")
+def list_posts():
+    return jsonify(list(posts.values())), 200
+
+
+@app.get("/posts/&lt;string:post_id&gt;")
+def get_post(post_id: str):
+    return jsonify(_get_or_404(post_id)), 200
+
+
+# ── UPDATE ───────────────────────────────────────────────────────────
+@app.patch("/posts/&lt;string:post_id&gt;")
+def update_post(post_id: str):
+    post = _get_or_404(post_id)
+    body = request.get_json(silent=True) or {}
+    for field in ("title", "content", "author"):
+        if field in body:
+            post[field] = body[field]
+    post["updated_at"] = datetime.now(timezone.utc).isoformat()
+    return jsonify(post), 200
+
+
+# ── DELETE ───────────────────────────────────────────────────────────
+@app.delete("/posts/&lt;string:post_id&gt;")
+def delete_post(post_id: str):
+    _get_or_404(post_id)
+    del posts[post_id]
+    return "", 204
+
+
+@app.errorhandler(404)
+def not_found(err):
+    return jsonify(error=str(err.description)), 404
+
+
+@app.errorhandler(400)
+def bad_request(err):
+    return jsonify(error=str(err.description)), 400
+
+
+if __name__ == "__main__":
+    app.run(debug=True)</code></pre>
+            </div>
+          </div>
+          <div class="panel-note">
+            Uses modern Flask 2.x decorators (@app.post, @app.patch, @app.delete), typed dataclass, PATCH over PUT (correct REST semantics), structured 404/400 error responses.
+          </div>
+        </div>
+
+        <!-- GEMINI FLASK -->
+        <div class="output-panel gemini" style="margin-top:20px;">
+          <div class="panel-header">
+            <span class="panel-title gemini">Gemini CLI — Flask API</span>
+            <span class="panel-badge">94 lines · Python</span>
+          </div>
+          <div class="panel-body">
+            <div class="code-block-wrap" style="border:none;border-radius:0;margin:0;">
+              <div class="code-block-header">
+                <span class="code-block-lang">Python (Flask)</span>
+                <button class="copy-btn" aria-label="Copy code to clipboard" data-target="code-flask-gemini">Copy</button>
+              </div>
+              <pre><code class="language-python" id="code-flask-gemini">from flask import Flask, jsonify, request
+from flask_sqlalchemy import SQLAlchemy
+from marshmallow import Schema, fields, ValidationError
+from datetime import datetime
+import os
+
+app = Flask(__name__)
+app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:///blog.db')
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+db = SQLAlchemy(app)
+
+
+class BlogPost(db.Model):
+    __tablename__ = 'posts'
+    id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(200), nullable=False)
+    content = db.Column(db.Text, nullable=False)
+    author = db.Column(db.String(100), nullable=False)
+    created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def to_dict(self):
+        return {
+            'id': self.id, 'title': self.title, 'content': self.content,
+            'author': self.author,
+            'created_at': self.created_at.isoformat(),
+            'updated_at': self.updated_at.isoformat(),
+        }
+
+
+class PostSchema(Schema):
+    title = fields.Str(required=True, validate=lambda s: len(s) &gt; 0)
+    content = fields.Str(required=True)
+    author = fields.Str(required=True)
+
+post_schema = PostSchema()
+partial_schema = PostSchema(partial=True)
+
+
+@app.route('/posts', methods=['POST'])
+def create_post():
+    try:
+        data = post_schema.load(request.get_json() or {})
+    except ValidationError as e:
+        return jsonify({'errors': e.messages}), 400
+    post = BlogPost(**data)
+    db.session.add(post)
+    db.session.commit()
+    return jsonify(post.to_dict()), 201
+
+
+@app.route('/posts', methods=['GET'])
+def list_posts():
+    page = request.args.get('page', 1, type=int)
+    per_page = request.args.get('per_page', 20, type=int)
+    paginated = BlogPost.query.order_by(BlogPost.created_at.desc()).paginate(
+        page=page, per_page=per_page, error_out=False)
+    return jsonify({
+        'posts': [p.to_dict() for p in paginated.items],
+        'total': paginated.total,
+        'pages': paginated.pages,
+        'current_page': page,
+    }), 200
+
+
+@app.route('/posts/&lt;int:post_id&gt;', methods=['GET'])
+def get_post(post_id):
+    post = db.get_or_404(BlogPost, post_id)
+    return jsonify(post.to_dict()), 200
+
+
+@app.route('/posts/&lt;int:post_id&gt;', methods=['PUT'])
+def update_post(post_id):
+    post = db.get_or_404(BlogPost, post_id)
+    try:
+        data = partial_schema.load(request.get_json() or {})
+    except ValidationError as e:
+        return jsonify({'errors': e.messages}), 400
+    for key, value in data.items():
+        setattr(post, key, value)
+    db.session.commit()
+    return jsonify(post.to_dict()), 200
+
+
+@app.route('/posts/&lt;int:post_id&gt;', methods=['DELETE'])
+def delete_post(post_id):
+    post = db.get_or_404(BlogPost, post_id)
+    db.session.delete(post)
+    db.session.commit()
+    return '', 204
+
+
+if __name__ == '__main__':
+    with app.app_context():
+        db.create_all()
+    app.run(debug=True)</code></pre>
+            </div>
+          </div>
+          <div class="panel-note">
+            Adds SQLAlchemy ORM + marshmallow validation + pagination. More production-ready but requires additional dependencies. Uses PUT (full replacement) instead of PATCH (partial update) — a minor REST convention difference.
+          </div>
+        </div>
+
+        <!-- COPILOT FLASK -->
+        <div class="output-panel copilot" style="margin-top:20px;">
+          <div class="panel-header">
+            <span class="panel-title copilot">Copilot CLI — Flask Scaffold</span>
+            <span class="panel-badge">Shell suggestion</span>
+          </div>
+          <div class="panel-body">
+            <div class="code-tabs" role="tablist" aria-label="Shell tabs for Copilot Flask">
+              <button class="code-tab active" role="tab" aria-selected="true" onclick="switchTab(this,'copilot-flask-bash')" aria-controls="copilot-flask-bash">Bash</button>
+              <button class="code-tab" role="tab" aria-selected="false" onclick="switchTab(this,'copilot-flask-ps')" aria-controls="copilot-flask-ps">PowerShell</button>
+            </div>
+            <div class="code-pane active" id="copilot-flask-bash">
+              <div class="code-block-header">
+                <span class="code-block-lang">bash</span>
+                <button class="copy-btn" aria-label="Copy code to clipboard" data-target="code-copilot-flask-bash">Copy</button>
+              </div>
+              <pre><code class="language-bash" id="code-copilot-flask-bash">$ gh copilot suggest "Generate a Python Flask REST API with CRUD for a blog post"
+
+Suggestion:
+  pip install flask &amp;&amp; \
+  python -c "
+from flask import Flask; app = Flask(__name__)
+# Add routes here
+app.run()
+"
+
+# Copilot CLI suggests the pip install + a minimal skeleton.
+# It does NOT write the full CRUD routes.
+# Correct usage pattern: use Copilot CLI for the setup commands,
+# then use an interactive agent for code generation:
+gh copilot suggest "create a python virtual environment and install flask sqlalchemy"
+# → python -m venv venv &amp;&amp; source venv/bin/activate &amp;&amp; pip install flask flask-sqlalchemy</code></pre>
+            </div>
+            <div class="code-pane" id="copilot-flask-ps">
+              <div class="code-block-header">
+                <span class="code-block-lang">PowerShell</span>
+                <button class="copy-btn" aria-label="Copy code to clipboard" data-target="code-copilot-flask-ps">Copy</button>
+              </div>
+              <pre><code class="language-powershell" id="code-copilot-flask-ps">PS> gh copilot suggest "Generate a Python Flask REST API with CRUD for a blog post"
+
+# Suggestion:
+#   pip install flask; python -c "from flask import Flask; app = Flask(__name__); app.run()"
+
+# For actual code generation, use:
+#   claude  →  start Claude Code interactive session
+#   gemini  →  start Gemini CLI interactive session
+# Both will write the full app.py file in your project directory.</code></pre>
+            </div>
+          </div>
+          <div class="panel-note">
+            Copilot CLI suggests the environment setup commands correctly. For code generation, hand off to claude or gemini.
+          </div>
+        </div>
+
+        <!-- DIFF ANIMATION -->
+        <div class="animation-container" aria-label="Code diff highlighting strengths of each tool">
+          <div class="anim-header">
+            <span class="anim-title">Diff highlight — what each tool adds beyond the baseline</span>
+            <div class="anim-controls">
+              <button class="anim-btn" id="diff-play" aria-label="Play diff animation">Play</button>
+              <button class="anim-btn" id="diff-pause" aria-label="Pause diff animation">Pause</button>
+              <button class="anim-btn" id="diff-restart" aria-label="Restart diff animation">Restart</button>
+            </div>
+          </div>
+          <canvas id="diff-canvas" width="800" height="220" style="width:100%;height:220px;display:block;" role="img" aria-label="Diff visualization: Claude Code adds WHAT/WHY comments and typed errors; Gemini CLI adds SQLAlchemy, marshmallow, and pagination; Copilot CLI contributes shell scaffolding only"></canvas>
+        </div>
+
+        <div class="compare-table-wrap">
+          <table class="compare-table" aria-label="Flask API quality comparison">
+            <thead>
+              <tr>
+                <th>Dimension</th>
+                <th class="claude-th">Claude Code</th>
+                <th class="gemini-th">Gemini CLI</th>
+                <th class="copilot-th">Copilot CLI</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>Completeness</td>
+                <td class="win">✓ Full CRUD, zero deps beyond Flask</td>
+                <td class="win">✓ Full CRUD + ORM + validation</td>
+                <td class="miss">Setup only</td>
+              </tr>
+              <tr>
+                <td>REST correctness</td>
+                <td class="win">PATCH for partial update, correct status codes</td>
+                <td class="ok">PUT (full replace), needs PATCH for strict REST</td>
+                <td class="miss">N/A</td>
+              </tr>
+              <tr>
+                <td>Production readiness</td>
+                <td class="ok">In-memory store — needs DB for production</td>
+                <td class="win">SQLAlchemy + marshmallow + pagination</td>
+                <td class="miss">N/A</td>
+              </tr>
+              <tr>
+                <td>Zero-dependency run</td>
+                <td class="win">✓ <code>pip install flask</code> only</td>
+                <td class="ok">Needs flask-sqlalchemy marshmallow</td>
+                <td class="miss">N/A</td>
+              </tr>
+              <tr>
+                <td>Annotation quality</td>
+                <td class="win">WHAT/WHY/GOTCHA block comments</td>
+                <td class="ok">Minimal inline comments</td>
+                <td class="miss">N/A</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+
+      </section>
+
+      <div class="section-divider" aria-hidden="true"></div>
+
+      <!-- KEY INSIGHT -->
+      <section class="section" id="key-insight" aria-labelledby="insight-heading">
+        <div class="section-header">
+          <div class="section-eyebrow">Section 7</div>
+          <h2 id="insight-heading">Key <span class="accent">Insight</span></h2>
+        </div>
+
+        <div class="insight-box">
+          <div class="insight-label">Pattern Observed</div>
+          <p><strong>Claude Code produces cleaner, more idiomatic output on average.</strong> It defaults to the minimum necessary — no extra deps, explicit error typing, correct HTTP conventions (PATCH not PUT), inline pedagogical comments. It behaves like a senior developer who writes the lean version and explains it.</p>
+          <p><strong>Gemini CLI is competitive and benefits from larger context.</strong> When your codebase is already loaded (<code>@src/</code> or <code>@package.json</code>), Gemini detects that you're using SQLAlchemy and naturally extends the generated code to match. On a fresh prompt it makes more assumptions. Its output is often more feature-rich — pagination, validation — which is better for production but adds setup cost.</p>
+          <p><strong>Copilot CLI is architecturally excluded from code generation comparison.</strong> This is not a flaw — <code>gh copilot suggest</code> is a shell command translator. It excels at environment setup, git commands, and workflow automation. Use it as the first step (set up the project), then hand to Claude or Gemini for the actual code.</p>
+        </div>
+
+        <div class="callout success">
+          <span class="callout-icon" aria-hidden="true">&#10003;</span>
+          <div class="callout-body">
+            <strong>Practical workflow: chain the tools</strong>
+            <p>The most productive pattern many teams use: <strong>1)</strong> Use <code>gh copilot suggest</code> to scaffold the project and install deps. <strong>2)</strong> Use <code>claude</code> or <code>gemini</code> to generate the actual code. <strong>3)</strong> Use <code>gh copilot suggest</code> again for git commands, Docker commands, and CI configuration. Each tool handles what it was designed for.</p>
+          </div>
+        </div>
+
+        <div class="checkpoint">
+          <div class="checkpoint-label">What Just Happened?</div>
+          <p>You now have a concrete, code-level understanding of how these tools differ on generation quality:</p>
+          <ul>
+            <li>Claude Code: cleaner types, correct conventions, pedagogical comments, leaner output.</li>
+            <li>Gemini CLI: more features, larger assumptions, better when context is already loaded.</li>
+            <li>Copilot CLI: excellent for shell scaffolding; not a code generator from the terminal.</li>
+          </ul>
+          <p style="margin-top:10px;">Next: M05 covers multi-file editing and large codebase handling — where context window size becomes the dominant variable.</p>
+        </div>
+
+      </section>
+
+      <div class="section-divider" aria-hidden="true"></div>
+
+      <!-- QUIZ -->
+      <section class="quiz-section" id="quiz" aria-labelledby="quiz-heading">
+        <h2 id="quiz-heading">Knowledge Check</h2>
+        <p class="quiz-subtitle">Five questions on code generation quality and tool architecture.</p>
+
+        <!-- Q1 -->
+        <div class="quiz-question" id="q1">
+          <div class="question-num">Question 1 of 5</div>
+          <div class="question-text">When Claude Code generates a TypeScript fetch function, it throws a typed <code>FetchError</code> for server errors, but does NOT retry on 4xx status codes. Why?</div>
+          <div class="quiz-options" role="group">
+            <button class="quiz-option" onclick="checkAnswer(this,false,'q1')" aria-label="Option A"><span class="opt-key">A</span>Claude Code has a bug — it should retry on 429 Too Many Requests</button>
+            <button class="quiz-option" onclick="checkAnswer(this,true,'q1')" aria-label="Option B"><span class="opt-key">B</span>4xx errors indicate the request itself is malformed — retrying the same request will always fail, so it's wasteful and misleading</button>
+            <button class="quiz-option" onclick="checkAnswer(this,false,'q1')" aria-label="Option C"><span class="opt-key">C</span>4xx retries would violate the HTTP spec</button>
+            <button class="quiz-option" onclick="checkAnswer(this,false,'q1')" aria-label="Option D"><span class="opt-key">D</span>Claude Code cannot detect the difference between 4xx and 5xx responses</button>
+          </div>
+          <div class="quiz-feedback" id="q1-feedback">Correct. A 4xx status (400 Bad Request, 401 Unauthorized, 404 Not Found) means the request itself is wrong. Retrying the identical request will return the same error. 5xx errors (500 Internal Server Error, 502 Bad Gateway, 503 Unavailable) indicate a transient server problem that may resolve on retry — which is why only those are retried. Note: 429 (Too Many Requests) is technically a 4xx that benefits from retry — this is a valid edge case to add manually.</div>
+        </div>
+
+        <!-- Q2 -->
+        <div class="quiz-question" id="q2">
+          <div class="question-num">Question 2 of 5</div>
+          <div class="question-text">Gemini CLI's Flask output uses SQLAlchemy and marshmallow without being asked. What does this tell you about its generation behavior?</div>
+          <div class="quiz-options" role="group">
+            <button class="quiz-option" onclick="checkAnswer(this,false,'q2')" aria-label="Option A"><span class="opt-key">A</span>Gemini CLI always requires a database connection</button>
+            <button class="quiz-option" onclick="checkAnswer(this,false,'q2')" aria-label="Option B"><span class="opt-key">B</span>Gemini CLI ignores the prompt and generates whatever it prefers</button>
+            <button class="quiz-option" onclick="checkAnswer(this,true,'q2')" aria-label="Option C"><span class="opt-key">C</span>Gemini CLI defaults to feature-rich, production-oriented assumptions — more complete, but adds dependency overhead</button>
+            <button class="quiz-option" onclick="checkAnswer(this,false,'q2')" aria-label="Option D"><span class="opt-key">D</span>This is a Gemini CLI bug that adds unnecessary libraries</button>
+          </div>
+          <div class="quiz-feedback" id="q2-feedback">Correct. Gemini CLI tends to generate "production-oriented" output by default — it assumes you eventually want a real database, input validation, and pagination. This is often the right call for a backend API, but it does mean you need to install additional packages (flask-sqlalchemy, marshmallow) before running the code. Claude Code takes the opposite default: minimal dependencies, correct code, and a comment telling you to add a real DB for production.</div>
+        </div>
+
+        <!-- Q3 -->
+        <div class="quiz-question" id="q3">
+          <div class="question-num">Question 3 of 5</div>
+          <div class="question-text">A developer runs <code>gh copilot suggest "write a TypeScript retry function"</code> and receives a stub shell command instead of full code. What should they do next?</div>
+          <div class="quiz-options" role="group">
+            <button class="quiz-option" onclick="checkAnswer(this,false,'q3')" aria-label="Option A"><span class="opt-key">A</span>File a bug report — Copilot CLI should generate full code</button>
+            <button class="quiz-option" onclick="checkAnswer(this,false,'q3')" aria-label="Option B"><span class="opt-key">B</span>Use <code>gh copilot explain</code> instead, which generates more complete output</button>
+            <button class="quiz-option" onclick="checkAnswer(this,true,'q3')" aria-label="Option C"><span class="opt-key">C</span>Switch to <code>claude</code> or <code>gemini</code> interactive mode for the code generation step — Copilot CLI is a shell translator, not a code generator</button>
+            <button class="quiz-option" onclick="checkAnswer(this,false,'q3')" aria-label="Option D"><span class="opt-key">D</span>Add <code>--code-mode</code> flag to get full TypeScript output from Copilot CLI</button>
+          </div>
+          <div class="quiz-feedback" id="q3-feedback">Correct. <code>gh copilot suggest</code> is designed to translate natural language into shell commands. It will always produce a shell command output, even when the input is a programming request. For code generation from the terminal, Claude Code and Gemini CLI are the right tools. There is no <code>--code-mode</code> flag.</div>
+        </div>
+
+        <!-- Q4 -->
+        <div class="quiz-question" id="q4">
+          <div class="question-num">Question 4 of 5</div>
+          <div class="question-text">What is exponential backoff with jitter, and why does jitter matter?</div>
+          <div class="quiz-options" role="group">
+            <button class="quiz-option" onclick="checkAnswer(this,false,'q4')" aria-label="Option A"><span class="opt-key">A</span>Jitter adds a random prefix to the URL to prevent caching</button>
+            <button class="quiz-option" onclick="checkAnswer(this,true,'q4')" aria-label="Option B"><span class="opt-key">B</span>Exponential backoff increases retry delay per attempt (300ms, 600ms, 1200ms…); jitter adds randomness to prevent many clients from retrying at exactly the same time and overloading the server again</button>
+            <button class="quiz-option" onclick="checkAnswer(this,false,'q4')" aria-label="Option C"><span class="opt-key">C</span>Jitter reduces the delay on the final retry to speed up recovery</button>
+            <button class="quiz-option" onclick="checkAnswer(this,false,'q4')" aria-label="Option D"><span class="opt-key">D</span>Exponential backoff means retrying only on odd-numbered HTTP status codes</button>
+          </div>
+          <div class="quiz-feedback" id="q4-feedback">Correct. Without jitter, all clients whose requests failed at the same time will retry at the same moment (e.g., all at t+300ms). This creates a "thundering herd" that overwhelms the server again. By adding ±25-50% random variation to each retry delay, clients spread out their retries in time, giving the server a chance to recover. This is a well-known distributed systems pattern — AWS documented it in their "Exponential Backoff and Jitter" blog post in 2015.</div>
+        </div>
+
+        <!-- Q5 -->
+        <div class="quiz-question" id="q5">
+          <div class="question-num">Question 5 of 5</div>
+          <div class="question-text">Claude Code's Flask API uses PATCH for updates while Gemini CLI's uses PUT. Which is more correct according to REST semantics, and why?</div>
+          <div class="quiz-options" role="group">
+            <button class="quiz-option" onclick="checkAnswer(this,false,'q5')" aria-label="Option A"><span class="opt-key">A</span>PUT is more correct because it is a simpler HTTP method</button>
+            <button class="quiz-option" onclick="checkAnswer(this,true,'q5')" aria-label="Option B"><span class="opt-key">B</span>PATCH is more correct for partial updates — PUT means "replace the entire resource," PATCH means "apply these changes." Most blog post APIs only update some fields, making PATCH the right choice</button>
+            <button class="quiz-option" onclick="checkAnswer(this,false,'q5')" aria-label="Option C"><span class="opt-key">C</span>They are identical — PATCH and PUT are interchangeable in Flask</button>
+            <button class="quiz-option" onclick="checkAnswer(this,false,'q5')" aria-label="Option D"><span class="opt-key">D</span>PUT is correct because REST requires full resource replacement on every update</button>
+          </div>
+          <div class="quiz-feedback" id="q5-feedback">Correct. RFC 5789 defines PATCH as a method for applying partial modifications to a resource. PUT replaces the entire resource — if you PUT a post with only a new title, you must also send all other fields (content, author) or they will be deleted/reset. PATCH lets you send only the fields you want to change. For a blog post API where clients commonly update just the title or content, PATCH is the semantically correct choice. Gemini's PUT output works, but a client that sends only {"title": "new title"} via PUT would accidentally clear the content field.</div>
+        </div>
+
+        <div class="quiz-score" id="quiz-score" role="status" aria-live="polite"></div>
+      </section>
+
+    </div><!-- /content -->
+
+    <!-- NAVIGATION -->
+    <nav class="module-nav" aria-label="Module navigation">
+      <a href="M03-prompting-comparison.html" class="nav-btn" aria-label="Previous module: M03 Prompting Comparison">
+        <span aria-hidden="true">←</span>
+        <div class="nav-btn-inner prev">
+          <span class="nav-label">Previous Module</span>
+          M03: Prompting Comparison
+        </div>
+      </a>
+      <a href="M05-file-operations.html" class="nav-btn" aria-label="Next module: M05 File Operations">
+        <div class="nav-btn-inner">
+          <span class="nav-label">Next Module</span>
+          M05: File Operations
+        </div>
+        <span aria-hidden="true">→</span>
+      </a>
+    </nav>
+
+  </main>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-powershell.min.js"></script>
+
+<script>
+/* ============================================================
+   COPY BUTTONS
+   ============================================================ */
+document.querySelectorAll('.copy-btn').forEach(btn => {
+  btn.addEventListener('click', () => {
+    const targetId = btn.getAttribute('data-target');
+    const el = document.getElementById(targetId);
+    if (!el) return;
+    navigator.clipboard.writeText(el.textContent).then(() => {
+      btn.textContent = 'Copied!';
+      btn.classList.add('copied');
+      btn.setAttribute('aria-label', 'Copied to clipboard');
+      setTimeout(() => {
+        btn.textContent = 'Copy';
+        btn.classList.remove('copied');
+        btn.setAttribute('aria-label', 'Copy code to clipboard');
+      }, 1800);
+    });
+  });
+});
+
+/* ============================================================
+   CODE TABS
+   ============================================================ */
+function switchTab(clickedTab, targetPaneId) {
+  const tabList = clickedTab.closest('.code-tabs');
+  const panel = clickedTab.closest('.output-panel') || clickedTab.closest('.code-block-wrap') || document;
+  tabList.querySelectorAll('.code-tab').forEach(t => {
+    t.classList.remove('active');
+    t.setAttribute('aria-selected', 'false');
+  });
+  clickedTab.classList.add('active');
+  clickedTab.setAttribute('aria-selected', 'true');
+  // Find all sibling panes
+  const panes = tabList.nextElementSibling;
+  if (panes && panes.classList.contains('code-pane')) {
+    let el = panes;
+    while (el) {
+      el.classList.remove('active');
+      el = el.nextElementSibling && el.nextElementSibling.classList.contains('code-pane') ? el.nextElementSibling : null;
+    }
+  }
+  const target = document.getElementById(targetPaneId);
+  if (target) target.classList.add('active');
+}
+
+/* ============================================================
+   SIDEBAR ACTIVE LINK
+   ============================================================ */
+(function() {
+  const links = document.querySelectorAll('.sidebar-link');
+  const sections = document.querySelectorAll('section[id]');
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        links.forEach(l => l.classList.remove('active'));
+        const match = document.querySelector(`.sidebar-link[href="#${entry.target.id}"]`);
+        if (match) match.classList.add('active');
+      }
+    });
+  }, { rootMargin: '-40% 0px -55% 0px', threshold: 0 });
+  sections.forEach(s => observer.observe(s));
+})();
+
+/* ============================================================
+   QUIZ
+   ============================================================ */
+const quizState = { q1:false,q2:false,q3:false,q4:false,q5:false, answered:{q1:false,q2:false,q3:false,q4:false,q5:false} };
+let quizComplete = false;
+
+function checkAnswer(btn, isCorrect, qId) {
+  if (quizState.answered[qId]) return;
+  quizState.answered[qId] = true;
+  quizState[qId] = isCorrect;
+  const container = document.getElementById(qId);
+  const opts = container.querySelectorAll('.quiz-option');
+  opts.forEach(o => o.disabled = true);
+  if (isCorrect) { btn.classList.add('correct'); }
+  else {
+    btn.classList.add('wrong');
+    opts.forEach(o => { if (o.getAttribute('onclick') && o.getAttribute('onclick').includes('true')) o.classList.add('correct'); });
+  }
+  const feedback = document.getElementById(qId + '-feedback');
+  if (feedback) feedback.classList.add('show');
+  const allAnswered = Object.values(quizState.answered).every(v => v);
+  if (allAnswered && !quizComplete) {
+    quizComplete = true;
+    const score = ['q1','q2','q3','q4','q5'].filter(k => quizState[k]).length;
+    const scoreEl = document.getElementById('quiz-score');
+    if (scoreEl) {
+      scoreEl.classList.add('show');
+      let msg = score === 5 ? 'Perfect score! You understand code generation quality dimensions deeply.' :
+                score >= 3 ? 'Good. Review the questions you missed, then move to M05.' :
+                'Keep reviewing — understanding why tools make different trade-offs is core to choosing the right tool.';
+      scoreEl.innerHTML = `<strong>Score: ${score}/5</strong> — ${msg}`;
+    }
+  }
+}
+
+/* ============================================================
+   ANIMATION 1: GENERATION RACE (BAR CHART)
+   ============================================================ */
+(function() {
+  const canvas = document.getElementById('race-canvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const prefersRM = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const tools = [
+    { label: 'Claude Code', sub: '52 lines · clean generics · typed errors', value: 52, color: '#D4A843' },
+    { label: 'Gemini CLI', sub: '68 lines · ORM-ready · timeout support', value: 68, color: '#4285F4' },
+    { label: 'Copilot CLI', sub: 'Shell scaffold only — no code generated', value: 12, color: '#6E7681', isStub: true },
+  ];
+  let progress = 0;
+  let animId = null;
+  let playing = false;
+  const frames = prefersRM ? 1 : 80;
+
+  function resize() {
+    canvas.width = canvas.offsetWidth * devicePixelRatio;
+    canvas.height = canvas.offsetHeight * devicePixelRatio;
+    ctx.scale(devicePixelRatio, devicePixelRatio);
+    draw(progress);
+  }
+
+  function draw(p) {
+    const W = canvas.offsetWidth, H = canvas.offsetHeight;
+    ctx.clearRect(0, 0, W, H);
+    const padL = 130, padR = 80, barH = 30, gap = 20;
+    const totalH = tools.length * (barH + gap) - gap;
+    const startY = (H - totalH) / 2;
+    const maxW = W - padL - padR;
+    const maxVal = 68;
+
+    tools.forEach((t, i) => {
+      const y = startY + i * (barH + gap);
+      const barW = t.isStub
+        ? (maxW * (t.value / maxVal)) * p * 0.3
+        : (maxW * (t.value / maxVal)) * p;
+
+      ctx.font = '12px Inter, sans-serif';
+      ctx.fillStyle = t.color;
+      ctx.textAlign = 'right';
+      ctx.fillText(t.label, padL - 8, y + barH / 2 - 4);
+      ctx.font = '10px Inter, sans-serif';
+      ctx.fillStyle = '#484F58';
+      ctx.fillText(t.sub, padL - 8, y + barH / 2 + 10);
+
+      // Track
+      ctx.beginPath();
+      ctx.fillStyle = 'rgba(255,255,255,0.03)';
+      ctx.roundRect(padL, y, maxW, barH, 4);
+      ctx.fill();
+
+      // Fill
+      if (barW > 0) {
+        ctx.beginPath();
+        ctx.fillStyle = t.isStub ? t.color + '40' : t.color;
+        ctx.roundRect(padL, y, barW, barH, 4);
+        ctx.fill();
+      }
+
+      if (p > 0.6) {
+        ctx.font = '12px Inter, sans-serif';
+        ctx.fillStyle = t.isStub ? '#484F58' : t.color;
+        ctx.textAlign = 'left';
+        ctx.fillText(t.isStub ? 'N/A (shell only)' : t.value + ' lines', padL + barW + 6, y + barH / 2 + 4);
+      }
+    });
+  }
+
+  function animate() {
+    if (progress < 1) { progress = Math.min(progress + 1/frames, 1); draw(progress); animId = requestAnimationFrame(animate); }
+    else playing = false;
+  }
+
+  document.getElementById('race-play').addEventListener('click', () => { if (!playing) { playing = true; animId = requestAnimationFrame(animate); } });
+  document.getElementById('race-pause').addEventListener('click', () => { if (animId) cancelAnimationFrame(animId); playing = false; });
+  document.getElementById('race-restart').addEventListener('click', () => { if (animId) cancelAnimationFrame(animId); playing = false; progress = 0; draw(0); playing = true; animId = requestAnimationFrame(animate); });
+
+  window.addEventListener('resize', resize);
+  resize();
+  if (prefersRM) { progress = 1; draw(1); } else { playing = true; animId = requestAnimationFrame(animate); }
+})();
+
+/* ============================================================
+   ANIMATION 2: RADAR CHART
+   ============================================================ */
+(function() {
+  const canvas = document.getElementById('radar-canvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const prefersRM = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  const axes = ['Correctness', 'TS Quality', 'Error Handling', 'Test-Ready', 'Conciseness'];
+  const tools = [
+    { label: 'Claude Code', color: '#D4A843', scores: [5,5,5,5,5] },
+    { label: 'Gemini CLI', color: '#4285F4', scores: [5,4,5,4,3] },
+    { label: 'Copilot CLI', color: '#6E7681', scores: [0,0,0,0,4] },
+  ];
+  let progress = 0;
+  let animId = null;
+  let playing = false;
+  const frames = prefersRM ? 1 : 70;
+
+  function resize() {
+    canvas.width = canvas.offsetWidth * devicePixelRatio;
+    canvas.height = canvas.offsetHeight * devicePixelRatio;
+    ctx.scale(devicePixelRatio, devicePixelRatio);
+    draw(progress);
+  }
+
+  function draw(p) {
+    const W = canvas.offsetWidth, H = canvas.offsetHeight;
+    ctx.clearRect(0, 0, W, H);
+
+    const n = axes.length;
+    const centerX = W * 0.38, centerY = H / 2, R = Math.min(W * 0.28, H * 0.38);
+    const angleStep = (2 * Math.PI) / n;
+    const startAngle = -Math.PI / 2;
+
+    // Grid circles
+    for (let level = 1; level <= 5; level++) {
+      ctx.beginPath();
+      for (let i = 0; i < n; i++) {
+        const a = startAngle + i * angleStep;
+        const r = (R * level) / 5;
+        i === 0 ? ctx.moveTo(centerX + r * Math.cos(a), centerY + r * Math.sin(a))
+                : ctx.lineTo(centerX + r * Math.cos(a), centerY + r * Math.sin(a));
+      }
+      ctx.closePath();
+      ctx.strokeStyle = 'rgba(255,255,255,0.06)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
+
+    // Spokes + labels
+    axes.forEach((ax, i) => {
+      const a = startAngle + i * angleStep;
+      ctx.beginPath();
+      ctx.moveTo(centerX, centerY);
+      ctx.lineTo(centerX + R * Math.cos(a), centerY + R * Math.sin(a));
+      ctx.strokeStyle = 'rgba(255,255,255,0.08)';
+      ctx.lineWidth = 1;
+      ctx.stroke();
+
+      const lx = centerX + (R + 22) * Math.cos(a);
+      const ly = centerY + (R + 22) * Math.sin(a);
+      ctx.font = '11px Inter, sans-serif';
+      ctx.fillStyle = '#8B949E';
+      ctx.textAlign = 'center';
+      ctx.fillText(ax, lx, ly + 4);
+    });
+
+    // Polygons
+    tools.forEach(tool => {
+      ctx.beginPath();
+      tool.scores.forEach((score, i) => {
+        const a = startAngle + i * angleStep;
+        const r = (R * score / 5) * p;
+        i === 0 ? ctx.moveTo(centerX + r * Math.cos(a), centerY + r * Math.sin(a))
+                : ctx.lineTo(centerX + r * Math.cos(a), centerY + r * Math.sin(a));
+      });
+      ctx.closePath();
+      ctx.fillStyle = tool.color + '20';
+      ctx.fill();
+      ctx.strokeStyle = tool.color;
+      ctx.lineWidth = 2;
+      ctx.stroke();
+    });
+
+    // Legend
+    const legendX = W * 0.76;
+    tools.forEach((tool, i) => {
+      const ly = H / 2 - 24 + i * 28;
+      ctx.beginPath();
+      ctx.rect(legendX, ly, 14, 14);
+      ctx.fillStyle = tool.color + '30';
+      ctx.fill();
+      ctx.strokeStyle = tool.color;
+      ctx.lineWidth = 2;
+      ctx.strokeRect(legendX, ly, 14, 14);
+      ctx.font = '12px Inter, sans-serif';
+      ctx.fillStyle = tool.color;
+      ctx.textAlign = 'left';
+      ctx.fillText(tool.label, legendX + 20, ly + 11);
+    });
+  }
+
+  function animate() {
+    if (progress < 1) { progress = Math.min(progress + 1/frames, 1); draw(progress); animId = requestAnimationFrame(animate); }
+    else playing = false;
+  }
+
+  document.getElementById('radar-play').addEventListener('click', () => { if (!playing) { playing = true; animId = requestAnimationFrame(animate); } });
+  document.getElementById('radar-pause').addEventListener('click', () => { if (animId) cancelAnimationFrame(animId); playing = false; });
+  document.getElementById('radar-restart').addEventListener('click', () => { if (animId) cancelAnimationFrame(animId); playing = false; progress = 0; draw(0); playing = true; animId = requestAnimationFrame(animate); });
+
+  window.addEventListener('resize', resize);
+  resize();
+  if (prefersRM) { progress = 1; draw(1); } else { playing = true; animId = requestAnimationFrame(animate); }
+})();
+
+/* ============================================================
+   ANIMATION 3: DIFF HIGHLIGHT
+   ============================================================ */
+(function() {
+  const canvas = document.getElementById('diff-canvas');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const prefersRM = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  const columns = [
+    {
+      label: 'Claude Code', color: '#D4A843',
+      adds: ['WHAT/WHY/GOTCHA comments', 'FetchError class (typed)', '4xx vs 5xx distinction', 'Generic <T>', 'Jitter formula'],
+    },
+    {
+      label: 'Gemini CLI', color: '#4285F4',
+      adds: ['AbortController timeout', 'retryOnStatus[] config', 'maxDelay cap', 'ApiResponse<T> wrapper', 'node-fetch polyfill'],
+    },
+    {
+      label: 'Copilot CLI', color: '#6E7681',
+      adds: ['Shell scaffold (npx)', 'env setup suggestion', '(no code output)', '', ''],
+    },
+  ];
+
+  let progress = 0;
+  let animId = null;
+  let playing = false;
+  const frames = prefersRM ? 1 : 80;
+
+  function resize() {
+    canvas.width = canvas.offsetWidth * devicePixelRatio;
+    canvas.height = canvas.offsetHeight * devicePixelRatio;
+    ctx.scale(devicePixelRatio, devicePixelRatio);
+    draw(progress);
+  }
+
+  function draw(p) {
+    const W = canvas.offsetWidth, H = canvas.offsetHeight;
+    ctx.clearRect(0, 0, W, H);
+    const colW = W / 3;
+    const rowH = 30;
+    const headerH = 36;
+
+    columns.forEach((col, ci) => {
+      const x = ci * colW;
+      // Header
+      ctx.fillStyle = col.color + '15';
+      ctx.fillRect(x, 0, colW - 4, headerH);
+      ctx.font = '13px Inter, sans-serif';
+      ctx.fillStyle = col.color;
+      ctx.textAlign = 'center';
+      ctx.fillText(col.label, x + colW / 2, headerH / 2 + 5);
+
+      // Items
+      const visibleCount = Math.floor(col.adds.length * p);
+      col.adds.slice(0, visibleCount).forEach((item, ri) => {
+        if (!item) return;
+        const y = headerH + ri * rowH;
+        const alpha = Math.min(1, (p * col.adds.length - ri));
+        ctx.globalAlpha = Math.max(0, alpha);
+        ctx.fillStyle = col.color + '12';
+        ctx.fillRect(x + 6, y + 4, colW - 16, rowH - 6);
+        ctx.strokeStyle = col.color + '30';
+        ctx.lineWidth = 1;
+        ctx.strokeRect(x + 6, y + 4, colW - 16, rowH - 6);
+        ctx.font = '11.5px Inter, sans-serif';
+        ctx.fillStyle = col.color;
+        ctx.textAlign = 'left';
+        ctx.fillText('+ ' + item, x + 14, y + rowH / 2 + 6);
+        ctx.globalAlpha = 1;
+      });
+    });
+  }
+
+  function animate() {
+    if (progress < 1) { progress = Math.min(progress + 1/frames, 1); draw(progress); animId = requestAnimationFrame(animate); }
+    else playing = false;
+  }
+
+  document.getElementById('diff-play').addEventListener('click', () => { if (!playing) { playing = true; animId = requestAnimationFrame(animate); } });
+  document.getElementById('diff-pause').addEventListener('click', () => { if (animId) cancelAnimationFrame(animId); playing = false; });
+  document.getElementById('diff-restart').addEventListener('click', () => { if (animId) cancelAnimationFrame(animId); playing = false; progress = 0; draw(0); playing = true; animId = requestAnimationFrame(animate); });
+
+  window.addEventListener('resize', resize);
+  resize();
+  if (prefersRM) { progress = 1; draw(1); } else { playing = true; animId = requestAnimationFrame(animate); }
+})();
+</script>
+</body>
+</html>
