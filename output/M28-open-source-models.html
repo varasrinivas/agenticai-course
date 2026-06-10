@@ -327,7 +327,7 @@
       background: var(--bg-secondary);
       border: 1px solid var(--code-border);
       border-radius: 12px;
-      padding: 2rem;
+      padding: 2rem 2rem 4.5rem 2rem;
       margin: 2rem 0;
       position: relative;
       min-height: 260px;
@@ -768,7 +768,7 @@
         <!-- ANIMATION: API_DIFF -->
         <div class="animation-container" id="anim-apidiff" aria-label="API schema comparison animation">
           <div class="animation-title">Animation: Anthropic Messages API vs. OpenAI Chat Completions</div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;" class="anim-live">
+          <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:1rem;" class="anim-live">
             <div>
               <div style="font-family:'JetBrains Mono',monospace;font-size:0.72rem;color:var(--accent-primary);margin-bottom:0.5rem;font-weight:700;">ANTHROPIC MESSAGES API</div>
               <div id="anthropic-json" style="background:var(--code-bg);border-radius:8px;padding:1rem;font-family:'JetBrains Mono',monospace;font-size:0.78rem;line-height:1.7;color:var(--code-text);border:1px solid var(--code-border);"></div>
@@ -811,7 +811,7 @@
         <!-- ANIMATION: OLLAMA_INSTALL -->
         <div class="animation-container" id="anim-ollama" aria-label="Ollama install and model pull animation" style="min-height:240px;">
           <div class="animation-title">Animation: Ollama Install &amp; Model Pull</div>
-          <div class="anim-live" id="ollama-terminal" style="font-family:'JetBrains Mono',monospace;font-size:0.82rem;line-height:1.8;background:var(--code-bg);border-radius:8px;padding:1rem;min-height:160px;color:var(--code-text);border:1px solid var(--code-border);overflow:hidden;">
+          <div class="anim-live" id="ollama-terminal" style="font-family:'JetBrains Mono',monospace;font-size:0.82rem;line-height:1.8;background:var(--code-bg);border-radius:8px;padding:1rem;min-height:160px;max-height:240px;color:var(--code-text);border:1px solid var(--code-border);overflow-y:auto;overflow-x:hidden;">
             <span style="color:var(--success);">$</span> <span id="ollama-cmd-text"></span><span id="ollama-cursor" style="display:inline-block;width:8px;height:1em;background:var(--accent-primary);animation:blink 1s step-end infinite;vertical-align:text-bottom;"></span>
             <div id="ollama-output" style="margin-top:0.5rem;"></div>
           </div>
@@ -1072,10 +1072,12 @@ async function callProvider(baseURL, apiKey, model) {
   return data.choices[0].message.content;
 }
 
-// Claude via Anthropic API
+// Claude via LiteLLM proxy (start: litellm --model claude-sonnet-4-6 --port 4000)
+// Requires ANTHROPIC_API_KEY set in the proxy server's environment, not here.
+// Skip this call if you don't have an Anthropic key — Mistral below works offline.
 const claudeText = await callProvider(
-  'https://api.anthropic.com/v1',
-  process.env.ANTHROPIC_API_KEY,
+  'http://localhost:4000',
+  'any-string',   // LiteLLM proxy handles auth internally
   'claude-sonnet-4-6'
 );
 
@@ -1391,7 +1393,7 @@ ask();</code></pre>
           <div style="display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:1rem;font-size:0.9rem;">
             <div><strong style="display:block;margin-bottom:0.2rem;">What You'll Build</strong><span style="color:var(--text-secondary);">A CLI chat app that runs against Mistral-7B locally, then compare outputs to Claude on the same prompt</span></div>
             <div><strong style="display:block;margin-bottom:0.2rem;">Time Estimate</strong><span style="color:var(--text-secondary);">45-60 min (includes model download ~4 GB)</span></div>
-            <div><strong style="display:block;margin-bottom:0.2rem;">Prerequisites</strong><span style="color:var(--text-secondary);">M01 complete, ANTHROPIC_API_KEY set, ~5 GB free disk space</span></div>
+            <div><strong style="display:block;margin-bottom:0.2rem;">Prerequisites</strong><span style="color:var(--text-secondary);">M01 complete, ~5 GB free disk space. <em>ANTHROPIC_API_KEY optional</em> — only needed in Step 2 to run the Claude side-by-side comparison. Steps 1 and 3 run fully offline.</span></div>
             <div><strong style="display:block;margin-bottom:0.2rem;">Files You'll Create</strong><span style="color:var(--text-secondary);"><code>ollama_hello.py</code>, <code>litellm_swap.py</code>, <code>provider_agnostic_chat.py</code></span></div>
           </div>
         </div>
@@ -1410,9 +1412,10 @@ source venv/bin/activate
 
 pip install anthropic openai litellm python-dotenv
 
-# Create .env file with your Anthropic key
-echo "ANTHROPIC_API_KEY=your-key-here" > .env
-# Windows (PowerShell): Set-Content .env "ANTHROPIC_API_KEY=your-key-here"
+# Optional: set your Anthropic key only if you want to run the Claude comparison in Step 2.
+# Steps 1 and 3 work entirely offline without this key.
+# echo "ANTHROPIC_API_KEY=your-key-here" > .env
+# Windows (PowerShell): # Set-Content .env "ANTHROPIC_API_KEY=your-key-here"
 
 # Install Ollama (macOS/Linux):
 curl -fsSL https://ollama.ai/install.sh | sh
@@ -1611,7 +1614,7 @@ node litellm_swap.mjs         # Node.js</code></pre>
         <details style="margin:0.75rem 0;color:var(--text-secondary);">
           <summary style="cursor:pointer;font-weight:600;">Troubleshooting Step 2</summary>
           <ul style="margin-top:0.5rem;">
-            <li><strong>Claude call fails with AuthenticationError</strong> → check that your <code>.env</code> file has <code>ANTHROPIC_API_KEY=...</code> and that <code>load_dotenv()</code> runs before the LiteLLM call.</li>
+            <li><strong>Claude call fails with AuthenticationError</strong> → the <code>ANTHROPIC_API_KEY</code> is missing or invalid. Add it to your <code>.env</code> file, or skip the Claude call — the Mistral (Ollama) call works without it.</li>
             <li><strong>Mistral call fails with ConnectionError</strong> → Ollama needs to be running. In another terminal: <code>ollama serve</code>.</li>
             <li><strong><code>litellm.exceptions.APIError: ollama/mistral not found</code></strong> → Make sure you pulled the model: <code>ollama pull mistral</code>.</li>
           </ul>
@@ -2024,6 +2027,8 @@ python provider_agnostic_chat.py --provider mistral</code></pre>
         line.style.color = out.color;
         line.textContent = out.text;
         outEl.appendChild(line);
+        const terminal = document.getElementById('ollama-terminal');
+        terminal.scrollTop = terminal.scrollHeight;
         timeout = setTimeout(showOutput, out.delay);
       }
 
