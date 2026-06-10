@@ -238,8 +238,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
 <title>AI Agent Engineering — Interview Study Guide</title>
 <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@600;700;800&family=Source+Sans+3:wght@400;600;700&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
 <style>
-  /* === Ultra-compact 2-column layout === */
-  @page { size: A4; margin: 5mm 5mm 5mm 5mm; }
+  /* === 2-column layout, readable spacing === */
+  @page { size: A4; margin: 14mm 16mm 14mm 16mm; }
   * { box-sizing: border-box; }
 
   :root {
@@ -258,21 +258,21 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     margin: 0; padding: 0;
     background: #fff; color: var(--text-primary);
     font-family: 'Source Sans 3', -apple-system, sans-serif;
-    font-size: 7pt; line-height: 1.28;
+    font-size: 9pt; line-height: 1.5;
     -webkit-print-color-adjust: exact; print-color-adjust: exact;
   }
   h1, h2, h3, h4 { font-family: 'Bricolage Grotesque', sans-serif; color: #0A1628; }
-  h1 { font-size: 11pt; line-height: 1.18; margin: 0.3rem 0 0.15rem; }
-  h2 { font-size: 8.5pt; line-height: 1.2; margin: 0.22rem 0 0.1rem; }
-  h3 { font-size: 7pt; line-height: 1.24; margin: 0.18rem 0 0.08rem; }
-  p  { margin: 0 0 0.18rem; }
-  ul, ol { margin: 0.12rem 0 0.2rem 0.75rem; padding: 0; }
-  li { margin-bottom: 0.08rem; }
+  h1 { font-size: 13pt; line-height: 1.2; margin: 0.5rem 0 0.25rem; }
+  h2 { font-size: 10.5pt; line-height: 1.25; margin: 0.4rem 0 0.2rem; }
+  h3 { font-size: 9pt; line-height: 1.28; margin: 0.3rem 0 0.15rem; }
+  p  { margin: 0 0 0.4rem; }
+  ul, ol { margin: 0.25rem 0 0.4rem 1rem; padding: 0; }
+  li { margin-bottom: 0.2rem; }
   strong { font-weight: 700; }
   a { color: #2563eb; text-decoration: none; }
   code {
-    font-family: 'JetBrains Mono', monospace; font-size: 6pt;
-    background: rgba(99,102,241,0.07); padding: 0.02rem 0.2rem;
+    font-family: 'JetBrains Mono', monospace; font-size: 7.5pt;
+    background: rgba(99,102,241,0.07); padding: 0.05rem 0.3rem;
     border-radius: 2px; border: 1px solid rgba(99,102,241,0.15);
   }
   em { color: var(--text-secondary); font-style: italic; }
@@ -280,113 +280,110 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   /* === Cover: compact banner, full width === */
   .cover {
     text-align: center;
-    padding: 2.5mm 0 2mm;
+    padding: 5mm 0 4mm;
     border-bottom: 1.5px solid #d4a843;
-    margin-bottom: 2mm;
+    margin-bottom: 4mm;
   }
   .cover .eyebrow {
-    font-size: 6pt; letter-spacing: 0.2em; text-transform: uppercase;
+    font-size: 7.5pt; letter-spacing: 0.2em; text-transform: uppercase;
     color: #8a6a1a; font-weight: 700;
   }
   .cover h1 {
-    font-size: 14pt; margin: 0.8mm 0 0.5mm; color: #0A1628;
+    font-size: 18pt; margin: 1.5mm 0 1mm; color: #0A1628;
     font-family: 'Bricolage Grotesque', sans-serif;
   }
   .cover .sub { display: none; }
   .cover ul.coverage { display: none; }
-  .cover .meta { font-size: 6pt; color: #718096; }
+  .cover .meta { font-size: 7.5pt; color: #718096; }
 
   /* === TOC: full-width index, then page break before modules === */
   .toc {
-    padding: 1.5mm 0 2mm;
+    padding: 3mm 0 4mm;
     border-bottom: 1px solid #e2e8f0;
-    margin-bottom: 2mm;
+    margin-bottom: 4mm;
     break-after: always;
   }
-  .toc h1 { font-size: 9pt; margin: 0 0 1mm; }
+  .toc h1 { font-size: 11pt; margin: 0 0 2mm; }
   .toc .toc-hint { display: none; }
-  .toc-list { list-style: none; margin: 0; padding: 0; column-count: 3; column-gap: 3mm; }
+  .toc-list { list-style: none; margin: 0; padding: 0; column-count: 3; column-gap: 5mm; }
   .toc-item { border-bottom: none; break-inside: avoid; }
-  .toc-item a { display: flex; align-items: baseline; gap: 0.3rem; padding: 0.1rem 0; color: #1a1f2e; }
-  .toc-num { flex: 0 0 auto; width: 2.1em;
+  .toc-item a { display: flex; align-items: baseline; gap: 0.4rem; padding: 0.18rem 0; color: #1a1f2e; }
+  .toc-num { flex: 0 0 auto; width: 2.4em;
              font-family: 'Bricolage Grotesque', sans-serif;
-             font-size: 6.5pt; font-weight: 700; color: var(--track-color); white-space: nowrap; }
-  .toc-title { flex: 1 1 auto; font-size: 6.5pt; font-weight: 600; color: #0A1628;
-               line-height: 1.2; min-width: 0; }
+             font-size: 8pt; font-weight: 700; color: var(--track-color); white-space: nowrap; }
+  .toc-title { flex: 1 1 auto; font-size: 8pt; font-weight: 600; color: #0A1628;
+               line-height: 1.3; min-width: 0; }
   .toc-track { display: none; }
 
   /* === Module — each on its own page, 2-column content inside === */
   .module {
     border-top: 3px solid var(--track-color);
-    padding-top: 0.3rem;
+    padding-top: 0.5rem;
     margin-top: 0;
     break-before: always;
   }
   .module.first-module { break-before: auto; }
 
-  /* 2-column layout scoped to each module's card content */
   .module-body-cols {
-    columns: 2;
-    column-gap: 5mm;
-    margin-top: 0.3rem;
+    margin-top: 0.5rem;
   }
   .module-head {
     display: flex; justify-content: space-between; align-items: baseline;
-    gap: 0.3rem; margin-bottom: 0.12rem;
+    gap: 0.4rem; margin-bottom: 0.2rem;
   }
   .module-head .num {
-    font-family: 'Bricolage Grotesque', sans-serif; font-size: 7pt; font-weight: 800;
+    font-family: 'Bricolage Grotesque', sans-serif; font-size: 8.5pt; font-weight: 800;
     color: var(--track-color); letter-spacing: 0.06em; text-transform: uppercase;
     white-space: nowrap;
   }
   .module-head .track {
-    font-size: 5.8pt; color: #4a5568; font-weight: 600;
-    background: var(--bg-surface); padding: 0.04rem 0.28rem; border-radius: 2px;
+    font-size: 7pt; color: #4a5568; font-weight: 600;
+    background: var(--bg-surface); padding: 0.1rem 0.4rem; border-radius: 2px;
   }
   .module h1.module-title {
-    font-size: 11pt; line-height: 1.18; font-weight: 800;
-    margin: 0 0 0.1rem; color: #0A1628;
+    font-size: 13pt; line-height: 1.2; font-weight: 800;
+    margin: 0 0 0.2rem; color: #0A1628;
   }
   .module .module-sub {
-    font-size: 6.5pt; color: #4a5568; font-style: italic;
-    margin: 0 0 0.22rem; line-height: 1.28;
-    padding-bottom: 0.18rem; border-bottom: 1px dotted #d1d5db;
+    font-size: 8pt; color: #4a5568; font-style: italic;
+    margin: 0 0 0.4rem; line-height: 1.4;
+    padding-bottom: 0.3rem; border-bottom: 1px dotted #d1d5db;
   }
 
-  /* === Cards: ultra-tight === */
+  /* === Cards === */
   .mobile-card {
     background: transparent; border: 0;
-    padding: 0.2rem 0 0;
-    margin: 0.28rem 0 0.2rem;
+    padding: 0.35rem 0 0;
+    margin: 0.5rem 0 0.35rem;
     break-inside: avoid;
     border-top: 1px solid #e8edf3;
   }
-  .mobile-card:first-child { border-top: 0; padding-top: 0; margin-top: 0.15rem; }
+  .mobile-card:first-child { border-top: 0; padding-top: 0; margin-top: 0.25rem; }
   .mobile-card h2 {
-    font-size: 8.5pt; line-height: 1.2;
-    margin: 0.1rem 0 0.1rem; color: #0A1628;
+    font-size: 10.5pt; line-height: 1.25;
+    margin: 0.15rem 0 0.15rem; color: #0A1628;
   }
-  .mobile-card h3 { font-size: 7pt; line-height: 1.22; margin: 0.15rem 0 0.08rem; }
+  .mobile-card h3 { font-size: 9pt; line-height: 1.28; margin: 0.25rem 0 0.12rem; }
 
   /* === Card header chip === */
   .card-label, .section-label, .analogy-label {
     display: inline-block;
     font-family: 'Bricolage Grotesque', sans-serif;
-    font-size: 7pt; font-weight: 700;
+    font-size: 8pt; font-weight: 700;
     letter-spacing: 0.04em; text-transform: uppercase;
     color: var(--track-color);
     background: rgba(99, 102, 241, 0.06);
-    padding: 0.1rem 0.38rem 0.1rem 0.32rem;
+    padding: 0.15rem 0.5rem 0.15rem 0.4rem;
     border-radius: 2px;
     border-left: 2px solid var(--track-color);
-    line-height: 1.28;
+    line-height: 1.4;
   }
   .section-label .cl-cluster,
   .card-label .cl-cluster,
   .analogy-label .cl-cluster { color: #0A1628; font-weight: 800; }
   .section-label .cl-sep,
   .card-label .cl-sep,
-  .analogy-label .cl-sep { color: var(--track-color); opacity: 0.5; margin: 0 0.1rem; }
+  .analogy-label .cl-sep { color: var(--track-color); opacity: 0.5; margin: 0 0.15rem; }
   .section-label .cl-type,
   .card-label .cl-type,
   .analogy-label .cl-type { color: var(--track-color); font-weight: 600; }
@@ -394,11 +391,11 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   .concept-chip {
     display: inline-block;
     font-family: 'Bricolage Grotesque', sans-serif;
-    font-size: 6pt; font-weight: 700;
+    font-size: 7pt; font-weight: 700;
     letter-spacing: 0.04em; text-transform: uppercase;
     color: #6a4f0e; background: rgba(212, 168, 67, 0.13);
-    padding: 0.08rem 0.3rem; border-radius: 2px;
-    margin: 0 0 0 0.3rem; vertical-align: middle;
+    padding: 0.1rem 0.4rem; border-radius: 2px;
+    margin: 0 0 0 0.35rem; vertical-align: middle;
   }
 
   /* === Pseudocode === */
@@ -407,8 +404,8 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     border-left: 2px solid var(--code-border);
     border-radius: 0 2px 2px 0;
     font-family: 'JetBrains Mono', monospace;
-    font-size: 6pt; line-height: 1.35;
-    padding: 0.22rem 0.4rem; margin: 0.18rem 0;
+    font-size: 7.5pt; line-height: 1.5;
+    padding: 0.45rem 0.65rem; margin: 0.35rem 0;
     white-space: pre-wrap; word-break: break-word;
     color: #1a1f2e; overflow: visible;
   }
@@ -422,18 +419,18 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     background: rgba(212, 168, 67, 0.08);
     border-left: 2px solid #b8860b;
     border-radius: 0 2px 2px 0;
-    padding: 0.2rem 0.38rem; margin: 0.18rem 0;
-    font-size: 7pt;
+    padding: 0.4rem 0.6rem; margin: 0.35rem 0;
+    font-size: 9pt;
   }
   .takeaway::before {
     content: "Takeaway"; display: block;
     font-family: 'Bricolage Grotesque', sans-serif;
-    font-size: 6pt; font-weight: 800; letter-spacing: 0.1em;
+    font-size: 7pt; font-weight: 800; letter-spacing: 0.1em;
     text-transform: uppercase; color: #8a6a1a;
-    margin-bottom: 0.08rem;
+    margin-bottom: 0.2rem;
   }
   .takeaway h3 { display: none; }
-  .takeaway p { margin: 0 0 0.12rem; }
+  .takeaway p { margin: 0 0 0.25rem; }
   .takeaway p:last-child { margin-bottom: 0; }
 
   /* === Misconceptions === */
@@ -441,15 +438,15 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     background: rgba(244, 63, 94, 0.04);
     border-left: 2px solid #be123c;
     border-radius: 0 2px 2px 0;
-    padding: 0.18rem 0.35rem; margin: 0 0 0.18rem;
+    padding: 0.35rem 0.55rem; margin: 0 0 0.35rem;
   }
   .misconception .icon { display: none; }
   .misconception .wrong, .misconception .myth {
-    display: block; font-weight: 700; color: #be123c; font-size: 7pt;
-    margin-bottom: 0.08rem;
+    display: block; font-weight: 700; color: #be123c; font-size: 9pt;
+    margin-bottom: 0.15rem;
   }
   .misconception .right, .misconception .reality {
-    color: #2d3748; font-size: 7pt; line-height: 1.3;
+    color: #2d3748; font-size: 9pt; line-height: 1.45;
   }
 
   /* === Analogy box === */
@@ -457,78 +454,78 @@ HTML_TEMPLATE = """<!DOCTYPE html>
     background: rgba(212, 168, 67, 0.06);
     border-left: 2px solid #b8860b;
     border-radius: 0 2px 2px 0;
-    padding: 0.2rem 0.38rem; margin: 0.18rem 0;
+    padding: 0.4rem 0.6rem; margin: 0.35rem 0;
   }
-  .analogy-box p { margin: 0 0 0.15rem; font-size: 7pt; }
+  .analogy-box p { margin: 0 0 0.3rem; font-size: 9pt; }
   .analogy-box p:last-child { margin-bottom: 0; }
 
   /* === Step list === */
   .step-list, .steps-list {
-    list-style: none; counter-reset: step; margin: 0.15rem 0; padding: 0;
+    list-style: none; counter-reset: step; margin: 0.3rem 0; padding: 0;
   }
   .step-list li, .steps-list li {
     counter-increment: step; position: relative;
-    padding: 0.18rem 0.25rem 0.18rem 1.3rem;
-    margin-bottom: 0.14rem;
+    padding: 0.3rem 0.4rem 0.3rem 1.6rem;
+    margin-bottom: 0.25rem;
     background: rgba(99, 102, 241, 0.04);
     border-left: 1.5px solid var(--track-color);
     border-radius: 0 2px 2px 0;
-    font-size: 7pt; color: #2d3748;
+    font-size: 9pt; color: #2d3748;
   }
   .step-list li::before, .steps-list li::before {
-    content: counter(step); position: absolute; left: 0.22rem; top: 0.22rem;
-    width: 0.78rem; height: 0.78rem; border-radius: 50%;
+    content: counter(step); position: absolute; left: 0.3rem; top: 0.32rem;
+    width: 0.95rem; height: 0.95rem; border-radius: 50%;
     background: var(--track-color); color: #fff;
-    font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 5.5pt;
+    font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 6.5pt;
     display: flex; align-items: center; justify-content: center; line-height: 1;
   }
   .step-list li strong, .steps-list li strong {
-    display: block; margin-bottom: 0.06rem; color: #0A1628;
+    display: block; margin-bottom: 0.1rem; color: #0A1628;
     font-family: 'Bricolage Grotesque', sans-serif;
   }
 
   /* === Tables === */
   table, .compare-table, .framework-table, .decision-table, .domain-table {
     display: table !important; border-collapse: collapse;
-    font-size: 6.5pt; width: 100%; margin: 0.18rem 0; break-inside: avoid;
+    font-size: 8pt; width: 100%; margin: 0.35rem 0; break-inside: avoid;
   }
   thead { display: table-header-group; }
   tbody { display: table-row-group; }
   tr { display: table-row; }
-  th, td { display: table-cell; padding: 0.18rem 0.3rem; border-bottom: 1px solid #e2e8f0; vertical-align: top; }
+  th, td { display: table-cell; padding: 0.3rem 0.45rem; border-bottom: 1px solid #e2e8f0; vertical-align: top; }
   th { background: var(--bg-surface); font-family: 'Bricolage Grotesque', sans-serif;
-       font-weight: 700; font-size: 6.2pt; text-align: left; color: var(--text-secondary);
+       font-weight: 700; font-size: 7.5pt; text-align: left; color: var(--text-secondary);
        text-transform: uppercase; letter-spacing: 0.03em; }
 
   /* === Grid "tables" === */
-  .pattern-grid { display: block; margin: 0.18rem 0; border-top: 1px solid #e2e8f0; }
+  .pattern-grid { display: block; margin: 0.35rem 0; border-top: 1px solid #e2e8f0; }
   .pattern-row {
-    display: grid; grid-template-columns: 2.1rem 1fr; gap: 0.3rem;
-    padding: 0.18rem 0.22rem; border-bottom: 1px solid #e2e8f0;
-    break-inside: avoid; font-size: 7pt;
+    display: grid; grid-template-columns: 2.4rem 1fr; gap: 0.4rem;
+    padding: 0.3rem 0.35rem; border-bottom: 1px solid #e2e8f0;
+    break-inside: avoid; font-size: 9pt;
   }
   .pattern-row .pn {
     font-family: 'JetBrains Mono', monospace; font-weight: 700;
-    color: var(--track-color); font-size: 6.5pt; align-self: center;
+    color: var(--track-color); font-size: 8pt; align-self: center;
   }
   .pattern-row .pname {
     display: block; font-weight: 700; color: #0A1628;
-    font-family: 'Bricolage Grotesque', sans-serif; font-size: 7pt;
+    font-family: 'Bricolage Grotesque', sans-serif; font-size: 9pt;
   }
-  .pattern-row .psub { display: block; font-size: 6.5pt; color: #4a5568; margin-top: 0.05rem; }
+  .pattern-row .psub { display: block; font-size: 8pt; color: #4a5568; margin-top: 0.08rem; }
 
-  .compare-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.3rem; margin: 0.2rem 0; }
+  .compare-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 0.4rem; margin: 0.35rem 0; }
   .compare-card {
     background: var(--bg-surface); border: 1px solid #e2e8f0; border-radius: 3px;
-    padding: 0.28rem 0.38rem; break-inside: avoid; font-size: 6.5pt;
+    padding: 0.4rem 0.55rem; break-inside: avoid; font-size: 8pt;
   }
   .compare-card .ttl {
-    font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 7pt;
-    margin-bottom: 0.15rem; padding-bottom: 0.12rem; border-bottom: 1px solid #e2e8f0;
+    font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 9pt;
+    margin-bottom: 0.25rem; padding-bottom: 0.2rem; border-bottom: 1px solid #e2e8f0;
   }
   .compare-card .row {
-    display: flex; justify-content: space-between; gap: 0.3rem;
-    padding: 0.1rem 0; border-bottom: 1px dotted #e2e8f0;
+    display: flex; justify-content: space-between; gap: 0.35rem;
+    padding: 0.15rem 0; border-bottom: 1px dotted #e2e8f0;
   }
   .compare-card .row:last-child { border-bottom: 0; }
   .compare-card .row > span:first-child { color: #4a5568; }
@@ -538,16 +535,16 @@ HTML_TEMPLATE = """<!DOCTYPE html>
   .col-sdk  { color: #10B981; font-weight: 700; }
   .col-spec { color: #B45309; font-weight: 700; }
 
-  .track-row { display: flex; flex-wrap: wrap; gap: 0.25rem; margin: 0.15rem 0; font-size: 6.5pt; }
-  .track-row .pill { background: var(--bg-surface); border: 1px solid #e2e8f0; padding: 0.04rem 0.3rem; border-radius: 999px; color: #4a5568; }
+  .track-row { display: flex; flex-wrap: wrap; gap: 0.3rem; margin: 0.25rem 0; font-size: 8pt; }
+  .track-row .pill { background: var(--bg-surface); border: 1px solid #e2e8f0; padding: 0.08rem 0.4rem; border-radius: 999px; color: #4a5568; }
 
   /* === SVG diagrams === */
   .diagram-container, .agent-diagram, .analogy-svg-wrap {
     background: transparent; border: 1px solid #e2e8f0;
-    border-radius: 2px; padding: 0.3rem;
-    margin: 0.2rem 0; text-align: center; break-inside: avoid;
+    border-radius: 2px; padding: 0.4rem;
+    margin: 0.35rem 0; text-align: center; break-inside: avoid;
   }
-  svg { max-width: 100%; max-height: 50mm; height: auto; display: block; margin: 0 auto; }
+  svg { max-width: 100%; max-height: 55mm; height: auto; display: block; margin: 0 auto; }
   svg [fill="#0A1628" i], svg [fill="#162033" i],
   svg [fill="#111D33" i], svg [fill="#1A2740" i] { fill: transparent; }
 
