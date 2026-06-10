@@ -237,7 +237,7 @@
 
         <div class="tech-def-box">
           <span class="box-label">Technical Definition</span>
-          When you call the <span class="term-tooltip" tabindex="0" aria-describedby="tt-msgapi">Messages API<span class="tooltip-content" role="tooltip" id="tt-msgapi">Anthropic's primary API for interacting with the model. You send a list of role-tagged messages and receive a response. Supports system prompts, tool use, streaming, and more.</span></span>, you send two things. First, a <code>system</code> parameter &mdash; a string of persistent instructions that the model always follows but the end user never sees. Second, a <code>messages</code> array &mdash; a list of objects, each tagged with a <code>role</code>.
+          When you call the <span class="term-tooltip" tabindex="0" aria-describedby="tt-msgapi">Chat Completions API<span class="tooltip-content" role="tooltip" id="tt-msgapi">The OpenAI-compatible API for interacting with the model (exposed by Ollama at <code>http://localhost:11434/v1</code>). You send a list of role-tagged messages and receive a response. Supports system prompts, tool use, streaming, and more.</span></span>, you send two things. First, a <code>system</code> parameter &mdash; a string of persistent instructions that the model always follows but the end user never sees. Second, a <code>messages</code> array &mdash; a list of objects, each tagged with a <code>role</code>.
           <br><br>The roles must strictly alternate: <code>"user"</code> (what the human says) then <code>"assistant"</code> (what the model said previously). Think of it as handing the model the full script of the conversation so far, plus the director's notes. the model reads the entire array as one seamless context and generates the next assistant turn. It does not "remember" anything from previous API calls &mdash; each request starts from scratch.
         </div>
 
@@ -571,27 +571,29 @@ Think step by step:
 # Total input: system prompt + all 5 messages. You pay for ALL of it.</code></pre>
         </div>
 
-        <p><strong>And here's the response object you get back:</strong> The key fields are <code>content</code> (the model's answer), <code>stop_reason</code> (why it stopped), and <code>usage</code> (your token bill):</p>
+        <p><strong>And here's the response object you get back:</strong> The key fields are <code>choices[0].message.content</code> (the model's answer), <code>finish_reason</code> (why it stopped), and <code>usage</code> (your token bill):</p>
         <div class="code-single">
           <pre><code class="language-python"># What you get back from client.chat.completions.create(...)
+# response.choices[0]:
 {
-  "role": "assistant",
-  "content": [{"type": "text", "text": "Use sorted()..."}],
-  "stop_reason": "end_turn",       # "end_turn" = finished naturally
-                                    # "max_tokens" = hit the limit
-                                    # "tool_use" = wants to call a tool
-  "usage": {
-    "input_tokens": 35,            # what you sent (you pay for this)
-    "output_tokens": 52            # what the model generated (costs more)
-  }
+  "message": {"role": "assistant", "content": "Use sorted()..."},
+  "finish_reason": "stop",         # "stop"       = finished naturally
+                                    # "length"     = hit the token limit
+                                    # "tool_calls" = wants to call a tool
+}
+# response.usage:
+{
+  "prompt_tokens": 35,             # what you sent (you pay for this)
+  "completion_tokens": 52          # what the model generated (costs more)
+}
 }</code></pre>
         </div>
 
         <div class="tech-def-box">
           <span class="box-label">Technical Definition</span>
           Each API call is <span class="term-tooltip" tabindex="0" aria-describedby="tt-stateless">stateless<span class="tooltip-content" role="tooltip" id="tt-stateless">the model has no memory between API calls. Each request is independent. If you want the model to "remember" a conversation, your code must send the full message history with every request.</span></span>. Here's what that means step by step.
-          <br><br>First, your code constructs the full messages array. That array contains three things: the system prompt, the conversation history, and the new user message. Second, you send that array to the API. Third, you receive back a <span class="term-tooltip" tabindex="0" aria-describedby="tt-completion">completion<span class="tooltip-content" role="tooltip" id="tt-completion">The model's generated response to your prompt. A completion includes the assistant's content blocks, a stop_reason (why generation stopped), and usage metadata (input/output token counts).</span></span>.
-          <br><br>The completion contains three things. The assistant's response text is the main one. Next is <code><span class="term-tooltip" tabindex="0" aria-describedby="tt-stopreason">stop_reason<span class="tooltip-content" role="tooltip" id="tt-stopreason">A field in the API response that tells you why the model stopped generating. Common values: "stop" (finished naturally), "length" (hit the token limit), "tool_calls" (wants to call a tool).</span></span></code>, which tells you why the model stopped generating. Finally, the <code>usage</code> metadata shows how many tokens were consumed.
+          <br><br>First, your code constructs the full messages array. That array contains three things: the system prompt, the conversation history, and the new user message. Second, you send that array to the API. Third, you receive back a <span class="term-tooltip" tabindex="0" aria-describedby="tt-completion">completion<span class="tooltip-content" role="tooltip" id="tt-completion">The model's generated response to your prompt. A completion includes the assistant's message content, a finish_reason (why generation stopped), and usage metadata (token counts).</span></span>.
+          <br><br>The completion contains three things. The assistant's response text is the main one. Next is <code><span class="term-tooltip" tabindex="0" aria-describedby="tt-stopreason">finish_reason<span class="tooltip-content" role="tooltip" id="tt-stopreason">A field in the API response that tells you why the model stopped generating. Common values: "stop" (finished naturally), "length" (hit the token limit), "tool_calls" (wants to call a tool).</span></span></code>, which tells you why the model stopped generating. Finally, the <code>usage</code> metadata shows how many tokens were consumed.
           <br><br>As you learned in M02, every token in this loop &mdash; including the history you resend each time &mdash; counts toward cost and <span class="term-tooltip" tabindex="0" aria-describedby="tt-ctxwin">context window<span class="tooltip-content" role="tooltip" id="tt-ctxwin">The fixed-size token buffer for a single API call. Everything &mdash; system prompt, history, user message, and response &mdash; must fit. Mistral-7B supports 32K tokens; larger models like Mixtral-8x7B also support 32K.</span></span> limits.
         </div>
 
@@ -634,7 +636,7 @@ Think step by step:
         <div class="callout-warning">
           <span class="box-label">⚠️ Common Misconceptions</span>
           <p><strong>"the model remembers my previous API calls, right?"</strong> &mdash; No. Every API call is completely independent. the model has zero memory between requests. The "conversation" is an illusion created by your code assembling and resending the full message history each time. If you don't include previous messages, the model has no idea they happened.</p>
-          <p><strong>"<code>stop_reason: 'end_turn'</code> means the response is complete and correct."</strong> &mdash; It means the model finished generating naturally, not that the answer is right. the model can confidently produce wrong answers and still stop with <code>end_turn</code>. Always validate the content, not just the stop reason.</p>
+          <p><strong>"<code>finish_reason: 'stop'</code> means the response is complete and correct."</strong> &mdash; It means the model finished generating naturally, not that the answer is right. The model can confidently produce wrong answers and still stop with <code>finish_reason: "stop"</code>. Always validate the content, not just the finish reason.</p>
           <p style="margin-bottom:0;"><strong>"I can save tokens by only sending the last 2-3 messages."</strong> &mdash; You can, but the model will lose all context from earlier in the conversation. It's a tradeoff. If Turn 1 established important constraints ("only use Python 3.10+ features") and you drop it, the model won't know about that constraint anymore. M08 teaches smarter approaches like progressive summarization that compress context without losing critical information.</p>
         </div>
       </section>
@@ -1044,7 +1046,7 @@ try {
         <div class="code-single">
           <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy setup commands">Copy</button>
           <pre><code class="language-bash">pip install openai           # or: npm install openai
-export ANTHROPIC_API_KEY="your-key-here"  # or (Windows): set ANTHROPIC_API_KEY=your-key-here</code></pre>
+# No API key needed — Ollama runs locally (ollama serve)</code></pre>
         </div>
 
         <h3 id="step1-heading">Step 1: Build a Code Review System Prompt</h3>
@@ -1159,7 +1161,7 @@ Tokens: 185 in, 92 out</div>
           <summary style="cursor:pointer; font-weight:600;">Troubleshooting</summary>
           <ul style="margin-top:0.5rem;">
             <li><strong><code>ModuleNotFoundError: No module named 'openai'</code></strong> &mdash; Run <code>pip install openai</code> to install the SDK.</li>
-            <li><strong><code>AuthenticationError: Could not resolve API key</code></strong> &mdash; Make sure you've set <code>export ANTHROPIC_API_KEY="sk-..."</code> in your terminal (or <code>set ANTHROPIC_API_KEY=sk-...</code> on Windows).</li>
+            <li><strong><code>Connection refused</code></strong> &mdash; Ollama must be running. Start it with <code>ollama serve</code> in a separate terminal window.</li>
             <li><strong>The model doesn't follow the output format</strong> &mdash; Make sure the <code>&lt;output_format&gt;</code> XML tags are inside the <code>system</code> parameter, not in the <code>messages</code> array. System-level instructions get higher priority.</li>
           </ul>
         </details>
@@ -1289,7 +1291,7 @@ Response:
           <summary style="cursor:pointer; font-weight:600;">Troubleshooting</summary>
           <ul style="margin-top:0.5rem;">
             <li><strong><code>ModuleNotFoundError: No module named 'openai'</code></strong> &mdash; Run <code>pip install openai</code> to install the SDK.</li>
-            <li><strong><code>AuthenticationError</code></strong> &mdash; Check your <code>ANTHROPIC_API_KEY</code> environment variable is set correctly.</li>
+            <li><strong><code>Connection refused</code></strong> &mdash; Ollama must be running. Start it with <code>ollama serve</code>.</li>
             <li><strong>Only one or two patterns print</strong> &mdash; One of the API calls may have hit a rate limit. Wait a few seconds and re-run. The loop will resume from the failed pattern.</li>
           </ul>
         </details>

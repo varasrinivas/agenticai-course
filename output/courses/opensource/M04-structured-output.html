@@ -311,7 +311,7 @@
       }
     }
   ],
-  "stop_reason": "tool_use"        # ← stopped because it wants to call a tool
+  "finish_reason": "tool_calls"    # ← stopped because it wants to call a tool
 }</code></pre>
         </div>
 
@@ -388,7 +388,7 @@
               <text x="240" y="32" class="tf-label" fill="var(--track-foundations, #6366F1)" text-anchor="middle">The model</text>
               <text x="240" y="50" class="tf-body" text-anchor="middle">reads tool definitions</text>
               <text x="240" y="66" class="tf-body" text-anchor="middle">picks extract_contact</text>
-              <text x="240" y="80" class="tf-mono" fill="var(--accent-primary, #D4A843)" text-anchor="middle">stop_reason: "tool_use"</text>
+              <text x="240" y="80" class="tf-mono" fill="var(--accent-primary, #D4A843)" text-anchor="middle">finish_reason: "tool_calls"</text>
             </g>
             <!-- Arrow 2→3 -->
             <g class="tf-step">
@@ -424,7 +424,7 @@
               <rect x="170" y="112" width="140" height="56" rx="8" fill="rgba(99,102,241,0.1)" stroke="var(--track-foundations, #6366F1)" stroke-width="1.5"/>
               <text x="240" y="132" class="tf-label" fill="var(--track-foundations, #6366F1)" text-anchor="middle">The model (again)</text>
               <text x="240" y="148" class="tf-body" text-anchor="middle">receives tool_result</text>
-              <text x="240" y="162" class="tf-mono" fill="var(--accent-primary, #D4A843)" text-anchor="middle">stop_reason: "end_turn"</text>
+              <text x="240" y="162" class="tf-mono" fill="var(--accent-primary, #D4A843)" text-anchor="middle">finish_reason: "stop"</text>
             </g>
             <!-- Arrow 5→6 (left) -->
             <g class="tf-step">
@@ -476,7 +476,7 @@
           Reliable structured output uses a <strong>defense-in-depth</strong> strategy &mdash; meaning you stack multiple safety layers so that if one fails, the next catches the problem. Here are the three layers and what each one actually does:
           <br><br><strong>Layer 1 &mdash; Format constraints:</strong> This is where you use tool use or careful prompt engineering to make the model emit valid JSON in the first place. Think of it as building the output in the right shape from the start.
           <br><strong>Layer 2 &mdash; Stop sequences:</strong> These are strings (like <code>}</code> or <code>]</code>) that you tell the API to watch for. When the model generates one of these strings, it immediately stops producing more text. This prevents the model from appending conversational text after your JSON object.
-          <br>You set them in the API request as <code>"stop_sequences": ["}"]</code>. the model generates tokens until it hits that closing brace, then halts. The response's <code>stop_reason</code> will be <code>"stop_sequence"</code> instead of <code>"end_turn"</code>, so your code can tell exactly why generation stopped. Note: stop sequences are most useful for prompt-based JSON extraction. When you use tool use (Layer 1), you don't need them because tool_use blocks are already bounded.
+          <br>You set them in the API request as <code>"stop": ["}"]</code>. The model generates tokens until it hits that closing brace, then halts. The response's <code>finish_reason</code> will be <code>"stop"</code>. Note: stop sequences are most useful for prompt-based JSON extraction. When you use tool use (Layer 1), you don't need them because tool_calls are already bounded.
           <br><strong>Layer 3 &mdash; <span class="term-tooltip" tabindex="0" aria-describedby="tt-schemaval">Schema validation<span class="tooltip-content" role="tooltip" id="tt-schemaval">The process of checking that a data structure matches an expected format &mdash; verifying that required fields exist, types are correct, and values are within allowed ranges. Implemented with Pydantic (Python) or Zod (TypeScript).</span></span>:</strong> Even if the JSON is syntactically valid, it might have the wrong fields or types. Schema validation checks three things: Does every required field exist? Does every value have the correct type? Did any unexpected data sneak in? When all three layers are active, you approach near-100% valid structured output.
         </div>
 
@@ -994,12 +994,12 @@ async function extractWithRetry(text, maxRetries = 3) {
         <div class="code-single">
           <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy setup commands">Copy</button>
           <pre><code class="language-bash"># Python
-pip install "anthropic>=0.40.0" "pydantic>=2.0"
-export ANTHROPIC_API_KEY="your-key-here"
+pip install openai "pydantic>=2.0"
+# No API key needed — Ollama runs locally (ollama serve)
 
 # Node.js
 npm install openai zod
-export ANTHROPIC_API_KEY="your-key-here"</code></pre>
+# No API key needed — Ollama runs locally (ollama serve)</code></pre>
         </div>
 
         <h3 id="step1-heading">Step 1: Define the Schema and Test Data</h3>
@@ -1294,7 +1294,7 @@ Extracted: J. &lt;j@co.com&gt;</div>
           <ul style="margin-top:0.5rem;">
             <li><strong><code>ModuleNotFoundError: No module named 'pydantic'</code></strong> &mdash; Run <code>pip install pydantic>=2.0</code>. Pydantic v2 is required for <code>model_json_schema()</code>.</li>
             <li><strong><code>Cannot find module 'zod'</code></strong> &mdash; Run <code>npm install zod</code>.</li>
-            <li><strong>All 5 extractions fail</strong> &mdash; Check your API key is set. Run <code>echo $ANTHROPIC_API_KEY</code> to verify (Linux/Mac) or <code>echo %ANTHROPIC_API_KEY%</code> (Windows).</li>
+            <li><strong>All 5 extractions fail</strong> &mdash; Check Ollama is running: <code>curl http://localhost:11434/v1/models</code>. If it fails, run <code>ollama serve</code>.</li>
             <li><strong>Retry loop takes too long</strong> &mdash; Exponential backoff means waits of 2s, 4s, 8s. If testing, reduce <code>max_retries</code> to 2 or remove the <code>time.sleep()</code> temporarily.</li>
             <li><strong><code>RuntimeError: Failed after 3 attempts</code></strong> &mdash; This is expected for very ambiguous input. The circuit breaker worked correctly. Try a cleaner test signature to confirm the pipeline works.</li>
           </ul>

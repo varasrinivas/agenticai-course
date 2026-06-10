@@ -222,7 +222,7 @@
 
         <div class="tech-def-box">
           <span class="box-label">Technical Definition</span>
-          <p>When you call the <span class="term-tooltip" tabindex="0" aria-describedby="tt-messagesapi">Messages API<span class="tooltip-content" role="tooltip" id="tt-messagesapi">Anthropic's primary API for interacting with the model. You send a list of messages (user/assistant turns) and receive the model's response. It supports text generation, tool use, vision, and streaming. All modern the model integrations use the Messages API.</span></span>, you can include a <code>tools</code> parameter &mdash; an array of <span class="term-tooltip" tabindex="0" aria-describedby="tt-tooldef">tool definitions<span class="tooltip-content" role="tooltip" id="tt-tooldef">A JSON object describing a function the model can call. Each tool has a name, description (critical for the model's selection), and an input_schema (JSON Schema) specifying the expected parameters with types and descriptions.</span></span> that describe what functions the model is allowed to request.</p>
+          <p>When you call the <span class="term-tooltip" tabindex="0" aria-describedby="tt-messagesapi">Chat Completions API<span class="tooltip-content" role="tooltip" id="tt-messagesapi">The OpenAI-compatible API for interacting with the model. You send a list of messages (user/assistant turns) and receive the model's response. It supports text generation, tool use, vision, and streaming. Ollama exposes this API at <code>http://localhost:11434/v1</code>.</span></span>, you can include a <code>tools</code> parameter &mdash; an array of <span class="term-tooltip" tabindex="0" aria-describedby="tt-tooldef">tool definitions<span class="tooltip-content" role="tooltip" id="tt-tooldef">A JSON object describing a function the model can call. Each tool has a name, description (critical for the model's selection), and an input_schema (JSON Schema) specifying the expected parameters with types and descriptions.</span></span> that describe what functions the model is allowed to request.</p>
           <p>Each definition has three parts. First, a <strong>name</strong> &mdash; this is how your code identifies which function was called. Second, a <strong>description</strong> &mdash; the plain-English explanation the model reads to decide when this tool is useful. Third, an <strong>input_schema</strong> &mdash; a JSON Schema object that specifies what arguments the function accepts, their types, and which ones are required. Of these three, the description matters most &mdash; it's what the model uses to decide which tool fits the user's request.</p>
           <p>Here's the key idea: <strong>the model never runs your code.</strong> When the model decides it needs a tool, it stops generating text and instead returns a <span class="term-tooltip" tabindex="0" aria-describedby="tt-tooluse">tool_use content block<span class="tooltip-content" role="tooltip" id="tt-tooluse">A content block in the model's response with type "tool_use". It contains the tool's name, a unique ID, and an input object with the arguments the model wants to pass. Your code reads this block, executes the function, and sends back the result.</span></span>. In plain terms, it's a structured JSON object that says "I want to call <code>get_weather</code> with <code>{city: "Tokyo"}</code>." Your application code reads that request, runs the actual function on your server, and sends the output back as a <span class="term-tooltip" tabindex="0" aria-describedby="tt-toolresult">tool_result message<span class="tooltip-content" role="tooltip" id="tt-toolresult">A message you send back to the model containing the output of the tool execution. It must reference the tool_use_id from the model's request. The model incorporates this result to formulate its final response.</span></span>. the model then uses that result to write its final answer.</p>
           <p>Why this design? Because it keeps <strong>you in control</strong>. the model can suggest calling any tool you've defined, but your code is the gatekeeper &mdash; you validate inputs, enforce rate limits, check permissions, and decide whether to actually execute. This separation of "deciding what to do" (the model) from "actually doing it" (your code) is what makes tool use safe for production systems.</p>
@@ -274,13 +274,13 @@
             <div class="loop-arrow" id="la-arr1">&#8595;</div>
             <div class="loop-step actor-claude" id="ls-2" style="position:relative;"><span class="step-num">2</span><span class="step-label">the model receives message + tool definitions</span><span class="step-data">tools: [get_weather, calculate]</span><span class="loop-annotation" id="la-2">the model sees your tools array</span></div>
             <div class="loop-arrow" id="la-arr2">&#8595;</div>
-            <div class="loop-step actor-claude" id="ls-3" style="position:relative;"><span class="step-num">3</span><span class="step-label">the model returns tool_use block</span><span class="step-data">get_weather({city: "Tokyo"})</span><span class="loop-annotation" id="la-3">stop_reason: "tool_use"</span></div>
+            <div class="loop-step actor-claude" id="ls-3" style="position:relative;"><span class="step-num">3</span><span class="step-label">the model returns tool call</span><span class="step-data">get_weather({city: "Tokyo"})</span><span class="loop-annotation" id="la-3">finish_reason: "tool_calls"</span></div>
             <div class="loop-arrow" id="la-arr3">&#8595;</div>
             <div class="loop-step actor-you" id="ls-4" style="position:relative;"><span class="step-num" style="background:var(--success);">4</span><span class="step-label">YOUR CODE executes the function</span><span class="step-data">result: {temp: 22, condition: "sunny"}</span><span class="loop-annotation" id="la-4">You control execution!</span></div>
             <div class="loop-arrow" id="la-arr4">&#8595;</div>
             <div class="loop-step actor-you" id="ls-5" style="position:relative;"><span class="step-num" style="background:var(--success);">5</span><span class="step-label">You send tool_result back to the model</span><span class="step-data">tool_result: {temp: 22, ...}</span><span class="loop-annotation" id="la-5">Include the tool_use_id</span></div>
             <div class="loop-arrow" id="la-arr5">&#8595;</div>
-            <div class="loop-step actor-claude" id="ls-6" style="position:relative;"><span class="step-num">6</span><span class="step-label">The model formulates final response</span><span class="step-data">"It's 22&deg;C and sunny in Tokyo!"</span><span class="loop-annotation" id="la-6">stop_reason: "end_turn"</span></div>
+            <div class="loop-step actor-claude" id="ls-6" style="position:relative;"><span class="step-num">6</span><span class="step-label">The model formulates final response</span><span class="step-data">"It's 22&deg;C and sunny in Tokyo!"</span><span class="loop-annotation" id="la-6">finish_reason: "stop"</span></div>
           </div>
           <div style="display:flex;gap:1rem;justify-content:center;margin-top:0.75rem;font-size:0.72rem;font-family:'JetBrains Mono',monospace;">
             <span style="color:var(--info);">&#9632; User</span>
@@ -296,9 +296,9 @@
         </div>
 
         <!-- Diagram: Tool Use Loop — Circular Flow (SVG) -->
-        <div class="animation-container" style="min-height:auto;padding-bottom:1.5rem;" aria-label="Circular flow diagram of the tool use loop: send message, check stop_reason, if tool_use execute and loop back, if end_turn return response">
+        <div class="animation-container" style="min-height:auto;padding-bottom:1.5rem;" aria-label="Circular flow diagram of the tool use loop: send message, check finish_reason, if tool_calls execute and loop back, if stop return response">
           <div class="animation-title">Diagram: The Tool Use Loop — Circular Flow</div>
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 580 400" style="width:100%;max-width:580px;display:block;margin:0 auto;" role="img" aria-label="Circular diagram: Send message to the model, check stop_reason, branch to tool_use (execute tool and loop) or end_turn (return response)">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 580 400" style="width:100%;max-width:580px;display:block;margin:0 auto;" role="img" aria-label="Circular diagram: Send message to the model, check finish_reason, branch to tool_calls (execute tool and loop) or stop (return response)">
             <style>
               .cl-label { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 11px; }
               .cl-body { font-family: 'Source Sans 3', sans-serif; font-size: 10.5px; fill: var(--text-primary, #E8ECF1); }
@@ -340,16 +340,16 @@
             <g class="cl-fade">
               <line x1="290" y1="66" x2="290" y2="98" class="cl-arrow" stroke="var(--text-muted, #64748B)"/>
             </g>
-            <!-- Step B: Check stop_reason (diamond) -->
+            <!-- Step B: Check finish_reason (diamond) -->
             <g class="cl-fade">
               <polygon points="290,100 400,155 290,210 180,155" fill="rgba(212,168,67,0.1)" stroke="var(--accent-primary, #D4A843)" stroke-width="2"/>
               <text x="290" y="148" class="cl-label" fill="var(--accent-primary, #D4A843)" text-anchor="middle">Check</text>
-              <text x="290" y="164" class="cl-label" fill="var(--accent-primary, #D4A843)" text-anchor="middle">stop_reason</text>
+              <text x="290" y="164" class="cl-label" fill="var(--accent-primary, #D4A843)" text-anchor="middle">finish_reason</text>
             </g>
             <!-- Branch LEFT: "tool_use" -->
             <g class="cl-fade">
               <line x1="180" y1="155" x2="108" y2="155" class="cl-arrow" stroke="#8B5CF6" marker-end="url(#cl-arrowhead-purple)"/>
-              <text x="144" y="145" class="cl-mono" fill="#8B5CF6" text-anchor="middle">"tool_use"</text>
+              <text x="144" y="145" class="cl-mono" fill="#8B5CF6" text-anchor="middle">"tool_calls"</text>
             </g>
             <!-- Step C: Execute tool (left side) -->
             <g class="cl-fade">
@@ -362,7 +362,7 @@
             <g class="cl-fade">
               <rect x="10" y="210" width="96" height="58" rx="8" fill="rgba(16,185,129,0.08)" stroke="var(--success, #10B981)" stroke-width="1" stroke-dasharray="4 2"/>
               <text x="58" y="232" class="cl-label" fill="var(--success, #10B981)" text-anchor="middle">Append</text>
-              <text x="58" y="248" class="cl-label" fill="var(--success, #10B981)" text-anchor="middle">tool_result</text>
+              <text x="58" y="248" class="cl-label" fill="var(--success, #10B981)" text-anchor="middle">tool result</text>
               <text x="58" y="262" class="cl-mono" fill="var(--text-muted, #64748B)" text-anchor="middle">to messages[]</text>
             </g>
             <!-- Arrow C→D -->
@@ -376,7 +376,7 @@
             <!-- Branch RIGHT: "end_turn" -->
             <g class="cl-fade">
               <line x1="400" y1="155" x2="440" y2="155" class="cl-arrow" stroke="var(--success, #10B981)" marker-end="url(#cl-arrowhead-green)"/>
-              <text x="420" y="145" class="cl-mono" fill="var(--success, #10B981)" text-anchor="middle">"end_turn"</text>
+              <text x="420" y="145" class="cl-mono" fill="var(--success, #10B981)" text-anchor="middle">"stop"</text>
             </g>
             <!-- Step E: Return response (right side) -->
             <g class="cl-fade">
@@ -554,7 +554,7 @@
 
         <p>The tool use loop is the core pattern that turns the model from a chatbot into an agent. Here's the idea in plain English: you send the model a message, the model thinks about it, and sometimes the model decides it needs more information before answering. When that happens, the model pauses and says "I'd like to call this tool." Your code runs the tool, sends back the result, and the model picks up where it left off. This back-and-forth continues until the model has everything it needs to give a final answer.</p>
 
-        <p>In code, this translates to a <code>while</code> loop. Each time the model responds, you check a field called <span class="term-tooltip" tabindex="0" aria-describedby="tt-stopreason">stop_reason<span class="tooltip-content" role="tooltip" id="tt-stopreason">A field in the model's response indicating why generation stopped. "end_turn" means the model finished normally. "tool_use" means the model wants to call a tool and is waiting for the result before continuing.</span></span>. If <code>stop_reason</code> is <code>"tool_use"</code>, the model is waiting for a tool result &mdash; so you execute the tool, append the result to the conversation, and call the API again. If <code>stop_reason</code> is <code>"end_turn"</code>, the model is finished &mdash; you extract the text and return it to the user.</p>
+        <p>In code, this translates to a <code>while</code> loop. Each time the model responds, you check a field called <span class="term-tooltip" tabindex="0" aria-describedby="tt-stopreason">finish_reason<span class="tooltip-content" role="tooltip" id="tt-stopreason">A field in the model's response indicating why generation stopped. "stop" means the model finished normally. "tool_calls" means the model wants to call a tool and is waiting for the result before continuing.</span></span>. If <code>finish_reason</code> is <code>"tool_calls"</code>, the model is waiting for a tool result &mdash; so you execute the tool, append the result to the conversation, and call the API again. If <code>finish_reason</code> is <code>"stop"</code>, the model is finished &mdash; you extract the text and return it to the user.</p>
 
         <p>This is different from a simple request/response pattern. In a normal API call, you send one message and get one reply. With the tool use loop, a single user question might trigger 2, 3, or even 10 API round-trips as the model calls different tools to gather information. Each round-trip adds to the conversation history, so the model always has the full context of what it's already tried. The loop only exits when the model decides it has enough information &mdash; signaled by <code>"end_turn"</code>.</p>
 
@@ -563,7 +563,7 @@
           <div class="animation-title">Animation: The While Loop Pattern</div>
           <div class="while-counter" id="whileCounter">Iteration: waiting to start...</div>
           <div class="loop-container" id="whileLoop" style="margin-top:0.75rem;">
-            <div class="loop-step" id="wl-1" style="position:relative;"><span class="step-num" style="background:var(--info)">&#8635;</span><span class="step-label">while stop_reason == "tool_use":</span><span class="loop-annotation" id="wa-1">The core agent pattern</span></div>
+            <div class="loop-step" id="wl-1" style="position:relative;"><span class="step-num" style="background:var(--info)">&#8635;</span><span class="step-label">while finish_reason == "tool_calls":</span><span class="loop-annotation" id="wa-1">The core agent pattern</span></div>
             <div class="loop-arrow" id="wa-arr1">&#8595;</div>
             <div class="loop-step" id="wl-2" style="position:relative;"><span class="step-num">1</span><span class="step-label">Extract tool name + arguments</span><span class="step-data" id="wl-2-data">get_weather({city:"Tokyo"})</span></div>
             <div class="loop-arrow" id="wa-arr2">&#8595;</div>
@@ -571,7 +571,7 @@
             <div class="loop-arrow" id="wa-arr3">&#8595;</div>
             <div class="loop-step" id="wl-4" style="position:relative;"><span class="step-num">3</span><span class="step-label">Append tool_result to messages</span><span class="step-data" id="wl-4-data">{temp:22, condition:"sunny"}</span></div>
             <div class="loop-arrow" id="wa-arr4">&#8595;</div>
-            <div class="loop-step" id="wl-5" style="position:relative;"><span class="step-num">4</span><span class="step-label">Send messages to the model again</span><span class="step-data" id="wl-5-data">stop_reason: "tool_use"</span><span class="loop-annotation" id="wa-5">Still tool_use &mdash; loop again!</span></div>
+            <div class="loop-step" id="wl-5" style="position:relative;"><span class="step-num">4</span><span class="step-label">Send messages to the model again</span><span class="step-data" id="wl-5-data">finish_reason: "tool_calls"</span><span class="loop-annotation" id="wa-5">Still tool_calls &mdash; loop again!</span></div>
           </div>
           <div class="while-loop-back" id="whileLoopBack">&#8635; Loop back &mdash; the model requested another tool!</div>
           <div class="animation-controls">
@@ -585,7 +585,7 @@
         <div class="callout-warning">
           <span class="box-label">&#9888;&#65039; Common Misconceptions: The Loop</span>
           <p><strong>"The loop runs forever if the model keeps calling tools"</strong> &mdash; In theory, yes. In practice, the model almost always converges within 2-5 iterations. But you should always add a safety cap (e.g., <code>max_iterations = 10</code>) so a misbehaving prompt can't burn through your API budget. Module 12 covers this in depth.</p>
-          <p><strong>"I need to parse the model's text to know when it's done"</strong> &mdash; Never do this. The <code>stop_reason</code> field is the only reliable signal. Don't scan the model's response for phrases like "I'm finished" or "here's your answer" &mdash; those are unreliable and fragile.</p>
+          <p><strong>"I need to parse the model's text to know when it's done"</strong> &mdash; Never do this. The <code>finish_reason</code> field is the only reliable signal. Don't scan the model's response for phrases like "I'm finished" or "here's your answer" &mdash; those are unreliable and fragile.</p>
           <p style="margin-bottom:0;"><strong>"Each loop iteration is a new conversation"</strong> &mdash; No. Each iteration adds to the SAME messages array. the model sees the full history &mdash; including every tool call and result from previous iterations &mdash; which is how it knows what it's already tried and what information it still needs.</p>
         </div>
 
@@ -596,13 +596,13 @@
 
         <div class="callout-why" style="background:rgba(16,185,129,0.08);border-left:4px solid #10B981;border-radius:0 8px 8px 0;padding:1.25rem 1.5rem;margin:1.5rem 0;">
           <span class="box-label" style="color:#10B981;">&#128640; Looking Ahead: Pre-Built Tools (Computer Use, Bash, Text Editor)</span>
-          <p>Everything in this module covered <em>custom</em> tools &mdash; functions <em>you</em> define and execute. Anthropic also ships a small set of <strong>pre-built tools</strong> that the API knows how to use natively, with no schema for you to write:</p>
+          <p>Everything in this module covered <em>custom</em> tools &mdash; functions <em>you</em> define and execute. Some frameworks ship <strong>pre-built tools</strong> for common operations, with no schema for you to write:</p>
           <ul>
-            <li><strong>Computer Use</strong> (<code>computer_20250124</code>) &mdash; the model takes screenshots, clicks, types, and scrolls a real desktop. Used for browser automation, form filling, QA testing, and accessibility flows that have no API.</li>
-            <li><strong>Bash</strong> (<code>bash_20250124</code>) &mdash; the model runs shell commands. Common in dev-environment agents (build, test, grep, install).</li>
-            <li><strong>Text Editor</strong> (<code>text_editor_20250429</code>) &mdash; the model reads, writes, and edits files with an Anthropic-defined schema. Used in coding agents and Claude Code itself.</li>
+            <li><strong>Web search</strong> &mdash; built into some agent frameworks (LangChain's SerpAPI tool, CrewAI's search tool). Same tool call / tool result loop, but the schema and execution are provided for you.</li>
+            <li><strong>Code execution</strong> &mdash; sandboxed Python runners (E2B, Modal) that let the model run code safely. You provide the sandbox; the framework provides the tool definition.</li>
+            <li><strong>File operations</strong> &mdash; read, write, edit files. Often available as prebuilt tools in LangChain and similar frameworks for coding agents.</li>
           </ul>
-          <p style="margin-bottom:0;">These work like the custom tools you just wrote &mdash; same <code>tool_use</code> / <code>tool_result</code> loop &mdash; but the schema is fixed by Anthropic, and you provide the <em>execution sandbox</em> (a Docker VM with a virtual display, a shell, a workspace directory). M24 covers Computer Use in depth, including the sandboxing requirements that keep these tools safe to deploy.</p>
+          <p style="margin-bottom:0;">These work like the custom tools you just wrote &mdash; same <code>finish_reason: "tool_calls"</code> loop &mdash; but the schema and routing are handled by the framework. You provide the execution environment. M24 covers advanced tool patterns including computer use and sandboxing.</p>
         </div>
       </section>
 
@@ -639,7 +639,7 @@
         <h2 id="code-walkthrough-heading">Code Walkthrough: Multi-Tool Agent</h2>
 
         <div style="background: rgba(139,92,246,0.05); border-left: 3px solid var(--accent-primary); padding: 1rem 1.25rem; margin: 1.25rem 0; border-radius: 0 6px 6px 0;">
-          <strong>Conceptual Bridge:</strong> You've seen the tool use loop as a diagram &mdash; user sends message, the model returns a tool_use block, your code executes, you send the result back, and the model responds. Now it's time to translate that six-step loop into real, runnable code. The code below implements everything you just learned: tool definitions with JSON Schema, the <code>while</code> loop that keeps running until <code>stop_reason</code> is <code>"end_turn"</code>, a dispatcher that routes tool requests to actual functions, and error handling at every step. Read through the chunk annotations before each section to understand what each part does and why.
+          <strong>Conceptual Bridge:</strong> You've seen the tool use loop as a diagram &mdash; user sends message, the model returns a tool call, your code executes, you send the result back, and the model responds. Now it's time to translate that six-step loop into real, runnable code. The code below implements everything you just learned: tool definitions with JSON Schema, the <code>while</code> loop that keeps running until <code>finish_reason</code> is <code>"stop"</code>, a dispatcher that routes tool requests to actual functions, and error handling at every step. Read through the chunk annotations before each section to understand what each part does and why.
         </div>
 
         <h3 id="full-agent-heading">Complete Tool-Using Agent</h3>
@@ -648,7 +648,7 @@
 
         <div style="background: var(--bg-card); border-radius: 8px; padding: 1rem 1.25rem; margin: 1rem 0;">
           <strong style="color: var(--track-color);">Chunk 1 &mdash; Setup &amp; Tool Definitions</strong><br>
-          Let's start with the foundation. The first thing the code does is initialize the Anthropic client and define two tools: <code>get_weather</code> and <code>calculate</code>. Each tool gets a name, a description, and a JSON Schema specifying what arguments it accepts. The interesting part is the description field &mdash; this is literally what the model reads to decide which tool fits the user's request. Think of it as a menu item description at a restaurant: vague descriptions like <code>"Search"</code> are like labeling a dish "Food" &mdash; nobody knows what they're getting, and the model will pick the wrong tool.
+          Let's start with the foundation. The first thing the code does is initialize the OpenAI client pointed at Ollama and define two tools: <code>get_weather</code> and <code>calculate</code>. Each tool gets a name, a description, and a JSON Schema specifying what arguments it accepts. The interesting part is the description field &mdash; this is literally what the model reads to decide which tool fits the user's request. Think of it as a menu item description at a restaurant: vague descriptions like <code>"Search"</code> are like labeling a dish "Food" &mdash; nobody knows what they're getting, and the model will pick the wrong tool.
         </div>
 
         <div style="background: var(--bg-card); border-radius: 8px; padding: 1rem 1.25rem; margin: 1rem 0;">
@@ -658,7 +658,7 @@
 
         <div style="background: var(--bg-card); border-radius: 8px; padding: 1rem 1.25rem; margin: 1rem 0;">
           <strong style="color: var(--track-color);">Chunk 3 &mdash; The Agent Loop (while True)</strong><br>
-          This is the heart of the agent &mdash; the <code>while True</code> loop that keeps the conversation going until the model is done. Here's how each iteration works: send the current messages to the model, check the <code>stop_reason</code> in the response. If it's <code>"tool_use"</code>, the model wants to call a tool, so you execute it and loop again. If it's <code>"end_turn"</code>, the model is finished and you return the final text. The key gotcha that trips up most beginners: you must append <em>both</em> the model's assistant message AND the tool_result user message to the conversation history before the next API call. Forget either one and the API returns an error &mdash; the model needs to see the full conversation to know where it left off.
+          This is the heart of the agent &mdash; the <code>while True</code> loop that keeps the conversation going until the model is done. Here's how each iteration works: send the current messages to the model, check <code>finish_reason</code> in the response. If it's <code>"tool_calls"</code>, the model wants to call a tool, so you execute it and loop again. If it's <code>"stop"</code>, the model is finished and you return the final text. The key gotcha that trips up most beginners: you must append <em>both</em> the assistant message (with tool_calls) AND the tool role messages to the conversation history before the next API call. Forget either one and the API returns an error &mdash; the model needs to see the full conversation to know where it left off.
         </div>
 
         <div style="background: var(--bg-card); border-radius: 8px; padding: 1rem 1.25rem; margin: 1rem 0;">
@@ -900,7 +900,7 @@ console.log(await runAgent("What's the capital of France?"));</code></pre>
 The capital of France is Paris.</div>
 
         <div style="background: rgba(16,185,129,0.06); border-left: 3px solid var(--success); padding: 1rem 1.25rem; margin: 1.25rem 0; border-radius: 0 6px 6px 0;">
-          <strong>What Just Happened?</strong> You just built a complete tool-using AI agent. Here's what the code does end-to-end: it defines two tools with JSON Schema descriptions, implements mock functions for each, and runs a <code>while True</code> loop that keeps calling the Messages API until the model stops requesting tools. For the first query ("weather in Tokyo"), the model recognized it needed <code>get_weather</code>, returned a <code>tool_use</code> block, your code executed the mock function, sent back the result, and the model composed a natural-language answer from the data. For the second query, the model picked the <code>calculate</code> tool instead. For the third query ("capital of France"), the model knew the answer from its training data and responded directly without calling any tool &mdash; the <code>stop_reason</code> was <code>"end_turn"</code> on the first response, so the loop exited immediately. This is the foundational agent pattern that every module from here forward builds upon.
+          <strong>What Just Happened?</strong> You just built a complete tool-using AI agent. Here's what the code does end-to-end: it defines two tools with JSON Schema descriptions, implements mock functions for each, and runs a <code>while True</code> loop that keeps calling the Chat Completions API until the model stops requesting tools. For the first query ("weather in Tokyo"), the model recognized it needed <code>get_weather</code>, returned a tool call, your code executed the mock function, sent back the result, and the model composed a natural-language answer from the data. For the second query, the model picked the <code>calculate</code> tool instead. For the third query ("capital of France"), the model knew the answer from its training data and responded directly without calling any tool &mdash; <code>finish_reason</code> was <code>"stop"</code> on the first response, so the loop exited immediately. This is the foundational agent pattern that every module from here forward builds upon.
         </div>
       </section>
 
@@ -914,7 +914,7 @@ The capital of France is Paris.</div>
 
         <div style="background:var(--bg-card);border-radius:12px;padding:1.25rem 1.5rem;margin-bottom:1.5rem;">
           <h3 style="margin-top:0;color:var(--accent-primary);">What You'll Build</h3>
-          <p style="margin-bottom:0.5rem;">A 3-tool agent with <code>get_weather</code>, <code>calculate</code>, and <code>get_time</code> tools that handles tool calls, no-tool questions, and error cases &mdash; all with the <code>while stop_reason == "tool_use"</code> loop pattern.</p>
+          <p style="margin-bottom:0.5rem;">A 3-tool agent with <code>get_weather</code>, <code>calculate</code>, and <code>get_time</code> tools that handles tool calls, no-tool questions, and error cases &mdash; all with the <code>while finish_reason == "tool_calls"</code> loop pattern.</p>
           <p style="margin-bottom:0;"><strong>Time estimate:</strong> 25&ndash;35 minutes &bull; <strong>Prerequisites:</strong> M01-M04 labs complete &bull; <strong>Files you'll create:</strong> <code>tool_agent.py</code> (or <code>tool_agent.mjs</code>)</p>
         </div>
 
@@ -1128,14 +1128,14 @@ Test: {"temp": 22, "condition": "sunny", "humidity": 45}</div>
         <details style="margin: 1rem 0; color: var(--text-secondary);">
           <summary style="cursor:pointer; font-weight:600;">Troubleshooting Step 1</summary>
           <ul style="margin-top:0.5rem;">
-            <li><strong><code>ModuleNotFoundError: No module named 'anthropic'</code></strong> &mdash; Run <code>pip install openai</code>. Make sure your virtual environment is activated.</li>
+            <li><strong><code>ModuleNotFoundError: No module named 'openai'</code></strong> &mdash; Run <code>pip install openai</code>. Make sure your virtual environment is activated.</li>
             <li><strong><code>SyntaxError</code> in the TOOLS list</strong> &mdash; Check for missing commas between tool definitions. Each tool dictionary in the list needs a trailing comma.</li>
             <li><strong>Output shows <code>{"error": "City 'Tokyo' not found"}</code></strong> &mdash; The mock lookup uses <code>.lower()</code>. Make sure the MOCK_WEATHER keys are lowercase: <code>"tokyo"</code>, not <code>"Tokyo"</code>.</li>
           </ul>
         </details>
 
         <h3 id="step2-heading">Step 2: Build the Agent Loop and Test Single-Tool Calls</h3>
-        <p>Now let's wire up the <code>while stop_reason == "tool_use"</code> loop and test it with questions that each require exactly one tool. This is the core agent pattern you'll use for the rest of the course. This uses the <code>TOOLS</code> and <code>run_tool()</code> from Step 1.</p>
+        <p>Now let's wire up the <code>while finish_reason == "tool_calls"</code> loop and test it with questions that each require exactly one tool. This is the core agent pattern you'll use for the rest of the course. This uses the <code>TOOLS</code> and <code>run_tool()</code> from Step 1.</p>
         <p>Add the following to <code>tool_agent.py</code>:</p>
 
         <div class="code-block-wrapper">
@@ -1296,7 +1296,7 @@ Agent: The capital of France is Paris.</div>
         </div>
 
         <div style="background: rgba(16,185,129,0.06); border-left: 3px solid var(--success); padding: 1rem 1.25rem; margin: 1rem 0; border-radius: 0 6px 6px 0;">
-          <strong>&#127881; Congratulations!</strong> You've built a working tool-using agent with the <code>while stop_reason == "tool_use"</code> loop. This is the foundational pattern for every agent in this course. In M06, you'll extend this to handle multiple tools in a single turn and manage tool selection for complex queries.
+          <strong>&#127881; Congratulations!</strong> You've built a working tool-using agent with the <code>while finish_reason == "tool_calls"</code> loop. This is the foundational pattern for every agent in this course. In M06, you'll extend this to handle multiple tools in a single turn and manage tool selection for complex queries.
         </div>
 
         <h3 id="stretch-heading">Stretch Goals (Optional)</h3>
@@ -1308,7 +1308,7 @@ Agent: The capital of France is Paris.</div>
 
       <div class="callout-cert" style="background:rgba(212,168,67,.06);border-left:4px solid #D4A843;border-radius:0 8px 8px 0;padding:1.25rem 1.5rem;margin:2rem 0;">
         <span class="box-label" style="color:#D4A843;font-weight:700;display:block;margin-bottom:0.5rem;">&#129518; Where This Leads &mdash; Three Ways to Build Agents</span>
-        <p style="margin:0.5rem 0;">You just wrote your first tool call using <code>client.messages.create</code>. This is the <strong>RAW</strong> approach. As the course progresses this pattern evolves:</p>
+        <p style="margin:0.5rem 0;">You just wrote your first tool call using <code>client.chat.completions.create</code>. This is the <strong>RAW</strong> approach. As the course progresses this pattern evolves:</p>
         <ul style="margin:0.75rem 0 0.75rem 1.25rem;padding:0;">
           <li>In <strong>M12</strong> you wrap it in a ReAct loop.</li>
           <li>In <strong>M15B</strong> you build a complete multi-agent system.</li>
@@ -1326,11 +1326,11 @@ Agent: The capital of France is Paris.</div>
 
         <div class="quiz-question" data-correct="b">
           <h4>Q1: Who executes the tool &mdash; the model or your code?</h4>
-          <div class="quiz-option" data-value="a" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option A"><span class="quiz-marker">A</span><span>the model executes the tool directly on Anthropic's servers</span></div>
+          <div class="quiz-option" data-value="a" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option A"><span class="quiz-marker">A</span><span>the model executes the tool directly on the Ollama server</span></div>
           <div class="quiz-option" data-value="b" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option B"><span class="quiz-marker">B</span><span>Your code executes the tool &mdash; the model only returns a request to call it</span></div>
-          <div class="quiz-option" data-value="c" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option C"><span class="quiz-marker">C</span><span>The Anthropic API automatically dispatches the tool call</span></div>
+          <div class="quiz-option" data-value="c" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option C"><span class="quiz-marker">C</span><span>The OpenAI-compatible API automatically dispatches the tool call</span></div>
           <div class="quiz-option" data-value="d" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option D"><span class="quiz-marker">D</span><span>The tool executes itself when the model references it</span></div>
-          <div class="quiz-feedback correct-fb">Correct! the model never executes tools. It returns a tool_use content block with the tool name and arguments. Your code reads this, runs the function, and sends back the result. This is critical for security and control.</div>
+          <div class="quiz-feedback correct-fb">Correct! The model never executes tools. It returns a tool call with the function name and arguments. Your code reads this, runs the function, and sends back the result. This is critical for security and control.</div>
           <div class="quiz-feedback incorrect-fb"></div>
         </div>
 
@@ -1338,9 +1338,9 @@ Agent: The capital of France is Paris.</div>
           <h4>Q2: What field in the model's response tells you it wants to use a tool?</h4>
           <div class="quiz-option" data-value="a" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option A"><span class="quiz-marker">A</span><span><code>response.action == "call_function"</code></span></div>
           <div class="quiz-option" data-value="b" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option B"><span class="quiz-marker">B</span><span><code>response.tool_request</code> being non-null</span></div>
-          <div class="quiz-option" data-value="c" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option C"><span class="quiz-marker">C</span><span><code>response.stop_reason == "tool_use"</code></span></div>
+          <div class="quiz-option" data-value="c" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option C"><span class="quiz-marker">C</span><span><code>response.choices[0].finish_reason == "tool_calls"</code></span></div>
           <div class="quiz-option" data-value="d" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option D"><span class="quiz-marker">D</span><span><code>response.content[0].type == "function_call"</code></span></div>
-          <div class="quiz-feedback correct-fb">Correct! When <code>stop_reason</code> is "tool_use", the model is pausing to wait for a tool result. You'll find the tool details in the content blocks where <code>type == "tool_use"</code>.</div>
+          <div class="quiz-feedback correct-fb">Correct! When <code>finish_reason</code> is "tool_calls", the model is pausing to wait for a tool result. You'll find the tool details in <code>response.choices[0].message.tool_calls</code>.</div>
           <div class="quiz-feedback incorrect-fb"></div>
         </div>
 
@@ -1407,7 +1407,7 @@ Agent: The capital of France is Paris.</div>
           <ul>
             <li><strong>The model proposes, you execute</strong> &mdash; the model returns tool_use blocks with arguments; your code runs the actual function. This is the security model.</li>
             <li><strong>Descriptions matter most</strong> &mdash; the model picks tools based on descriptions. Invest time in making them clear, specific, and complete.</li>
-            <li><strong>The while loop pattern</strong> &mdash; keep sending messages until <code>stop_reason</code> is "end_turn". the model may call multiple tools before finishing.</li>
+            <li><strong>The while loop pattern</strong> &mdash; keep sending messages until <code>finish_reason</code> is "stop". the model may call multiple tools before finishing.</li>
             <li><strong>Return errors as results</strong> &mdash; when tools fail, send the error as a tool_result so the model can adapt. Don't crash.</li>
             <li><strong>This is the chatbot-to-agent moment</strong> &mdash; the model can now interact with external systems. Every module from here builds on this foundation.</li>
           </ul>
@@ -1422,10 +1422,10 @@ Agent: The capital of France is Paris.</div>
       <section class="section" id="references">
         <h2 id="references-heading">References &amp; Resources</h2>
         <ul>
-          <li><a href="https://docs.anthropic.com/en/docs/build-with-claude/tool-use/overview" target="_blank" rel="noopener noreferrer">Tool Use Overview &mdash; Anthropic Documentation</a></li>
-          <li><a href="https://docs.anthropic.com/en/docs/build-with-claude/tool-use/tool-use-examples" target="_blank" rel="noopener noreferrer">Tool Use Examples &mdash; Anthropic Documentation</a></li>
-          <li><a href="https://docs.anthropic.com/en/api/messages" target="_blank" rel="noopener noreferrer">Messages API Reference &mdash; Anthropic API</a></li>
-          <li><a href="https://github.com/anthropics/anthropic-cookbook/tree/main/tool_use" target="_blank" rel="noopener noreferrer">Tool Use Cookbook Examples &mdash; Anthropic GitHub</a></li>
+          <li><a href="https://platform.openai.com/docs/guides/function-calling" target="_blank" rel="noopener noreferrer">Function Calling Guide &mdash; OpenAI Platform Documentation</a></li>
+          <li><a href="https://ollama.com/blog/tool-support" target="_blank" rel="noopener noreferrer">Tool Support in Ollama &mdash; Ollama Blog</a></li>
+          <li><a href="https://platform.openai.com/docs/api-reference/chat" target="_blank" rel="noopener noreferrer">Chat Completions API Reference &mdash; OpenAI</a></li>
+          <li><a href="https://github.com/openai/openai-cookbook/tree/main/examples" target="_blank" rel="noopener noreferrer">Tool Use Examples &mdash; OpenAI Cookbook</a></li>
           <li><a href="https://json-schema.org/learn/getting-started-step-by-step" target="_blank" rel="noopener noreferrer">JSON Schema: Getting Started &mdash; json-schema.org</a></li>
         </ul>
       </section>
@@ -1598,8 +1598,8 @@ Agent: The capital of France is Paris.</div>
     let whileStep = 0, whileIteration = 0;
     // Two iterations: first loops back, second exits
     const whileIterData = [
-      { tool: 'get_weather({city:"Tokyo"})', exec: 'weather_api.fetch("Tokyo")', result: '{temp:22, condition:"sunny"}', stop: 'stop_reason: "tool_use"', label: 'Still tool_use \u2014 loop again!' },
-      { tool: 'calculate({expr:"22*9/5+32"})', exec: 'eval("22*9/5+32")', result: '{result: 71.6}', stop: 'stop_reason: "end_turn" \u2713', label: 'end_turn \u2014 exit loop!' },
+      { tool: 'get_weather({city:"Tokyo"})', exec: 'weather_api.fetch("Tokyo")', result: '{temp:22, condition:"sunny"}', stop: 'finish_reason: "tool_calls"', label: 'Still tool_calls \u2014 loop again!' },
+      { tool: 'calculate({expr:"22*9/5+32"})', exec: 'eval("22*9/5+32")', result: '{result: 71.6}', stop: 'finish_reason: "stop" \u2713', label: 'stop \u2014 exit loop!' },
     ];
 
     function whileResetSteps() {
@@ -1644,7 +1644,7 @@ Agent: The capital of France is Paris.</div>
           document.getElementById('whileLoopBack').classList.add('visible');
           whileIteration++;
         } else {
-          document.getElementById('whileCounter').textContent = 'Done! The model responded with stop_reason: "end_turn"';
+          document.getElementById('whileCounter').textContent = 'Done! The model responded with finish_reason: "stop"';
           whileAnimTimer.pause();
           whileStep++;
           return;

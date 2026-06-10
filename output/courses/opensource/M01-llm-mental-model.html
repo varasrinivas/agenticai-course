@@ -1230,26 +1230,27 @@ needs to handle BOTH variations gracefully.</code></pre>
           <strong>Concept &rarr; Code Bridge:</strong> You now understand the theory &mdash; LLMs predict tokens, process input in parallel, and generate output sequentially. The next step is to see this in action. The code below sends a prompt to the model's API and gets back a response, letting you observe token prediction firsthand (including how many tokens went in and came out).
         </div>
 
-        <p>Let's make your first call to the model API. You'll need an <span class="term-tooltip" tabindex="0" aria-describedby="tt-apikey">API key<span class="tooltip-content" role="tooltip" id="tt-apikey">A secret string that authenticates your application with Anthropic's servers. Never share it, never commit it to code. Always store it as an environment variable.</span></span> from <a href="https://console.anthropic.com/" target="_blank" rel="noopener noreferrer">console.anthropic.com</a>.</p>
+        <p>Let's make your first call to the model API. This track uses <strong>Ollama running locally</strong> — no API key needed. Ollama exposes an OpenAI-compatible <span class="term-tooltip" tabindex="0" aria-describedby="tt-apikey">endpoint<span class="tooltip-content" role="tooltip" id="tt-apikey">A URL where your code sends requests. Ollama's Chat Completions endpoint is <code>http://localhost:11434/v1</code> — the same interface as the OpenAI API, just running on your machine.</span></span> at <code>http://localhost:11434/v1</code>.</p>
 
-        <h3 id="setup-heading">Setup: API Key as Environment Variable</h3>
-
-        <div class="callout-security">
-          <span class="box-label">Security: Never Hardcode API Keys</span>
-          Store your key as an environment variable. Never put it directly in code, never commit it to Git.
-        </div>
+        <h3 id="setup-heading">Setup: Start Ollama &amp; Pull a Model</h3>
 
         <div class="code-single">
           <div class="code-label">bash</div>
           <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
-          <pre><code class="language-bash"># Set your API key as an environment variable
-export ANTHROPIC_API_KEY="your-key-here"</code></pre>
+          <pre><code class="language-bash"># Start Ollama (runs as a background daemon)
+ollama serve
+
+# Pull Mistral (first time only — ~4GB download)
+ollama pull mistral
+
+# Verify it's available
+ollama list   # should show "mistral" in the list</code></pre>
         </div>
 
         <h3 id="first-call-heading">Making the Call</h3>
 
         <div style="background: var(--bg-card); border-radius: 8px; padding: 1rem 1.25rem; margin: 1rem 0;">
-          <p style="margin-bottom:0.5rem;">Let's start with the simplest possible the model API call. The code below creates an Anthropic client, sends a single message, and prints the response. This three-step pattern &mdash; create client, call <code>messages.create</code>, read the content &mdash; is the foundation for <em>every</em> API call you'll make in this course. Once you internalize this structure, adding tools, streaming, and multi-turn conversations in later modules will feel like natural extensions.</p>
+          <p style="margin-bottom:0.5rem;">Let's start with the simplest possible API call. The code below creates an OpenAI client pointing at Ollama, sends a single message, and prints the response. This three-step pattern &mdash; create client, call <code>chat.completions.create</code>, read the content &mdash; is the foundation for <em>every</em> API call you'll make in this course. Once you internalize this structure, adding tools, streaming, and multi-turn conversations in later modules will feel like natural extensions.</p>
           <p style="margin-bottom:0;">Here's the one thing that trips up almost everyone on their first try: the response is <code>message.choices[0].message.content</code>, not <code>message.text</code>. Why the extra <code>[0]</code>? Because <code>content</code> is a list of content blocks &mdash; the model can return text, images, and tool calls in the same response. Even for a simple text reply, you need <code>[0]</code> to grab the first block. Forget this and you'll get a confusing list object instead of a string.</p>
         </div>
 
@@ -1264,7 +1265,6 @@ export ANTHROPIC_API_KEY="your-key-here"</code></pre>
             <pre><code class="language-python"># pip install openai>=0.30.0
 from openai import OpenAI
 
-# The client reads ANTHROPIC_API_KEY from your environment
 client = OpenAI(base_url="http://localhost:11434/v1", api_key="ollama")
 
 try:
@@ -1275,20 +1275,16 @@ try:
             {"role": "user", "content": "What is a large language model? Explain in 2 sentences."}
         ]
     )
-    # The response content is a list of content blocks
     print(message.choices[0].message.content)
-    print(f"\nTokens used: {message.usage.input_tokens} in, {message.usage.output_tokens} out")
-except Exception:
-    print("Invalid API key. Check your ANTHROPIC_API_KEY environment variable.")
+    print(f"\nTokens used: {message.usage.prompt_tokens} in, {message.usage.completion_tokens} out")
 except Exception as e:
-    print(f"API error: {e.message}")</code></pre>
+    print(f"API error: {e}")</code></pre>
           </div>
           <div class="code-panel" id="first-call-nodejs" role="tabpanel" aria-labelledby="tab-first-call-js">
             <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy Node.js code">Copy</button>
             <pre><code class="language-javascript">// npm install openai
 import OpenAI from 'openai';
 
-// The client reads ANTHROPIC_API_KEY from your environment
 const client = new OpenAI({ baseURL: 'http://localhost:11434/v1', apiKey: 'ollama' });
 
 try {
@@ -1300,9 +1296,8 @@ try {
     ]
   });
 
-  // The response content is a list of content blocks
   console.log(message.choices[0].message.content);
-  console.log(`\nTokens used: ${message.usage.input_tokens} in, ${message.usage.output_tokens} out`);
+  console.log(`\nTokens used: ${message.usage.prompt_tokens} in, ${message.usage.completion_tokens} out`);
 } catch (error) {
   if (error?.status) {
     console.error(`API error: ${error.status} - ${error.message}`);
@@ -1313,15 +1308,12 @@ try {
           </div>
           <div class="code-panel" id="first-call-curl" role="tabpanel" aria-labelledby="tab-first-call-curl">
             <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy cURL code">Copy</button>
-            <pre><code class="language-bash">curl https://api.anthropic.com/v1/messages \
+            <pre><code class="language-bash">curl http://localhost:11434/v1/chat/completions \
   -H "content-type: application/json" \
-  -H "x-api-key: $ANTHROPIC_API_KEY" \
-  -H "anthropic-version: 2023-06-01" \
   -d '{
     "model": "mistral",
-    "max_tokens": 1024,
-    "system": "You are a helpful assistant who explains things clearly.",
     "messages": [
+      {"role": "system", "content": "You are a helpful assistant who explains things clearly."},
       {"role": "user", "content": "What is a large language model? Explain in 2 sentences."}
     ]
   }'</code></pre>
@@ -1454,7 +1446,7 @@ Temperature 1.0: Our luminous neighbor drifts through the cosmic dark, a pale st
         <div style="background:var(--bg-card);border-radius:12px;padding:1.25rem 1.5rem;margin-bottom:1.5rem;">
           <h3 style="margin-top:0;color:var(--accent-primary);">What You'll Build</h3>
           <p style="margin-bottom:0.5rem;">A series of small scripts that call the model's API, experiment with temperature, and culminate in a working CLI chatbot. By the end you'll have made your first API call, observed how temperature changes output, and built a multi-turn conversation loop.</p>
-          <p style="margin-bottom:0;"><strong>Time estimate:</strong> 20&ndash;30 minutes &bull; <strong>Prerequisites:</strong> Python 3.9+ or Node.js 18+ &bull; An Anthropic API key from <a href="https://console.anthropic.com/" target="_blank" rel="noopener noreferrer">console.anthropic.com</a></p>
+          <p style="margin-bottom:0;"><strong>Time estimate:</strong> 20&ndash;30 minutes &bull; <strong>Prerequisites:</strong> Python 3.9+ or Node.js 18+ &bull; Ollama installed and running (<code>ollama serve</code>)</p>
         </div>
 
         <h3 id="env-setup-heading">Environment Setup</h3>
@@ -1467,26 +1459,30 @@ Temperature 1.0: Our luminous neighbor drifts through the cosmic dark, a pale st
           </div>
           <div class="code-panel active" id="env-setup-python" role="tabpanel" aria-labelledby="tab-env-setup-py">
             <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy Python setup">Copy</button>
-            <pre><code class="language-bash">mkdir hello-claude && cd hello-claude
+            <pre><code class="language-bash">mkdir hello-model && cd hello-model
 python -m venv venv
 # macOS/Linux:
 source venv/bin/activate
 # Windows:
 # venv\Scripts\activate
 pip install openai
-export ANTHROPIC_API_KEY="your-key-here"   # Windows: set ANTHROPIC_API_KEY=your-key-here</code></pre>
+# No API key needed — Ollama runs locally!
+# Make sure Ollama is running: ollama serve
+# Make sure mistral is downloaded: ollama pull mistral</code></pre>
           </div>
           <div class="code-panel" id="env-setup-nodejs" role="tabpanel" aria-labelledby="tab-env-setup-js">
             <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy Node.js setup">Copy</button>
-            <pre><code class="language-bash">mkdir hello-claude && cd hello-claude
+            <pre><code class="language-bash">mkdir hello-model && cd hello-model
 npm init -y
 npm install openai
-export ANTHROPIC_API_KEY="your-key-here"   # Windows: set ANTHROPIC_API_KEY=your-key-here</code></pre>
+# No API key needed — Ollama runs locally!
+# Make sure Ollama is running: ollama serve
+# Make sure mistral is downloaded: ollama pull mistral</code></pre>
           </div>
         </div>
 
         <h3 id="step1-heading">Step 1: Make Your First API Call</h3>
-        <p>This step verifies that your API key works and that you can communicate with the model. It's the "hello world" of agent development &mdash; if this works, everything else in the course will build on it.</p>
+        <p>This step verifies that Ollama is running and you can communicate with the model. It's the "hello world" of agent development &mdash; if this works, everything else in the course will build on it.</p>
         <p>Create a new file called <code>hello.py</code> (or <code>hello.mjs</code> for Node.js):</p>
 
         <div class="code-block-wrapper">
@@ -1509,11 +1505,10 @@ try:
         ]
     )
     print(message.choices[0].message.content)
-    print(f"\nTokens used: {message.usage.input_tokens} in, {message.usage.output_tokens} out")
-except Exception:
-    print("Invalid API key. Check your ANTHROPIC_API_KEY environment variable.")
+    print(f"\nTokens used: {message.usage.prompt_tokens} in, {message.usage.completion_tokens} out")
 except Exception as e:
-    print(f"API error: {e.message}")</code></pre>
+    print(f"API error: {e}")
+    print("Is Ollama running? Try: ollama serve")</code></pre>
           </div>
           <div class="code-panel" id="lab-step1-nodejs" role="tabpanel" aria-labelledby="tab-lab-step1-js">
             <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy Node.js code">Copy</button>
@@ -1530,13 +1525,10 @@ try {
     ]
   });
   console.log(message.choices[0].message.content);
-  console.log(`\nTokens used: ${message.usage.input_tokens} in, ${message.usage.output_tokens} out`);
+  console.log(`\nTokens used: ${message.usage.prompt_tokens} in, ${message.usage.completion_tokens} out`);
 } catch (error) {
-  if (error?.status) {
-    console.error(`API error: ${error.status} - ${error.message}`);
-  } else {
-    throw error;
-  }
+  console.error(`API error: ${error.message}`);
+  console.error('Is Ollama running? Try: ollama serve');
 }</code></pre>
           </div>
         </div>
@@ -1555,9 +1547,9 @@ Tokens used: 35 in, 48 out</div>
         <details style="margin: 1rem 0; color: var(--text-secondary);">
           <summary style="cursor:pointer; font-weight:600;">Troubleshooting</summary>
           <ul style="margin-top:0.5rem;">
-            <li><strong><code>AuthenticationError</code></strong> &mdash; Your API key is missing or invalid. Run <code>echo $ANTHROPIC_API_KEY</code> (or <code>echo %ANTHROPIC_API_KEY%</code> on Windows) to check it's set.</li>
+            <li><strong><code>Connection refused</code> / timeout</strong> &mdash; Ollama is not running. Start it with <code>ollama serve</code> in a separate terminal. Verify with <code>curl http://localhost:11434/v1/models</code>.</li>
             <li><strong><code>ModuleNotFoundError: No module named 'openai'</code></strong> &mdash; You're not in the virtual environment. Run <code>source venv/bin/activate</code> first, then <code>pip install openai</code>.</li>
-            <li><strong><code>Connection error</code> / timeout</strong> &mdash; Check your internet connection. The API endpoint is <code>api.anthropic.com</code> &mdash; make sure it's not blocked by a firewall or VPN.</li>
+            <li><strong>Model not found error</strong> &mdash; Run <code>ollama list</code> to see available models. If mistral is missing, run <code>ollama pull mistral</code>.</li>
           </ul>
         </details>
 

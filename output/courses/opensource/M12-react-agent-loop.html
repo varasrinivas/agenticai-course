@@ -188,7 +188,7 @@
       <ul>
         <li>Explain the difference between a chatbot and an agent, and when each is appropriate</li>
         <li>Describe the four phases of the ReAct loop (Reason → Act → Observe → Repeat) and what happens in each</li>
-        <li>Implement a working ReAct agent using the model's Messages API and tool-use loop</li>
+        <li>Implement a working ReAct agent using the Chat Completions API and tool-calling loop</li>
         <li>Use thought traces to improve reasoning quality and debuggability</li>
         <li>Define correct stop conditions — without relying on arbitrary iteration caps</li>
         <li>Compare the manual implementation to the Agent SDK approach side-by-side</li>
@@ -337,17 +337,17 @@
       <p>Why force the reasoning to be explicit? Because when the thought is written out, it becomes part of the conversation context. That means subsequent reasoning steps can reference earlier thoughts. The model is essentially leaving notes for itself. Without this, complex multi-step tasks collapse because each tool call happens in a kind of vacuum — the model has already "forgotten" what it was trying to accomplish.</p>
 
       <h3 id="act-phase">Phase 2 — Act</h3>
-      <p>The Act phase is the model tool call — one of the tool_use blocks you met in M05. the model picks a tool from the available set (web search, code execution, database query, whatever you've given it) and calls it with specific parameters. This is the moment the model interacts with the real world: it reads a file, fetches a URL, runs code, queries an API. Anything can go wrong here (network errors, empty results, access denied), so your agent infrastructure must handle errors gracefully and return them to the model as structured tool results.</p>
+      <p>The Act phase is the model tool call — one of the tool calls you met in M05. the model picks a tool from the available set (web search, code execution, database query, whatever you've given it) and calls it with specific parameters. This is the moment the model interacts with the real world: it reads a file, fetches a URL, runs code, queries an API. Anything can go wrong here (network errors, empty results, access denied), so your agent infrastructure must handle errors gracefully and return them to the model as structured tool results.</p>
 
       <h3 id="observe-phase">Phase 3 — Observe</h3>
       <p>After the tool executes, your code (not the model — the model doesn't run the tools, it just requests them) appends the tool result to the conversation history as a <code>tool_result</code> content block. the model reads this result in the next turn — that reading is the "Observe" phase. This is where the model updates its understanding: "The search returned three papers, but none of them have the pricing data I need." That updated understanding feeds directly into the next Reason phase.</p>
 
       <h3 id="repeat-or-stop">Phase 4 — Repeat or Stop</h3>
-      <p>After observing, the model has a choice: call another tool (continue the loop) or produce a final answer (stop). The correct way to detect which it chose is by checking <code>stop_reason</code> in the API response. If <code>finish_reason == "tool_calls"</code>, the model requested more tools — keep going. If <code>stop_reason == "end_turn"</code>, the model is done and produced a final text response.</p>
+      <p>After observing, the model has a choice: call another tool (continue the loop) or produce a final answer (stop). The correct way to detect which it chose is by checking <code>finish_reason</code> in the API response. If <code>finish_reason == "tool_calls"</code>, the model requested more tools — keep going. If <code>finish_reason == "stop"</code>, the model is done and produced a final text response.</p>
 
       <div class="callout-cert">
-        <span class="box-label">🎓 Cert Tip — Domain 1.1</span>
-        <p>The correct way to determine loop termination is checking <code>stop_reason</code>: <strong>'tool_use'</strong> means continue, <strong>'end_turn'</strong> means done. CRITICAL anti-pattern: parsing the model's natural language response to see if it says "I'm done" or "task complete." Text parsing is fragile — the model may phrase completion differently every time, and any mismatch causes the loop to hang or terminate early.</p>
+        <span class="box-label">💡 Key Pattern</span>
+        <p>The correct way to determine loop termination is checking <code>finish_reason</code>: <strong>'tool_calls'</strong> means continue, <strong>'stop'</strong> means done. CRITICAL anti-pattern: parsing the model's natural language response to see if it says "I'm done" or "task complete." Text parsing is fragile — the model may phrase completion differently every time, and any mismatch causes the loop to hang or terminate early.</p>
       </div>
     </section>
 
@@ -355,11 +355,11 @@
     <section class="section" id="implementing-react">
       <h2 id="implementing-react">Implementing ReAct with the model's Tool Use</h2>
 
-      <p>ReAct is not a library or framework — it's a pattern you implement directly using the Messages API you already know from M05 and M06. The key is the <em>agentic loop</em>: a <code>while</code> loop that keeps calling <code>client.chat.completions.create()</code> until <code>stop_reason == "end_turn"</code>, with each iteration appending both the model's tool requests and your tool results to the running conversation history.</p>
+      <p>ReAct is not a library or framework — it's a pattern you implement directly using the Chat Completions API you already know from M05 and M06. The key is the <em>agentic loop</em>: a <code>while</code> loop that keeps calling <code>client.chat.completions.create()</code> until <code>finish_reason == "stop"</code>, with each iteration appending both the model's tool calls and your tool results to the running conversation history.</p>
 
       <div class="tech-def-box">
         <span class="box-label">📐 The Agentic Loop Pattern</span>
-        <p>The loop works like this: send the user's request to the model → check if the model wants to use tools → if yes, execute those tools and append results → loop back to the model with the updated history → if <code>stop_reason == "end_turn"</code>, extract and return the final text response.</p>
+        <p>The loop works like this: send the user's request to the model → check if the model wants to use tools → if yes, execute those tools and append results → loop back to the model with the updated history → if <code>finish_reason == "stop"</code>, extract and return the final text response.</p>
         <p>The conversation history array is the <strong>agent's memory</strong> — it grows with every turn. the model's "reasoning" happens because each new call includes all previous thoughts, actions, and observations. The stateless API call becomes stateful because your code maintains the history list.</p>
       </div>
 
@@ -439,7 +439,7 @@ const TOOLS: object[] = [
       </div>
 
       <h3>Chunk 2: The Agent Loop</h3>
-      <p>This is the heart of ReAct. Notice three things: (1) the loop condition checks <code>stop_reason</code>, not a counter; (2) every tool call and its result is appended to <code>messages</code> before looping; (3) the system prompt explicitly instructs the model to reason before acting.</p>
+      <p>This is the heart of ReAct. Notice three things: (1) the loop condition checks <code>finish_reason</code>, not a counter; (2) every tool call and its result is appended to <code>messages</code> before looping; (3) the system prompt explicitly instructs the model to reason before acting.</p>
 
       <div class="code-block-wrapper">
         <div class="code-tabs" role="tablist">
@@ -451,7 +451,7 @@ const TOOLS: object[] = [
           <pre><code class="language-python">from openai import OpenAI
 import json
 
-client = OpenAI(base_url="http://localhost:11434/v1", api_key="ollama")  # reads ANTHROPIC_API_KEY from environment
+client = OpenAI(base_url="http://localhost:11434/v1", api_key="ollama")
 
 SYSTEM_PROMPT = """You are a research assistant with access to web search tools.
 
@@ -468,8 +468,8 @@ This reasoning process makes your answers more accurate and your actions more fo
 
 def run_react_agent(user_question: str, max_turns: int = 20) -> str:
     """
-    Run the ReAct loop until the model finishes (stop_reason == 'end_turn').
-    max_turns is a SAFETY NET — the agent terminates via stop_reason, not via this cap.
+    Run the ReAct loop until the model finishes (finish_reason == 'stop').
+    max_turns is a SAFETY NET — the agent terminates via finish_reason, not via this cap.
     """
     messages = [{"role": "user", "content": user_question}]
     turn_count = 0
@@ -478,41 +478,37 @@ def run_react_agent(user_question: str, max_turns: int = 20) -> str:
         turn_count += 1
 
         # --- REASON + ACT phase ---
-        # the model produces a thought, then optionally requests a tool call
+        # the model produces a thought, then optionally requests tool calls
         response = client.chat.completions.create(
             model="mistral",
             tools=TOOLS,
             messages=messages
         )
 
-        # Append the model's full response to history (preserves thought traces + tool calls)
-        messages.append({"role": "assistant", "content": response.content})
+        msg = response.choices[0].message
 
         # --- STOP CHECK ---
-        # 'end_turn' = the model is done and produced a final answer
-        # 'tool_use' = the model wants to call one or more tools
+        # finish_reason == "stop"       → model is done, extract final answer
+        # finish_reason == "tool_calls" → model wants to call tools, continue loop
         if response.choices[0].finish_reason == "stop":
-            # Extract the final text response
-            for block in response.content:
-                if hasattr(block, 'text'):
-                    return block.text
-            return "Agent finished without a text response."
+            return msg.content or "Agent finished without a text response."
+
+        # Append the assistant's message (includes tool_calls) to history
+        messages.append({
+            "role": "assistant",
+            "content": msg.content,
+            "tool_calls": msg.tool_calls
+        })
 
         # --- OBSERVE phase ---
-        # Find all tool_use blocks the model requested and execute them
-        tool_results = []
-        for block in response.content:
-            if block.type == "function":
-                result = execute_tool(block.name, block.input)
-                tool_results.append({
-                    "role": "tool",
-                    "tool_call_id": block.id,
-                    "content": result
-                })
-
-        # Append all tool results so the model can observe them in the next turn
-        if tool_results:
-            messages.append({"role": "user", "content": tool_results})
+        # Execute each tool call and append results as tool-role messages
+        for tc in (msg.tool_calls or []):
+            result = execute_tool(tc.function.name, json.loads(tc.function.arguments))
+            messages.append({
+                "role": "tool",
+                "tool_call_id": tc.id,
+                "content": result
+            })
 
     return f"Safety limit reached after {max_turns} turns."
 
@@ -534,7 +530,7 @@ def execute_tool(name: str, inputs: dict) -> str:
           <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
           <pre><code class="language-typescript">import OpenAI from 'openai';
 
-const client = new OpenAI({ baseURL: 'http://localhost:11434/v1', apiKey: 'ollama' }); // reads ANTHROPIC_API_KEY from environment
+const client = new OpenAI({ baseURL: 'http://localhost:11434/v1', apiKey: 'ollama' });
 
 const SYSTEM_PROMPT = `You are a research assistant with access to web search tools.
 
@@ -561,30 +557,24 @@ async function runReactAgent(userQuestion: string, maxTurns = 20): Promise<strin
       messages,
     });
 
-    // Append the model's response to history (preserves thoughts and tool calls)
-    messages.push({ role: "assistant", content: response.content });
+    const msg = response.choices[0].message;
 
-    // STOP CHECK: 'end_turn' means done; 'tool_use' means continue
+    // STOP CHECK: finish_reason "stop" means done; "tool_calls" means continue
     if (response.choices[0].finish_reason === "stop") {
-      const textBlock = response.content.find((b): b is object => b.type === "text");
-      return response.choices[0].message.content ?? "Agent finished without a text response.";
+      return msg.content ?? "Agent finished without a text response.";
     }
 
-    // OBSERVE: execute tool calls, collect results
-    const toolResults: object[] = [];
-    for (const block of response.content) {
-      if (block.type === "function") {
-        const result = await executeTool(block.name, block.input as Record<string, string>);
-        toolResults.push({
-          role: "tool",
-          tool_call_id: block.id,
-          content: result,
-        });
-      }
-    }
+    // Append the assistant's message (with tool_calls) to history
+    messages.push({ role: "assistant", content: msg.content, tool_calls: msg.tool_calls });
 
-    if (toolResults.length > 0) {
-      messages.push({ role: "user", content: toolResults });
+    // OBSERVE: execute each tool call, append results as tool-role messages
+    for (const tc of (msg.tool_calls ?? [])) {
+      const result = await executeTool(tc.function.name, JSON.parse(tc.function.arguments));
+      messages.push({
+        role: "tool",
+        tool_call_id: tc.id,
+        content: result,
+      });
     }
   }
   return `Safety limit reached after ${maxTurns} turns.`;
@@ -593,7 +583,7 @@ async function runReactAgent(userQuestion: string, maxTurns = 20): Promise<strin
       </div>
 
       <div class="callout-checkpoint">
-        <strong>✅ What Just Happened?</strong> You just implemented the full ReAct loop. The <code>while</code> loop runs until the model says <code>stop_reason == "end_turn"</code>. Each iteration: the model reasons + requests tools → you execute them → you append results → repeat. The <code>messages</code> list is the shared memory that makes all the "reasoning" work — every thought, action, and observation accumulates there.
+        <strong>✅ What Just Happened?</strong> You just implemented the full ReAct loop. The <code>while</code> loop runs until the model sets <code>finish_reason == "stop"</code>. Each iteration: the model reasons + requests tools → you execute them → you append results → repeat. The <code>messages</code> list is the shared memory that makes all the "reasoning" work — every thought, action, and observation accumulates there.
       </div>
     </section>
 
@@ -661,13 +651,13 @@ async function runReactAgent(userQuestion: string, maxTurns = 20): Promise<strin
       </div>
 
       <div class="callout-why">
-        <span class="box-label">✅ Correct Pattern: stop_reason + Safety Cap</span>
-        <p>The correct primary stop condition is <code>stop_reason == "end_turn"</code> — the model decides it has enough information and stops calling tools. The iteration cap (<code>max_turns</code>) is a <strong>safety net</strong>, not a control mechanism. Set it high enough that legitimate tasks finish (20-50 depending on your use case) and handle the cap-exceeded case explicitly (log it, notify the user, do not silently return partial results).</p>
+        <span class="box-label">✅ Correct Pattern: finish_reason + Safety Cap</span>
+        <p>The correct primary stop condition is <code>finish_reason == "stop"</code> — the model decides it has enough information and stops calling tools. The iteration cap (<code>max_turns</code>) is a <strong>safety net</strong>, not a control mechanism. Set it high enough that legitimate tasks finish (20-50 depending on your use case) and handle the cap-exceeded case explicitly (log it, notify the user, do not silently return partial results).</p>
       </div>
 
       <div class="callout-cert">
-        <span class="box-label">🎓 Cert Tip — Domain 1.1</span>
-        <p><code>maxTurns</code> / iteration caps are a <strong>SAFETY NET</strong>, not a control mechanism. Anti-pattern: using an arbitrary cap (e.g., 10 iterations) as the primary stopping logic. Let the agent terminate naturally via <code>stop_reason</code>. If you're hitting the cap regularly, your agent design has a problem (missing "enough information" signal, tools that never return complete data, or goals that are too open-ended).</p>
+        <span class="box-label">💡 Key Pattern</span>
+        <p><code>maxTurns</code> / iteration caps are a <strong>SAFETY NET</strong>, not a control mechanism. Anti-pattern: using an arbitrary cap (e.g., 10 iterations) as the primary stopping logic. Let the agent terminate naturally via <code>finish_reason</code>. If you're hitting the cap regularly, your agent design has a problem (missing "enough information" signal, tools that never return complete data, or goals that are too open-ended).</p>
       </div>
     </section>
 
@@ -703,21 +693,23 @@ while True:
         tools=TOOLS,
         messages=messages
     )
-    messages.append({"role": "assistant", "content": resp.content})
+    msg = resp.choices[0].message
 
     if resp.choices[0].finish_reason == "stop":
-        return next(b.text for b in resp.content if hasattr(b, 'text'))
+        return msg.content
 
-    tool_results = []
-    for block in resp.content:
-        if block.type == "function":
-            result = execute_tool(block.name, block.input)
-            tool_results.append({
-                "role": "tool",
-                "tool_call_id": block.id,
-                "content": result
-            })
-    messages.append({"role": "user", "content": tool_results})
+    messages.append({
+        "role": "assistant",
+        "content": msg.content,
+        "tool_calls": msg.tool_calls
+    })
+    for tc in (msg.tool_calls or []):
+        result = execute_tool(tc.function.name, json.loads(tc.function.arguments))
+        messages.append({
+            "role": "tool",
+            "tool_call_id": tc.id,
+            "content": result
+        })
 
 # YOU control: history management, tool dispatch,
 # error handling, stop logic, logging</code></pre>
@@ -738,21 +730,17 @@ while (true) {
     tools: TOOLS,
     messages
   });
-  messages.push({ role: "assistant", content: resp.content });
+  const msg = resp.choices[0].message;
 
   if (resp.choices[0].finish_reason === "stop") {
-    const tb = resp.content.find(b => b.type === "text") as object;
-    return tb.text;
+    return msg.content ?? "";
   }
 
-  const results: object[] = [];
-  for (const b of resp.content) {
-    if (b.type === "function") {
-      const res = await executeTool(b.name, b.input as Record<string, string>);
-      results.push({ role: "tool", tool_call_id: b.id, content: res });
-    }
+  messages.push({ role: "assistant", content: msg.content, tool_calls: msg.tool_calls });
+  for (const tc of (msg.tool_calls ?? [])) {
+    const res = await executeTool(tc.function.name, JSON.parse(tc.function.arguments));
+    messages.push({ role: "tool", tool_call_id: tc.id, content: res });
   }
-  messages.push({ role: "user", content: results });
 }
 // YOU control: everything</code></pre>
             </div>
@@ -851,7 +839,7 @@ console.log(result.finalText);</code></pre>
 
       <div class="callout-why">
         <span class="box-label">✅ What the SDK Does (and Doesn't) Hide</span>
-        <p><strong>SDK handles:</strong> the while loop, appending messages to history, routing tool_use blocks to your decorated functions, collecting tool results, checking stop_reason, surfacing the final text.</p>
+        <p><strong>SDK handles:</strong> the while loop, appending messages to history, routing tool calls to your decorated functions, collecting tool results, checking finish_reason, surfacing the final text.</p>
         <p><strong>You still control:</strong> tool implementations (the actual API calls happen in your @tool functions), the system prompt, model selection, max_turns safety cap, and error handling within each tool.</p>
         <p><strong>Why learn both:</strong> When something goes wrong in the SDK (wrong tool called, loop terminates early, unexpected output) you need to understand the manual loop to know where to look. The SDK is a productivity layer, not a black box you trust blindly.</p>
       </div>
@@ -869,7 +857,7 @@ console.log(result.finalText);</code></pre>
           </div>
           <div>
             <div style="font-family:'Bricolage Grotesque',sans-serif;font-size:0.75rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;margin-bottom:0.4rem;">Time · Prerequisites · Files</div>
-            <div style="font-size:0.9rem;">⏱ 30-45 min · Python 3.10+, ANTHROPIC_API_KEY set<br>
+            <div style="font-size:0.9rem;">⏱ 30-45 min · Python 3.10+, Ollama running (<code>ollama serve</code>)<br>
             📄 <code>agent.py</code> · <code>tools.py</code> · <code>mock_search.py</code></div>
           </div>
         </div>
@@ -884,9 +872,10 @@ python -m venv venv
 # Mac/Linux: source venv/bin/activate
 pip install openai httpx
 
-# Set your API key
-# Windows:  set ANTHROPIC_API_KEY=your-key-here
-# Mac/Linux: export ANTHROPIC_API_KEY=your-key-here</code></pre>
+# Verify Ollama is running and mistral is available
+# ollama serve             ← start if not running
+# ollama pull mistral      ← download model if needed
+# ollama list              ← should show mistral in the list</code></pre>
       </div>
 
       <h3>Step 1: Create the Mock Search Tool</h3>
@@ -1010,11 +999,11 @@ def execute_tool(name: str, inputs: dict) -> str:
 
 def run_agent(question: str, max_turns: int = 20, verbose: bool = True) -> str:
     """
-    Run the ReAct loop until stop_reason == 'end_turn'.
+    Run the ReAct loop until finish_reason == 'stop'.
 
     Args:
         question: The user's research question
-        max_turns: Safety cap (loop terminates via stop_reason, not this cap)
+        max_turns: Safety cap (loop terminates via finish_reason, not this cap)
         verbose: Print thought traces and tool calls to stdout
     """
     messages = [{"role": "user", "content": question}]
@@ -1034,40 +1023,37 @@ def run_agent(question: str, max_turns: int = 20, verbose: bool = True) -> str:
             messages=messages
         )
 
-        # Append the model's full response (includes both text thoughts and tool_use blocks)
-        messages.append({"role": "assistant", "content": response.content})
+        msg = response.choices[0].message
 
         # Print verbose trace
         if verbose:
             print(f"\n--- Turn {turn} (finish_reason: {response.choices[0].finish_reason}) ---")
-            for block in response.content:
-                if hasattr(block, 'text') and block.text:
-                    print(f"💭 {block.text[:300]}{'...' if len(block.text) > 300 else ''}")
-                elif block.type == "function":
-                    print(f"🔧 {block.name}({json.dumps(block.input, indent=None)[:100]})")
+            if msg.content:
+                print(f"💭 {msg.content[:300]}{'...' if len(msg.content) > 300 else ''}")
+            for tc in (msg.tool_calls or []):
+                print(f"🔧 {tc.function.name}({tc.function.arguments[:100]})")
 
         # STOP: the model has produced its final answer
         if response.choices[0].finish_reason == "stop":
-            for block in response.content:
-                if hasattr(block, 'text') and block.text:
-                    return block.text
-            return "Agent completed without final text."
+            return msg.content or "Agent completed without final text."
 
-        # OBSERVE: Execute tool calls, collect results
-        tool_results = []
-        for block in response.content:
-            if block.type == "function":
-                result = execute_tool(block.name, block.input)
-                if verbose:
-                    print(f"👁  Result preview: {result[:150]}...")
-                tool_results.append({
-                    "role": "tool",
-                    "tool_call_id": block.id,
-                    "content": result
-                })
+        # Append the assistant's message (with tool_calls) to history
+        messages.append({
+            "role": "assistant",
+            "content": msg.content,
+            "tool_calls": msg.tool_calls
+        })
 
-        if tool_results:
-            messages.append({"role": "user", "content": tool_results})
+        # OBSERVE: Execute each tool call, append results as tool-role messages
+        for tc in (msg.tool_calls or []):
+            result = execute_tool(tc.function.name, json.loads(tc.function.arguments))
+            if verbose:
+                print(f"👁  Result preview: {result[:150]}...")
+            messages.append({
+                "role": "tool",
+                "tool_call_id": tc.id,
+                "content": result
+            })
 
     return f"[Safety cap reached after {max_turns} turns — partial result]"
 
@@ -1089,17 +1075,17 @@ if __name__ == "__main__":
 QUESTION: What are the main Python frameworks for building AI agents in 2025...
 ============================================================
 
---- Turn 1 (stop_reason: tool_use) ---
+--- Turn 1 (finish_reason: tool_calls) ---
 💭 Thought: I need to find current information about Python AI frameworks...
 🔧 web_search({"query": "python ai frameworks 2025"})
 👁  Result preview: Search results for 'python ai frameworks 2025': ...
 
---- Turn 2 (stop_reason: tool_use) ---
-💭 Thought: I have a list of frameworks. Now let me search specifically for claude-agent-sdk...
-🔧 web_search({"query": "claude agent sdk features"})
-👁  Result preview: Search results for 'claude agent sdk features': ...
+--- Turn 2 (finish_reason: tool_calls) ---
+💭 Thought: I have a list of frameworks. Now let me search specifically for open-source agent SDKs...
+🔧 web_search({"query": "ollama mistral agent sdk features"})
+👁  Result preview: Search results for 'ollama mistral agent sdk features': ...
 
---- Turn 3 (stop_reason: end_turn) ---
+--- Turn 3 (finish_reason: stop) ---
 💭 [Final report text]
 
 ============================================================
@@ -1115,12 +1101,12 @@ Python's agent framework ecosystem has matured significantly in 2025...
 ## Sources Used
 - web_search("python ai frameworks 2025")
 - web_search("claude agent sdk features")</pre>
-      <div class="callout-checkpoint">✅ If you see multiple "Turn" headers with Thought/Tool/Observe traces, the ReAct loop is working correctly. The agent should complete in 2–4 turns for this question. If you get an AuthenticationError, check that ANTHROPIC_API_KEY is set.</div>
+      <div class="callout-checkpoint">✅ If you see multiple "Turn" headers with Thought/Tool/Observe traces, the ReAct loop is working correctly. The agent should complete in 2–4 turns for this question. If you get a connection error, make sure Ollama is running: <code>ollama serve</code>.</div>
 
       <h3>Troubleshooting</h3>
       <ul style="font-size:0.9rem;">
-        <li><strong>AuthenticationError:</strong> Run <code>echo $ANTHROPIC_API_KEY</code> (Mac/Linux) or <code>echo %ANTHROPIC_API_KEY%</code> (Windows) — must return your key, not blank.</li>
-        <li><strong>ModuleNotFoundError: anthropic:</strong> Run <code>pip install openai</code> — make sure your virtual environment is activated.</li>
+        <li><strong>Connection error / refused:</strong> Ollama must be running. Start it with <code>ollama serve</code> and confirm with <code>curl http://localhost:11434/v1/models</code>.</li>
+        <li><strong>ModuleNotFoundError: openai:</strong> Run <code>pip install openai</code> — make sure your virtual environment is activated.</li>
         <li><strong>Agent stops after 1 turn with no tool calls:</strong> Check your system prompt is being passed. Also verify TOOLS list is non-empty.</li>
         <li><strong>Loop never terminates:</strong> Usually means tool results are not being appended correctly. Add a <code>print(messages[-1])</code> after the tool_results append to verify.</li>
       </ul>
@@ -1143,11 +1129,11 @@ Python's agent framework ecosystem has matured significantly in 2025...
         </div>
         <div class="quiz-option" onclick="checkQuiz(this,'q1',true)" role="button" tabindex="0" aria-label="Option C">
           <div class="quiz-marker">C</div>
-          <span>Check <code>stop_reason == "end_turn"</code> in the API response</span>
+          <span>Check <code>finish_reason == "stop"</code> in the API response</span>
         </div>
         <div class="quiz-option" onclick="checkQuiz(this,'q1',false)" role="button" tabindex="0" aria-label="Option D">
           <div class="quiz-marker">D</div>
-          <span>Stop when no tool_use blocks appear in the response content</span>
+          <span>Stop when <code>response.choices[0].message.tool_calls</code> is <code>None</code></span>
         </div>
         <div class="quiz-feedback" id="q1-feedback"></div>
       </div>
@@ -1187,7 +1173,7 @@ Python's agent framework ecosystem has matured significantly in 2025...
         </div>
         <div class="quiz-option" onclick="checkQuiz(this,'q3',true)" role="button" tabindex="0">
           <div class="quiz-marker">C</div>
-          <span>As a "user" role message with <code>role: "tool"</code> content blocks, after the assistant's message</span>
+          <span>As individual <code>role: "tool"</code> messages — one per tool call — each with a matching <code>tool_call_id</code>, appended after the assistant's message</span>
         </div>
         <div class="quiz-option" onclick="checkQuiz(this,'q3',false)" role="button" tabindex="0">
           <div class="quiz-marker">D</div>
@@ -1213,7 +1199,7 @@ Python's agent framework ecosystem has matured significantly in 2025...
         </div>
         <div class="quiz-option" onclick="checkQuiz(this,'q4',false)" role="button" tabindex="0">
           <div class="quiz-marker">D</div>
-          <span>They are required by the Messages API — the API rejects requests without thought traces</span>
+          <span>They are required by the Chat Completions API — the API rejects requests without thought traces</span>
         </div>
         <div class="quiz-feedback" id="q4-feedback"></div>
       </div>
@@ -1272,7 +1258,7 @@ Python's agent framework ecosystem has matured significantly in 2025...
           <ul style="font-size:0.9rem;">
             <li><strong>ReAct</strong> = Reasoning + Acting interleaved</li>
             <li>Loop phases: Reason → Act → Observe → Repeat</li>
-            <li><code>stop_reason == "end_turn"</code> = correct stop signal</li>
+            <li><code>finish_reason == "stop"</code> = correct stop signal</li>
             <li>Thought traces = working memory + audit trail</li>
             <li>Iteration cap = safety net, not control mechanism</li>
             <li>Tool descriptions = the model's selection signal</li>
@@ -1392,7 +1378,7 @@ const reactSteps = [
   },
   {
     id: 'rl-repeat',
-    ann: '🔁 <strong>Repeat or Stop:</strong> Check __CODEBLOCK_50__. "tool_use" → loop again. "end_turn" → the model is done, extract final text response.',
+    ann: '🔁 <strong>Repeat or Stop:</strong> Check __CODEBLOCK_50__. "tool_calls" → loop again. "stop" → the model is done, extract final text response.',
     center: '4. Repeat?'
   }
 ];
@@ -1458,11 +1444,11 @@ function playTraceAnim() {
 // ─── Quiz logic ──────────────────────────────────────────────────────────────
 const quizFeedback = {
   q1: {
-    correct: 'Exactly right. __CODEBLOCK_51__ is the authoritative signal — it\'s part of the API contract. "tool_use" means the model wants to keep going. Text parsing is fragile and iteration caps are safety nets, not primary stops.',
+    correct: 'Exactly right. __CODEBLOCK_51__ is the authoritative signal — it\'s part of the API contract. "tool_calls" means the model wants to keep going. Text parsing is fragile and iteration caps are safety nets, not primary stops.',
     wrong: {
       A: 'Text parsing is fragile — the model may phrase completion differently on every run, and "I\'m done" might appear inside a thought trace mid-task.',
       B: 'An iteration cap is a safety net, not the primary stop. A cap of 10 might cut off complex tasks too early or waste turns on simple ones.',
-      D: 'When __CODEBLOCK_52__, the response may contain only a text block with no tool_use — but that\'s not the signal itself. The signal is stop_reason.'
+      D: 'Checking <code>msg.tool_calls is None</code> works too, but the authoritative check is <code>finish_reason</code> — it\'s part of the API contract.'
     }
   },
   q2: {
@@ -1474,11 +1460,11 @@ const quizFeedback = {
     }
   },
   q3: {
-    correct: 'Correct. Tool results go as a "user" role message with __CODEBLOCK_53__ content blocks, each referencing the __CODEBLOCK_54__ from the model\'s request. The Messages API requires this structure.',
+    correct: 'Correct. Each tool result is its own <code>role: "tool"</code> message with a matching <code>tool_call_id</code>, appended after the assistant\'s message that contained the tool calls. The Chat Completions API requires this structure.',
     wrong: {
       A: 'System messages are for initial instructions, not tool results. Appending to system mid-conversation is not valid API usage.',
-      B: 'the model\'s tool_use request is an assistant message. Tool results must come from the "user" role to maintain the alternating user/assistant structure.',
-      D: 'the model does not automatically receive tool results — your code must execute the tools and append results explicitly.'
+      B: 'In the OpenAI format tool results use <code>role: "tool"</code>, not <code>role: "assistant"</code> — each is a separate message in the history.',
+      D: 'The model does not automatically receive tool results — your code must execute the tools and append results explicitly.'
     }
   },
   q4: {
@@ -1486,7 +1472,7 @@ const quizFeedback = {
     wrong: {
       A: 'Thought traces add tokens and may slightly increase turn count (by causing the model to recognize more gaps). They don\'t reduce API calls.',
       C: 'the model has no automatic deduplication of tool calls based on traces — the thought may influence the model\'s judgment, but it\'s not a built-in skip mechanism.',
-      D: 'Thought traces are an optional pattern — the Messages API works without them. They\'re recommended for quality, not required by the API.'
+      D: 'Thought traces are an optional pattern — the Chat Completions API works without them. They\'re recommended for quality, not required by the API.'
     }
   },
   q5: {
@@ -1501,7 +1487,7 @@ const quizFeedback = {
     correct: 'Correct. Tier 2 (M12, M13, M14, M16, M17, M19) ships both a manual solution using raw client.chat.completions.create() and an SDK solution using claude-agent-sdk. The goal is showing what the SDK abstracts so students can debug it later.',
     wrong: {
       A: 'That\'s Tier 3 — flagship modules where the SDK is the primary path and the manual loop is in an appendix.',
-      C: 'There\'s only one API key needed — ANTHROPIC_API_KEY. Both the raw API and the SDK use the same authentication.',
+      C: 'No API key needed — both the raw OpenAI SDK and frameworks like CrewAI point at Ollama running locally.',
       D: 'Tier 2 modules are pivot-point modules, not optional advanced topics — they\'re in the main curriculum path.'
     }
   }
