@@ -247,6 +247,11 @@ code{font-family:'JetBrains Mono',monospace;font-size:0.88rem;background:var(--b
     </tbody>
   </table>
 
+  <div class="callout-why">
+    <span class="box-label" style="color:var(--success)">About the "expected output" blocks</span>
+    <p style="margin-bottom:0">Frontend success is partly terminal output (<code>node --test</code>) and partly <em>observable behavior</em> &#8212; so the expected-output blocks below describe both. Your visual design will differ; the behaviors (which state shows when, where focus lands, what persists) must match exactly.</p>
+  </div>
+
   <div class="step-card" data-step="Phase 1">
     <h4>Foundation: rules, skeleton, tokens</h4>
     <p>New repo. <code>GEMINI.md</code> rules: the three-layer separation above; semantic HTML (<code>table</code> for the board, <code>button</code> for actions &#8212; never clickable <code>div</code>s); all colors/spacing via CSS custom properties in <code>:root</code>; every interactive element keyboard-reachable; loading/error/empty are <em>three distinct</em> UI states, never conflated. Then generate the skeleton from a spec-comment in <code>index.html</code> (Move 1: type an HTML comment describing the regions &#8212; header with search + refresh, SLA banner, filter bar, order table, drawer <code>&lt;aside&gt;</code> &#8212; pause for ghost text, accept section by section) and the token sheet in <code>style.css</code> the same way.</p>
@@ -266,12 +271,45 @@ code{font-family:'JetBrains Mono',monospace;font-size:0.88rem;background:var(--b
 // Pure function: never call Date.now() — now arrives as a parameter.</code></pre>
     </div>
     <p>Generate tests (Move 3: select <code>classifySla</code> &#8594; right-click &#8594; <em>Generate unit tests</em>, then in chat demand <em>"node:test suite for classifySla covering all four outcomes plus the boundary: promised date == today"</em>), run <code>node --test tests/</code> in the integrated terminal, and iterate. Then <code>api.js</code>: <code>mockApi</code> first (deterministic orders covering every state and SLA class &#8212; generate it headlessly with Gemini CLI like the other capstones), then <code>liveApi</code> with timeouts and typed errors (<code>{kind: "network" | "http", status?}</code>) so the UI can distinguish failure from emptiness.</p>
+    <div class="code-block-wrapper">
+      <div class="code-header"><span class="code-lang">expected output &#8212; pure logic, tested without a browser</span></div>
+      <pre><code class="language-markdown">PS&gt; node --test tests/
+&#10004; classifySla: MET when shipped on or before promised date
+&#10004; classifySla: BREACHED when unshipped past promised date
+&#10004; classifySla: AT_RISK when promised date is today (the boundary)
+&#10004; classifySla: AT_RISK when promised date is tomorrow
+&#10004; classifySla: ON_TIME otherwise
+&#10004; filterOrders: state and customer filters combine (AND)
+&#10004; filterOrders: empty criteria returns all orders
+&#10004; sortOrders: promised date ascending, stable for ties
+&#10004; formatEvent: ISO timestamp renders as local short form
+&#8505; tests 14 &#8226; suites 4 &#8226; pass 14 &#8226; fail 0 &#8226; duration_ms 92</code></pre>
+    </div>
     <div class="checkpoint"><span class="checkpoint-icon">&#9989;</span><div><strong>Checkpoint</strong> <code>node --test</code> all green with zero browser involvement &#8212; if any logic test needs a DOM, the function is in the wrong file (the frontend version of G04's "failing tests indict the design").</div></div>
   </div>
 
   <div class="step-card" data-step="Phase 3">
     <h4>Render: where you review with your eyes</h4>
     <p>Build <code>app.js</code> in chat-sized increments: render the board from mock data &#8594; wire filters/sort (calling logic.js) &#8594; SLA banner &#8594; drawer &#8594; auto-refresh with the "last updated" stamp. Then <strong>force the three async states</strong> and look at each: mock mode with empty data (empty state: "No orders match" + a clear-filters action), live mode with the API stopped (error state: "Can't reach TrackFlow &#8212; data may be stale" + retry), and a throttled network (loading state visible, UI not frozen). Use chat to fix what you see, feeding it evidence G03-style: paste the console error or describe the misbehavior precisely.</p>
+    <div class="code-block-wrapper">
+      <div class="code-header"><span class="code-lang">expected behavior &#8212; the three async states, forced and observed</span></div>
+      <pre><code class="language-markdown">http://localhost:8000/?mode=mock
+  -&gt; board renders 12 orders &#183; banner reads "&#9888; 2 BREACHED &#183; 3 AT RISK"
+  -&gt; "Last updated 14:02:11" stamp ticks on every refresh
+
+EMPTY  (mock mode, filter to a customer with no orders)
+  -&gt; "No orders match your filters"  +  [Clear filters] button
+  -&gt; banner counts unchanged (they reflect ALL orders, not the filter)
+
+ERROR  (live mode, TrackFlow server stopped)
+  -&gt; red strip: "Can't reach TrackFlow — data may be stale"  +  [Retry]
+  -&gt; previous orders stay visible, marked stale — NOT a blank table
+  -&gt; DevTools console: one handled error log, no uncaught exceptions
+
+LOADING  (DevTools &#8594; Network &#8594; throttle to Slow 3G, press Refresh)
+  -&gt; skeleton rows or spinner visible; filters remain clickable;
+     the "Last updated" stamp does NOT advance until data lands</code></pre>
+    </div>
     <div class="callout-gotcha"><span class="box-label" style="color:var(--error)">The conflation trap</span><p style="margin-bottom:0">Generated frontend code loves <code>catch (e) { orders = [] }</code> &#8212; which renders an API outage as "no orders," the exact lie that gets a rep to tell a customer their order doesn't exist. Hunt for this pattern in every diff you accept; rejecting it is rubric item 3.</p></div>
   </div>
 
@@ -288,6 +326,23 @@ code{font-family:'JetBrains Mono',monospace;font-size:0.88rem;background:var(--b
 3. Both themes must keep WCAG AA contrast for state chips and the SLA
    banner — list the contrast ratios you chose in your plan.
 Plan first.</code></pre>
+    </div>
+    <div class="code-block-wrapper">
+      <div class="code-header"><span class="code-lang">expected behavior &#8212; keyboard task and theme persistence</span></div>
+      <pre><code class="language-markdown">KEYBOARD-ONLY TASK (mouse unplugged)
+  Tab order: search &#8594; refresh &#8594; theme toggle &#8594; SLA banner &#8594; filters &#8594; first row
+  Arrow/Tab to the breached row, press Enter
+    -&gt; drawer opens, focus lands on the drawer heading
+  Tab through: line items &#8594; audit timeline &#8594; tracking events
+  Press Esc
+    -&gt; drawer closes, focus RETURNS to the row you opened it from
+
+THEME
+  Click toggle -&gt; &lt;html data-theme="light"&gt;; aria-pressed flips to "true"
+  DevTools console:  localStorage.getItem("theme")  -&gt;  "light"
+  Reload -&gt; still light.  Clear localStorage + reload
+    -&gt; follows OS prefers-color-scheme
+  State chips and SLA banner readable in BOTH themes (AA: &#8805;4.5:1)</code></pre>
     </div>
     <div class="checkpoint"><span class="checkpoint-icon">&#9989;</span><div><strong>Checkpoint</strong> The agent's plan listed real contrast ratios (challenge it if the warning-on-light pairing is below 4.5:1 &#8212; it often is); the diff touched only the token block, the toggle, and localStorage logic. Toggle works, persists, and respects the OS default on first visit.</div></div>
   </div>

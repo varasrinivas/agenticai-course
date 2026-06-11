@@ -253,6 +253,11 @@ ref_filing      for UCC3 rows: the UCC-1 filing_number it modifies (sometimes mi
   <h2>Build Phases</h2>
   <p>Each phase names the course skills it exercises and gives you the key prompt. You write the judgment; Gemini writes the labor.</p>
 
+  <div class="callout-why">
+    <span class="box-label" style="color:var(--success)">About the "expected output" blocks</span>
+    <p style="margin-bottom:0">Every phase below shows a sample of what success looks like. Because Gemini generates your code, your <strong>exact counts, wording, and formatting will differ</strong> &#8212; what must match is the <em>shape</em> (the same kinds of lines appear) and the <em>invariants</em> (e.g., bronze = silver + rejects). If your output is structurally different &#8212; missing reject reasons, no idempotency, counts that don't reconcile &#8212; that's a finding to fix, not a formatting quirk.</p>
+  </div>
+
   <table class="skills-table" aria-label="Phase to module skills mapping">
     <thead><tr><th>Phase</th><th>What happens</th><th>Skills from</th></tr></thead>
     <tbody>
@@ -272,12 +277,36 @@ ref_filing      for UCC3 rows: the UCC-1 filing_number it modifies (sometimes mi
       <pre><code class="language-bash">gemini -p "Write a Python script make_data.py that generates 3 CSVs (data/raw/ucc_filings_2026_01.csv, _02, _03) with ~120 rows total matching this schema: filing_number, filing_type (UCC1/UCC3-AMEND/UCC3-CONT/UCC3-TERM, inconsistent casing), file_date (deliberately mixed formats: ISO, MM/DD/YYYY, DD-Mon-YY), debtor_name (include 4 companies that each appear under 3 name variants like 'ACME Industrial Supply LLC' / 'Acme Industrial Supply, L.L.C.'), debtor_state, secured_party, collateral_desc (some empty), ref_filing (UCC3 rows reference real UCC1 numbers, but make 3 of them orphans and 2 missing). Include 2 duplicate filing_numbers with identical content and 1 with conflicting content. Use only the stdlib + random with a fixed seed." > make_data.py
 python make_data.py</code></pre>
     </div>
+    <div class="code-block-wrapper">
+      <div class="code-header"><span class="code-lang">expected output &#8212; shape matters, your seeded values will differ</span></div>
+      <pre><code class="language-markdown">PS&gt; python make_data.py
+Wrote data/raw/ucc_filings_2026_01.csv  (42 rows)
+Wrote data/raw/ucc_filings_2026_02.csv  (40 rows)
+Wrote data/raw/ucc_filings_2026_03.csv  (44 rows)
+
+PS&gt; Get-Content data\raw\ucc_filings_2026_01.csv -TotalCount 4
+filing_number,filing_type,file_date,debtor_name,debtor_state,secured_party,collateral_desc,ref_filing
+2026-0142337,UCC1,2026-03-14,ACME Industrial Supply LLC,OH,First Commercial Bank,all inventory and equipment,
+2026-0142401,ucc3-amend,03/22/2026,"Acme Industrial Supply, L.L.C.",OH,First Commercial Bank,,2026-0142337
+2026-0142498,UCC1,22-Mar-26,BLUE RIVER LOGISTICS,TX,Lone Star Credit,fleet vehicles,</code></pre>
+    </div>
     <div class="checkpoint"><span class="checkpoint-icon">&#9989;</span><div><strong>Checkpoint</strong> Three CSVs exist; open one and visually confirm the chaos (mixed dates, name variants, orphan refs). You just used AI to build a realistic test fixture &#8212; a legitimate professional trick.</div></div>
   </div>
 
   <div class="step-card" data-step="Phase 2">
     <h4>Bronze: boring on purpose</h4>
     <p>Create <code>stages/bronze.py</code> with a header docstring stating the bronze contract (load raw, add <code>source_file</code> and <code>loaded_at</code>, never transform, idempotent by source_file). Generate <code>load_bronze()</code> from spec-comments (Move 1: type the comment in <code>bronze.py</code>, pause for ghost text, <code>Tab</code> to accept). The interesting requirement is <strong>idempotency</strong>: re-running must not duplicate rows &#8212; spec it in the comment ("delete existing rows for this source_file before insert") and verify by running it twice.</p>
+    <div class="code-block-wrapper">
+      <div class="code-header"><span class="code-lang">expected output &#8212; note the second run changes nothing</span></div>
+      <pre><code class="language-markdown">PS&gt; python pipeline.py run --stage bronze
+[bronze] ucc_filings_2026_01.csv -&gt; 42 rows loaded
+[bronze] ucc_filings_2026_02.csv -&gt; 40 rows loaded
+[bronze] ucc_filings_2026_03.csv -&gt; 44 rows loaded
+[bronze] total rows in data/bronze/filings.db: 126
+
+PS&gt; python pipeline.py run --stage bronze     # idempotency check
+[bronze] total rows in data/bronze/filings.db: 126   &lt;-- unchanged</code></pre>
+    </div>
     <div class="checkpoint"><span class="checkpoint-icon">&#9989;</span><div><strong>Checkpoint</strong> <code>python pipeline.py run --stage bronze</code> twice in a row &#8594; same row count both times. Bronze row count equals raw CSV row count exactly (rejects don't exist yet &#8212; bronze takes everything).</div></div>
   </div>
 
@@ -292,6 +321,18 @@ where this rule WRONGLY merges two different companies, and 3 pairs it
 wrongly keeps apart. Should I add anything cheap to reduce the worst risk?</code></pre>
     </div>
     <div class="callout-checkpoint"><span class="box-label" style="color:var(--success)">What you'll discover</span><p style="margin-bottom:0">Chat will show you that "JOHNSON SUPPLY" (Ohio) and "JOHNSON SUPPLY" (Texas) merge wrongly &#8212; which is why your <code>entity_id</code> should include <code>debtor_state</code>. Real entity-resolution teams fight exactly this; your cheap fix (state-scoped identity) is the same first move they make.</p></div>
+    <div class="code-block-wrapper">
+      <div class="code-header"><span class="code-lang">expected output &#8212; the invariant: input = cleaned + rejected</span></div>
+      <pre><code class="language-markdown">PS&gt; python pipeline.py run --stage silver
+[silver] input rows: 126
+[silver] cleaned: 114    rejected: 12
+[silver]   BAD_DATE: 3 · CONFLICT: 2 · ORPHAN_AMENDMENT: 5 · DUPLICATE: 2
+[silver] entities resolved: 58 distinct (4 variant groups merged)
+
+PS&gt; pytest tests/ -q
+............................                                  [100%]
+28 passed in 0.61s</code></pre>
+    </div>
     <div class="checkpoint"><span class="checkpoint-icon">&#9989;</span><div><strong>Checkpoint</strong> Silver runs end-to-end; the 4 variant-named companies resolve to 4 entity_ids (not 12); the conflict-duplicate and orphan rows sit in the <code>rejects</code> table with correct reason codes; pytest all green.</div></div>
   </div>
 
@@ -312,6 +353,21 @@ wrongly keeps apart. Should I add anything cheap to reduce the worst risk?</code
 4. pytest coverage for both tables including a continuation-extends-expiry case.
 Show me your plan first.</code></pre>
     </div>
+    <div class="code-block-wrapper">
+      <div class="code-header"><span class="code-lang">expected output &#8212; gold stage and a peek at the risk table</span></div>
+      <pre><code class="language-markdown">PS&gt; python pipeline.py run --stage gold --as-of 2026-06-11
+[gold] entity_risk: 58 rows
+[gold] lapse_alerts: 6 filings expire within 90 days of 2026-06-11
+
+PS&gt; python -c "import sqlite3; [print(r) for r in sqlite3.connect('data/gold/gold.db').execute('SELECT canonical_name,state,active_lien_count,risk_score FROM entity_risk ORDER BY risk_score DESC LIMIT 3')]"
+('ACME INDUSTRIAL SUPPLY', 'OH', 5, 78)
+('BLUE RIVER LOGISTICS', 'TX', 3, 52)
+('HILLTOP FOODS', 'CA', 2, 41)
+
+PS&gt; pytest tests/ -q
+....................................                           [100%]
+36 passed in 0.74s</code></pre>
+    </div>
     <div class="checkpoint"><span class="checkpoint-icon">&#9989;</span><div><strong>Checkpoint</strong> You challenged at least one thing in the agent's plan (the risk formula is designed to provoke this &#8212; if its weights seem arbitrary, say so and make it defend or revise them). Tests green from <em>your</em> terminal; <code>git diff --stat</code> footprint matches the ticket.</div></div>
   </div>
 
@@ -322,6 +378,18 @@ Show me your plan first.</code></pre>
       <div class="code-header"><span class="code-lang">Move 5 &#183; integrated terminal</span><button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button></div>
       <pre><code class="language-bash">gemini -p "Write README.md for this pipeline: the UCC domain in 5 sentences, the medallion stages and what each guarantees, every CLI command with examples, the five silver transformation rules, and how to run the tests. Only markdown." > README.md
 python pipeline.py report   # paste this output into the README yourself</code></pre>
+    </div>
+    <div class="code-block-wrapper">
+      <div class="code-header"><span class="code-lang">expected output &#8212; the report a risk manager would read</span></div>
+      <pre><code class="language-markdown">PS&gt; python pipeline.py report
+LIENSIGHT DATA QUALITY REPORT          as of 2026-06-11
+------------------------------------------------------
+bronze   126 rows from 3 source files
+silver   114 cleaned (90.5%)  |  12 quarantined
+         BAD_DATE 3 · CONFLICT 2 · ORPHAN_AMENDMENT 5 · DUPLICATE 2
+entities 58 distinct (4 variant groups merged; largest group: 3 names)
+gold     58 entity_risk rows  ·  6 lapse alerts (90-day window)
+invariant: bronze(126) == silver(114) + rejects(12)   OK</code></pre>
     </div>
   </div>
 </section>

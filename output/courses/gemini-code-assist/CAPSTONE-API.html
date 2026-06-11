@@ -265,6 +265,11 @@ GET /sla/breaches?as_of=2026-06-15
     </tbody>
   </table>
 
+  <div class="callout-why">
+    <span class="box-label" style="color:var(--success)">About the "expected output" blocks</span>
+    <p style="margin-bottom:0">Each phase shows a sample of success. Your generated code will phrase things differently &#8212; match the <em>shape</em>: the status codes, the JSON fields named in the contracts, and the invariants (64 matrix cases, 409 bodies that include <code>allowed</code>). Run the server with <code>python app.py</code> in one terminal tab and curl from a second.</p>
+  </div>
+
   <div class="step-card" data-step="Phase 1">
     <h4>Foundation: the contract is the GEMINI.md</h4>
     <p style="margin-bottom:0">New repo <code>trackflow/</code>. Paste the endpoint contracts and the six state-machine rules into <code>GEMINI.md</code> verbatim, plus your standing conventions (storage layer separation, JSON errors, parameterized SQL, type hints, pytest temp-DB fixture). Add <code>.aiexclude</code> (<code>*.db</code>, <code>.env</code>). Commit before writing any code &#8212; in this capstone, the spec quality directly determines how little correcting you'll do later.</p>
@@ -289,6 +294,27 @@ TRANSITIONS: dict[str, set[str]] = {</code></pre>
   <div class="step-card" data-step="Phase 3">
     <h4>Tests: the matrix, exhaustively</h4>
     <p>Move 3, with a twist: select the whole of <code>lifecycle.py</code> &#8594; right-click &#8594; <em>Gemini Code Assist &#8594; Generate unit tests</em> &#8212; then refine the result in chat (Move 2) with an explicit demand: <em>"a parameterized pytest that checks EVERY (from, to) state pair &#8212; all 8&#215;8 &#8212; against the expected legality, plus the ON_HOLD restore behavior and the SHIPPED-requires-carrier rule at the API level."</em> 64 combinations is exactly what humans skip and generators don't.</p>
+    <div class="code-block-wrapper">
+      <div class="code-header"><span class="code-lang">expected output &#8212; tests, the happy path, and a correct 409</span></div>
+      <pre><code class="language-markdown">PS&gt; pytest tests/ -q
+.........................................................................  [100%]
+73 passed in 0.84s        # 64 matrix cases + API/lifecycle tests
+
+PS&gt; curl -X POST http://localhost:5001/orders -H "Content-Type: application/json" -d "{\"po_number\":\"PO-88412\",\"customer\":\"Riverside Restaurants\",\"lines\":[{\"sku\":\"OIL-CAN-5L\",\"qty\":40,\"unit_price\":18.50}]}"
+{"po_number":"PO-88412","state":"SUBMITTED","customer":"Riverside Restaurants",
+ "lines":[{"sku":"OIL-CAN-5L","qty":40,"unit_price":18.5}],
+ "created_at":"2026-06-11T09:12:44"}                          &lt;-- 201
+
+PS&gt; curl -X POST http://localhost:5001/orders/PO-88412/transition -H "Content-Type: application/json" -d "{\"to\":\"SHIPPED\",\"actor\":\"warehouse-3\"}"
+{"error":"illegal transition SUBMITTED -&gt; SHIPPED",
+ "current_state":"SUBMITTED",
+ "allowed":["CONFIRMED","ON_HOLD","CANCELLED"]}               &lt;-- 409
+
+PS&gt; curl http://localhost:5001/orders/PO-88412
+{"po_number":"PO-88412","state":"SUBMITTED", ...,
+ "events":[{"from":null,"to":"SUBMITTED","actor":"api","at":"2026-06-11T09:12:44"}],
+ "sla":{"promised_ship_date":null,"status":"NOT_CONFIRMED"}}  &lt;-- 200</code></pre>
+    </div>
     <div class="checkpoint"><span class="checkpoint-icon">&#9989;</span><div><strong>Checkpoint</strong> The parameterized matrix test exists and passes; a curl sequence SUBMITTED&#8594;CONFIRMED&#8594;PICKING&#8594;SHIPPED&#8594;DELIVERED works; SUBMITTED&#8594;SHIPPED returns 409 with the <code>allowed</code> list; the events table shows the full audit trail.</div></div>
   </div>
 
@@ -304,12 +330,48 @@ normalized events), and its mock should simulate a 2-day-slower timeline.
 Register it in the carrier factory, make POST .../transition accept it,
 and add tests mirroring the fastship ones. Plan first.</code></pre>
     </div>
+    <div class="code-block-wrapper">
+      <div class="code-header"><span class="code-lang">expected output &#8212; normalized events, regardless of carrier</span></div>
+      <pre><code class="language-markdown"># after transitioning PO-88412: CONFIRMED -&gt; PICKING -&gt; SHIPPED (carrier fastship, FS123456)
+PS&gt; curl http://localhost:5001/orders/PO-88412/tracking
+{"po_number":"PO-88412","carrier":"fastship","tracking_number":"FS123456",
+ "events":[
+   {"status":"created",          "at":"2026-06-09T08:14:00"},
+   {"status":"in_transit",       "at":"2026-06-10T02:31:00"},
+   {"status":"out_for_delivery", "at":"2026-06-11T07:05:00"}]}     &lt;-- 200
+
+# an econofreight order returns the SAME event vocabulary —
+# its IT/OFD status codes were mapped inside the adapter:
+{"po_number":"PO-88436","carrier":"econofreight","tracking_number":"EF777102",
+ "events":[
+   {"status":"created",   "at":"2026-06-08T11:02:00"},
+   {"status":"in_transit","at":"2026-06-10T19:44:00"}]}            &lt;-- 200
+
+# tracking before SHIPPED:
+{"error":"PO-88451 is in state PICKING; tracking available after SHIPPED"}  &lt;-- 409</code></pre>
+    </div>
     <div class="checkpoint"><span class="checkpoint-icon">&#9989;</span><div><strong>Checkpoint</strong> <code>GET /orders/&lt;po&gt;/tracking</code> returns normalized events for orders shipped on either carrier &#8212; proof the adapter seam works. The agent's diff stayed inside <code>carriers/</code>, the factory, and tests; if it "improved" unrelated code, you rejected those hunks.</div></div>
   </div>
 
   <div class="step-card" data-step="Phase 5">
     <h4>SLA engine, review gate, ship</h4>
     <p>Build <code>sla.py</code> (business-day math &#8212; write the Friday-confirmation test FIRST, then generate the implementation until it passes) and the <code>/sla/breaches</code> endpoint. Then the full G09&#8211;G10 finish: push to GitHub with <code>.gemini/config.yaml</code> + <code>styleguide.md</code> (encode the 409 contract and audit-trail rule as "must flag"), open the SLA feature as a PR, process the bot review, merge clean &#8212; and optionally deploy to Cloud Run (the G10 prep checklist applies unchanged: requirements.txt, Procfile, PORT, ephemeral-SQLite caveat).</p>
+    <div class="code-block-wrapper">
+      <div class="code-header"><span class="code-lang">expected output &#8212; the SLA report, including the Friday case</span></div>
+      <pre><code class="language-markdown">PS&gt; pytest tests/test_sla.py -q
+........                                                       [100%]
+8 passed in 0.21s
+# the test that matters: confirmed Friday 2026-06-12 -&gt;
+# promised_ship_date == Tuesday 2026-06-16 (weekend skipped, NOT Sunday 06-14)
+
+PS&gt; curl "http://localhost:5001/sla/breaches?as_of=2026-06-15"
+{"breached":[
+   {"po_number":"PO-88371","customer":"Marina Foods","state":"CONFIRMED",
+    "promised_ship_date":"2026-06-10","days_late":3}],
+ "at_risk":[
+   {"po_number":"PO-88393","customer":"Hilltop Cafes","state":"PICKING",
+    "promised_ship_date":"2026-06-15"}]}                       &lt;-- 200</code></pre>
+    </div>
   </div>
 </section>
 

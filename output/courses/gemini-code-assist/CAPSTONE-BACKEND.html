@@ -276,6 +276,11 @@ code{font-family:'JetBrains Mono',monospace;font-size:0.88rem;background:var(--b
     </tbody>
   </table>
 
+  <div class="callout-why">
+    <span class="box-label" style="color:var(--success)">About the "expected output" blocks</span>
+    <p style="margin-bottom:0">Each phase shows a sample of success. Your generated code will phrase details differently &#8212; what must match is the <em>shape</em>: the three outcomes, machine-readable reason codes, <code>rules_version</code> on every decision, and audit entries that never name a patient. Run the service with <code>python app.py</code> (port 5002 in these samples) and curl from a second terminal tab.</p>
+  </div>
+
   <div class="step-card" data-step="Phase 1">
     <h4>Foundation: hygiene rules before anything else</h4>
     <p>New repo <code>priorauth/</code>. Your <code>GEMINI.md</code> gets a section no other capstone has &#8212; write it first:</p>
@@ -298,6 +303,19 @@ code{font-family:'JetBrains Mono',monospace;font-size:0.88rem;background:var(--b
   <div class="step-card" data-step="Phase 2">
     <h4>Engine: write the tests before the engine exists</h4>
     <p>This capstone inverts the usual order &#8212; in compliance software, expected outcomes are specifiable up front, so specify them. Open <code>rules/criteria.json</code> in the editor (active file = chat context), then in chat (Move 2): <em>"Generate a pytest file for a not-yet-written <code>engine.evaluate(request: dict, rules: dict) -&gt; Decision</code>. Cover for each criterion: approve, deny with the exact fail_code, waiver path (with WAIVED_BY_RED_FLAG in reasons), ICD prefix mismatch &#8594; ICD_NOT_INDICATED, unknown CPT &#8594; PENDING_REVIEW, and the 97110 quantity boundary at exactly max_units."</em> Review the expected values against the JSON yourself &#8212; <strong>you are signing off on policy here, not code</strong>. Then build <code>engine.py</code> with spec-comments (Move 1) until <code>pytest tests/ -v</code> in the integrated terminal is green.</p>
+    <div class="code-block-wrapper">
+      <div class="code-header"><span class="code-lang">expected output &#8212; the pre-written suite goes green</span></div>
+      <pre><code class="language-markdown">PS&gt; pytest tests/test_engine.py -v
+tests/test_engine.py::test_72148_approved_with_6_weeks_therapy PASSED
+tests/test_engine.py::test_72148_denied_therapy_not_met PASSED
+tests/test_engine.py::test_72148_waived_by_neuro_red_flag PASSED
+tests/test_engine.py::test_icd_prefix_mismatch_denied PASSED
+tests/test_engine.py::test_unknown_cpt_pending_review PASSED
+tests/test_engine.py::test_97110_quantity_at_exact_limit PASSED
+tests/test_engine.py::test_97110_quantity_exceeded_pends PASSED
+...
+24 passed in 0.34s</code></pre>
+    </div>
     <div class="checkpoint"><span class="checkpoint-icon">&#9989;</span><div><strong>Checkpoint</strong> Engine green against the pre-written suite; <code>evaluate()</code> imports nothing but stdlib; running it twice on the same input yields byte-identical decisions.</div></div>
   </div>
 
@@ -311,6 +329,31 @@ code{font-family:'JetBrains Mono',monospace;font-size:0.88rem;background:var(--b
 2. Can any endpoint mutate or delete audit rows?
 3. Is rules_version stored with every decision?
 List violations with file:line, or confirm each rule passes.</code></pre>
+    </div>
+    <div class="code-block-wrapper">
+      <div class="code-header"><span class="code-lang">expected output &#8212; one of each outcome, plus the audit trail</span></div>
+      <pre><code class="language-markdown"># APPROVED (72148, ICD M54.50, 8 weeks therapy)
+{"request_id":"REQ-0007","outcome":"APPROVED",
+ "auth_number":"PA-2026-0007","valid_through":"2026-09-09",
+ "reasons":[{"code":"ALL_CRITERIA_MET","detail":"icd allowed; therapy 8/6 weeks"}],
+ "rules_version":"2026.06-v1"}                                 &lt;-- 201
+
+# DENIED (72148, only 4 weeks therapy, no red flags)
+{"request_id":"REQ-0011","outcome":"DENIED",
+ "reasons":[{"code":"CONSERVATIVE_THERAPY_NOT_MET",
+             "detail":"4 weeks documented; 6 required"}],
+ "rules_version":"2026.06-v1"}                                 &lt;-- 201
+
+# PENDING_REVIEW (unknown CPT 99999)
+{"request_id":"REQ-0019","outcome":"PENDING_REVIEW",
+ "reasons":[{"code":"UNKNOWN_CPT","detail":"99999 not in criteria set"}],
+ "rules_version":"2026.06-v1"}                                 &lt;-- 201
+
+PS&gt; curl http://localhost:5002/audit/REQ-0011
+[{"event":"EVALUATED","rules_version":"2026.06-v1","at":"2026-06-11T10:42:18",
+  "conditions":[{"check":"icd_prefix_allowed","result":"PASS"},
+                {"check":"conservative_therapy_weeks&gt;=6","result":"FAIL"}]}]
+# note: request_id only — no patient_ref anywhere in audit or logs</code></pre>
     </div>
     <div class="checkpoint"><span class="checkpoint-icon">&#9989;</span><div><strong>Checkpoint</strong> All 30 synthetic requests POST successfully with sensible outcomes; <code>GET /audit/&lt;id&gt;</code> shows rule version + per-condition results; the self-audit returns clean (fix anything it flags &#8212; it usually finds a logging leak on the 404 path).</div></div>
   </div>
@@ -330,6 +373,21 @@ in a NEW file rules/criteria_2026_07.json (v1 stays untouched):
 4. Tests: the SAME request approved under v1 (7 weeks therapy) is DENIED
    under v2 — prove version selection works both ways.
 Plan first. Do not modify engine.py unless something truly requires it.</code></pre>
+    </div>
+    <div class="code-block-wrapper">
+      <div class="code-header"><span class="code-lang">expected output &#8212; the same request flips across the version boundary</span></div>
+      <pre><code class="language-markdown">PS&gt; pytest tests/test_versioning.py -v
+tests/test_versioning.py::test_7wk_request_approved_under_v1 PASSED
+tests/test_versioning.py::test_7wk_request_denied_under_v2 PASSED
+tests/test_versioning.py::test_decision_date_selects_rules_file PASSED
+tests/test_versioning.py::test_73721_knee_mri_new_in_v2 PASSED
+4 passed in 0.18s
+
+# identical clinical facts, different decision dates:
+decision date 2026-06-15  -&gt;  APPROVED   (rules_version 2026.06-v1, 6 wks required)
+decision date 2026-07-02  -&gt;  DENIED     (rules_version 2026.07-v2, 8 wks required,
+                                          reason CONSERVATIVE_THERAPY_NOT_MET)
+# both decisions sit in the audit trail, each citing its own rules_version</code></pre>
     </div>
     <div class="checkpoint"><span class="checkpoint-icon">&#9989;</span><div><strong>Checkpoint</strong> The acid test: if the agent's plan says it must edit <code>engine.py</code>, interrogate why &#8212; a true policy-as-data design needs only a rules file + version selection. (If your engine genuinely needs changes, that's a finding about your Phase 2 design &#8212; the failing-test lesson from G04 at architecture scale.) The 7-weeks request flips outcomes across the version boundary, with both results in the audit trail citing their rules version.</div></div>
   </div>
