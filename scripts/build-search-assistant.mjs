@@ -158,8 +158,9 @@ function renderPage(course, index) {
   h1 .badge { display: inline-block; margin-left: 0.6rem; font-size: 0.7rem; font-weight: 700; vertical-align: middle; background: var(--accent-muted); color: var(--accent-primary); border: 1px solid var(--accent-primary); border-radius: 20px; padding: 0.15rem 0.6rem; }
   .sub { color: var(--text-muted); font-size: 0.85rem; margin-top: 0.2rem; }
   .searchrow { max-width: 960px; margin: 0.9rem auto 0; display: flex; gap: 0.75rem; flex-wrap: wrap; align-items: center; }
-  #q { flex: 1; min-width: 260px; background: var(--bg-card); border: 1px solid var(--code-border); border-radius: 10px; color: var(--text-primary); font-size: 1.05rem; padding: 0.65rem 1rem; outline: none; }
-  #q:focus { border-color: var(--accent-primary); }
+  #q, #cq { flex: 1; min-width: 260px; background: var(--bg-card); border: 1px solid var(--code-border); border-radius: 10px; color: var(--text-primary); font-size: 1.05rem; padding: 0.65rem 1rem; outline: none; }
+  #q:focus, #cq:focus { border-color: var(--accent-primary); }
+  [hidden] { display: none !important; }
   select, label.opt { background: var(--bg-card); border: 1px solid var(--code-border); border-radius: 10px; color: var(--text-secondary); font-size: 0.85rem; padding: 0.55rem 0.75rem; }
   label.opt { display: inline-flex; align-items: center; gap: 0.4rem; cursor: pointer; user-select: none; }
   main { max-width: 960px; margin: 0 auto; padding: 1.5rem 2rem 4rem; }
@@ -186,7 +187,21 @@ function renderPage(course, index) {
   .browse li a { display: inline-block; background: var(--bg-card); border: 1px solid var(--code-border); border-radius: 16px; padding: 0.2rem 0.7rem; font-size: 0.78rem; color: var(--text-secondary); text-decoration: none; }
   .browse li a:hover { color: var(--accent-primary); border-color: var(--accent-primary); }
   kbd { background: var(--bg-surface); border: 1px solid var(--code-border); border-radius: 4px; padding: 0 5px; font-size: 0.8em; }
-  @media (max-width: 768px) { header, main { padding-left: 1rem; padding-right: 1rem; } }
+  .tabs { max-width: 960px; margin: 0.9rem auto 0; display: flex; gap: 0.5rem; }
+  .tabs button { background: var(--bg-card); border: 1px solid var(--code-border); border-radius: 20px; color: var(--text-secondary); font-size: 0.9rem; font-weight: 600; padding: 0.45rem 1.1rem; cursor: pointer; }
+  .tabs button.active { background: var(--accent-muted); border-color: var(--accent-primary); color: var(--accent-primary); }
+  #askbtn { background: var(--accent-primary); border: none; border-radius: 10px; color: #0A1628; font-weight: 700; font-size: 0.95rem; padding: 0.65rem 1.3rem; cursor: pointer; }
+  #askbtn:hover { filter: brightness(1.1); }
+  .msg { max-width: 85%; border-radius: 14px; padding: 0.8rem 1.1rem; margin-bottom: 0.9rem; font-size: 0.95rem; }
+  .msg.user { background: var(--info-bg); border: 1px solid var(--info); margin-left: auto; }
+  .msg.bot { background: var(--bg-card); border: 1px solid var(--code-border); }
+  .msg.bot .src { display: block; font-weight: 700; color: var(--accent-primary); text-decoration: none; margin-bottom: 0.35rem; }
+  .msg.bot .src:hover { text-decoration: underline; }
+  .msg.bot blockquote { border-left: 3px solid var(--accent-primary); margin: 0.4rem 0 0.6rem; padding: 0.2rem 0 0.2rem 0.8rem; color: var(--text-secondary); }
+  .msg.bot .also { margin-top: 0.5rem; font-size: 0.85rem; color: var(--text-muted); }
+  .msg.bot .also a { color: var(--info); text-decoration: none; } .msg.bot .also a:hover { text-decoration: underline; }
+  .disclaimer { color: var(--text-muted); font-size: 0.78rem; margin-bottom: 1rem; }
+  @media (max-width: 768px) { header, main { padding-left: 1rem; padding-right: 1rem; } .msg { max-width: 100%; } }
   @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
 </style>
 </head>
@@ -196,14 +211,26 @@ function renderPage(course, index) {
     <h1>Course Search Assistant <span class="badge">100% OFFLINE</span></h1>
     <div class="sub">${esc(course)} — instantly check which modules cover a word or topic. No internet, no API. Built ${builtOn}.</div>
   </div>
-  <div class="searchrow">
+  <div class="tabs" role="tablist">
+    <button id="tab-search" class="active" role="tab" aria-selected="true">🔍 Search</button>
+    <button id="tab-chat" role="tab" aria-selected="false">💬 Ask the Course</button>
+  </div>
+  <div class="searchrow" id="searchrow">
     <input id="q" type="search" placeholder="Type a word or topic…  e.g. MCP, embeddings, hooks, HIPAA, rate limit" autofocus aria-label="Search the course">
     <label class="opt"><input type="checkbox" id="whole"> whole word</label>
     <select id="scope" aria-label="Limit search to one file"><option value="">All files</option></select>
   </div>
+  <div class="searchrow" id="chatrow" hidden>
+    <input id="cq" type="text" placeholder="Ask a question…  e.g. How do I cache prompts? What is a subagent?" aria-label="Ask the course a question">
+    <button id="askbtn">Ask</button>
+  </div>
 </header>
 <main>
   <div id="out"></div>
+  <div id="chatview" hidden>
+    <div class="disclaimer">Answers are quoted verbatim from the course text (offline retrieval — no AI model, no internet). Always open the linked section for full context.</div>
+    <div id="thread"></div>
+  </div>
 </main>
 <script id="course-index" type="application/json">${indexJson}</script>
 <script>
@@ -319,19 +346,194 @@ function renderBrowse() {
   $out.innerHTML = html + '</div>';
 }
 
+// ------------------------------------------------------------ chat ("Ask")
+
+const $tabSearch = document.getElementById('tab-search'), $tabChat = document.getElementById('tab-chat'),
+      $searchrow = document.getElementById('searchrow'), $chatrow = document.getElementById('chatrow'),
+      $chatview = document.getElementById('chatview'), $thread = document.getElementById('thread'),
+      $cq = document.getElementById('cq'), $askbtn = document.getElementById('askbtn');
+
+function setTab(chat) {
+  $tabSearch.classList.toggle('active', !chat); $tabChat.classList.toggle('active', chat);
+  $tabSearch.setAttribute('aria-selected', String(!chat)); $tabChat.setAttribute('aria-selected', String(chat));
+  $searchrow.hidden = chat; $out.hidden = chat;
+  $chatrow.hidden = !chat; $chatview.hidden = !chat;
+  (chat ? $cq : $q).focus();
+}
+$tabSearch.addEventListener('click', () => setTab(false));
+$tabChat.addEventListener('click', () => setTab(true));
+
+const STOP = new Set(('a an and are as at be but by can cant could did do does doesn doesnt don dont for from get has have how i if in into is isn isnt it its just like me my no not of on one or our out should so some tell that the their them then there these they this to up us was wasn we what whats when where which who why will with would you your course module modules section explain explained explains say says said cover covers covered mean means work works working use used using').split(' '));
+
+function chatTerms(question) {
+  return [...new Set(question.toLowerCase().replace(/[^a-z0-9._\\- ]/g, ' ').split(/\\s+/)
+    .filter((w) => w.length >= 2 && !STOP.has(w)))].slice(0, 8);
+}
+
+function answer(question) {
+  const terms = chatTerms(question);
+  if (!terms.length) {
+    return '<em>Give me a topic to look up — e.g. "How does prompt caching work?", "What is a subagent?", "rate limits".</em>';
+  }
+  const regs = terms.map((t) => new RegExp('\\\\b' + escRe(t), 'gi'));
+  const any = new RegExp(regs.map((r) => r.source).join('|'), 'gi');
+  const hits = [];
+  for (const d of INDEX) for (const s of d.sections) {
+    let score = 0, distinct = 0;
+    for (const r of regs) {
+      const c = (s.text.match(r) || []).length + (s.title.match(r) || []).length * 4;
+      if (c) { distinct++; score += c; }
+    }
+    // sections matching more of the question's terms rank far higher
+    if (distinct) hits.push({ d, s, score: score * distinct * distinct });
+  }
+  if (!hits.length) {
+    return 'I couldn\\u2019t find that in the course text. Try different words, or switch to the 🔍 Search tab for substring matching.';
+  }
+  hits.sort((a, b) => b.score - a.score);
+  const top = hits[0];
+
+  // extract the 2-3 most relevant sentences from the top section, in original order
+  const sentences = top.s.text.match(/[^.!?]+[.!?]+(?:\\s|$)/g) || [top.s.text];
+  const best = sentences
+    .map((sen, i) => {
+      let c = 0;
+      for (const r of regs) { r.lastIndex = 0; c += (sen.match(r) || []).length; }
+      return { sen: sen.trim(), i, c };
+    })
+    .filter((x) => x.c > 0 && x.sen.length > 25)
+    .sort((a, b) => b.c - a.c).slice(0, 3)
+    .sort((a, b) => a.i - b.i);
+  const quote = (best.map((x) => x.sen).join(' ') || top.s.text.slice(0, 400)).slice(0, 650);
+
+  const re = { any };
+  const href = esc(top.d.file) + (top.s.id ? '#' + esc(top.s.id) : '');
+  let html = '<a class="src" href="' + href + '">' + esc(top.d.title || top.d.file) +
+    (top.s.title ? ' › ' + esc(top.s.title) : '') + '</a>' +
+    '<blockquote>' + hl(quote, re) + '</blockquote>' +
+    '<a href="' + href + '">Read this section in full →</a>';
+
+  // up to 3 more sources, max one section per file
+  const seen = new Set([top.d.file]);
+  const more = [];
+  for (const h of hits) {
+    if (seen.has(h.d.file)) continue;
+    seen.add(h.d.file);
+    more.push('<a href="' + esc(h.d.file) + (h.s.id ? '#' + esc(h.s.id) : '') + '">' +
+      esc(h.d.title || h.d.file) + (h.s.title ? ' › ' + esc(h.s.title) : '') + '</a>');
+    if (more.length === 3) break;
+  }
+  if (more.length) html += '<div class="also">Also covered in: ' + more.join(' &middot; ') + '</div>';
+  return html;
+}
+
+function ask() {
+  const question = $cq.value.trim();
+  if (!question) return;
+  $cq.value = '';
+  const u = document.createElement('div');
+  u.className = 'msg user'; u.textContent = question;
+  $thread.appendChild(u);
+  const b = document.createElement('div');
+  b.className = 'msg bot'; b.innerHTML = answer(question);
+  $thread.appendChild(b);
+  b.scrollIntoView({ block: 'end' });
+}
+$askbtn.addEventListener('click', ask);
+$cq.addEventListener('keydown', (e) => { if (e.key === 'Enter') ask(); });
+
+// --------------------------------------------------------------- wiring
+
 let timer;
 const onChange = () => { clearTimeout(timer); timer = setTimeout(search, 120); };
 $q.addEventListener('input', onChange);
 $whole.addEventListener('change', search);
 $scope.addEventListener('change', search);
 document.addEventListener('keydown', (e) => {
-  if (e.key === '/' && document.activeElement !== $q) { e.preventDefault(); $q.focus(); $q.select(); }
+  if (e.key === '/' && document.activeElement !== $q && document.activeElement !== $cq) {
+    e.preventDefault(); setTab(false); $q.focus(); $q.select();
+  }
 });
 renderBrowse();
+
+// deep links: ?q=<term> pre-runs a search, ?ask=<question> pre-asks in chat
+const params = new URLSearchParams(location.search);
+if (params.get('ask')) { setTab(true); $cq.value = params.get('ask'); ask(); }
+else if (params.get('q')) { $q.value = params.get('q'); search(); }
 </script>
 </body>
 </html>
 `;
+}
+
+// ----------------------------------------------------------- page widget
+
+// Injected into every course page: a floating "Ask the Course" button that
+// opens search-assistant.html in an overlay iframe — embedded feel, but the
+// 0.2–4 MB index is loaded once (lazily) instead of duplicated per page.
+const WIDGET_START = '<!-- course-assistant-widget:start -->';
+const WIDGET_END = '<!-- course-assistant-widget:end -->';
+
+const WIDGET_HTML = `${WIDGET_START}
+<style>
+#caw-fab{position:fixed;bottom:1.5rem;right:1.5rem;z-index:99990;background:#D4A843;color:#0A1628;border:none;border-radius:28px;padding:0.7rem 1.2rem;font-weight:700;font-size:0.95rem;cursor:pointer;box-shadow:0 4px 18px rgba(0,0,0,0.45);font-family:inherit}
+#caw-fab:hover{filter:brightness(1.08)}
+#caw-overlay{position:fixed;inset:0;z-index:99991;background:rgba(4,10,20,0.72);display:flex;align-items:center;justify-content:center;padding:2rem}
+#caw-overlay[hidden]{display:none}
+#caw-panel{width:min(1100px,100%);height:min(760px,100%);background:#0A1628;border:1px solid #D4A843;border-radius:14px;display:flex;flex-direction:column;overflow:hidden}
+#caw-bar{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:0.5rem 1rem;background:#111D33;border-bottom:1px solid #21262D;color:#E8ECF1;font-size:0.85rem;font-family:sans-serif}
+#caw-bar a{color:#D4A843;text-decoration:none}
+#caw-close{background:none;border:none;color:#94A3B8;font-size:1.3rem;cursor:pointer;line-height:1}
+#caw-close:hover{color:#E8ECF1}
+#caw-frame{flex:1;border:none;width:100%;background:#0A1628}
+@media (max-width:768px){#caw-overlay{padding:0}#caw-panel{border-radius:0}}
+@media print{#caw-fab,#caw-overlay{display:none!important}}
+</style>
+<button id="caw-fab" aria-haspopup="dialog" aria-label="Open course search and ask assistant">💬 Ask the Course</button>
+<div id="caw-overlay" hidden role="dialog" aria-modal="true" aria-label="Course search assistant">
+  <div id="caw-panel">
+    <div id="caw-bar">
+      <span>Course Assistant — search or ask, fully offline</span>
+      <span><a href="search-assistant.html" target="_blank" rel="noopener">Open full page ↗</a> &nbsp; <button id="caw-close" aria-label="Close assistant">✕</button></span>
+    </div>
+    <iframe id="caw-frame" title="Course search assistant"></iframe>
+  </div>
+</div>
+<script>
+(function(){
+  var fab=document.getElementById('caw-fab'),ov=document.getElementById('caw-overlay'),
+      fr=document.getElementById('caw-frame'),cl=document.getElementById('caw-close');
+  function open(){ if(!fr.src) fr.src='search-assistant.html'; ov.hidden=false; fab.hidden=true; }
+  function close(){ ov.hidden=true; fab.hidden=false; fab.focus(); }
+  fab.addEventListener('click',open);
+  cl.addEventListener('click',close);
+  ov.addEventListener('click',function(e){ if(e.target===ov) close(); });
+  document.addEventListener('keydown',function(e){ if(e.key==='Escape'&&!ov.hidden) close(); });
+})();
+</script>
+${WIDGET_END}`;
+
+/** Add (or refresh) the assistant widget in every top-level page of a course. */
+function injectWidget(courseDir) {
+  const files = fs.readdirSync(courseDir)
+    .filter((f) => f.endsWith('.html') && f !== 'search-assistant.html')
+    .filter((f) => fs.statSync(path.join(courseDir, f)).isFile());
+  let injected = 0;
+  for (const f of files) {
+    const p = path.join(courseDir, f);
+    let html = fs.readFileSync(p, 'utf8');
+    const start = html.indexOf(WIDGET_START);
+    if (start !== -1) {
+      const end = html.indexOf(WIDGET_END);
+      if (end === -1) { console.warn(`  ! broken widget markers, skipped: ${f}`); continue; }
+      html = html.slice(0, start) + html.slice(end + WIDGET_END.length);
+    }
+    if (!/<\/body>/i.test(html)) { console.warn(`  ! no </body>, skipped: ${f}`); continue; }
+    html = html.replace(/<\/body>/i, WIDGET_HTML + '\n</body>');
+    fs.writeFileSync(p, html, 'utf8');
+    injected++;
+  }
+  return injected;
 }
 
 // --------------------------------------------------------------------- main
@@ -358,8 +560,10 @@ for (const slug of courses) {
   const course = courseName(courseDir, slug);
   const outFile = path.join(courseDir, 'search-assistant.html');
   fs.writeFileSync(outFile, renderPage(course, index), 'utf8');
+  const injected = injectWidget(courseDir);
   const sectionCount = index.reduce((n, d) => n + d.sections.length, 0);
   console.log(
     `${slug}: ${index.length} files, ${sectionCount} sections → ` +
-    `${path.relative(ROOT, outFile)} (${(fs.statSync(outFile).size / 1024 / 1024).toFixed(1)} MB)`);
+    `${path.relative(ROOT, outFile)} (${(fs.statSync(outFile).size / 1024 / 1024).toFixed(1)} MB), ` +
+    `widget in ${injected} pages`);
 }
