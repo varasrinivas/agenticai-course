@@ -1,0 +1,49 @@
+$ python e2e_test.py
+1. search_filings_by_name
+   OK — 3 candidates
+2. search with state filter
+   OK — 2 DE candidates
+3. search miss returns structured error (not an exception)
+   OK — NO_RESULTS
+4. fuzzy_match_score on near-identical names
+   OK — likely_match {'exact': 0.95, 'normalized': 1.0, 'token_sort_ratio': 1.0}
+5. registry hit and NOT_FOUND signal
+   OK — hit + NOT_FOUND
+6. filing details
+   OK — 3 filings, $2,300,000 exposure
+7. merge rejects low confidence
+   OK — INSUFFICIENT_EVIDENCE below 0.5
+8. merge succeeds with evidence
+   OK — MP-ACME LOGIS-88%
+
+All 8 tool checks passed. Build the agent.
+
+$ python solution/entity_agent.py
+  [tool] search_filings_by_name({"business_name": "Acme Logistics LLC"})
+  [tool] fuzzy_match_score({"entity_a": "Acme Logistics LLC", "entity_b": "ACME LOGISTICS, L.L.C."})
+  [tool] fuzzy_match_score({"entity_a": "Acme Logistics LLC", "entity_b": "Acme Logistics Company"})
+  [tool] fuzzy_match_score({"entity_a": "Acme Logistics LLC", "entity_b": "Acme Logistics Inc."})
+  [tool] get_business_registry_data({"business_name": "Acme Logistics LLC", "state": "DE"})
+  [tool] get_business_registry_data({"business_name": "Acme Logistics Inc.", "state": "NY"})
+  [tool] get_filing_details({"business_name": "ACME LOGISTICS, L.L.C.", "state": "DE"})
+  [tool] merge_entity_profile({"primary_entity": {"name": "ACME LOGISTICS, L.L.C.", ...
+
+============================================================
+RESOLUTION:
+============================================================
+Entity resolution for "Acme Logistics LLC" (Delaware):
+
+MERGED (confidence 0.88): ACME LOGISTICS, L.L.C. (DE) and Acme Logistics
+Company (DE) — token_sort 1.0/0.85, same state; DE registry confirms one
+active LLC at 456 Commerce Blvd. Merged profile: 4 filings, $2.3M total
+lien exposure with First National Bank and Delaware Capital Partners.
+
+KEPT SEPARATE: Acme Logistics Inc. (NY) — different state, and the NY
+registry shows a distinct corporation (NY-CORP-2020-1234567) formed in
+2020 at a different address. Flagged for periodic re-review.
+
+(Tool order and exact confidence vary by run — Mistral-7B typically uses
+6-10 calls. PASS criteria: DE entities merged with confidence 0.8-0.95,
+NY entity kept separate with stated reasoning, no crash on the registry
+NOT_FOUND for "Acme Logistics Company". If the agent merges all three,
+it failed the exam — tighten the system prompt or try a stronger model.)
