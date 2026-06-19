@@ -232,7 +232,7 @@
 "Jane Smith is the VP of Engineering at TechCorp. Her email is
  jane.smith@techcorp.io and you can reach her at (555) 123-4567."
 
-# Structured (tool_use response — code-ready):
+# Structured (tool call response — code-ready):
 {
   "name": "Jane Smith",
   "email": "jane.smith@techcorp.io",
@@ -287,31 +287,30 @@
 
         <div class="analogy-box">
           <span class="box-label">Everyday Analogy</span>
-          <p><strong>BEFORE:</strong> Without <span class="term-tooltip" tabindex="0" aria-describedby="tt-tooluse">tool use<span class="tooltip-content" role="tooltip" id="tt-tooluse">The model API feature where you define functions (tools) with JSON Schema parameters. the model returns structured tool_use content blocks specifying which tool to call and with what arguments. This is the model's most reliable structured output mechanism.</span></span>, getting structured output from the model was like shouting your order across a noisy room &mdash; you'd write a prompt saying "please return JSON with these fields" and hope the model understood.</p>
+          <p><strong>BEFORE:</strong> Without <span class="term-tooltip" tabindex="0" aria-describedby="tt-tooluse">tool use<span class="tooltip-content" role="tooltip" id="tt-tooluse">The model API feature where you define functions (tools) with JSON Schema parameters. the model returns structured tool calls specifying which tool to call and with what arguments. This is the model's most reliable structured output mechanism.</span></span>, getting structured output from the model was like shouting your order across a noisy room &mdash; you'd write a prompt saying "please return JSON with these fields" and hope the model understood.</p>
           <p><strong>PAIN:</strong> The model might add markdown formatting around the JSON, forget required fields, use the wrong types, or slip in a conversational sentence before the data. You'd need fragile regex and try-catch blocks just to extract the output.</p>
           <p style="margin-bottom:0;"><strong>MAPPING:</strong> Tool use is like handing the model a <strong>restaurant order form</strong> with pre-printed fields: name of dish, quantity, special instructions. the model can only fill in the blanks on the form &mdash; it physically cannot return free-form text when forced to use a tool. The form (JSON Schema) guarantees the structure.</p>
         </div>
 
-        <p><strong>What this actually looks like in the API response:</strong> When the model uses a tool, you don't get a plain text string. You get a structured <code>content</code> block with <code>type: "tool_use"</code>:</p>
+        <p><strong>What this actually looks like in the API response:</strong> When the model uses a tool, you don't get a plain text string. You get a structured <code>tool_calls</code> array on the response message:</p>
         <div class="code-single">
           <pre><code class="language-python"># The model's actual response when forced to use a tool:
 {
-  "role": "assistant",
-  "content": [
-    {
-      "type": "tool_use",           # ← not "text"!
-      "id": "toolu_01A2B3C4D5",
-      "name": "extract_contact",    # ← which tool it "called"
-      "input": {                    # ← structured data, guaranteed valid JSON
-        "name": "Jane Smith",
-        "email": "jane.smith@techcorp.io",
-        "phone": "(555) 123-4567",
-        "company": "TechCorp",
-        "role": "VP of Engineering"
-      }
-    }
-  ],
-  "finish_reason": "tool_calls"    # ← stopped because it wants to call a tool
+  "choices": [{
+    "message": {
+      "role": "assistant",
+      "content": null,
+      "tool_calls": [{                  # ← not "content" text!
+        "id": "call_a1b2c3d4",
+        "type": "function",
+        "function": {
+          "name": "extract_contact",    # ← which tool it "called"
+          "arguments": "{\"name\": \"Jane Smith\", \"email\": \"jane.smith@techcorp.io\", \"phone\": \"(555) 123-4567\", \"company\": \"TechCorp\", \"role\": \"VP of Engineering\"}"
+        }                               # ← arguments is a JSON *string* — json.loads() it
+      }]
+    },
+    "finish_reason": "tool_calls"        # ← stopped because it wants to call a tool
+  }]
 }</code></pre>
         </div>
 
@@ -319,8 +318,8 @@
           <span class="box-label">Technical Definition</span>
           Here's how tool use works for structured output, step by step.
           <br><br>First, you define a tool in your API request's <code>tools</code> array. Each tool has a name, description, and an <span class="term-tooltip" tabindex="0" aria-describedby="tt-jsonschema">JSON Schema<span class="tooltip-content" role="tooltip" id="tt-jsonschema">A standard for describing the structure of JSON data. It specifies field names, types, required fields, enums, nested objects, and validation rules. Used in the model's tool definitions to describe expected parameters.</span></span> that describes its expected parameters &mdash; field names, types, which are required.
-          <br><br>Second, the model reads the tool definition and returns a <span class="term-tooltip" tabindex="0" aria-describedby="tt-tooluse-block"><code>tool_use</code> content block<span class="tooltip-content" role="tooltip" id="tt-tooluse-block">A specific content type in the model's API response. When the model decides to call a tool, it returns a content block with type "tool_use", containing the tool name and a structured input object matching the tool's JSON Schema.</span></span> &mdash; a structured object with the tool name and populated arguments that match the schema.
-          <br><br>Third, you can <em>force</em> the model to use a specific tool with the <span class="term-tooltip" tabindex="0" aria-describedby="tt-toolchoice"><code>tool_choice</code><span class="tooltip-content" role="tooltip" id="tt-toolchoice">An API parameter that controls whether the model must use a tool. Set to {"type": "tool", "name": "..."} to force a specific tool, or {"type": "any"} to require any tool. This guarantees a structured tool_use response.</span></span> parameter. This guarantees you'll get structured output every time. The key insight: you don't have to actually <em>execute</em> the tool. You can define a "tool" purely as a structured output mechanism &mdash; the model fills in the form, and you just read the values. This works because the model is specifically trained to produce valid tool_use blocks.
+          <br><br>Second, the model reads the tool definition and returns a <span class="term-tooltip" tabindex="0" aria-describedby="tt-tooluse-block">tool call<span class="tooltip-content" role="tooltip" id="tt-tooluse-block">An entry in <code>response.choices[0].message.tool_calls</code>. When the model decides to call a tool, it returns this with the tool name and a <code>function.arguments</code> JSON string matching the tool's schema.</span></span> &mdash; a structured object with the tool name and populated arguments that match the schema.
+          <br><br>Third, you can <em>force</em> the model to use a specific tool with the <span class="term-tooltip" tabindex="0" aria-describedby="tt-toolchoice"><code>tool_choice</code><span class="tooltip-content" role="tooltip" id="tt-toolchoice">An API parameter that controls whether the model must use a tool. Set to {"type": "function", "function": {"name": "..."}} to force a specific tool, or "required" to require any tool. This guarantees a structured tool call.</span></span> parameter. This guarantees you'll get structured output every time. The key insight: you don't have to actually <em>execute</em> the tool. You can define a "tool" purely as a structured output mechanism &mdash; the model fills in the form, and you just read the values. This works because the model is specifically trained to produce valid tool calls.
         </div>
 
         <!-- Animation 2: Tool Loop -->
@@ -347,9 +346,9 @@
         </div>
 
         <!-- Diagram: Tool Use Flow (SVG) -->
-        <div class="animation-container" style="min-height:auto;padding-bottom:1.5rem;" aria-label="Diagram showing the full tool use cycle from user message through the model through tool_use through your code back to the model and final response">
+        <div class="animation-container" style="min-height:auto;padding-bottom:1.5rem;" aria-label="Diagram showing the full tool use cycle from user message through the model returning a tool call, your code executing it, sending the result back, and the final response">
           <div class="animation-title">Diagram: Tool Use Flow — Full Cycle</div>
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 340" style="width:100%;max-width:600px;display:block;margin:0 auto;" role="img" aria-label="Flow diagram: User message goes to the model, the model returns tool_use, your code executes the tool, sends tool_result back to the model, the model returns final response">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 340" style="width:100%;max-width:600px;display:block;margin:0 auto;" role="img" aria-label="Flow diagram: User message goes to the model, the model returns a tool call, your code executes the tool, sends the result back to the model, the model returns final response">
             <style>
               .tf-label { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 11px; }
               .tf-body { font-family: 'Source Sans 3', sans-serif; font-size: 10.5px; fill: var(--text-primary, #E8ECF1); }
@@ -393,15 +392,15 @@
             <!-- Arrow 2→3 -->
             <g class="tf-step">
               <line x1="310" y1="48" x2="348" y2="48" class="tf-arrow" stroke="var(--text-muted, #64748B)"/>
-              <text x="329" y="40" class="tf-mono" fill="var(--accent-primary, #D4A843)" text-anchor="middle">tool_use</text>
+              <text x="329" y="40" class="tf-mono" fill="var(--accent-primary, #D4A843)" text-anchor="middle">tool_call</text>
             </g>
-            <!-- Step 3: tool_use block -->
+            <!-- Step 3: tool call -->
             <g class="tf-step">
               <rect x="350" y="12" width="140" height="72" rx="8" fill="rgba(212,168,67,0.1)" stroke="var(--accent-primary, #D4A843)" stroke-width="1.5"/>
-              <text x="420" y="34" class="tf-label" fill="var(--accent-primary, #D4A843)" text-anchor="middle">tool_use Block</text>
-              <text x="420" y="50" class="tf-mono" fill="var(--text-secondary, #94A3B8)" text-anchor="middle">name: "extract_contact"</text>
-              <text x="420" y="64" class="tf-mono" fill="var(--text-secondary, #94A3B8)" text-anchor="middle">input: {name, email}</text>
-              <text x="420" y="78" class="tf-mono" fill="var(--text-muted, #64748B)" text-anchor="middle">id: "toolu_01A2B3"</text>
+              <text x="420" y="34" class="tf-label" fill="var(--accent-primary, #D4A843)" text-anchor="middle">Tool Call</text>
+              <text x="420" y="50" class="tf-mono" fill="var(--text-secondary, #94A3B8)" text-anchor="middle">function.name: "extract_contact"</text>
+              <text x="420" y="64" class="tf-mono" fill="var(--text-secondary, #94A3B8)" text-anchor="middle">arguments: {name, email}</text>
+              <text x="420" y="78" class="tf-mono" fill="var(--text-muted, #64748B)" text-anchor="middle">id: "call_a1b2.."</text>
             </g>
             <!-- Arrow 3→4 (down) -->
             <g class="tf-step">
@@ -419,11 +418,11 @@
               <line x1="350" y1="140" x2="312" y2="140" class="tf-arrow" stroke="var(--text-muted, #64748B)"/>
               <text x="331" y="132" class="tf-mono" fill="var(--text-muted, #64748B)" text-anchor="middle">result</text>
             </g>
-            <!-- Step 5: tool_result back to the model -->
+            <!-- Step 5: result back to the model -->
             <g class="tf-step">
               <rect x="170" y="112" width="140" height="56" rx="8" fill="rgba(99,102,241,0.1)" stroke="var(--track-foundations, #6366F1)" stroke-width="1.5"/>
               <text x="240" y="132" class="tf-label" fill="var(--track-foundations, #6366F1)" text-anchor="middle">The model (again)</text>
-              <text x="240" y="148" class="tf-body" text-anchor="middle">receives tool_result</text>
+              <text x="240" y="148" class="tf-body" text-anchor="middle">receives the result</text>
               <text x="240" y="162" class="tf-mono" fill="var(--accent-primary, #D4A843)" text-anchor="middle">finish_reason: "stop"</text>
             </g>
             <!-- Arrow 5→6 (left) -->
@@ -443,12 +442,12 @@
               <rect x="20" y="36" width="12" height="12" rx="2" fill="rgba(59,130,246,0.3)" stroke="var(--info, #3B82F6)" stroke-width="1"/>
               <text x="40" y="47" class="tf-body">User / Client side</text>
               <rect x="200" y="36" width="12" height="12" rx="2" fill="rgba(99,102,241,0.2)" stroke="var(--track-foundations, #6366F1)" stroke-width="1"/>
-              <text x="220" y="47" class="tf-body">The model (Anthropic API)</text>
+              <text x="220" y="47" class="tf-body">The model (Ollama)</text>
               <rect x="400" y="36" width="12" height="12" rx="2" fill="rgba(16,185,129,0.2)" stroke="var(--success, #10B981)" stroke-width="1"/>
               <text x="420" y="47" class="tf-body">Your Code (you control)</text>
               <text x="20" y="75" class="tf-body">You don't have to actually execute the tool. For structured output, define a</text>
               <text x="20" y="92" class="tf-body">"tool" purely as a schema — the model fills the form, you just read the values.</text>
-              <text x="20" y="115" class="tf-mono" fill="var(--accent-primary, #D4A843)">tool_choice: {"type": "tool", "name": "extract_contact"}  ← forces structured output</text>
+              <text x="20" y="115" class="tf-mono" fill="var(--accent-primary, #D4A843)">tool_choice: {type:"function", function:{name:"extract_contact"}}  ← forces structured output</text>
             </g>
           </svg>
         </div>
@@ -582,17 +581,17 @@
 
         <p>Under the hood, these libraries work by defining a model class (Pydantic) or schema object (Zod) with typed fields. When you pass the model's output through the model, the library checks each field: Is <code>name</code> a string? Is <code>price</code> a number? Is <code>email</code> present (since it's required)? If any check fails, it raises a <span class="term-tooltip" tabindex="0" aria-describedby="tt-valerror"><code>ValidationError</code><span class="tooltip-content" role="tooltip" id="tt-valerror">An exception raised by Pydantic when input data fails validation. It contains a list of specific field errors &mdash; which field failed, what type was expected, and what was received &mdash; making it ideal for retry prompts.</span></span> with field-level details &mdash; not just "invalid data" but "field 'email' expected str, got None." These specific error messages are exactly what you'll feed back into retry prompts.</p>
 
-        <p>How does this differ from just calling <code>JSON.parse()</code> or <code>json.loads()</code>? Those only check that the JSON is <em>syntactically</em> valid &mdash; matching braces, correct commas. Schema validation goes further: it verifies that the data is <em>semantically</em> correct for your application. Valid JSON like <code>{"name": 123}</code> would pass <code>JSON.parse()</code> but fail Pydantic because <code>name</code> should be a string, not a number. The tool's parameters are specified in the <span class="term-tooltip" tabindex="0" aria-describedby="tt-inputschema"><code>input_schema</code><span class="tooltip-content" role="tooltip" id="tt-inputschema">A field in each tool definition that contains a JSON Schema object describing the tool's expected parameters &mdash; their names, types, descriptions, and which are required. the model uses this schema to generate valid arguments.</span></span> field of the tool definition. Here's a time-saving trick: you can auto-generate this schema from your Pydantic model using <code>ContactInfo.model_json_schema()</code>. That way, you define the shape once in Pydantic, and the tool definition stays in sync automatically.</p>
+        <p>How does this differ from just calling <code>JSON.parse()</code> or <code>json.loads()</code>? Those only check that the JSON is <em>syntactically</em> valid &mdash; matching braces, correct commas. Schema validation goes further: it verifies that the data is <em>semantically</em> correct for your application. Valid JSON like <code>{"name": 123}</code> would pass <code>JSON.parse()</code> but fail Pydantic because <code>name</code> should be a string, not a number. The tool's parameters are specified in the <span class="term-tooltip" tabindex="0" aria-describedby="tt-inputschema"><code>parameters</code><span class="tooltip-content" role="tooltip" id="tt-inputschema">A field inside each tool definition's <code>function</code> object that contains a JSON Schema describing the tool's expected parameters &mdash; their names, types, descriptions, and which are required. the model uses this schema to generate valid arguments.</span></span> field of the tool definition. Here's a time-saving trick: you can auto-generate this schema from your Pydantic model using <code>ContactInfo.model_json_schema()</code>. That way, you define the shape once in Pydantic, and the tool definition stays in sync automatically.</p>
         <div class="callout-cert" style="background:rgba(212,168,67,.06);border-left:4px solid #D4A843;border-radius:0 8px 8px 0;padding:1.25rem 1.5rem;margin:1.5rem 0;">
           <span class="box-label" style="color:#D4A843;">&#127891; Cert Tip &mdash; Domain 4.3</span>
-          <p style="margin:0;"><code>tool_use</code> guarantees STRUCTURE (valid JSON matching schema) but NOT semantic correctness. Values inside the JSON may still be wrong. Always add business rule validation after <code>tool_use</code> extraction.</p>
+          <p style="margin:0;">A <code>tool_calls</code> response guarantees STRUCTURE (valid JSON matching schema) but NOT semantic correctness. Values inside the JSON may still be wrong. Always add business rule validation after tool-call extraction.</p>
         </div>
       </section>
 
         <div class="callout-warning">
           <span class="box-label">⚠️ Common Misconceptions</span>
           <p><strong>"Tool use guarantees the data is correct."</strong> &mdash; No. Tool use guarantees <em>structure</em> (valid JSON matching the schema), not <em>semantic correctness</em>. If you ask the model to extract a phone number and it hallucinates "(555) 000-0000," the JSON will be perfectly valid but the data is wrong. Always add business rule validation on top of schema validation.</p>
-          <p><strong>"I can just ask the model to 'respond in JSON' instead of using tool use."</strong> &mdash; You can, but it's significantly less reliable. Prompt-only JSON extraction fails 5&ndash;15% of the time (markdown wrappers, trailing text, missing commas). Tool use fails under 0.5% because the model is specifically trained for the <code>tool_use</code> format. For anything beyond a quick prototype, use tool use.</p>
+          <p><strong>"I can just ask the model to 'respond in JSON' instead of using tool use."</strong> &mdash; You can, but it's significantly less reliable. Prompt-only JSON extraction fails 5&ndash;15% of the time (markdown wrappers, trailing text, missing commas). Tool use fails under 0.5% because the model is specifically trained for the tool-calling format. For anything beyond a quick prototype, use tool use.</p>
           <p><strong>"Schema validation catches all bad output."</strong> &mdash; Schema validation catches <em>type</em> errors (string where number expected) and <em>missing</em> fields, but not logical errors. A schema can confirm <code>age</code> is an integer, but not that 350 is an unreasonable value for a human's age. You need separate business logic validation for semantic checks.</p>
           <p><strong>"If parsing fails, just retry the same prompt."</strong> &mdash; Blind retries have a low success rate because the model will likely make the same mistake again. The effective approach is to include the <em>specific error message</em> in the retry prompt so the model can see what went wrong and self-correct.</p>
           <p style="margin-bottom:0;"><strong>"Structured output is only for data extraction."</strong> &mdash; It's also essential for decision routing (the model returns <code>{"action": "escalate", "reason": "..."}</code>), tool selection (returning which tool to call with what parameters), and any scenario where downstream code needs to branch on the model's response. If your code does an <code>if</code> on the model's output, you need structured output.</p>
@@ -662,9 +661,9 @@
 
         <h3 id="approach1-heading">Approach 1: Tool Use for Structured Output</h3>
 
-        <p>Let's start with the data model. The code below defines a <code>ContactInfo</code> schema in two places: a Pydantic model (your validation blueprint) and a matching tool definition (what the model sees). Having both gives you a two-layer guarantee &mdash; the model's tool_use ensures the right structure, and Pydantic ensures the right types and values. One important gotcha: these two definitions must stay in sync. If you add a field to one, add it to the other. In production, you'd use <code>ContactInfo.model_json_schema()</code> to auto-generate the tool schema from Pydantic, eliminating the sync problem entirely.</p>
+        <p>Let's start with the data model. The code below defines a <code>ContactInfo</code> schema in two places: a Pydantic model (your validation blueprint) and a matching tool definition (what the model sees). Having both gives you a two-layer guarantee &mdash; the model's tool call ensures the right structure, and Pydantic ensures the right types and values. One important gotcha: these two definitions must stay in sync. If you add a field to one, add it to the other. In production, you'd use <code>ContactInfo.model_json_schema()</code> to auto-generate the tool schema from Pydantic, eliminating the sync problem entirely.</p>
 
-        <p>The interesting part is the <code>extract_contact()</code> function. It sends text to the model with <code>tool_choice={"type": "tool", "name": "extract_contact"}</code> &mdash; this is the critical line that forces the model to return a structured <code>tool_use</code> block instead of free-form text. The function then loops through the response content blocks to find the one with <code>type == "tool_use"</code> and validates its <code>input</code> field through Pydantic. Here's the important nuance: even with forced tool use, the <em>values</em> inside the JSON might be wrong (the model could hallucinate an email, for example). Tool use guarantees the structure is valid, not that the content is correct.</p>
+        <p>The interesting part is the <code>extract_contact()</code> function. It sends text to the model with <code>tool_choice={"type": "function", "function": {"name": "extract_contact"}}</code> &mdash; this is the critical line that forces the model to return a structured tool call instead of free-form text. The function then reads the first entry in <code>response.choices[0].message.tool_calls</code>, parses its <code>function.arguments</code> string with <code>json.loads</code>, and validates the result through Pydantic. Here's the important nuance: even with forced tool use, the <em>values</em> inside the JSON might be wrong (the model could hallucinate an email, for example). Tool use guarantees the structure is valid, not that the content is correct.</p>
 
         <p>Finally, notice how the error handling separates <code>ValidationError</code> from <code>APIError</code>. These are fundamentally different problems: a validation error means the model returned the wrong data shape (retry with a better prompt), while an API error means the network or rate limit failed (retry with backoff). Catching them separately lets you respond appropriately to each. Never catch a bare <code>Exception</code> &mdash; you'll mask bugs in your own code.</p>
 
@@ -675,7 +674,7 @@
           </div>
           <div class="code-panel active" id="toolext-python" role="tabpanel" aria-labelledby="tab-toolext-py">
             <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy Python code">Copy</button>
-            <pre><code class="language-python"># pip install "anthropic>=0.40.0" "pydantic>=2.0"
+            <pre><code class="language-python"># pip install openai pydantic
 from openai import OpenAI
 import json
 from pydantic import BaseModel, ValidationError
@@ -693,18 +692,21 @@ class ContactInfo(BaseModel):
 
 # Tool definition matches the Pydantic schema
 extract_contact_tool = {
-    "name": "extract_contact",
-    "description": "Extract structured contact information from text.",
-    "input_schema": {
-        "type": "object",
-        "properties": {
-            "name": {"type": "string", "description": "Full name of the person"},
-            "email": {"type": "string", "description": "Email address"},
-            "phone": {"type": "string", "description": "Phone number, if mentioned"},
-            "company": {"type": "string", "description": "Company name, if mentioned"},
-            "role": {"type": "string", "description": "Job title or role, if mentioned"},
+    "type": "function",
+    "function": {
+        "name": "extract_contact",
+        "description": "Extract structured contact information from text.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "name": {"type": "string", "description": "Full name of the person"},
+                "email": {"type": "string", "description": "Email address"},
+                "phone": {"type": "string", "description": "Phone number, if mentioned"},
+                "company": {"type": "string", "description": "Company name, if mentioned"},
+                "role": {"type": "string", "description": "Job title or role, if mentioned"},
+            },
+            "required": ["name", "email"],
         },
-        "required": ["name", "email"],
     },
 }
 
@@ -714,27 +716,27 @@ def extract_contact(text: str) -> ContactInfo:
         response = client.chat.completions.create(
             model="mistral",
             tools=[extract_contact_tool],
-            tool_choice={"type": "tool", "name": "extract_contact"},
+            tool_choice={"type": "function", "function": {"name": "extract_contact"}},
             messages=[{
                 "role": "user",
                 "content": f"Extract the contact information from this text:\n\n{text}"
             }]
         )
 
-        # the model returns a tool_use content block
-        for block in response.content:
-            if block.type == "tool_use":
-                # Validate with Pydantic
-                contact = ContactInfo(**block.input)
-                return contact
+        # the structured args come back in message.tool_calls
+        tool_calls = response.choices[0].message.tool_calls
+        if tool_calls:
+            args = json.loads(tool_calls[0].function.arguments)
+            # Validate with Pydantic
+            return ContactInfo(**args)
 
-        raise ValueError("No tool_use block in response")
+        raise ValueError("No tool call in response")
 
     except ValidationError as e:
         print(f"Validation failed: {e}")
         raise
     except Exception as e:
-        print(f"API error: {e.status_code} - {e.message}")
+        print(f"API error: {e}")
         raise
 
 # Usage
@@ -769,18 +771,21 @@ const ContactInfo = z.object({
 });
 
 const extractContactTool = {
-  name: 'extract_contact',
-  description: 'Extract structured contact information from text.',
-  input_schema: {
-    type: 'object',
-    properties: {
-      name: { type: 'string', description: 'Full name of the person' },
-      email: { type: 'string', description: 'Email address' },
-      phone: { type: 'string', description: 'Phone number, if mentioned' },
-      company: { type: 'string', description: 'Company name, if mentioned' },
-      role: { type: 'string', description: 'Job title or role, if mentioned' },
+  type: 'function',
+  function: {
+    name: 'extract_contact',
+    description: 'Extract structured contact information from text.',
+    parameters: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Full name of the person' },
+        email: { type: 'string', description: 'Email address' },
+        phone: { type: 'string', description: 'Phone number, if mentioned' },
+        company: { type: 'string', description: 'Company name, if mentioned' },
+        role: { type: 'string', description: 'Job title or role, if mentioned' },
+      },
+      required: ['name', 'email'],
     },
-    required: ['name', 'email'],
   },
 };
 
@@ -789,21 +794,20 @@ async function extractContact(text) {
     const response = await client.chat.completions.create({
       model: 'mistral',
       tools: [extractContactTool],
-      tool_choice: { type: 'tool', name: 'extract_contact' },
+      tool_choice: { type: 'function', function: { name: 'extract_contact' } },
       messages: [{
         role: 'user',
         content: `Extract the contact information from this text:\n\n${text}`
       }]
     });
 
-    for (const block of response.content) {
-      if (block.type === 'tool_use') {
-        // Validate with Zod
-        const contact = ContactInfo.parse(block.input);
-        return contact;
-      }
+    const toolCalls = response.choices[0].message.tool_calls;
+    if (toolCalls) {
+      // Validate with Zod
+      const contact = ContactInfo.parse(JSON.parse(toolCalls[0].function.arguments));
+      return contact;
     }
-    throw new Error('No tool_use block in response');
+    throw new Error('No tool call in response');
   } catch (error) {
     if (error instanceof z.ZodError) {
       console.error('Validation failed:', error.issues);
@@ -835,7 +839,7 @@ Company: TechCorp Inc.
 Role:    VP of Engineering</div>
 
         <div style="background: rgba(16,185,129,0.06); border-left: 3px solid var(--success); padding: 1rem 1.25rem; margin: 1.25rem 0; border-radius: 0 6px 6px 0;">
-          <strong>What Just Happened?</strong> You sent unstructured text (an email signature) to the model with a forced tool call. The model parsed the natural language and returned a structured <code>tool_use</code> block with typed fields. Pydantic then validated those fields against your schema. The result: five clean, typed fields extracted from a messy paragraph &mdash; no regex, no string splitting, no guessing. If any field had the wrong type or was missing, Pydantic would have raised a <code>ValidationError</code> with the exact field name and expected type.
+          <strong>What Just Happened?</strong> You sent unstructured text (an email signature) to the model with a forced tool call. The model parsed the natural language and returned a structured tool call with typed fields. Pydantic then validated those fields against your schema. The result: five clean, typed fields extracted from a messy paragraph &mdash; no regex, no string splitting, no guessing. If any field had the wrong type or was missing, Pydantic would have raised a <code>ValidationError</code> with the exact field name and expected type.
         </div>
 
         <h3 id="retry-code-heading">Adding Retry with Error Feedback</h3>
@@ -851,7 +855,7 @@ Role:    VP of Engineering</div>
           <div class="code-panel active" id="retry-python" role="tabpanel" aria-labelledby="tab-retry-py">
             <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy Python code">Copy</button>
             <pre><code class="language-python">from openai import OpenAI
-import time
+import time, json
 from pydantic import BaseModel, ValidationError
 from typing import Optional
 
@@ -880,19 +884,23 @@ def extract_with_retry(text: str, max_retries: int = 3) -> ContactInfo:
             response = client.chat.completions.create(
                 model="mistral",
                 tools=[{
-                    "name": "extract_contact",
-                    "description": "Extract contact info. ALL fields must be valid.",
-                    "input_schema": ContactInfo.model_json_schema(),
+                    "type": "function",
+                    "function": {
+                        "name": "extract_contact",
+                        "description": "Extract contact info. ALL fields must be valid.",
+                        "parameters": ContactInfo.model_json_schema(),
+                    },
                 }],
-                tool_choice={"type": "tool", "name": "extract_contact"},
+                tool_choice={"type": "function", "function": {"name": "extract_contact"}},
                 messages=[{"role": "user", "content": prompt}],
             )
 
-            for block in response.content:
-                if block.type == "tool_use":
-                    contact = ContactInfo(**block.input)
-                    print(f"Attempt {attempt}: Success!")
-                    return contact
+            tool_calls = response.choices[0].message.tool_calls
+            if tool_calls:
+                args = json.loads(tool_calls[0].function.arguments)
+                contact = ContactInfo(**args)
+                print(f"Attempt {attempt}: Success!")
+                return contact
 
         except ValidationError as e:
             last_error = str(e)
@@ -900,7 +908,7 @@ def extract_with_retry(text: str, max_retries: int = 3) -> ContactInfo:
             time.sleep(2 ** attempt)  # Exponential backoff
 
         except Exception as e:
-            print(f"Attempt {attempt}: API error - {e.message}")
+            print(f"Attempt {attempt}: API error - {e}")
             time.sleep(2 ** attempt)
 
     raise RuntimeError(f"Failed after {max_retries} attempts. Last error: {last_error}")</code></pre>
@@ -935,30 +943,32 @@ async function extractWithRetry(text, maxRetries = 3) {
       const response = await client.chat.completions.create({
         model: 'mistral',
         tools: [{
-          name: 'extract_contact',
-          description: 'Extract contact info. ALL fields must be valid.',
-          input_schema: {
-            type: 'object',
-            properties: {
-              name: { type: 'string' },
-              email: { type: 'string' },
-              phone: { type: 'string' },
-              company: { type: 'string' },
-              role: { type: 'string' },
+          type: 'function',
+          function: {
+            name: 'extract_contact',
+            description: 'Extract contact info. ALL fields must be valid.',
+            parameters: {
+              type: 'object',
+              properties: {
+                name: { type: 'string' },
+                email: { type: 'string' },
+                phone: { type: 'string' },
+                company: { type: 'string' },
+                role: { type: 'string' },
+              },
+              required: ['name', 'email'],
             },
-            required: ['name', 'email'],
           },
         }],
-        tool_choice: { type: 'tool', name: 'extract_contact' },
+        tool_choice: { type: 'function', function: { name: 'extract_contact' } },
         messages: [{ role: 'user', content: prompt }],
       });
 
-      for (const block of response.content) {
-        if (block.type === 'tool_use') {
-          const contact = ContactInfo.parse(block.input);
-          console.log(`Attempt ${attempt}: Success!`);
-          return contact;
-        }
+      const toolCalls = response.choices[0].message.tool_calls;
+      if (toolCalls) {
+        const contact = ContactInfo.parse(JSON.parse(toolCalls[0].function.arguments));
+        console.log(`Attempt ${attempt}: Success!`);
+        return contact;
       }
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -1099,9 +1109,12 @@ Test signatures: 5</div>
           <div class="code-panel active" id="lab-s2-python" role="tabpanel" aria-labelledby="tab-lab-s2-py">
             <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy Python code">Copy</button>
             <pre><code class="language-python">extract_tool = {
-    "name": "extract_contact",
-    "description": "Extract structured contact information from an email signature.",
-    "input_schema": ContactInfo.model_json_schema(),
+    "type": "function",
+    "function": {
+        "name": "extract_contact",
+        "description": "Extract structured contact information from an email signature.",
+        "parameters": ContactInfo.model_json_schema(),
+    },
 }
 
 def extract_contact(text: str) -> ContactInfo:
@@ -1109,13 +1122,13 @@ def extract_contact(text: str) -> ContactInfo:
     response = client.chat.completions.create(
         model="mistral",
         tools=[extract_tool],
-        tool_choice={"type": "tool", "name": "extract_contact"},
+        tool_choice={"type": "function", "function": {"name": "extract_contact"}},
         messages=[{"role": "user", "content": f"Extract contact info:\n\n{text}"}],
     )
-    for block in response.content:
-        if block.type == "tool_use":
-            return ContactInfo(**block.input)
-    raise ValueError("No tool_use block in response")
+    tool_calls = response.choices[0].message.tool_calls
+    if tool_calls:
+        return ContactInfo(**json.loads(tool_calls[0].function.arguments))
+    raise ValueError("No tool call in response")
 
 # Run against all 5 test signatures
 successes = 0
@@ -1127,25 +1140,28 @@ for i, sig in enumerate(TEST_SIGNATURES, 1):
     except (ValidationError, ValueError) as e:
         print(f"✗ Sig {i}: FAILED — {e}")
     except Exception as e:
-        print(f"✗ Sig {i}: API error — {e.message}")
+        print(f"✗ Sig {i}: API error — {e}")
 
 print(f"\nResults: {successes}/{len(TEST_SIGNATURES)} extracted successfully")</code></pre>
           </div>
           <div class="code-panel" id="lab-s2-nodejs" role="tabpanel" aria-labelledby="tab-lab-s2-js">
             <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy Node.js code">Copy</button>
             <pre><code class="language-javascript">const extractTool = {
-  name: 'extract_contact',
-  description: 'Extract structured contact information from an email signature.',
-  input_schema: {
-    type: 'object',
-    properties: {
-      name: { type: 'string', description: 'Full name' },
-      email: { type: 'string', description: 'Email address' },
-      phone: { type: 'string', description: 'Phone number if present' },
-      company: { type: 'string', description: 'Company name if present' },
-      role: { type: 'string', description: 'Job title if present' },
+  type: 'function',
+  function: {
+    name: 'extract_contact',
+    description: 'Extract structured contact information from an email signature.',
+    parameters: {
+      type: 'object',
+      properties: {
+        name: { type: 'string', description: 'Full name' },
+        email: { type: 'string', description: 'Email address' },
+        phone: { type: 'string', description: 'Phone number if present' },
+        company: { type: 'string', description: 'Company name if present' },
+        role: { type: 'string', description: 'Job title if present' },
+      },
+      required: ['name', 'email'],
     },
-    required: ['name', 'email'],
   },
 };
 
@@ -1153,13 +1169,12 @@ async function extractContact(text) {
   const response = await client.chat.completions.create({
     model: 'mistral',
     tools: [extractTool],
-    tool_choice: { type: 'tool', name: 'extract_contact' },
+    tool_choice: { type: 'function', function: { name: 'extract_contact' } },
     messages: [{ role: 'user', content: `Extract contact info:\n\n${text}` }],
   });
-  for (const block of response.content) {
-    if (block.type === 'tool_use') return ContactInfo.parse(block.input);
-  }
-  throw new Error('No tool_use block');
+  const toolCalls = response.choices[0].message.tool_calls;
+  if (toolCalls) return ContactInfo.parse(JSON.parse(toolCalls[0].function.arguments));
+  throw new Error('No tool call');
 }
 
 let successes = 0;
@@ -1215,18 +1230,18 @@ def extract_with_retry(text: str, max_retries: int = 3) -> ContactInfo:
             response = client.chat.completions.create(
                 model="mistral",
                 tools=[extract_tool],
-                tool_choice={"type": "tool", "name": "extract_contact"},
+                tool_choice={"type": "function", "function": {"name": "extract_contact"}},
                 messages=[{"role": "user", "content": prompt}],
             )
-            for block in response.content:
-                if block.type == "tool_use":
-                    return ContactInfo(**block.input)
+            tool_calls = response.choices[0].message.tool_calls
+            if tool_calls:
+                return ContactInfo(**json.loads(tool_calls[0].function.arguments))
         except ValidationError as e:
             last_error = str(e)
             print(f"  Attempt {attempt}: Validation error, retrying...")
             time.sleep(2 ** attempt)
         except Exception as e:
-            print(f"  Attempt {attempt}: API error — {e.message}")
+            print(f"  Attempt {attempt}: API error — {e}")
             time.sleep(2 ** attempt)
     raise RuntimeError(f"Failed after {max_retries} attempts: {last_error}")
 
@@ -1249,12 +1264,11 @@ except RuntimeError as e:
       const response = await client.chat.completions.create({
         model: 'mistral',
         tools: [extractTool],
-        tool_choice: { type: 'tool', name: 'extract_contact' },
+        tool_choice: { type: 'function', function: { name: 'extract_contact' } },
         messages: [{ role: 'user', content: prompt }],
       });
-      for (const block of response.content) {
-        if (block.type === 'tool_use') return ContactInfo.parse(block.input);
-      }
+      const toolCalls = response.choices[0].message.tool_calls;
+      if (toolCalls) return ContactInfo.parse(JSON.parse(toolCalls[0].function.arguments));
     } catch (error) {
       if (error instanceof z.ZodError) {
         lastError = error.issues.map(i => `${i.path}: ${i.message}`).join(', ');
@@ -1352,7 +1366,7 @@ TOOL analyze_document(document_base64, media_type):
         ]
         tools = [ structured_filing_schema ]
 
-    PARSE tool_use response
+    PARSE tool call response
     VALIDATE against schema
     RETURN structured filing record</code></pre>
         </div>
@@ -1375,7 +1389,7 @@ TOOL analyze_document(document_base64, media_type):
           <div class="quiz-option" data-value="b" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option B"><span class="quiz-marker">B</span><span>Set temperature to 0 for deterministic output</span></div>
           <div class="quiz-option" data-value="c" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option C"><span class="quiz-marker">C</span><span>Use tool use with a JSON Schema definition &mdash; the model is specifically trained for this format</span></div>
           <div class="quiz-option" data-value="d" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option D"><span class="quiz-marker">D</span><span>Post-process the text response with regex to extract JSON</span></div>
-          <div class="quiz-feedback correct-fb">Correct! Tool use is the model's most reliable structured output mechanism. the model is specifically trained to produce valid tool_use content blocks with properly typed parameters. It's far more reliable than prompt engineering alone.</div>
+          <div class="quiz-feedback correct-fb">Correct! Tool use is the model's most reliable structured output mechanism. the model is specifically trained to produce valid tool calls with properly typed parameters. It's far more reliable than prompt engineering alone.</div>
           <div class="quiz-feedback incorrect-fb"></div>
         </div>
 
@@ -1407,12 +1421,12 @@ TOOL analyze_document(document_base64, media_type):
 
         <!-- Q4 -->
         <div class="quiz-question" data-correct="a">
-          <h4>Q4: What does <code>tool_choice: {"type": "tool", "name": "extract_contact"}</code> do?</h4>
-          <div class="quiz-option" data-value="a" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option A"><span class="quiz-marker">A</span><span>Forces the model to use that specific tool, guaranteeing a structured <code>tool_use</code> response</span></div>
+          <h4>Q4: What does <code>tool_choice: {"type": "function", "function": {"name": "extract_contact"}}</code> do?</h4>
+          <div class="quiz-option" data-value="a" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option A"><span class="quiz-marker">A</span><span>Forces the model to use that specific tool, guaranteeing a structured <code>tool_calls</code> response</span></div>
           <div class="quiz-option" data-value="b" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option B"><span class="quiz-marker">B</span><span>Suggests the tool but the model can still respond with plain text</span></div>
           <div class="quiz-option" data-value="c" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option C"><span class="quiz-marker">C</span><span>Automatically executes the tool on the server side</span></div>
           <div class="quiz-option" data-value="d" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option D"><span class="quiz-marker">D</span><span>Adds the tool to the model's training data for better results</span></div>
-          <div class="quiz-feedback correct-fb">Correct! Setting tool_choice to a specific tool forces the model to use it, guaranteeing you'll get a structured tool_use content block. This is the key to reliable structured output via tool use.</div>
+          <div class="quiz-feedback correct-fb">Correct! Setting tool_choice to a specific tool forces the model to use it, guaranteeing you'll get a structured tool call. This is the key to reliable structured output via tool use.</div>
           <div class="quiz-feedback incorrect-fb"></div>
         </div>
 
@@ -1422,7 +1436,7 @@ TOOL analyze_document(document_base64, media_type):
           <div class="quiz-option" data-value="a" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option A"><span class="quiz-marker">A</span><span>It makes the model think harder by giving it more time</span></div>
           <div class="quiz-option" data-value="b" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option B"><span class="quiz-marker">B</span><span>It prevents overwhelming the API during outages and gives transient errors time to resolve</span></div>
           <div class="quiz-option" data-value="c" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option C"><span class="quiz-marker">C</span><span>It reduces token usage by spacing out requests</span></div>
-          <div class="quiz-option" data-value="d" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option D"><span class="quiz-marker">D</span><span>It's required by the Anthropic API terms of service</span></div>
+          <div class="quiz-option" data-value="d" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option D"><span class="quiz-marker">D</span><span>It's required by the Ollama API for every request</span></div>
           <div class="quiz-feedback correct-fb">Correct! Exponential backoff (1s, 2s, 4s, 8s...) prevents your retries from making an API overload worse, and gives transient issues time to clear. It's a standard reliability pattern you'll see again in M17 (Circuit Breakers).</div>
           <div class="quiz-feedback incorrect-fb"></div>
         </div>
@@ -1433,14 +1447,14 @@ TOOL analyze_document(document_base64, media_type):
           <div class="code-single" style="margin:0.5rem 0 1rem;"><pre><code class="language-python">response = client.chat.completions.create(
     model="mistral",
     tools=[my_tool],
-    ______={"type": "tool", "name": "my_tool"},
+    ______={"type": "function", "function": {"name": "my_tool"}},
     messages=[...]
 )</code></pre></div>
           <div class="quiz-option" data-value="a" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option A"><span class="quiz-marker">A</span><span><code>tool_select</code></span></div>
           <div class="quiz-option" data-value="b" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option B"><span class="quiz-marker">B</span><span><code>force_tool</code></span></div>
           <div class="quiz-option" data-value="c" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option C"><span class="quiz-marker">C</span><span><code>tool_choice</code></span></div>
           <div class="quiz-option" data-value="d" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option D"><span class="quiz-marker">D</span><span><code>required_tool</code></span></div>
-          <div class="quiz-feedback correct-fb">Correct! The parameter is <code>tool_choice</code>. Setting it to <code>{"type": "tool", "name": "my_tool"}</code> forces the model to use that specific tool, guaranteeing structured output.</div>
+          <div class="quiz-feedback correct-fb">Correct! The parameter is <code>tool_choice</code>. Setting it to <code>{"type": "function", "function": {"name": "my_tool"}}</code> forces the model to use that specific tool, guaranteeing structured output.</div>
           <div class="quiz-feedback incorrect-fb"></div>
         </div>
 
@@ -1457,7 +1471,7 @@ TOOL analyze_document(document_base64, media_type):
           <h3 id="key-takeaways" style="margin-top:0;color:var(--accent-primary);">Key Takeaways</h3>
           <ul>
             <li><strong>Structured output is the contract</strong> between the AI and your system &mdash; without it, downstream code breaks unpredictably.</li>
-            <li><strong>Tool use is the most reliable method</strong> &mdash; the model is specifically trained to produce valid tool_use content blocks with typed parameters.</li>
+            <li><strong>Tool use is the most reliable method</strong> &mdash; the model is specifically trained to produce valid tool calls with typed parameters.</li>
             <li><strong>Defense in depth</strong> &mdash; combine format constraints, stop sequences, and schema validation for near-100% reliability.</li>
             <li><strong>Pydantic &amp; Zod</strong> turn "it usually works" into "it always works or fails explicitly" with typed, validated objects.</li>
             <li><strong>Retry with error feedback</strong> &mdash; include the validation error in the retry prompt so the model can self-correct. Always use exponential backoff.</li>
