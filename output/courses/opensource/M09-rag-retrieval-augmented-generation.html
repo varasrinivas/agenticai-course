@@ -1133,134 +1133,154 @@ for (const c of await answerWithCitations('Who is the secured party and what is 
 
       <!-- ==================== MULTIMODAL INPUTS ==================== -->
       <section class="section" id="multimodal">
-        <h2 id="multimodal-heading">Multimodal Inputs &mdash; PDFs, Images, &amp; the Files API</h2>
+        <h2 id="multimodal-heading">Multimodal Inputs &mdash; PDFs, Images &amp; OCR for Local Models</h2>
 
-        <p>The retrieval pipeline you built so far assumes your documents arrive as plain text. In production they don't. They arrive as PDFs with embedded tables and figures, scanned images, charts, and screenshots. the model has three native primitives for handling these without a separate OCR step or vision model: <strong>PDF support</strong>, <strong>vision</strong>, and the <strong>Files API</strong>. Knowing which to reach for &mdash; and when to combine them with your RAG pipeline &mdash; closes the last gap between a toy chatbot and a production document agent.</p>
+        <p>The retrieval pipeline you built so far assumes your documents arrive as plain text. In production they don't &mdash; they arrive as PDFs with embedded tables, scanned images, charts, and screenshots. Some <em>hosted</em> models (Claude, GPT-4o) accept a PDF or image directly in the request and read it natively. <strong>Mistral-7B is text-only</strong>: Ollama has no <code>document</code> or <code>image</code> content block for it and no Files API, so handing it a PDF or PNG simply won't work.</p>
 
-        <!-- MULTIMODAL CONTENT BLOCK SVG -->
-        <div class="animation-container" aria-label="Three multimodal input types: text content blocks, PDF document blocks, and image blocks, all flowing into the model API in a single request">
-          <div class="animation-title">Three Input Modalities, One API Surface</div>
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 260" style="width:100%;max-width:600px;display:block;margin:0 auto;" role="img" aria-label="Four content block types stack into a single Messages API request: text content, PDF document content (up to 100 pages, native parsing of text and tables), image content (PNG/JPEG/GIF/WebP, base64 or URL), and Files API references (upload once, reference by file_id in many requests). All four feed into the model which produces unified output.">
+        <p>That's not a dead end &mdash; it's a pipeline. On open source you convert everything to <strong>text</strong> <em>before</em> it reaches the model, using the right tool for each format, then feed that text into the exact RAG pipeline you already built. Two tracks cover almost everything:</p>
+        <ul>
+          <li><strong>Documents &rarr; extract text upstream.</strong> Digital PDFs have a text layer you can pull directly; scanned pages need OCR.</li>
+          <li><strong>Pixels-with-meaning &rarr; a vision model.</strong> Charts, diagrams, and photos have no text to extract, so you run them through a multimodal open model (LLaVA, Llama&nbsp;3.2 Vision) that <em>describes</em> them as text.</li>
+        </ul>
+
+        <div class="callout-os">
+          <span class="box-label">&#128300; Open Source Difference</span>
+          <p style="margin-bottom:0;">There is no &ldquo;just send the PDF&rdquo; shortcut on a text-only local model &mdash; and that's fine. You assemble extract &rarr; OCR &rarr; vision-as-needed yourself. More moving parts than one hosted API call, but full control, no per-page vendor fees, and <strong>no document ever leaves your infrastructure</strong> &mdash; often the entire reason you're running locally.</p>
+        </div>
+
+        <!-- MULTIMODAL PIPELINE SVG (open-source: everything becomes text) -->
+        <div class="animation-container" aria-label="Open-source multimodal pipeline: digital PDFs go through pdfplumber, scanned pages through Tesseract OCR, charts and photos through a vision model, all producing plain text that feeds the RAG pipeline and Mistral">
+          <div class="animation-title">Everything Becomes Text, Then Feeds Your RAG Pipeline</div>
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 250" style="width:100%;max-width:600px;display:block;margin:0 auto;" role="img" aria-label="Three input tracks converge to text: digital PDF through pdfplumber/PyMuPDF; scanned page through Tesseract OCR; chart or photo through a LLaVA/Llama Vision model. All three produce plain text that is chunked, embedded, and answered by Mistral 7B (text-only).">
             <defs><marker id="mm-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#94A3B8"/></marker></defs>
-            <!-- Inputs column -->
-            <text x="100" y="22" text-anchor="middle" fill="#94A3B8" font-family="Bricolage Grotesque" font-weight="700" font-size="11">Content Blocks</text>
+            <text x="72" y="20" text-anchor="middle" fill="#94A3B8" font-family="Bricolage Grotesque" font-weight="700" font-size="10">Input</text>
+            <text x="262" y="20" text-anchor="middle" fill="#94A3B8" font-family="Bricolage Grotesque" font-weight="700" font-size="10">Convert to text</text>
 
-            <rect x="20" y="35" width="160" height="42" rx="6" fill="rgba(212,168,67,0.12)" stroke="#D4A843"/>
-            <text x="100" y="52" text-anchor="middle" fill="#D4A843" font-family="JetBrains Mono" font-weight="700" font-size="11">type: "text"</text>
-            <text x="100" y="68" text-anchor="middle" fill="#94A3B8" font-family="Source Sans 3" font-size="9">user message, prompt</text>
+            <!-- Track 1: digital PDF -->
+            <rect x="12" y="34" width="120" height="40" rx="6" fill="rgba(99,102,241,0.15)" stroke="#6366F1"/>
+            <text x="72" y="51" text-anchor="middle" fill="#6366F1" font-family="Bricolage Grotesque" font-weight="700" font-size="10.5">Digital PDF</text>
+            <text x="72" y="65" text-anchor="middle" fill="#94A3B8" font-family="Source Sans 3" font-size="8.5">has a text layer</text>
+            <rect x="190" y="32" width="150" height="44" rx="6" fill="rgba(99,102,241,0.10)" stroke="#6366F1"/>
+            <text x="265" y="50" text-anchor="middle" fill="#6366F1" font-family="JetBrains Mono" font-weight="700" font-size="10">pdfplumber /</text>
+            <text x="265" y="63" text-anchor="middle" fill="#6366F1" font-family="JetBrains Mono" font-weight="700" font-size="10">PyMuPDF</text>
+            <line x1="132" y1="54" x2="188" y2="54" stroke="#94A3B8" stroke-width="1.5" marker-end="url(#mm-arrow)"/>
 
-            <rect x="20" y="85" width="160" height="55" rx="6" fill="rgba(99,102,241,0.15)" stroke="#6366F1"/>
-            <text x="100" y="102" text-anchor="middle" fill="#6366F1" font-family="JetBrains Mono" font-weight="700" font-size="11">type: "document"</text>
-            <text x="100" y="117" text-anchor="middle" fill="#94A3B8" font-family="Source Sans 3" font-size="9">PDF, up to 100 pages</text>
-            <text x="100" y="130" text-anchor="middle" fill="#94A3B8" font-family="Source Sans 3" font-size="9">native text + table parsing</text>
+            <!-- Track 1b: scanned -->
+            <rect x="12" y="104" width="120" height="40" rx="6" fill="rgba(212,168,67,0.14)" stroke="#D4A843"/>
+            <text x="72" y="121" text-anchor="middle" fill="#D4A843" font-family="Bricolage Grotesque" font-weight="700" font-size="10.5">Scanned page</text>
+            <text x="72" y="135" text-anchor="middle" fill="#94A3B8" font-family="Source Sans 3" font-size="8.5">image of text</text>
+            <rect x="190" y="102" width="150" height="44" rx="6" fill="rgba(212,168,67,0.10)" stroke="#D4A843"/>
+            <text x="265" y="128" text-anchor="middle" fill="#D4A843" font-family="JetBrains Mono" font-weight="700" font-size="10">Tesseract OCR</text>
+            <line x1="132" y1="124" x2="188" y2="124" stroke="#94A3B8" stroke-width="1.5" marker-end="url(#mm-arrow)"/>
 
-            <rect x="20" y="148" width="160" height="55" rx="6" fill="rgba(139,92,246,0.15)" stroke="#8B5CF6"/>
-            <text x="100" y="165" text-anchor="middle" fill="#8B5CF6" font-family="JetBrains Mono" font-weight="700" font-size="11">type: "image"</text>
-            <text x="100" y="180" text-anchor="middle" fill="#94A3B8" font-family="Source Sans 3" font-size="9">PNG, JPEG, GIF, WebP</text>
-            <text x="100" y="193" text-anchor="middle" fill="#94A3B8" font-family="Source Sans 3" font-size="9">base64 or URL</text>
+            <!-- Track 2: chart/photo -->
+            <rect x="12" y="174" width="120" height="40" rx="6" fill="rgba(139,92,246,0.16)" stroke="#8B5CF6"/>
+            <text x="72" y="191" text-anchor="middle" fill="#8B5CF6" font-family="Bricolage Grotesque" font-weight="700" font-size="10.5">Chart / photo</text>
+            <text x="72" y="205" text-anchor="middle" fill="#94A3B8" font-family="Source Sans 3" font-size="8.5">no text to extract</text>
+            <rect x="190" y="172" width="150" height="44" rx="6" fill="rgba(139,92,246,0.10)" stroke="#8B5CF6"/>
+            <text x="265" y="190" text-anchor="middle" fill="#8B5CF6" font-family="JetBrains Mono" font-weight="700" font-size="10">LLaVA / Llama</text>
+            <text x="265" y="203" text-anchor="middle" fill="#8B5CF6" font-family="JetBrains Mono" font-weight="700" font-size="10">Vision (Ollama)</text>
+            <line x1="132" y1="194" x2="188" y2="194" stroke="#94A3B8" stroke-width="1.5" marker-end="url(#mm-arrow)"/>
 
-            <rect x="20" y="211" width="160" height="42" rx="6" fill="rgba(6,182,212,0.15)" stroke="#06B6D4"/>
-            <text x="100" y="228" text-anchor="middle" fill="#06B6D4" font-family="JetBrains Mono" font-weight="700" font-size="11">file_id: "file_abc"</text>
-            <text x="100" y="244" text-anchor="middle" fill="#94A3B8" font-family="Source Sans 3" font-size="9">Files API reference</text>
-
-            <!-- Arrows -->
-            <line x1="183" y1="56" x2="270" y2="115" stroke="#94A3B8" stroke-width="1.5" marker-end="url(#mm-arrow)"/>
-            <line x1="183" y1="112" x2="270" y2="125" stroke="#94A3B8" stroke-width="1.5" marker-end="url(#mm-arrow)"/>
-            <line x1="183" y1="175" x2="270" y2="135" stroke="#94A3B8" stroke-width="1.5" marker-end="url(#mm-arrow)"/>
-            <line x1="183" y1="232" x2="270" y2="145" stroke="#94A3B8" stroke-width="1.5" marker-end="url(#mm-arrow)"/>
-
-            <!-- the model -->
-            <rect x="275" y="100" width="140" height="60" rx="10" fill="rgba(236,72,153,0.18)" stroke="#EC4899" stroke-width="2"/>
-            <text x="345" y="123" text-anchor="middle" fill="#EC4899" font-family="Bricolage Grotesque" font-weight="700" font-size="13">The model</text>
-            <text x="345" y="139" text-anchor="middle" fill="#94A3B8" font-family="Source Sans 3" font-size="10">unified multimodal</text>
-            <text x="345" y="152" text-anchor="middle" fill="#94A3B8" font-family="Source Sans 3" font-size="10">reasoning</text>
-
-            <!-- Output -->
-            <line x1="418" y1="130" x2="448" y2="130" stroke="#94A3B8" stroke-width="1.5" marker-end="url(#mm-arrow)"/>
-            <rect x="450" y="100" width="135" height="60" rx="10" fill="rgba(16,185,129,0.15)" stroke="#10B981"/>
-            <text x="517" y="123" text-anchor="middle" fill="#10B981" font-family="Bricolage Grotesque" font-weight="700" font-size="12">Structured</text>
-            <text x="517" y="138" text-anchor="middle" fill="#10B981" font-family="Bricolage Grotesque" font-weight="700" font-size="12">extraction</text>
-            <text x="517" y="153" text-anchor="middle" fill="#94A3B8" font-family="Source Sans 3" font-size="9">+ citations</text>
+            <!-- Converge to text -> RAG -> Mistral -->
+            <line x1="340" y1="54"  x2="406" y2="112" stroke="#94A3B8" stroke-width="1.5" marker-end="url(#mm-arrow)"/>
+            <line x1="340" y1="124" x2="406" y2="124" stroke="#94A3B8" stroke-width="1.5" marker-end="url(#mm-arrow)"/>
+            <line x1="340" y1="194" x2="406" y2="136" stroke="#94A3B8" stroke-width="1.5" marker-end="url(#mm-arrow)"/>
+            <rect x="408" y="92" width="180" height="66" rx="10" fill="rgba(16,185,129,0.15)" stroke="#10B981" stroke-width="2"/>
+            <text x="498" y="113" text-anchor="middle" fill="#10B981" font-family="Bricolage Grotesque" font-weight="700" font-size="12">Plain text</text>
+            <text x="498" y="129" text-anchor="middle" fill="#94A3B8" font-family="Source Sans 3" font-size="9">chunk + embed (your RAG)</text>
+            <text x="498" y="145" text-anchor="middle" fill="#94A3B8" font-family="Source Sans 3" font-size="9">&rarr; Mistral 7B (text-only)</text>
           </svg>
         </div>
 
-        <h3>PDF Support &mdash; Skip the OCR Pipeline</h3>
-        <p>Pass a PDF directly as a <code>document</code> content block (base64-encoded or via Files API reference) and the model reads it natively &mdash; including tables, headings, and the layout structure that OCR'd text would lose. Limits to know: up to ~100 pages per document, ~32MB per file. For longer documents, split into chunks and use your RAG pipeline to shortlist before passing the most relevant pages.</p>
+        <h3>Track 1 &mdash; Digital PDFs: Pull Text and Tables</h3>
+        <p>If a PDF was generated digitally (exported from Word, a database, a web page), it already contains a text layer &mdash; no OCR needed. <code>pdfplumber</code> extracts both the prose <em>and</em> the tables, which is exactly the structure RAG chunking cares about.</p>
 
         <div class="code-block-wrapper">
+          <div class="code-annotation"><strong>WHAT:</strong> Extract text + tables from a digital PDF into one string<br><strong>WHY:</strong> Mistral is text-only; this is the input your existing chunk/embed pipeline expects<br><strong>GOTCHA:</strong> If <code>extract_text()</code> returns empty, the PDF is scanned (no text layer) &mdash; use Track 1b (OCR)</div>
           <div class="code-panel active" style="display:block;">
-            <pre><code class="language-python">from openai import OpenAI
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy Python code">Copy</button>
+            <pre><code class="language-python"># pip install pdfplumber
+import pdfplumber
+
+def pdf_to_text(path: str) -> str:
+    """Extract prose AND tables from a digital (non-scanned) PDF."""
+    parts = []
+    with pdfplumber.open(path) as pdf:
+        for page in pdf.pages:
+            parts.append(page.extract_text() or "")
+            for table in page.extract_tables():
+                rows = ["\t".join((cell or "") for cell in row) for row in table]
+                parts.append("\n".join(rows))
+    return "\n\n".join(p for p in parts if p.strip())
+
+# Feed the result straight into the chunk -> embed -> store pipeline you built earlier:
+text = pdf_to_text("ucc_filing.pdf")
+# chunks = chunk_text(text); add_to_chroma(chunks)   # same functions as before</code></pre>
+          </div>
+        </div>
+
+        <h3 style="margin-top:1.5rem;">Track 1b &mdash; Scanned Pages: OCR First</h3>
+        <p>A scanned document is just an <em>image</em> of text &mdash; <code>extract_text()</code> returns nothing. Run it through <span class="term-tooltip" tabindex="0">OCR<span class="tooltip-content" role="tooltip">Optical Character Recognition &mdash; software that detects characters in an image and outputs them as machine-readable text. Tesseract is the long-standing open-source engine; accuracy depends heavily on scan resolution (aim for 300 DPI).</span></span> to recover the text, then proceed exactly as in Track&nbsp;1.</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-annotation"><strong>WHAT:</strong> OCR a scanned image or scanned PDF into text<br><strong>WHY:</strong> No text layer exists to extract &mdash; the characters live only as pixels<br><strong>GOTCHA:</strong> Install the Tesseract <em>binary</em> too (<code>brew install tesseract</code> / <code>apt install tesseract-ocr</code>), not just the Python wrapper; scan at 300 DPI for usable accuracy</div>
+          <div class="code-panel active" style="display:block;">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy Python code">Copy</button>
+            <pre><code class="language-python"># pip install pytesseract pdf2image pillow   (+ the Tesseract binary)
+import pytesseract
+from PIL import Image
+from pdf2image import convert_from_path
+
+# A single scanned image:
+text = pytesseract.image_to_string(Image.open("scanned_form.png"))
+
+# A scanned PDF: rasterize each page, then OCR it
+def scanned_pdf_to_text(path: str, dpi: int = 300) -> str:
+    pages = convert_from_path(path, dpi=dpi)
+    return "\n\n".join(pytesseract.image_to_string(page) for page in pages)
+
+text = scanned_pdf_to_text("scanned_contract.pdf")
+# -> same chunk/embed/RAG path as Track 1</code></pre>
+          </div>
+        </div>
+
+        <h3 style="margin-top:1.5rem;">Track 2 &mdash; Charts, Diagrams &amp; Photos: A Vision Model</h3>
+        <p>When the meaning lives in <em>pixels</em> &mdash; a line chart, an architecture diagram, a photo of a whiteboard &mdash; there's no text to OCR. Pull a multimodal open model in Ollama (<code>ollama pull llava</code>, or <code>llama3.2-vision</code> / <code>qwen2-vl</code>) and send the image through the <strong>OpenAI-compatible <code>image_url</code> block</strong> &mdash; the same client you've used all along. The model's text answer then flows into RAG like any other chunk.</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-annotation"><strong>WHAT:</strong> Ask a vision-capable local model to describe/read an image<br><strong>WHY:</strong> Mistral can't see; a multimodal model turns pixels into text you can index<br><strong>GOTCHA:</strong> Vision models (LLaVA ~7B) are heavier and slower than Mistral and need their own VRAM &mdash; call them only when OCR/extraction can't, and cache the text result</div>
+          <div class="code-panel active" style="display:block;">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy Python code">Copy</button>
+            <pre><code class="language-python"># ollama pull llava
 import base64
+from openai import OpenAI
 
-with open("ucc_filing.pdf", "rb") as f:
-    pdf_data = base64.standard_b64encode(f.read()).decode("utf-8")
+client = OpenAI(base_url="http://localhost:11434/v1", api_key="ollama")
 
-response = client.chat.completions.create(
-    model="mistral",
+with open("latency_chart.png", "rb") as f:
+    img_b64 = base64.b64encode(f.read()).decode()
+
+resp = client.chat.completions.create(
+    model="llava",  # any multimodal model you've pulled into Ollama
     messages=[{
         "role": "user",
         "content": [
-            {
-                "type": "document",
-                "source": {"type": "base64", "media_type": "application/pdf", "data": pdf_data},
-                "title": "UCC-1 Filing 2024-001",
-                "citations": {"enabled": True}  # &larr; pairs with Citations
-            },
-            {"type": "text", "text": "Extract debtor, secured party, and collateral. Cite each field."}
-        ]
-    }]
-)</code></pre>
-          </div>
-        </div>
-
-        <h3 style="margin-top:1.5rem;">Vision &mdash; Images as First-Class Inputs</h3>
-        <p>Same content-block paradigm with <code>type: "image"</code>. Useful for: extracting data from charts/graphs, reading screenshots from agents that monitor dashboards, classifying scanned forms when you don't have native PDFs, and processing diagram-heavy documents (architecture diagrams, flowcharts). Cost: image tokens are calculated by image dimensions &mdash; ~1.15 tokens per pixel after resizing. A 1280x800 screenshot is roughly 1500 tokens.</p>
-
-        <div class="code-block-wrapper">
-          <div class="code-panel active" style="display:block;">
-            <pre><code class="language-python">with open("dashboard_screenshot.png", "rb") as f:
-    image_data = base64.standard_b64encode(f.read()).decode("utf-8")
-
-response = client.chat.completions.create(
-    model="mistral",
-    messages=[{
-        "role": "user",
-        "content": [
-            {"type": "image",
-             "source": {"type": "base64", "media_type": "image/png", "data": image_data}},
-            {"type": "text", "text": "Read the latency chart and report the p95 value for the last 24h."}
-        ]
-    }]
-)</code></pre>
-          </div>
-        </div>
-
-        <h3 style="margin-top:1.5rem;">Files API &mdash; Upload Once, Reference Many Times</h3>
-        <p>If you reference the same document across many requests &mdash; an agent that answers questions about a 50-page contract over a multi-turn session, or a batch job that runs 1000 questions against the same PDF &mdash; uploading via the <strong>Files API</strong> beats re-encoding the file in every request. You upload once, get a <code>file_id</code>, and reference it by ID in subsequent messages.</p>
-
-        <div class="code-block-wrapper">
-          <div class="code-panel active" style="display:block;">
-            <pre><code class="language-python"># Step 1: upload (do this once)
-file = client.files.create(file=open("contract.pdf", "rb"), purpose="user_data")
-file_id = file.id  # e.g., "file_abc123"
-
-# Step 2: reference by ID in any request
-response = client.chat.completions.create(
-    model="mistral",
-    messages=[{
-        "role": "user",
-        "content": [
-            {"type": "document", "source": {"type": "file", "file_id": file_id}},
-            {"type": "text", "text": "What is the termination clause?"}
-        ]
-    }]
-)</code></pre>
+            {"type": "text", "text": "Read the latency chart and report the p95 value for the last 24h."},
+            {"type": "image_url",
+             "image_url": {"url": f"data:image/png;base64,{img_b64}"}},
+        ],
+    }],
+)
+description = resp.choices[0].message.content
+print(description)
+# Treat `description` as text: chunk + embed it into your RAG store like any document.</code></pre>
           </div>
         </div>
 
         <h3 style="margin-top:1.5rem;">When to Use Each &mdash; Decision Matrix</h3>
-        <div class="animation-container" aria-label="Multimodal input decision matrix" style="padding:1.25rem;">
-          <div class="animation-title">Pick the Right Input Modality</div>
+        <div class="animation-container" aria-label="Open-source document format decision matrix" style="padding:1.25rem;">
+          <div class="animation-title">Route Each Format to the Right Converter</div>
           <table style="width:100%;border-collapse:collapse;font-size:0.88rem;">
             <thead>
               <tr style="background:var(--bg-surface);">
@@ -1269,24 +1289,23 @@ response = client.chat.completions.create(
               </tr>
             </thead>
             <tbody>
-              <tr><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);">One-off PDF question, &lt;100 pages</td><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);"><strong style="color:#6366F1;">document content block (base64)</strong> + Citations</td></tr>
-              <tr><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);">Same PDF referenced in 50+ requests</td><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);"><strong style="color:#06B6D4;">Files API</strong> + reference by <code>file_id</code></td></tr>
-              <tr><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);">PDF &gt;100 pages or &gt;32MB</td><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);"><strong style="color:#10B981;">RAG to shortlist + document blocks for top-K</strong></td></tr>
-              <tr><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);">Screenshot, chart, or scanned form</td><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);"><strong style="color:#8B5CF6;">image content block</strong></td></tr>
-              <tr><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);">Diagram/architecture interpretation</td><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);"><strong style="color:#8B5CF6;">image content block</strong> with explicit task prompt</td></tr>
-              <tr><td style="padding:0.55rem 0.75rem;">Mixed content (PDF + screenshots + text)</td><td style="padding:0.55rem 0.75rem;"><strong>All three</strong> in one <code>content</code> array &mdash; the model reasons across them jointly</td></tr>
+              <tr><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);">Digital PDF (has a text layer)</td><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);"><strong style="color:#6366F1;">pdfplumber / PyMuPDF</strong> &rarr; text &rarr; RAG</td></tr>
+              <tr><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);">Scanned PDF or photo of text</td><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);"><strong style="color:#D4A843;">Tesseract OCR</strong> (pdf2image + pytesseract) &rarr; text &rarr; RAG</td></tr>
+              <tr><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);">Chart, dashboard, or diagram</td><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);"><strong style="color:#8B5CF6;">Vision model</strong> (LLaVA / Llama&nbsp;3.2 Vision) &rarr; description &rarr; RAG</td></tr>
+              <tr><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);">Huge corpus, mixed formats</td><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);">Route by type at ingest: text-layer&rarr;extract, else OCR, pixels&rarr;vision &mdash; embed everything once</td></tr>
+              <tr><td style="padding:0.55rem 0.75rem;">Not sure if a PDF is scanned</td><td style="padding:0.55rem 0.75rem;">Try <code>extract_text()</code>; if it's empty or near-empty, fall back to OCR</td></tr>
             </tbody>
           </table>
         </div>
 
         <div class="callout-warning">
-          <span class="box-label">Cost &amp; Limits</span>
-          <p><strong>PDFs:</strong> ~1500&ndash;3000 tokens per page depending on text density. <strong>Images:</strong> tokens scale with image dimensions; resize before sending if you don't need full resolution. <strong>Files API:</strong> file references count toward your context window the same as inline content &mdash; the upload is for re-use efficiency, not free context. <strong>Caching:</strong> document and image content blocks ARE cacheable via <code>cache_control</code> &mdash; combine with prompt caching for high-frequency document Q&amp;A and you'll see 90% savings on the second-and-onward request.</p>
+          <span class="box-label">Cost &amp; Performance</span>
+          <p><strong>Extraction (pdfplumber):</strong> nearly free &mdash; pure CPU, milliseconds per page, keeps fast text-only Mistral in the loop. <strong>OCR (Tesseract):</strong> a preprocessing step; quality tracks scan resolution, so rasterize at 300&nbsp;DPI. <strong>Vision models:</strong> a 7B vision model needs its own multi-GB of VRAM and runs slower than Mistral &mdash; reserve it for genuine pixels-with-meaning, and <em>cache the text description</em> so you pay the vision cost once. Everything downstream is plain text, so your chunking, embeddings, and RAG retrieval work unchanged.</p>
         </div>
 
         <div class="callout-why">
           <span class="box-label">Why It Matters</span>
-          <p>The single biggest production gap for document agents isn't retrieval quality &mdash; it's <em>format handling</em>. Teams build elegant RAG pipelines, then hit a wall when 60% of their documents are scanned PDFs with tables. Native multimodal support collapses what used to be a 3-stage pipeline (OCR &rarr; layout parsing &rarr; LLM) into a single API call. Combined with Citations and prompt caching, you get a complete document-agent stack with audit-grade provenance for under 100 lines of code.</p>
+          <p>The single biggest production gap for document agents isn't retrieval quality &mdash; it's <em>format handling</em>. Teams build an elegant RAG pipeline, then hit a wall when 60% of their documents are scanned PDFs with tables. A hosted multimodal API hides that behind one call; on open source you build the converter yourself (extract &rarr; OCR &rarr; vision-as-needed &rarr; text). It's a few more moving parts, but you keep every document on your own hardware, pay no per-page fees, and can swap any stage &mdash; a better OCR engine, a stronger vision model &mdash; without touching the RAG core.</p>
         </div>
       </section>
 
