@@ -253,7 +253,7 @@ Hypothesis: "UCC-1 filing 2024-FL-0093 creates a security interest
 <span style="color:var(--text-muted);">// Stage 2 — Hybrid Search (BM25 + Vector, fused via RRF)</span>
 BM25 top-3: [Filing-0093 (12.4), Amendment-0093 (9.1), Debtor-Profile (6.8)]
 Vector top-3: [Risk-Analysis (0.91), Debtor-Profile (0.87), Credit-Score (0.85)]
-Fused top-3: [Filing-0093 (0.033), Debtor-Profile (0.031), Risk-Analysis (0.027)]
+Fused top-3: [Debtor-Profile (0.032), Filing-0093 (0.016), Risk-Analysis (0.016)]
 
 <span style="color:var(--text-muted);">// Stage 3 — Re-Ranking (Claude scores 1-10)</span>
 Filing-0093:      9.2 (directly about this filing)
@@ -425,9 +425,9 @@ Query: "UCC filing #2024-FL-0093 debtor risk"
   #3  Credit-Score-Report.txt score: 0.86  (related to risk assessment)
 
 <span style="color:var(--success);">RRF Fused (rank-based merge, k=60):</span>
-  #1  Filing-0093.txt         rrf: 0.033  (rank 1 in BM25 + not in vector top)
-  #2  Debtor-XYZ-Profile.txt  rrf: 0.031  (rank 3 in BM25 + rank 2 in vector)
-  #3  Risk-Analysis-Q4.txt    rrf: 0.027  (rank 1 in vector + not in BM25 top)
+  #1  Debtor-XYZ-Profile.txt  rrf: 0.0320  (BM25 #3 + vector #2 = 1/63 + 1/62 — the only doc in BOTH lists)
+  #2  Filing-0093.txt         rrf: 0.0164  (BM25 #1 only = 1/61)
+  #3  Risk-Analysis-Q4.txt    rrf: 0.0164  (vector #1 only = 1/61 — tied with Filing-0093)
         </div>
 
         <div class="tech-def-box">
@@ -437,6 +437,8 @@ Query: "UCC filing #2024-FL-0093 debtor risk"
           <p>Second, <em>dense retrieval</em> (vector similarity) encodes both query and documents as high-dimensional number arrays and finds the closest ones by cosine similarity. It understands meaning, not just words &mdash; so &ldquo;automobile&rdquo; and &ldquo;car&rdquo; would match even though they share no letters.</p>
           <p>Finally, <span class="term-tooltip" tabindex="0" aria-describedby="tt-rrf">Reciprocal Rank Fusion (RRF)<span class="tooltip-content" id="tt-rrf" role="tooltip">A method for combining ranked lists from different search systems. For each document, RRF computes 1/(k+rank) for each list it appears in and sums the scores. This gives a unified ranking without needing to normalize scores across different systems.</span></span> merges the two ranked lists into one. For each document, it computes a fused score based on where that document appeared in each list: <code>score = &Sigma; 1/(k + rank)</code>, where k is typically 60. The beauty of RRF is that it uses rank positions, not raw scores &mdash; so you never have to worry about normalizing BM25 scores (which might be 12.4) against cosine similarities (which might be 0.87).</p>
         </div>
+
+        <p><strong>The intuition: RRF is ranked-choice voting.</strong> Each retriever &mdash; BM25 and vector &mdash; casts a ballot, which is just its ranked list. A document&rsquo;s final score is the <em>sum of its votes</em>, and a vote is worth more the higher the document placed: a #1 finish is worth 1/(60+1)&nbsp;=&nbsp;0.0164, a #3 finish 1/(60+3)&nbsp;=&nbsp;0.0159. Why add 60? It deliberately shrinks the gap between rank&nbsp;1 and rank&nbsp;2 so no single list can crown the winner by itself. Here&rsquo;s the payoff, and the whole reason hybrid search works: a document that lands mid-pack in <em>both</em> lists (two modest votes) beats a document that&rsquo;s #1 in only <em>one</em> list (a single big vote) &mdash; that&rsquo;s exactly why Debtor-XYZ-Profile (0.0159&nbsp;+&nbsp;0.0161&nbsp;=&nbsp;0.0320) edges out Filing-0093 (a lone 0.0164) above. <strong>Agreement across two different retrieval methods is a stronger signal than a high score from either one alone.</strong> Watch that happen in the animation below: the documents that appear in <em>both</em> lists rise to the top, while documents that scored well in only one list fall behind.</p>
 
         <!-- Animation: Hybrid Search -->
         <div class="animation-container" id="anim-hybrid" aria-label="Animation showing hybrid search combining BM25 and vector results via Reciprocal Rank Fusion">
