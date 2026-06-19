@@ -224,7 +224,7 @@
         <h2 id="objectives-heading">Learning Objectives</h2>
         <ul class="objectives-list" aria-label="Learning objectives">
           <li>Explain the difference between parallel and sequential tool calls, and when to use each</li>
-          <li>Implement the agentic loop that processes multiple tool_use blocks and chains results</li>
+          <li>Implement the agentic loop that processes multiple tool calls and chains results</li>
           <li>Engineer effective tool descriptions that help the model select the right tool</li>
           <li>Build a ToolRegistry that dynamically adds and removes tools based on context</li>
           <li>Handle partial failures, retries, and circuit breakers in multi-tool workflows</li>
@@ -239,15 +239,15 @@
           <span class="box-label">Everyday Analogy</span>
           <p><strong>BEFORE:</strong> Imagine a kitchen where only one sous chef handles all prep work &mdash; chopping onions, then dicing tomatoes, then mincing garlic, one task after another while the head chef waits.</p>
           <p><strong>PAIN:</strong> Dinner service grinds to a halt because three 10-minute tasks take 30 minutes total, and every dish that depends on those ingredients sits idle the entire time.</p>
-          <p style="margin-bottom:0;"><strong>MAPPING:</strong> <span class="term-tooltip" tabindex="0" aria-describedby="tt-parallel">Parallel tool calls<span class="tooltip-content" role="tooltip" id="tt-parallel">When the model requests multiple tool calls in a single response because the calls are independent. The client executes all tools concurrently and returns all results in one message, reducing round trips and wall-clock time.</span></span> solve this exactly the way a smart head chef would &mdash; assign each task to a different sous chef so all three run simultaneously. The total time drops to the <em>slowest</em> single task (10 minutes), not the sum of all three (30 minutes). In agent terms, the model emits multiple <code>tool_use</code> blocks in one response, your code runs them concurrently, and the wall-clock time equals the slowest tool, not the total.</p>
+          <p style="margin-bottom:0;"><strong>MAPPING:</strong> <span class="term-tooltip" tabindex="0" aria-describedby="tt-parallel">Parallel tool calls<span class="tooltip-content" role="tooltip" id="tt-parallel">When the model requests multiple tool calls in a single response because the calls are independent. The client executes all tools concurrently and returns each result as its own role:"tool" message, reducing round trips and wall-clock time.</span></span> solve this exactly the way a smart head chef would &mdash; assign each task to a different sous chef so all three run simultaneously. The total time drops to the <em>slowest</em> single task (10 minutes), not the sum of all three (30 minutes). In agent terms, the model emits multiple <code>tool_calls</code> in one response, your code runs them concurrently, and the wall-clock time equals the slowest tool, not the total.</p>
         </div>
 
         <div class="tech-def-box">
           <span class="box-label">Technical Definition</span>
-          The model can return <strong>multiple <span class="term-tooltip" tabindex="0" aria-describedby="tt-tooluse"><code>tool_use</code><span class="tooltip-content" role="tooltip" id="tt-tooluse">A content block in the model's response with type "tool_use". It contains the tool's name, a unique ID, and an input object with arguments. Your code reads this block, executes the function, and returns the result. When multiple tool_use blocks appear in one response, the calls are independent and can run in parallel.</span></span> content blocks</strong> in a single assistant message when the calls are independent. Your client code then executes all of those tools concurrently. Remember from M05: your code runs the tools, not the model. Once all tools finish, you bundle all the <span class="term-tooltip" tabindex="0" aria-describedby="tt-toolresult">tool_result<span class="tooltip-content" role="tooltip" id="tt-toolresult">A message you send back containing the output of a tool execution. It must reference the tool_call_id from the model's request. When returning multiple results from parallel calls, include all tool result messages in a single user turn.</span></span> messages into a single user message and send them back in the next turn. The payoff? One API round trip handles N tools, instead of N separate round trips.
+          The model can return <strong>multiple <span class="term-tooltip" tabindex="0" aria-describedby="tt-tooluse"><code>tool_calls</code><span class="tooltip-content" role="tooltip" id="tt-tooluse">Entries in <code>response.choices[0].message.tool_calls</code>. Each has a unique <code>id</code>, a <code>function.name</code>, and a <code>function.arguments</code> string. Your code reads them, executes the functions, and returns the results. When multiple tool_calls appear in one response, the calls are independent and can run in parallel.</span></span></strong> in a single assistant message when the calls are independent. Your client code then executes all of those tools concurrently. Remember from M05: your code runs the tools, not the model. Once all tools finish, you append all the <span class="term-tooltip" tabindex="0" aria-describedby="tt-toolresult">tool results<span class="tooltip-content" role="tooltip" id="tt-toolresult">Each tool result is a message with <code>role:"tool"</code> carrying the matching <code>tool_call_id</code> and the output string. For parallel calls you append one such message per tool before the next API call.</span></span> &mdash; one <code>role:"tool"</code> message per tool &mdash; and send them back in the next turn. The payoff? One API round trip handles N tools, instead of N separate round trips.
         </div>
 
-        <p>So what does parallel execution actually look like in an API response? When the model decides it needs multiple independent tools, it returns multiple <code>tool_use</code> blocks in a single response. Here's an example:</p>
+        <p>So what does parallel execution actually look like in an API response? When the model decides it needs multiple independent tools, it returns multiple <code>tool_calls</code> in a single response. Here's an example:</p>
         <div style="background:var(--code-bg);border:1px solid var(--code-border);border-radius:8px;padding:1rem;font-family:'JetBrains Mono',monospace;font-size:0.78rem;color:var(--code-text);line-height:1.5;overflow-x:auto;margin:0.75rem 0;">
 <span style="color:var(--info);">"choices"</span>: [{
   <span style="color:var(--info);">"message"</span>: {
@@ -258,7 +258,7 @@
     ]
   }
 }]</div>
-        <p>Three tool_calls, each with its own <code>id</code>. Your code sees all three, fires them off concurrently (using <code>ThreadPoolExecutor</code> in Python or <code>Promise.all</code> in Node.js), and returns all three tool results in a single user message. One round trip, three tools executed.</p>
+        <p>Three tool_calls, each with its own <code>id</code>. Your code sees all three, fires them off concurrently (using <code>ThreadPoolExecutor</code> in Python or <code>Promise.all</code> in Node.js), and appends all three results &mdash; one <code>role:"tool"</code> message each &mdash; before the next call. One round trip, three tools executed.</p>
 
         <div class="callout-why">
           <span class="box-label">Why It Matters</span>
@@ -379,15 +379,15 @@
         <div style="background:var(--code-bg);border:1px solid var(--code-border);border-radius:8px;padding:1rem;font-family:'JetBrains Mono',monospace;font-size:0.75rem;color:var(--code-text);line-height:1.6;overflow-x:auto;margin:0.75rem 0;">
 <span style="color:#8B949E;">// Round trip 1: Model requests search</span>
 <span style="color:var(--info);">tool_call</span>: search({<span style="color:var(--info);">query</span>: <span style="color:var(--text-secondary);">"Mistral AI"</span>})
-<span style="color:var(--info);">tool_result</span>: {<span style="color:var(--info);">urls</span>: [<span style="color:var(--text-secondary);">"mistral.ai/..."</span>, <span style="color:var(--text-secondary);">"blog.mistral.ai/..."</span>]}
+<span style="color:var(--info);">result</span>: {<span style="color:var(--info);">urls</span>: [<span style="color:var(--text-secondary);">"mistral.ai/..."</span>, <span style="color:var(--text-secondary);">"blog.mistral.ai/..."</span>]}
 
 <span style="color:#8B949E;">// Round trip 2: Model uses URL from search result</span>
 <span style="color:var(--info);">tool_call</span>: fetch_page({<span style="color:var(--info);">url</span>: <span style="color:var(--text-secondary);">"mistral.ai/..."</span>})
-<span style="color:var(--info);">tool_result</span>: {<span style="color:var(--info);">content</span>: <span style="color:var(--text-secondary);">"Mistral AI is a French AI company..."</span> <span style="color:#8B949E;">// 5000 chars</span>}
+<span style="color:var(--info);">result</span>: {<span style="color:var(--info);">content</span>: <span style="color:var(--text-secondary);">"Mistral AI is a French AI company..."</span> <span style="color:#8B949E;">// 5000 chars</span>}
 
 <span style="color:#8B949E;">// Round trip 3: Model uses page text for summary</span>
 <span style="color:var(--info);">tool_call</span>: summarize({<span style="color:var(--info);">text</span>: <span style="color:var(--text-secondary);">"Mistral AI is a French AI company..."</span>})
-<span style="color:var(--info);">tool_result</span>: {<span style="color:var(--info);">summary</span>: [<span style="color:var(--text-secondary);">"Key point 1..."</span>, <span style="color:var(--text-secondary);">"Key point 2..."</span>]}
+<span style="color:var(--info);">result</span>: {<span style="color:var(--info);">summary</span>: [<span style="color:var(--text-secondary);">"Key point 1..."</span>, <span style="color:var(--text-secondary);">"Key point 2..."</span>]}
 
 <span style="color:#8B949E;">// Round trip 4: Model composes final answer (finish_reason: "stop")</span></div>
         <p>Each round trip is a full API call. The model sees the previous result, decides what to do next, and issues another tool call. This continues until the chain is complete and the model returns its final text response.</p>
