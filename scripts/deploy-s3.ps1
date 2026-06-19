@@ -1,20 +1,42 @@
-﻿# deploy-s3.ps1 - Replace the contents of s3://agenticai.varasrinivas.com with the local output/ folder
+# deploy-s3.ps1 - Replace the contents of the course site S3 bucket with the local output/ folder
 #
 # Usage (from the repo root):
 #   .\scripts\deploy-s3.ps1                # full deploy (delete stale + upload changed)
 #   .\scripts\deploy-s3.ps1 -DryRun        # preview what would change, touch nothing
 #   .\scripts\deploy-s3.ps1 -WipeFirst     # delete EVERYTHING in the bucket, then re-upload all
 #
+# Bucket and CloudFront distribution ID are resolved in this order:
+#   1. -Bucket / -DistributionId parameters
+#   2. COURSE_S3_BUCKET / COURSE_CF_DISTRIBUTION_ID environment variables
+#   3. scripts/deploy-config.ps1 (gitignored; see template below)
+#
+# scripts/deploy-config.ps1 template:
+#   @{
+#       Bucket         = "your-bucket-name"
+#       DistributionId = "YOUR_DISTRIBUTION_ID"
+#   }
+#
 # Requires: AWS CLI v2 with credentials configured (aws configure / SSO / env vars)
 
 param(
     [switch]$DryRun,
-    [switch]$WipeFirst
+    [switch]$WipeFirst,
+    [string]$Bucket = $env:COURSE_S3_BUCKET,
+    [string]$DistributionId = $env:COURSE_CF_DISTRIBUTION_ID
 )
 
-$Bucket         = "agenticai.varasrinivas.com"
-$DistributionId = "E204WFPQTUDQ3Q"   # CloudFront distribution serving https://agenticai.varasrinivas.com
-$SourceDir      = Join-Path $PSScriptRoot "..\output"
+$SourceDir = Join-Path $PSScriptRoot "..\output"
+
+$configFile = Join-Path $PSScriptRoot "deploy-config.ps1"
+if ((-not $Bucket -or -not $DistributionId) -and (Test-Path $configFile)) {
+    $cfg = & $configFile
+    if (-not $Bucket)         { $Bucket = $cfg.Bucket }
+    if (-not $DistributionId) { $DistributionId = $cfg.DistributionId }
+}
+if (-not $Bucket -or -not $DistributionId) {
+    Write-Error "Bucket/DistributionId not set. Pass -Bucket/-DistributionId, set COURSE_S3_BUCKET/COURSE_CF_DISTRIBUTION_ID, or create scripts/deploy-config.ps1 (see template in this script's header)."
+    exit 1
+}
 
 if (-not (Test-Path (Join-Path $SourceDir "index.html"))) {
     Write-Error "Sanity check failed: $SourceDir\index.html not found. Run from the repo root."
@@ -67,5 +89,5 @@ Write-Host ""
 if ($DryRun) {
     Write-Host "Dry run complete - nothing was changed." -ForegroundColor Cyan
 } else {
-    Write-Host "Deploy complete: https://agenticai.varasrinivas.com" -ForegroundColor Green
+    Write-Host "Deploy complete: https://$Bucket" -ForegroundColor Green
 }

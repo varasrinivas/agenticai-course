@@ -1,6 +1,7 @@
-// CloudFront Function (cloudfront-js-2.0, viewer-request) for agenticai.varasrinivas.com
+// CloudFront Function (cloudfront-js-2.0, viewer-request) for the course site.
 // 301-redirects pre-June-2026 flat-layout URLs to the new /courses/ structure.
-// Deployed as "agenticai-legacy-redirects" on distribution E204WFPQTUDQ3Q.
+// Deployed as "agenticai-legacy-redirects" on the site's CloudFront distribution
+// (ID in the gitignored scripts/deploy-config.ps1).
 
 function handler(event) {
     var request = event.request;

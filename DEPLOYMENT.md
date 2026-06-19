@@ -5,7 +5,7 @@ The course is a static site served at **https://agenticai.varasrinivas.com**.
 | Piece | Value |
 |---|---|
 | S3 bucket | `agenticai.varasrinivas.com` (us-east-1, private — no S3 website hosting) |
-| CloudFront distribution | `E204WFPQTUDQ3Q` → `d3bolc1a63l7fy.cloudfront.net` |
+| CloudFront distribution | ID in `scripts/deploy-config.ps1` (gitignored) → `*.cloudfront.net` |
 | DNS | `agenticai.varasrinivas.com` is a CNAME to the CloudFront domain |
 | Default root object | `index.html` (set on the distribution) |
 | Source of truth | local `output/` folder (course catalog `index.html` + `courses/<track>/…` + `mobile/…`) |
@@ -31,6 +31,10 @@ only the site root does. All internal links already point to explicit
 - Credentials configured (`aws configure`, SSO, or env vars) with permission for
   `s3:ListBucket`, `s3:GetObject`, `s3:PutObject`, `s3:DeleteObject` on the
   bucket and `cloudfront:CreateInvalidation` on the distribution
+- `scripts/deploy-config.ps1` created (gitignored) with the bucket name and
+  distribution ID — template in the header of `scripts/deploy-s3.ps1`.
+  Alternatively pass `-Bucket`/`-DistributionId` or set the
+  `COURSE_S3_BUCKET`/`COURSE_CF_DISTRIBUTION_ID` environment variables.
 
 ## Steps
 
@@ -82,7 +86,7 @@ module per track. If you still see old content, the invalidation may not have
 finished yet — check with:
 
 ```powershell
-aws cloudfront list-invalidations --distribution-id E204WFPQTUDQ3Q
+aws cloudfront list-invalidations --distribution-id <DISTRIBUTION_ID>
 ```
 
 ## Rollback
