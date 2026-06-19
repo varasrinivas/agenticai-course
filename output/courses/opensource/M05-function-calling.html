@@ -203,7 +203,7 @@
         <ul class="objectives-list" aria-label="Learning objectives">
           <li>Explain how function calling works: The model proposes, your code executes</li>
           <li>Define tools with JSON Schema input parameters and clear descriptions</li>
-          <li>Implement the complete tool use loop: send &rarr; detect tool_use &rarr; execute &rarr; return result</li>
+          <li>Implement the complete tool use loop: send &rarr; detect tool_calls &rarr; execute &rarr; return result</li>
           <li>Handle tool errors gracefully without crashing the agent loop</li>
           <li>Build a multi-tool agent that chooses the right tool based on the user's question</li>
         </ul>
@@ -222,9 +222,9 @@
 
         <div class="tech-def-box">
           <span class="box-label">Technical Definition</span>
-          <p>When you call the <span class="term-tooltip" tabindex="0" aria-describedby="tt-messagesapi">Chat Completions API<span class="tooltip-content" role="tooltip" id="tt-messagesapi">The OpenAI-compatible API for interacting with the model. You send a list of messages (user/assistant turns) and receive the model's response. It supports text generation, tool use, vision, and streaming. Ollama exposes this API at <code>http://localhost:11434/v1</code>.</span></span>, you can include a <code>tools</code> parameter &mdash; an array of <span class="term-tooltip" tabindex="0" aria-describedby="tt-tooldef">tool definitions<span class="tooltip-content" role="tooltip" id="tt-tooldef">A JSON object describing a function the model can call. Each tool has a name, description (critical for the model's selection), and an input_schema (JSON Schema) specifying the expected parameters with types and descriptions.</span></span> that describe what functions the model is allowed to request.</p>
-          <p>Each definition has three parts. First, a <strong>name</strong> &mdash; this is how your code identifies which function was called. Second, a <strong>description</strong> &mdash; the plain-English explanation the model reads to decide when this tool is useful. Third, an <strong>input_schema</strong> &mdash; a JSON Schema object that specifies what arguments the function accepts, their types, and which ones are required. Of these three, the description matters most &mdash; it's what the model uses to decide which tool fits the user's request.</p>
-          <p>Here's the key idea: <strong>the model never runs your code.</strong> When the model decides it needs a tool, it stops generating text and instead returns a <span class="term-tooltip" tabindex="0" aria-describedby="tt-tooluse">tool_use content block<span class="tooltip-content" role="tooltip" id="tt-tooluse">A content block in the model's response with type "tool_use". It contains the tool's name, a unique ID, and an input object with the arguments the model wants to pass. Your code reads this block, executes the function, and sends back the result.</span></span>. In plain terms, it's a structured JSON object that says "I want to call <code>get_weather</code> with <code>{city: "Tokyo"}</code>." Your application code reads that request, runs the actual function on your server, and sends the output back as a <span class="term-tooltip" tabindex="0" aria-describedby="tt-toolresult">tool_result message<span class="tooltip-content" role="tooltip" id="tt-toolresult">A message you send back to the model containing the output of the tool execution. It must reference the tool_use_id from the model's request. The model incorporates this result to formulate its final response.</span></span>. the model then uses that result to write its final answer.</p>
+          <p>When you call the <span class="term-tooltip" tabindex="0" aria-describedby="tt-messagesapi">Chat Completions API<span class="tooltip-content" role="tooltip" id="tt-messagesapi">The OpenAI-compatible API for interacting with the model. You send a list of messages (user/assistant turns) and receive the model's response. It supports text generation, tool use, vision, and streaming. Ollama exposes this API at <code>http://localhost:11434/v1</code>.</span></span>, you can include a <code>tools</code> parameter &mdash; an array of <span class="term-tooltip" tabindex="0" aria-describedby="tt-tooldef">tool definitions<span class="tooltip-content" role="tooltip" id="tt-tooldef">A JSON object describing a function the model can call. Each tool has a name, description (critical for the model's selection), and a parameters object (JSON Schema) specifying the expected arguments with types and descriptions &mdash; all wrapped as {"type": "function", "function": {...}}.</span></span> that describe what functions the model is allowed to request.</p>
+          <p>Each definition has three parts. First, a <strong>name</strong> &mdash; this is how your code identifies which function was called. Second, a <strong>description</strong> &mdash; the plain-English explanation the model reads to decide when this tool is useful. Third, a <strong>parameters</strong> object &mdash; a JSON Schema that specifies what arguments the function accepts, their types, and which ones are required. (In the OpenAI-compatible format these three live inside a <code>function</code> wrapper, as the code below shows.) Of these three, the description matters most &mdash; it's what the model uses to decide which tool fits the user's request.</p>
+          <p>Here's the key idea: <strong>the model never runs your code.</strong> When the model decides it needs a tool, it stops generating text and instead returns one or more <span class="term-tooltip" tabindex="0" aria-describedby="tt-tooluse">tool calls<span class="tooltip-content" role="tooltip" id="tt-tooluse">Entries in <code>response.choices[0].message.tool_calls</code>. Each has a unique <code>id</code>, a <code>function.name</code>, and a <code>function.arguments</code> string (JSON-encoded). Your code reads it, executes the function, and sends back the result.</span></span>. In plain terms, it's a structured request that says "I want to call <code>get_weather</code> with <code>{city: "Tokyo"}</code>." Your application code reads that request, runs the actual function on your server, and sends the output back as a <span class="term-tooltip" tabindex="0" aria-describedby="tt-toolresult">tool message<span class="tooltip-content" role="tooltip" id="tt-toolresult">A message with <code>role: "tool"</code> that carries the output of the tool execution. It must reference the <code>tool_call_id</code> from the model's request so the model knows which call it answers.</span></span>. the model then uses that result to write its final answer.</p>
           <p>Why this design? Because it keeps <strong>you in control</strong>. the model can suggest calling any tool you've defined, but your code is the gatekeeper &mdash; you validate inputs, enforce rate limits, check permissions, and decide whether to actually execute. This separation of "deciding what to do" (the model) from "actually doing it" (your code) is what makes tool use safe for production systems.</p>
         </div>
 
@@ -234,23 +234,22 @@
         </div>
 
         <p>So what does this look like in practice? Here's the actual JSON that the model returns when it wants to call a tool:</p>
-        <div class="json-viewer" aria-label="Example tool_use content block from the model's response">{
-  <span class="json-key">"type"</span>: <span class="json-str">"tool_use"</span>,
-  <span class="json-key">"id"</span>: <span class="json-str">"toolu_01A09q90qw90lq917835lq9"</span>,
-  <span class="json-key">"name"</span>: <span class="json-str">"get_weather"</span>,
-  <span class="json-key">"input"</span>: { <span class="json-key">"city"</span>: <span class="json-str">"Tokyo"</span> }
+        <div class="json-viewer" aria-label="Example tool call from the model's response">{
+  <span class="json-key">"id"</span>: <span class="json-str">"call_a1b2c3d4"</span>,
+  <span class="json-key">"type"</span>: <span class="json-str">"function"</span>,
+  <span class="json-key">"function"</span>: {
+    <span class="json-key">"name"</span>: <span class="json-str">"get_weather"</span>,
+    <span class="json-key">"arguments"</span>: <span class="json-str">"{\"city\": \"Tokyo\"}"</span>
+  }
 }</div>
-        <p>That's it &mdash; a content block inside the model's response with <code>type: "tool_use"</code>. Let's break it down field by field. The <code>id</code> is a unique identifier you'll need to reference when sending results back (think of it as a receipt number for this specific tool call). The <code>name</code> tells you which function to call. The <code>input</code> object contains the arguments the model wants to pass, matching the JSON Schema you defined.</p>
-        <p>And here's what the tool_result looks like when you send data back to the model:</p>
-        <div class="json-viewer" aria-label="Example tool_result message sent back to the model">{
-  <span class="json-key">"role"</span>: <span class="json-str">"user"</span>,
-  <span class="json-key">"content"</span>: [{
-    <span class="json-key">"type"</span>: <span class="json-str">"tool_result"</span>,
-    <span class="json-key">"tool_use_id"</span>: <span class="json-str">"toolu_01A09q90qw90lq917835lq9"</span>,
-    <span class="json-key">"content"</span>: <span class="json-str">"{\"temp\": 22, \"condition\": \"sunny\", \"humidity\": 65}"</span>
-  }]
+        <p>That's it &mdash; one entry from the <code>message.tool_calls</code> array in the model's response. Let's break it down field by field. The <code>id</code> is a unique identifier you'll need to reference when sending the result back (think of it as a receipt number for this specific tool call). <code>function.name</code> tells you which function to call. <code>function.arguments</code> is a <em>string</em> of JSON &mdash; you call <code>json.loads()</code> on it to get the arguments dict, matching the schema you defined.</p>
+        <p>And here's the message you send back to the model with the tool's output:</p>
+        <div class="json-viewer" aria-label="Example tool message sent back to the model">{
+  <span class="json-key">"role"</span>: <span class="json-str">"tool"</span>,
+  <span class="json-key">"tool_call_id"</span>: <span class="json-str">"call_a1b2c3d4"</span>,
+  <span class="json-key">"content"</span>: <span class="json-str">"{\"temp\": 22, \"condition\": \"sunny\", \"humidity\": 65}"</span>
 }</div>
-        <p>Notice the <code>tool_use_id</code> matches the <code>id</code> from the model's request above &mdash; that's how the model knows which tool call this result belongs to. The result goes inside a <code>"user"</code> message because, from the model's perspective, you (the application) are providing new information. No magic &mdash; just structured data flowing back and forth.</p>
+        <p>Notice the <code>tool_call_id</code> matches the <code>id</code> from the model's request above &mdash; that's how the model knows which tool call this result belongs to. The result goes in a message with <code>role: "tool"</code> &mdash; a dedicated role for feeding tool output back to the model. No magic &mdash; just structured data flowing back and forth.</p>
 
         <div class="callout-security">
           <span class="box-label">Security: Critical Insight</span>
@@ -263,7 +262,7 @@
           <p><strong>"Tools are like ChatGPT plugins?"</strong> &mdash; Not quite. Plugins run on someone else's infrastructure with a fixed interface you can't customize. With the model's function calling, YOU define the tools, YOU write the implementation, and YOU host the execution. There's no plugin marketplace or approval process &mdash; any function you can write is a potential tool.</p>
           <p><strong>"More tools = more capable agent?"</strong> &mdash; Actually, the opposite is often true. the model's tool selection accuracy starts to degrade when you offer more than 5-6 tools at once. Each additional tool means more descriptions for the model to evaluate, more chances for ambiguity, and slower response times. Module 6 covers strategies for managing many tools effectively.</p>
           <p><strong>"The tool description is just a label &mdash; the model understands from the name"</strong> &mdash; Names help, but the model heavily relies on the description to decide when and how to use a tool. A tool named <code>search</code> with description <code>"Search"</code> gives the model almost nothing to work with. Does it search the web? A database? Files? The description is where you tell the model what data source the tool hits, what format the output comes in, and when this tool is appropriate versus other options.</p>
-          <p style="margin-bottom:0;"><strong>"If the tool fails, the whole agent crashes"</strong> &mdash; Only if you let it. Best practice is to catch exceptions and return the error as the tool_result content. the model can then tell the user what went wrong or try an alternative approach. The agent loop keeps running &mdash; only an unhandled exception in YOUR code kills it.</p>
+          <p style="margin-bottom:0;"><strong>"If the tool fails, the whole agent crashes"</strong> &mdash; Only if you let it. Best practice is to catch exceptions and return the error as the tool's result content. the model can then tell the user what went wrong or try an alternative approach. The agent loop keeps running &mdash; only an unhandled exception in YOUR code kills it.</p>
         </div>
 
         <!-- Animation 1: Tool Use Loop Steps -->
@@ -278,7 +277,7 @@
             <div class="loop-arrow" id="la-arr3">&#8595;</div>
             <div class="loop-step actor-you" id="ls-4" style="position:relative;"><span class="step-num" style="background:var(--success);">4</span><span class="step-label">YOUR CODE executes the function</span><span class="step-data">result: {temp: 22, condition: "sunny"}</span><span class="loop-annotation" id="la-4">You control execution!</span></div>
             <div class="loop-arrow" id="la-arr4">&#8595;</div>
-            <div class="loop-step actor-you" id="ls-5" style="position:relative;"><span class="step-num" style="background:var(--success);">5</span><span class="step-label">You send tool_result back to the model</span><span class="step-data">tool_result: {temp: 22, ...}</span><span class="loop-annotation" id="la-5">Include the tool_use_id</span></div>
+            <div class="loop-step actor-you" id="ls-5" style="position:relative;"><span class="step-num" style="background:var(--success);">5</span><span class="step-label">You send the result back to the model</span><span class="step-data">role:"tool", content: {temp: 22, ...}</span><span class="loop-annotation" id="la-5">Include the tool_call_id</span></div>
             <div class="loop-arrow" id="la-arr5">&#8595;</div>
             <div class="loop-step actor-claude" id="ls-6" style="position:relative;"><span class="step-num">6</span><span class="step-label">The model formulates final response</span><span class="step-data">"It's 22&deg;C and sunny in Tokyo!"</span><span class="loop-annotation" id="la-6">finish_reason: "stop"</span></div>
           </div>
@@ -334,7 +333,7 @@
             <g class="cl-fade">
               <rect x="180" y="10" width="220" height="56" rx="10" fill="rgba(139,92,246,0.12)" stroke="#8B5CF6" stroke-width="1.5"/>
               <text x="290" y="32" class="cl-label" fill="#8B5CF6" text-anchor="middle">Send message + tools to the model</text>
-              <text x="290" y="50" class="cl-mono" fill="var(--text-secondary, #94A3B8)" text-anchor="middle">client.messages.create(...)</text>
+              <text x="290" y="50" class="cl-mono" fill="var(--text-secondary, #94A3B8)" text-anchor="middle">client.chat.completions.create(...)</text>
             </g>
             <!-- Arrow A→B -->
             <g class="cl-fade">
@@ -346,7 +345,7 @@
               <text x="290" y="148" class="cl-label" fill="var(--accent-primary, #D4A843)" text-anchor="middle">Check</text>
               <text x="290" y="164" class="cl-label" fill="var(--accent-primary, #D4A843)" text-anchor="middle">finish_reason</text>
             </g>
-            <!-- Branch LEFT: "tool_use" -->
+            <!-- Branch LEFT: "tool_calls" -->
             <g class="cl-fade">
               <line x1="180" y1="155" x2="108" y2="155" class="cl-arrow" stroke="#8B5CF6" marker-end="url(#cl-arrowhead-purple)"/>
               <text x="144" y="145" class="cl-mono" fill="#8B5CF6" text-anchor="middle">"tool_calls"</text>
@@ -358,7 +357,7 @@
               <text x="58" y="158" class="cl-label" fill="var(--success, #10B981)" text-anchor="middle">Tool</text>
               <text x="58" y="178" class="cl-mono" fill="var(--text-secondary, #94A3B8)" text-anchor="middle">your_fn()</text>
             </g>
-            <!-- Step D: Append tool_result -->
+            <!-- Step D: Append tool result -->
             <g class="cl-fade">
               <rect x="10" y="210" width="96" height="58" rx="8" fill="rgba(16,185,129,0.08)" stroke="var(--success, #10B981)" stroke-width="1" stroke-dasharray="4 2"/>
               <text x="58" y="232" class="cl-label" fill="var(--success, #10B981)" text-anchor="middle">Append</text>
@@ -373,7 +372,7 @@
               <rect x="445" y="295" width="70" height="22" rx="4" fill="var(--bg-secondary, #111D33)"/>
               <text x="480" y="310" class="cl-mono cl-pulse" fill="#8B5CF6" text-anchor="middle">LOOP BACK</text>
             </g>
-            <!-- Branch RIGHT: "end_turn" -->
+            <!-- Branch RIGHT: "stop" -->
             <g class="cl-fade">
               <line x1="400" y1="155" x2="440" y2="155" class="cl-arrow" stroke="var(--success, #10B981)" marker-end="url(#cl-arrowhead-green)"/>
               <text x="420" y="145" class="cl-mono" fill="var(--success, #10B981)" text-anchor="middle">"stop"</text>
@@ -398,11 +397,11 @@
       <section class="section" id="defining-tools">
         <h2 id="defining-tools-heading">Defining Tools</h2>
 
-        <p>A tool definition is a JSON object you pass to the API that tells the model "here's a function you can ask me to call." It has three parts: <strong>name</strong>, <strong>description</strong>, and <strong><span class="term-tooltip" tabindex="0" aria-describedby="tt-inputschema">input_schema<span class="tooltip-content" role="tooltip" id="tt-inputschema">A <strong>JSON Schema</strong> object that describes the parameters a tool accepts. JSON Schema is a standard for describing the structure of JSON data &mdash; including property names, types, descriptions, required fields, and enums. the model uses this schema to generate valid arguments.</span></span></strong>.</p>
+        <p>A tool definition is a JSON object you pass to the API that tells the model "here's a function you can ask me to call." It has three parts: <strong>name</strong>, <strong>description</strong>, and <strong><span class="term-tooltip" tabindex="0" aria-describedby="tt-inputschema">parameters<span class="tooltip-content" role="tooltip" id="tt-inputschema">A <strong>JSON Schema</strong> object that describes the arguments a tool accepts. JSON Schema is a standard for describing the structure of JSON data &mdash; including property names, types, descriptions, required fields, and enums. the model uses this schema to generate valid arguments. In the OpenAI-compatible format, name, description, and parameters all sit inside a <code>function</code> wrapper.</span></span></strong>.</p>
 
         <p>Under the hood, the model processes tool definitions as part of the system context. When a user sends a message, the model reads all available tool descriptions, evaluates which one (if any) matches the user's intent, and either calls the best match or responds directly without tools. This is fundamentally different from keyword matching &mdash; the model understands semantics. A user saying "how hot is it in Tokyo?" will match a tool described as "Get current weather for a city" even though the word "weather" never appears in the query.</p>
 
-        <p>If you've used APIs before, think of tool definitions as similar to API documentation &mdash; but instead of a human developer reading the docs, the model reads them. The <code>input_schema</code> uses <a href="https://json-schema.org" target="_blank" rel="noopener noreferrer">JSON Schema</a> &mdash; a standard for describing the shape of JSON data. You may have seen it in OpenAPI or Swagger specs. Here's one key difference from M04: in structured output, the schema described what came OUT of the model. Here, the schema describes what goes IN to your function. And of the three parts (name, description, schema), the description is by far the most important &mdash; the model picks tools based on descriptions, not names.</p>
+        <p>If you've used APIs before, think of tool definitions as similar to API documentation &mdash; but instead of a human developer reading the docs, the model reads them. The <code>parameters</code> field uses <a href="https://json-schema.org" target="_blank" rel="noopener noreferrer">JSON Schema</a> &mdash; a standard for describing the shape of JSON data. You may have seen it in OpenAPI or Swagger specs. Here's one key difference from M04: in structured output, the schema described what came OUT of the model. Here, the schema describes what goes IN to your function. And of the three parts (name, description, schema), the description is by far the most important &mdash; the model picks tools based on descriptions, not names.</p>
 
         <!-- Animation 2: Tool Cards -->
         <div class="animation-container" style="min-height:auto;" aria-label="Animation showing how the model selects from available tools">
@@ -443,9 +442,9 @@
         <h3 id="json-example-heading">Example Tool Definition</h3>
 
         <!-- Diagram: Tool Definition Anatomy (SVG) -->
-        <div class="animation-container" style="min-height:auto;padding-bottom:1.5rem;" aria-label="Annotated diagram showing the anatomy of a tool definition with name, description, and input_schema fields">
+        <div class="animation-container" style="min-height:auto;padding-bottom:1.5rem;" aria-label="Annotated diagram showing the anatomy of a tool definition with name, description, and parameters fields">
           <div class="animation-title">Diagram: Tool Definition Anatomy</div>
-          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 380" style="width:100%;max-width:600px;display:block;margin:0 auto;" role="img" aria-label="JSON Schema tool definition with annotated callouts for name, description, input_schema with properties and required fields">
+          <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 380" style="width:100%;max-width:600px;display:block;margin:0 auto;" role="img" aria-label="JSON Schema tool definition with annotated callouts for name, description, parameters with properties and required fields">
             <style>
               .td-key { font-family: 'JetBrains Mono', monospace; font-size: 11px; fill: #79C0FF; }
               .td-str { font-family: 'JetBrains Mono', monospace; font-size: 11px; fill: #A5D6FF; }
@@ -473,8 +472,8 @@
               <text x="50" y="84" class="td-key">"description"</text><text x="148" y="84" class="td-punct">:</text>
               <text x="158" y="84" class="td-str">"Get current</text>
               <text x="70" y="100" class="td-str">weather for a city..."</text><text x="250" y="100" class="td-punct">,</text>
-              <!-- input_schema -->
-              <text x="50" y="128" class="td-key">"input_schema"</text><text x="158" y="128" class="td-punct">: {</text>
+              <!-- parameters -->
+              <text x="50" y="128" class="td-key">"parameters"</text><text x="158" y="128" class="td-punct">: {</text>
               <text x="70" y="152" class="td-key">"type"</text><text x="113" y="152" class="td-punct">:</text>
               <text x="123" y="152" class="td-str">"object"</text><text x="190" y="152" class="td-punct">,</text>
               <!-- properties -->
@@ -510,11 +509,11 @@
               <text x="392" y="96" class="td-anno" fill="var(--text-secondary, #94A3B8)">the model picks tools based on this.</text>
               <text x="392" y="108" class="td-anno" fill="var(--text-secondary, #94A3B8)">Include: what, when, format.</text>
             </g>
-            <!-- input_schema annotation -->
+            <!-- parameters annotation -->
             <g class="td-fade">
               <line x1="163" y1="128" x2="380" y2="140" class="td-callout-line" stroke="#8B5CF6"/>
               <rect x="382" y="126" width="210" height="42" rx="6" fill="rgba(139,92,246,0.1)" stroke="#8B5CF6" stroke-width="1"/>
-              <text x="392" y="144" class="td-heading" fill="#8B5CF6">input_schema (JSON Schema)</text>
+              <text x="392" y="144" class="td-heading" fill="#8B5CF6">parameters (JSON Schema)</text>
               <text x="392" y="160" class="td-anno" fill="var(--text-secondary, #94A3B8)">Defines parameter types + constraints</text>
             </g>
             <!-- properties annotation -->
@@ -535,15 +534,19 @@
           </svg>
         </div>
 
+        <p style="font-size:0.9rem;color:var(--text-secondary);">The diagram above shows the <code>function</code> object. In the OpenAI-compatible format the API actually expects, that object is wrapped in <code>{"type": "function", "function": {…}}</code> &mdash; here's the complete tool definition you pass to Ollama:</p>
         <div class="json-viewer" aria-label="JSON example of a tool definition">{
-  <span class="json-key">"name"</span>: <span class="json-str">"get_weather"</span>,
-  <span class="json-key">"description"</span>: <span class="json-str">"Get the current weather for a specific city. Returns temperature in Celsius, conditions, and humidity."</span>,
-  <span class="json-key">"input_schema"</span>: {
-    <span class="json-key">"type"</span>: <span class="json-str">"object"</span>,
-    <span class="json-key">"properties"</span>: {
-      <span class="json-key">"city"</span>: { <span class="json-key">"type"</span>: <span class="json-str">"string"</span>, <span class="json-key">"description"</span>: <span class="json-str">"City name, e.g. 'Tokyo' or 'New York'"</span> }
-    },
-    <span class="json-key">"required"</span>: [<span class="json-str">"city"</span>]
+  <span class="json-key">"type"</span>: <span class="json-str">"function"</span>,
+  <span class="json-key">"function"</span>: {
+    <span class="json-key">"name"</span>: <span class="json-str">"get_weather"</span>,
+    <span class="json-key">"description"</span>: <span class="json-str">"Get the current weather for a specific city. Returns temperature in Celsius, conditions, and humidity."</span>,
+    <span class="json-key">"parameters"</span>: {
+      <span class="json-key">"type"</span>: <span class="json-str">"object"</span>,
+      <span class="json-key">"properties"</span>: {
+        <span class="json-key">"city"</span>: { <span class="json-key">"type"</span>: <span class="json-str">"string"</span>, <span class="json-key">"description"</span>: <span class="json-str">"City name, e.g. 'Tokyo' or 'New York'"</span> }
+      },
+      <span class="json-key">"required"</span>: [<span class="json-str">"city"</span>]
+    }
   }
 }</div>
       </section>
@@ -556,7 +559,7 @@
 
         <p>In code, this translates to a <code>while</code> loop. Each time the model responds, you check a field called <span class="term-tooltip" tabindex="0" aria-describedby="tt-stopreason">finish_reason<span class="tooltip-content" role="tooltip" id="tt-stopreason">A field in the model's response indicating why generation stopped. "stop" means the model finished normally. "tool_calls" means the model wants to call a tool and is waiting for the result before continuing.</span></span>. If <code>finish_reason</code> is <code>"tool_calls"</code>, the model is waiting for a tool result &mdash; so you execute the tool, append the result to the conversation, and call the API again. If <code>finish_reason</code> is <code>"stop"</code>, the model is finished &mdash; you extract the text and return it to the user.</p>
 
-        <p>This is different from a simple request/response pattern. In a normal API call, you send one message and get one reply. With the tool use loop, a single user question might trigger 2, 3, or even 10 API round-trips as the model calls different tools to gather information. Each round-trip adds to the conversation history, so the model always has the full context of what it's already tried. The loop only exits when the model decides it has enough information &mdash; signaled by <code>"end_turn"</code>.</p>
+        <p>This is different from a simple request/response pattern. In a normal API call, you send one message and get one reply. With the tool use loop, a single user question might trigger 2, 3, or even 10 API round-trips as the model calls different tools to gather information. Each round-trip adds to the conversation history, so the model always has the full context of what it's already tried. The loop only exits when the model decides it has enough information &mdash; signaled by <code>finish_reason: "stop"</code>.</p>
 
         <!-- Animation 3: Interactive Loop Demo -->
         <div class="animation-container" aria-label="Interactive demonstration of the tool use while loop with iteration cycling">
@@ -569,7 +572,7 @@
             <div class="loop-arrow" id="wa-arr2">&#8595;</div>
             <div class="loop-step" id="wl-3" style="position:relative;"><span class="step-num">2</span><span class="step-label">Execute tool function</span><span class="step-data" id="wl-3-data">weather_api.fetch("Tokyo")</span></div>
             <div class="loop-arrow" id="wa-arr3">&#8595;</div>
-            <div class="loop-step" id="wl-4" style="position:relative;"><span class="step-num">3</span><span class="step-label">Append tool_result to messages</span><span class="step-data" id="wl-4-data">{temp:22, condition:"sunny"}</span></div>
+            <div class="loop-step" id="wl-4" style="position:relative;"><span class="step-num">3</span><span class="step-label">Append tool result (role:"tool") to messages</span><span class="step-data" id="wl-4-data">{temp:22, condition:"sunny"}</span></div>
             <div class="loop-arrow" id="wa-arr4">&#8595;</div>
             <div class="loop-step" id="wl-5" style="position:relative;"><span class="step-num">4</span><span class="step-label">Send messages to the model again</span><span class="step-data" id="wl-5-data">finish_reason: "tool_calls"</span><span class="loop-annotation" id="wa-5">Still tool_calls &mdash; loop again!</span></div>
           </div>
@@ -610,15 +613,15 @@
       <section class="section" id="error-handling">
         <h2 id="error-handling-heading">Error Handling &amp; Edge Cases</h2>
 
-        <p>When tools fail &mdash; and they will &mdash; the worst thing you can do is crash the agent loop. Instead, the pattern is straightforward: catch the error, describe it in plain language, and send that description back as the <code>tool_result</code>. the model then has enough information to inform the user, try a different approach, or gracefully give up.</p>
+        <p>When tools fail &mdash; and they will &mdash; the worst thing you can do is crash the agent loop. Instead, the pattern is straightforward: catch the error, describe it in plain language, and send that description back as the tool's result. the model then has enough information to inform the user, try a different approach, or gracefully give up.</p>
 
-        <p>Here's how this works internally. When your code catches an exception inside a tool function, you have two choices. You could let the exception propagate, which kills the <code>while</code> loop and likely returns an ugly stack trace to the user. Or you could wrap the call in a try/except, format the error into a JSON object like <code>{"error": "City not found: Tokyoo"}</code>, and return it as the <code>tool_result</code>. the model reads that result, realizes something went wrong, and responds accordingly &mdash; often saying "I couldn't find weather data for 'Tokyoo'. Did you mean Tokyo?" That's a much better user experience.</p>
+        <p>Here's how this works internally. When your code catches an exception inside a tool function, you have two choices. You could let the exception propagate, which kills the <code>while</code> loop and likely returns an ugly stack trace to the user. Or you could wrap the call in a try/except, format the error into a JSON object like <code>{"error": "City not found: Tokyoo"}</code>, and return it as the tool result. the model reads that result, realizes something went wrong, and responds accordingly &mdash; often saying "I couldn't find weather data for 'Tokyoo'. Did you mean Tokyo?" That's a much better user experience.</p>
 
         <p>This approach differs from traditional error handling because the "caller" (the model) isn't your code &mdash; it's a language model that can reason about failures. In normal programming, you handle errors with if/else branches. With tool use, you report errors as data, and the model decides what to do. That means your error messages need to be descriptive enough for the model to make a good decision.</p>
 
         <p>There are four main failure modes to handle:</p>
         <ul>
-          <li><strong>Tool timeout:</strong> Set a time limit (e.g., 10 seconds) for each tool call. If it exceeds the limit, return a timeout message as the <code>tool_result</code> so the model can tell the user to try again.</li>
+          <li><strong>Tool timeout:</strong> Set a time limit (e.g., 10 seconds) for each tool call. If it exceeds the limit, return a timeout message as the tool result so the model can tell the user to try again.</li>
           <li><strong>Tool failure:</strong> Return a human-readable error description, not a raw stack trace. the model needs to understand what went wrong, not debug your Python code.</li>
           <li><strong>Invalid arguments:</strong> Validate inputs before executing. If the model sends <code>"city": 123</code> instead of a string, return a helpful error message explaining what format you expected.</li>
           <li><strong>Non-existent tool:</strong> This is rare (the model usually sticks to defined tools), but handle it with a fallback that returns <code>{"error": "Unknown tool: tool_name"}</code>. This prevents a crash if the model hallucinates a tool name.</li>
@@ -663,7 +666,7 @@
 
         <div style="background: var(--bg-card); border-radius: 8px; padding: 1rem 1.25rem; margin: 1rem 0;">
           <strong style="color: var(--track-color);">Chunk 4 &mdash; Tool Dispatch &amp; Error Handling</strong><br>
-          Inside the loop, the code needs to figure out which function to actually call. That's what the dispatcher dictionary (<code>tool_functions</code>) does &mdash; it maps tool names to Python functions, so <code>"get_weather"</code> routes to <code>get_weather()</code>. The clever bit is what happens when the model requests a tool that doesn't exist in the dictionary: instead of crashing with a <code>KeyError</code>, the code returns an error message as the <code>tool_result</code>. the model reads that error and can inform the user or try something else. This is a recurring pattern you'll see in every agent module going forward: errors are data, not crashes.
+          Inside the loop, the code needs to figure out which function to actually call. That's what the dispatcher dictionary (<code>tool_functions</code>) does &mdash; it maps tool names to Python functions, so <code>"get_weather"</code> routes to <code>get_weather()</code>. The clever bit is what happens when the model requests a tool that doesn't exist in the dictionary: instead of crashing with a <code>KeyError</code>, the code returns an error message as the tool result. the model reads that error and can inform the user or try something else. This is a recurring pattern you'll see in every agent module going forward: errors are data, not crashes.
         </div>
 
         <div style="background: var(--bg-card); border-radius: 8px; padding: 1rem 1.25rem; margin: 1rem 0;">
@@ -1283,7 +1286,7 @@ Agent: The capital of France is Paris.</div>
           <summary style="cursor:pointer; font-weight:600;">Troubleshooting</summary>
           <ul style="margin-top:0.5rem;">
             <li><strong>the model uses a tool for the France question</strong> &mdash; Occasionally the model may try <code>search_db</code> or another tool. If this happens consistently, check that your tool descriptions don't overlap with general knowledge questions. The descriptions should be specific about what each tool does.</li>
-            <li><strong><code>AttributeError: 'TextBlock' object has no attribute 'input'</code></strong> &mdash; You're iterating over content blocks without checking <code>block.type == "tool_use"</code> first. Text blocks don't have an <code>input</code> field.</li>
+            <li><strong><code>TypeError: 'NoneType' object is not iterable</code></strong> &mdash; You looped over <code>message.tool_calls</code> when <code>finish_reason</code> was <code>"stop"</code>. <code>tool_calls</code> is <code>None</code> unless the model actually requested a tool &mdash; guard on <code>finish_reason == "tool_calls"</code> first.</li>
             <li><strong>Infinite loop</strong> &mdash; Check that you're appending the model's response AND the tool results to <code>messages</code>. Both are needed for the next iteration.</li>
           </ul>
         </details>
@@ -1345,8 +1348,8 @@ Agent: The capital of France is Paris.</div>
         </div>
 
         <div class="quiz-question" data-correct="a">
-          <h4>Q3: What's wrong with this tool definition? (Recall from M04: tool input_schema uses JSON Schema &mdash; the same format you used for structured output.)</h4>
-          <div class="json-viewer" style="margin:0.5rem 0 1rem;font-size:0.75rem;">{"name": "search", "description": "Search", "input_schema": {"type": "object", "properties": {"q": {"type": "string"}}}}</div>
+          <h4>Q3: What's wrong with this tool definition? (Recall from M04: a tool's <code>parameters</code> use JSON Schema &mdash; the same format you used for structured output.)</h4>
+          <div class="json-viewer" style="margin:0.5rem 0 1rem;font-size:0.75rem;">{"type": "function", "function": {"name": "search", "description": "Search", "parameters": {"type": "object", "properties": {"q": {"type": "string"}}}}}</div>
           <div class="quiz-option" data-value="a" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option A"><span class="quiz-marker">A</span><span>The description is too vague &mdash; the model won't know when or how to use this tool</span></div>
           <div class="quiz-option" data-value="b" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option B"><span class="quiz-marker">B</span><span>The property name "q" is too short and will cause a syntax error</span></div>
           <div class="quiz-option" data-value="c" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option C"><span class="quiz-marker">C</span><span>It's missing a "required" field, which is mandatory</span></div>
@@ -1360,33 +1363,25 @@ Agent: The capital of France is Paris.</div>
           <div class="quiz-option" data-value="a" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option A"><span class="quiz-marker">A</span><span>Crash the agent and return the stack trace to the user</span></div>
           <div class="quiz-option" data-value="b" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option B"><span class="quiz-marker">B</span><span>Silently ignore the error and skip the tool result</span></div>
           <div class="quiz-option" data-value="c" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option C"><span class="quiz-marker">C</span><span>Retry the same tool call indefinitely until it succeeds</span></div>
-          <div class="quiz-option" data-value="d" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option D"><span class="quiz-marker">D</span><span>Return the error as a tool_result so the model can adapt its response</span></div>
-          <div class="quiz-feedback correct-fb">Correct! Send the error message (not the stack trace) as the tool_result. the model can then inform the user about the issue or try a different approach. This makes agents resilient without hiding failures.</div>
+          <div class="quiz-option" data-value="d" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option D"><span class="quiz-marker">D</span><span>Return the error as the tool result so the model can adapt its response</span></div>
+          <div class="quiz-feedback correct-fb">Correct! Send the error message (not the stack trace) back as the tool result. the model can then inform the user about the issue or try a different approach. This makes agents resilient without hiding failures.</div>
           <div class="quiz-feedback incorrect-fb"></div>
         </div>
 
         <div class="quiz-question" data-correct="b">
-          <h4>Q5: Fill in the blank to send a tool result back to the model:</h4>
-          <div class="json-viewer" style="margin:0.5rem 0 1rem;font-size:0.75rem;">{
-  "role": "user",
-  "content": [{
-    "type": "______",
-    "tool_use_id": "toolu_abc123",
-    "content": "{\"temp\": 22}"
-  }]
-}</div>
-          <div class="quiz-option" data-value="a" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option A"><span class="quiz-marker">A</span><span><code>function_result</code></span></div>
-          <div class="quiz-option" data-value="b" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option B"><span class="quiz-marker">B</span><span><code>tool_result</code></span></div>
-          <div class="quiz-option" data-value="c" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option C"><span class="quiz-marker">C</span><span><code>tool_response</code></span></div>
-          <div class="quiz-option" data-value="d" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option D"><span class="quiz-marker">D</span><span><code>tool_output</code></span></div>
-          <div class="quiz-feedback correct-fb">Correct! The type is <code>tool_result</code>. It must include the <code>tool_use_id</code> from the model's original tool_use block so the model knows which tool call this result corresponds to.</div>
+          <h4>Q5: Which message correctly sends a tool's result back to the model (OpenAI-compatible / Ollama)?</h4>
+          <div class="quiz-option" data-value="a" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option A"><span class="quiz-marker">A</span><span><code>{ "role": "user", "content": [{ "type": "tool_result", "tool_use_id": "..." }] }</code></span></div>
+          <div class="quiz-option" data-value="b" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option B"><span class="quiz-marker">B</span><span><code>{ "role": "tool", "tool_call_id": "call_abc123", "content": "{\"temp\": 22}" }</code></span></div>
+          <div class="quiz-option" data-value="c" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option C"><span class="quiz-marker">C</span><span><code>{ "role": "assistant", "tool_call_id": "call_abc123", "content": "..." }</code></span></div>
+          <div class="quiz-option" data-value="d" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option D"><span class="quiz-marker">D</span><span><code>{ "role": "function", "name": "get_weather", "content": "..." }</code></span></div>
+          <div class="quiz-feedback correct-fb">Correct! A tool result is a message with <code>role: "tool"</code> carrying the matching <code>tool_call_id</code> and the output as a <code>content</code> string. (Option A is Anthropic's Messages API shape, not the OpenAI-compatible one Ollama uses.)</div>
           <div class="quiz-feedback incorrect-fb"></div>
         </div>
 
         <div class="quiz-question" data-correct="c">
           <h4>Q6: Which of these is a security risk when implementing tool use?</h4>
           <div class="quiz-option" data-value="a" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option A"><span class="quiz-marker">A</span><span>Defining tools with detailed descriptions</span></div>
-          <div class="quiz-option" data-value="b" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option B"><span class="quiz-marker">B</span><span>Returning error messages as tool_result content</span></div>
+          <div class="quiz-option" data-value="b" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option B"><span class="quiz-marker">B</span><span>Returning error messages as tool result content</span></div>
           <div class="quiz-option" data-value="c" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option C"><span class="quiz-marker">C</span><span>Letting the model construct and execute arbitrary shell commands as a "tool"</span></div>
           <div class="quiz-option" data-value="d" onclick="selectQuiz(this)" tabindex="0" role="button" aria-label="Option D"><span class="quiz-marker">D</span><span>Using tool_choice to force a specific tool</span></div>
           <div class="quiz-feedback correct-fb">Correct! Never let the model construct arbitrary commands. Tools should be pre-defined functions with validated inputs. Giving the model a "run any command" tool is a critical security vulnerability.</div>
@@ -1405,10 +1400,10 @@ Agent: The capital of France is Paris.</div>
         <div style="background:var(--bg-card);border-radius:12px;padding:1.5rem;margin-bottom:1.5rem;">
           <h3 id="key-takeaways" style="margin-top:0;color:var(--accent-primary);">Key Takeaways</h3>
           <ul>
-            <li><strong>The model proposes, you execute</strong> &mdash; the model returns tool_use blocks with arguments; your code runs the actual function. This is the security model.</li>
+            <li><strong>The model proposes, you execute</strong> &mdash; the model returns tool calls with arguments; your code runs the actual function. This is the security model.</li>
             <li><strong>Descriptions matter most</strong> &mdash; the model picks tools based on descriptions. Invest time in making them clear, specific, and complete.</li>
             <li><strong>The while loop pattern</strong> &mdash; keep sending messages until <code>finish_reason</code> is "stop". the model may call multiple tools before finishing.</li>
-            <li><strong>Return errors as results</strong> &mdash; when tools fail, send the error as a tool_result so the model can adapt. Don't crash.</li>
+            <li><strong>Return errors as results</strong> &mdash; when tools fail, send the error as the tool result so the model can adapt. Don't crash.</li>
             <li><strong>This is the chatbot-to-agent moment</strong> &mdash; the model can now interact with external systems. Every module from here builds on this foundation.</li>
           </ul>
         </div>
