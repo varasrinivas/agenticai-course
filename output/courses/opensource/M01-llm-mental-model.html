@@ -830,7 +830,7 @@ Next token predictions:
           <span class="box-label">Technical Definitions</span>
           <p><span class="term-tooltip" tabindex="0" aria-describedby="tt-embed-model"><strong>Embedding model</strong><span class="tooltip-content" role="tooltip" id="tt-embed-model">A neural network that converts text into a dense numeric vector — a list of floating-point numbers. Similar texts land near each other in vector space. Embedding models never generate text; they only encode meaning into a compact, searchable format.</span></span> &mdash; A specialized neural network that converts a piece of text into a dense numeric vector (e.g., 1024 numbers). Unlike generative models, it never produces text output. You call it once per document when building an index, and once per query at search time. The resulting vectors can be compared instantly across millions of documents using cosine similarity or dot-product search &mdash; something that would take hundreds of thousands of LLM calls if you used a generative model instead. We&rsquo;ll build with these in M09.</p>
           <p><span class="term-tooltip" tabindex="0" aria-describedby="tt-rerank-model"><strong>Reranker model</strong><span class="tooltip-content" role="tooltip" id="tt-rerank-model">A cross-encoder model that takes a query and a candidate document together and scores how relevant the document is. Because it sees both at once, it is significantly more accurate than vector similarity — but it only scales to dozens of candidates, not millions, so it runs after vector search narrows the field.</span></span> &mdash; A cross-encoder that scores (query, document) pairs jointly rather than comparing pre-computed vectors. Because it sees both at once it is dramatically more accurate than vector similarity &mdash; but it only scales to tens of candidates, not millions. That&rsquo;s why reranking runs <em>after</em> the fast vector search narrows the field: vector search finds the top-50, reranker promotes the truly relevant ones to the top-5. We&rsquo;ll add reranking in M10.</p>
-          <p><span class="term-tooltip" tabindex="0" aria-describedby="tt-mm-model"><strong>Multimodal model</strong><span class="tooltip-content" role="tooltip" id="tt-mm-model">An LLM trained to accept inputs beyond text — images, PDFs, audio, video frames — alongside text. The model 3+ accepts text and images/PDFs. The output is still text; "multimodal" describes the input space, not the output space.</span></span> &mdash; An LLM whose input layer accepts more than text. The model 3+ accepts text plus images and PDFs natively. The output is still text &mdash; &ldquo;multimodal&rdquo; describes the input modalities, not the output. This means you can pass screenshots, charts, and scanned forms directly to the model without a separate vision pipeline, which matters for document-heavy agent use cases.</p>
+          <p><span class="term-tooltip" tabindex="0" aria-describedby="tt-mm-model"><strong>Multimodal model</strong><span class="tooltip-content" role="tooltip" id="tt-mm-model">An LLM trained to accept inputs beyond text — images, PDFs, audio, video frames — alongside text. Open models like LLaVA and Llama 3.2 Vision accept text and images. The output is still text; "multimodal" describes the input space, not the output space.</span></span> &mdash; An LLM whose input layer accepts more than text. Open multimodal models such as <strong>LLaVA</strong>, <strong>Llama&nbsp;3.2 Vision</strong>, and <strong>Qwen2-VL</strong> accept text plus images natively (Mistral&nbsp;7B does not &mdash; it&rsquo;s text-only). The output is still text &mdash; &ldquo;multimodal&rdquo; describes the input modalities, not the output. This lets you send screenshots, charts, and scanned forms to a vision model and feed its text answer into your pipeline, which matters for document-heavy agent use cases.</p>
         </div>
 
         <div class="callout-why">
@@ -839,10 +839,10 @@ Next token predictions:
         </div>
 
         <div style="background:rgba(99,102,241,0.07);border-left:3px solid var(--accent-primary);padding:0.9rem 1.25rem;margin-top:1.25rem;border-radius:0 6px 6px 0;">
-          <strong>&#128270; Hands-On Preview:</strong> The Bonus Step at the end of this module&rsquo;s lab sends an image to the model so you can experience the multimodal mode directly &mdash; no extra API key required.
+          <strong>&#128270; Hands-On Preview:</strong> The Bonus Step at the end of this module&rsquo;s lab sends an image to a vision model (<code>llava</code>) so you can experience multimodal input directly &mdash; no extra API key required (just <code>ollama pull llava</code>).
           Embedding and reranker calls require a third-party key (Voyage or Cohere) and are covered in depth starting in <strong>M09</strong>. For now, the taxonomy above is all the mental model you need.
         </div>
-        <p style="margin-top:1rem;">The model &mdash; the model powering the rest of this course &mdash; is a <strong>generative + multimodal</strong> model. The RAG track (M09&ndash;M11) introduces embedding and reranker models and shows you how to compose all three. For now, let&rsquo;s zoom in on exactly how the model processes text.</p>
+        <p style="margin-top:1rem;"><strong>Mistral&nbsp;7B</strong> &mdash; the model powering the rest of this course &mdash; is a <strong>generative, text-only</strong> model. The other types are purpose-built models you run alongside it: the RAG track (M09&ndash;M11) adds embedding and reranker models, and images go to a vision model like <code>llava</code>. For now, let&rsquo;s zoom in on exactly how the model processes text.</p>
       </section>
 
       <!-- ======================== CONCEPT 2 ======================== -->
@@ -1974,16 +1974,16 @@ def generative_call(question: str) -> str:
     )
     return response.choices[0].message.content
 
-# --- MULTIMODAL (image URL + text → text) ---
+# --- MULTIMODAL (image + text → text) — needs a vision model: `ollama pull llava` ---
 def multimodal_call(image_url: str, question: str) -> str:
     response = client.chat.completions.create(
-        model=MODEL,
+        model="llava",   # Mistral is text-only; images need a multimodal model
         messages=[{
             "role": "user",
             "content": [
-                # the model reads the image directly from the public URL
-                {"type": "image", "source": {"type": "url", "url": image_url}},
                 {"type": "text", "text": question},
+                # OpenAI-compatible image block (Ollama accepts a URL or a base64 data: URI)
+                {"type": "image_url", "image_url": {"url": image_url}},
             ],
         }],
     )
@@ -2009,14 +2009,16 @@ async function generativeCall(question) {
   return r.choices[0].message.content;
 }
 
+// needs a vision model: `ollama pull llava`
 async function multimodalCall(imageUrl, question) {
   const r = await client.chat.completions.create({
-    model: MODEL,    messages: [{
+    model: 'llava',    // Mistral is text-only; images need a multimodal model
+    messages: [{
       role: 'user',
       content: [
-        // the model reads the image directly from the public URL
-        { type: 'image', source: { type: 'url', url: imageUrl } },
         { type: 'text', text: question },
+        // OpenAI-compatible image block (Ollama accepts a URL or a base64 data: URI)
+        { type: 'image_url', image_url: { url: imageUrl } },
       ],
     }],
   });
@@ -2031,7 +2033,7 @@ console.log(await multimodalCall(IMAGE_URL, 'Describe this image in one sentence
         </div>
 
         <div style="background: rgba(16,185,129,0.06); border-left: 3px solid var(--success); padding: 1rem 1.25rem; margin: 1rem 0; border-radius: 0 6px 6px 0;">
-          <strong>&#9989; Checkpoint:</strong> You should see the model answer a text question, then produce a one-sentence description of the bicycle image. The only difference in code is the <code>content</code> array &mdash; generative passes a plain string; multimodal passes an array with an image block <em>and</em> a text block.
+          <strong>&#9989; Checkpoint:</strong> You should see Mistral answer the text question, then <code>llava</code> produce a one-sentence description of the bicycle image. Two things change between the calls: the <code>content</code> array (generative passes a plain string; multimodal passes a text block <em>and</em> an <code>image_url</code> block), and the <strong>model</strong> &mdash; Mistral is text-only, so vision needs a multimodal model like <code>llava</code>.
         </div>
 
         <p style="color:var(--text-secondary);font-size:0.92rem;margin-top:0.5rem;">
