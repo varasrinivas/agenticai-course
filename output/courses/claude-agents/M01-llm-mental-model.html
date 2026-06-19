@@ -962,14 +962,60 @@ Output generation: 3600ms (120 tokens, one at a time)</code></pre>
           </div>
         </div>
 
-        <h3 id="sampling-mechanics" style="margin-top:1.5rem;">Sampling &mdash; What &ldquo;Logits&rdquo; Become a Token</h3>
-        <p>The transformer doesn&rsquo;t pick a token; it outputs <strong>logits</strong> &mdash; a raw score per token in the vocabulary (~200K entries for Claude). To turn logits into a chosen token, three steps run:</p>
-        <ol>
-          <li><strong>Softmax with temperature.</strong> Logits &mdash; divide by temperature <em>T</em> &mdash; then softmax to a probability distribution. <em>T</em>&nbsp;=&nbsp;0 collapses to one-hot (always pick the argmax); <em>T</em>&nbsp;=&nbsp;1 keeps the model&rsquo;s native distribution; <em>T</em>&nbsp;&gt;&nbsp;1 flattens it (more surprise).</li>
-          <li><strong>Top-k / Top-p filter.</strong> Optionally truncate the distribution to either the top-<em>k</em> highest-probability tokens, or the smallest set whose cumulative probability exceeds <em>p</em> (nucleus sampling). This blocks the long tail of nonsense tokens.</li>
-          <li><strong>Sample.</strong> Draw one token from the (renormalized) filtered distribution. This single token becomes the &ldquo;next token,&rdquo; gets appended, and the loop continues.</li>
-        </ol>
-        <p>Important consequence: <em>the model&rsquo;s output is non-deterministic even at <code>temperature=1</code></em> because of the sampling step. Set <code>temperature=0</code> if you need reproducibility &mdash; that picks the argmax with no sampling. The next H2 on Temperature/Top-p/Top-k goes deeper on when to use each.</p>
+        <h3 id="sampling-mechanics" style="margin-top:1.5rem;">Sampling &mdash; How a List of Scores Becomes One Word</h3>
+
+        <p><strong>Start with the question every beginner actually has:</strong> <em>why does Claude give a different answer when I ask the exact same thing twice?</em> The answer lives in the last step of decode, and it&rsquo;s simpler than it sounds. Let&rsquo;s shrink the problem down to something you can hold in your head.</p>
+
+        <p>Imagine you ask the model for the next word in a sentence, and instead of 200,000 choices it only has <strong>five</strong>. The model does <em>not</em> pick a word. It hands you a scorecard &mdash; one raw, uncalibrated number per word:</p>
+
+        <table class="info-table" style="width:100%;border-collapse:collapse;font-size:0.9rem;margin:0.5rem 0;">
+          <thead><tr style="background:var(--bg-surface);">
+            <th style="padding:0.45rem 0.7rem;text-align:left;border-bottom:1px solid var(--code-border);">Candidate next word</th>
+            <th style="padding:0.45rem 0.7rem;text-align:left;border-bottom:1px solid var(--code-border);">Raw score (&ldquo;logit&rdquo;)</th>
+          </tr></thead>
+          <tbody>
+            <tr><td style="padding:0.4rem 0.7rem;border-bottom:1px solid var(--code-border);"><strong>cat</strong></td><td style="padding:0.4rem 0.7rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">4.0</td></tr>
+            <tr><td style="padding:0.4rem 0.7rem;border-bottom:1px solid var(--code-border);"><strong>dog</strong></td><td style="padding:0.4rem 0.7rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">3.0</td></tr>
+            <tr><td style="padding:0.4rem 0.7rem;border-bottom:1px solid var(--code-border);"><strong>bird</strong></td><td style="padding:0.4rem 0.7rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">2.0</td></tr>
+            <tr><td style="padding:0.4rem 0.7rem;border-bottom:1px solid var(--code-border);"><strong>rock</strong></td><td style="padding:0.4rem 0.7rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">1.0</td></tr>
+            <tr><td style="padding:0.4rem 0.7rem;"><strong>the</strong></td><td style="padding:0.4rem 0.7rem;color:var(--text-secondary);">0.5</td></tr>
+          </tbody>
+        </table>
+
+        <p>Those raw scores are called <span class="term-tooltip" tabindex="0">logits<span class="tooltip-content" role="tooltip">The raw, unnormalized scores a neural network outputs &mdash; one per token in the vocabulary. They can be any real number (negative or positive) and do not add up to 1. Softmax converts them into probabilities.</span></span>. The real model produces one for <em>every</em> word it knows &mdash; hundreds of thousands of them (~200K for a model like Claude) &mdash; but five is enough to see the whole mechanism. Logits aren&rsquo;t probabilities yet: they can be negative, and they don&rsquo;t add up to 100%. Three steps turn this scorecard into one chosen word.</p>
+
+        <p><strong>Step 1 &mdash; Softmax: turn scores into percentages.</strong> <span class="term-tooltip" tabindex="0">Softmax<span class="tooltip-content" role="tooltip">A function that squashes a list of real-valued scores into positive numbers that sum to 1, while preserving their order. Bigger score in &rarr; bigger probability out. It exponentiates each score then divides by the total.</span></span> is just a formula that squashes any list of scores into percentages that add up to 100%, while keeping their order (biggest stays biggest). Run our scorecard through it and we get a real <strong>probability distribution</strong> &mdash; a likelihood for each word:</p>
+
+        <div class="animation-container" aria-label="Probability distribution after softmax at temperature 1" style="padding:1rem;">
+          <div class="animation-title">After softmax (temperature = 1): the model&rsquo;s honest opinion</div>
+          <div style="display:flex;flex-direction:column;gap:0.4rem;font-size:0.85rem;">
+            <div style="display:flex;align-items:center;gap:0.6rem;"><span style="width:3rem;font-weight:700;">cat</span><span style="height:1.1rem;width:63%;background:var(--accent-primary);border-radius:4px;"></span><span style="color:var(--text-secondary);">63%</span></div>
+            <div style="display:flex;align-items:center;gap:0.6rem;"><span style="width:3rem;font-weight:700;">dog</span><span style="height:1.1rem;width:23%;background:var(--accent-primary);border-radius:4px;"></span><span style="color:var(--text-secondary);">23%</span></div>
+            <div style="display:flex;align-items:center;gap:0.6rem;"><span style="width:3rem;font-weight:700;">bird</span><span style="height:1.1rem;width:9%;background:var(--accent-primary);border-radius:4px;opacity:0.7;"></span><span style="color:var(--text-secondary);">9%</span></div>
+            <div style="display:flex;align-items:center;gap:0.6rem;"><span style="width:3rem;font-weight:700;">rock</span><span style="height:1.1rem;width:3%;background:var(--accent-primary);border-radius:4px;opacity:0.5;"></span><span style="color:var(--text-secondary);">3%</span></div>
+            <div style="display:flex;align-items:center;gap:0.6rem;"><span style="width:3rem;font-weight:700;">the</span><span style="height:1.1rem;width:2%;background:var(--accent-primary);border-radius:4px;opacity:0.5;"></span><span style="color:var(--text-secondary);">2%</span></div>
+          </div>
+        </div>
+
+        <p><strong>Step 2 &mdash; Temperature: the &ldquo;boldness dial.&rdquo;</strong> Before softmax runs, we divide every score by a number <em>T</em> called <span class="term-tooltip" tabindex="0">temperature<span class="tooltip-content" role="tooltip">A scalar that divides the logits before softmax. Low temperature sharpens the distribution toward the top token (more predictable); high temperature flattens it (more variety). Named by analogy to thermodynamics, where higher temperature means more random motion.</span></span>. Think of it as a dial for how bold the model is allowed to be:</p>
+        <ul>
+          <li><strong><em>T</em> = 0</strong> &rarr; always take the single highest score. &ldquo;cat,&rdquo; every single time. Predictable and <em>repeatable</em>, but it can feel robotic.</li>
+          <li><strong><em>T</em> = 1</strong> &rarr; use the model&rsquo;s honest percentages above (cat 63%, dog 23%&hellip;).</li>
+          <li><strong><em>T</em> = 2</strong> &rarr; flatten the gaps so the underdogs get a real shot. The same scorecard now reads <strong>cat 42%, dog 25%, bird 15%, rock 9%, the 7%</strong>. More variety, more surprise &mdash; and more risk of &ldquo;rock.&rdquo;</li>
+        </ul>
+
+        <p><strong>Step 3 &mdash; Top-k / Top-p: the bouncer at the door.</strong> Even after softmax, we usually don&rsquo;t want the model to <em>ever</em> blurt out a clearly-wrong word like &ldquo;rock.&rdquo; So we trim the tail before drawing:</p>
+        <ul>
+          <li><span class="term-tooltip" tabindex="0">Top-k<span class="tooltip-content" role="tooltip">Keep only the k highest-probability tokens, discard the rest, then renormalize. A hard cap on how many candidates survive.</span></span> &mdash; keep only the <em>k</em> highest words. With <code>k = 2</code>, only <strong>cat</strong> and <strong>dog</strong> survive; everything else is turned away.</li>
+          <li><span class="term-tooltip" tabindex="0">Top-p<span class="tooltip-content" role="tooltip">Also called nucleus sampling. Sort tokens by probability and keep the smallest set whose cumulative probability reaches p, then renormalize. The number of survivors flexes with how confident the model is.</span></span> (nucleus) &mdash; keep just enough words to cover <em>p</em>% of the probability. With <code>p = 0.90</code>, we add words until we&rsquo;ve covered 90%: cat (63%) + dog (86%) + bird (95% &ge; 90%) &mdash; so <strong>cat, dog, bird</strong> stay and <strong>rock, the</strong> are cut.</li>
+        </ul>
+
+        <p><strong>Then: roll the dice.</strong> From whichever words survived the bouncer, the model draws <em>one</em> at random &mdash; weighted by those percentages, so &ldquo;cat&rdquo; comes up far more often than &ldquo;bird,&rdquo; but &ldquo;bird&rdquo; can still win sometimes. That chosen word becomes the next token, gets appended to the sequence, and the whole decode loop repeats for the word after it.</p>
+
+        <div class="checkpoint">
+          <div class="checkpoint-label">&#x2714; What Just Happened?</div>
+          <p>That final dice roll is the entire reason <strong>the same prompt can give you different answers.</strong> Claude isn&rsquo;t being random for fun &mdash; it&rsquo;s drawing from a weighted distribution it computed. And it&rsquo;s exactly why setting <code>temperature=0</code> makes output repeatable: with the dial at zero there&rsquo;s no distribution to sample from, just &ldquo;take the top word,&rdquo; so the dice never get rolled. Everything you just watched happen to five words happens to ~200,000 words on every single token the model generates. The next H2 on Temperature/Top-p/Top-k goes deeper on when to turn each knob.</p>
+        </div>
 
         <h3 id="latency-anatomy" style="margin-top:1.5rem;">Latency Anatomy &mdash; Where Your Seconds Go</h3>
         <p>Real numbers, on Claude Sonnet 4.6 (typical 2026 production load, single-region):</p>
