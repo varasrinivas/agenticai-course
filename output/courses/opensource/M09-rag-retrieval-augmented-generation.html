@@ -922,60 +922,212 @@ Chunk 1: "assigns a unique file number. Continuation statements must be filed wi
 
       <!-- ==================== CITATIONS ==================== -->
       <section class="section" id="citations">
-        <h2 id="citations-heading">Citations &mdash; Native Provenance From the model</h2>
+        <h2 id="citations-heading">Citations &mdash; Verifiable Provenance Without a Native API</h2>
 
-        <p>The RAG pipeline you just built returns retrieved chunks <em>and</em> the model's answer, but stitching those two together &mdash; "which sentence in the answer came from which chunk?" &mdash; is your responsibility. For audit-grade applications (legal, medical, regulated finance), that stitching is fragile: the model can reword, summarize, or merge sources, and matching back to the original passages is error-prone.</p>
+        <p>The RAG pipeline you just built returns retrieved chunks <em>and</em> the model's answer, but stitching those two together &mdash; "which sentence in the answer came from which chunk?" &mdash; is your responsibility. For audit-grade applications (legal, medical, regulated finance), that stitching matters: the model can reword, summarize, or merge sources, and a claim that nobody can trace back to a source is a claim you can't defend.</p>
 
-        <p>Anthropic ships a built-in <strong>Citations</strong> feature that solves this at the API level. You pass your source documents into the request as <code>document</code> content blocks; the model returns its answer with explicit <code>citations</code> arrays attached to each sentence, telling you exactly which document and which character span supports each claim. No regex, no fuzzy matching, no hallucinated quotes.</p>
+        <p>Some <em>managed</em> models (Claude, for instance) ship a built-in citations API that returns character-span citations automatically. <strong>Open-source models running on Ollama have no such feature</strong> &mdash; there is no <code>"type": "document"</code> block and no <code>citations[]</code> array in the response. So you build provenance yourself, and the good news is the open-source pattern is just as audit-grade because <em>you</em> control the one step that actually matters: <strong>verification</strong>.</p>
+
+        <div class="callout-os">
+          <span class="box-label">&#128300; Open Source Difference</span>
+          <p style="margin-bottom:0;">There is no native citations endpoint on local models. The provenance pattern below is the open-source equivalent &mdash; and it ports cleanly to <em>any</em> chat model, hosted or local, because it relies only on plain tool use plus your own validation code. No vendor lock-in.</p>
+        </div>
 
         <div class="tech-def-box">
           <span class="box-label">Technical Definition</span>
-          <p>The Citations feature accepts up to ~20 documents per request, each with a unique <code>title</code>. the model's response includes <code>citations[]</code> on each text block, where each citation references a <code>document_index</code>, <code>document_title</code>, and the exact <code>cited_text</code> span used. You enable it per request by passing documents as content blocks with <code>"type": "document"</code> and <code>"citations": {"enabled": true}</code>.</p>
-          <pre style="background:var(--code-bg);border:1px solid var(--code-border);border-radius:8px;padding:0.85rem;font-family:'JetBrains Mono',monospace;font-size:0.78rem;color:var(--code-text);overflow-x:auto;margin:0.75rem 0 0.25rem;"><code>response = client.chat.completions.create(
-    model="mistral",
-    messages=[{
-        "role": "user",
-        "content": [
-            {
-                "type": "document",
-                "source": {"type": "text", "media_type": "text/plain", "data": chunk_1},
-                "title": "Filing UCC-2024-001",
-                "citations": {"enabled": True}
-            },
-            # ...more documents...
-            {"type": "text", "text": "Summarize the secured party's collateral interest."}
-        ]
-    }]
-)
-# response.content[0].citations -&gt; [{document_index: 0, document_title: "...", cited_text: "..."}]</code></pre>
+          <p>The open-source citation pattern is a <strong>citation contract</strong> in three parts:</p>
+          <ol style="margin:0.5rem 0 0;">
+            <li><strong>Tag every chunk.</strong> Give each retrieved chunk a stable id (<code>C1</code>, <code>C2</code>, &hellip;) and put that id in the context you send to the model.</li>
+            <li><strong>Demand structured citations.</strong> Using tool use (M04), force the model to return its answer as a list of <em>claims</em> &mdash; each claim carrying the <code>chunk_id</code> it relied on <em>and</em> a verbatim <code>quote</code> from that chunk.</li>
+            <li><strong>Verify &mdash; never trust.</strong> For each claim, check the cited <code>chunk_id</code> actually exists and the <code>quote</code> is genuinely a substring of that chunk's text. Flag or drop any claim that fails. The model can fabricate an id or misquote a passage, so the citation only counts <em>after</em> your code confirms it.</li>
+          </ol>
+          <p style="margin-bottom:0;">Step 3 is the whole game. A native API hands you pre-verified spans; here, <em>your</em> verification pass is what turns a hopeful "[C2]" into audit-grade provenance.</p>
         </div>
 
-        <h3>RAG vs Citations &mdash; Pick Per Job</h3>
-        <div class="animation-container" aria-label="RAG versus Citations decision matrix" style="padding:1.25rem;">
-          <div class="animation-title">When to Reach for Each</div>
+        <p>Here's the full pattern &mdash; force a citation tool, then validate every claim against the source chunks:</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs" role="tablist" aria-label="Citation pattern code">
+            <button class="code-tab active" role="tab" aria-selected="true" onclick="switchTab(this,'cite')" data-lang="python" id="tab-cite-py">Python</button>
+            <button class="code-tab" role="tab" aria-selected="false" onclick="switchTab(this,'cite')" data-lang="nodejs" id="tab-cite-js">Node.js</button>
+          </div>
+          <div class="code-annotation"><strong>WHAT:</strong> Force the model to cite a chunk_id + verbatim quote per claim, then verify each<br><strong>WHY:</strong> Open models have no citations API; verification is what makes the provenance trustworthy<br><strong>GOTCHA:</strong> Normalize whitespace/case before the substring check &mdash; models often re-space a quote</div>
+          <div class="code-panel active" id="cite-python" role="tabpanel" aria-labelledby="tab-cite-py">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy Python code">Copy</button>
+            <pre><code class="language-python"># pip install openai
+from openai import OpenAI
+import json, re
+
+client = OpenAI(base_url="http://localhost:11434/v1", api_key="ollama")
+
+# Tool the model MUST use: answer split into claims, each citing one chunk
+cite_tool = {
+    "type": "function",
+    "function": {
+        "name": "answer_with_citations",
+        "description": "Answer as a list of claims. Every claim cites the chunk it came from and quotes the exact supporting text.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "claims": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "text":     {"type": "string", "description": "One sentence of the answer"},
+                            "chunk_id": {"type": "string", "description": "ID of the supporting chunk, e.g. 'C2'"},
+                            "quote":    {"type": "string", "description": "Verbatim span from that chunk"},
+                        },
+                        "required": ["text", "chunk_id", "quote"],
+                    },
+                }
+            },
+            "required": ["claims"],
+        },
+    },
+}
+
+def _norm(s: str) -> str:
+    return re.sub(r"\s+", " ", s).strip().lower()
+
+def answer_with_citations(question: str, chunks: list[dict]) -> list[dict]:
+    """chunks: [{"id": "C1", "text": "..."}, ...] from your retriever."""
+    context = "\n\n".join(f"[{c['id']}] {c['text']}" for c in chunks)
+    by_id = {c["id"]: c["text"] for c in chunks}
+
+    resp = client.chat.completions.create(
+        model="mistral",
+        tools=[cite_tool],
+        tool_choice={"type": "function", "function": {"name": "answer_with_citations"}},
+        messages=[
+            {"role": "system", "content": "Answer ONLY from the chunks. Cite a chunk id and an exact quote for every claim."},
+            {"role": "user", "content": f"Chunks:\n{context}\n\nQuestion: {question}"},
+        ],
+    )
+
+    args = json.loads(resp.choices[0].message.tool_calls[0].function.arguments)
+    claims = args["claims"]
+
+    # VERIFY — the citation only counts once code confirms it
+    for claim in claims:
+        chunk_text = by_id.get(claim["chunk_id"], "")
+        claim["verified"] = bool(chunk_text) and _norm(claim["quote"]) in _norm(chunk_text)
+    return claims
+
+# Demo
+chunks = [
+    {"id": "C1", "text": "UCC-1 filing 2024-001 names Acme Capital as the secured party."},
+    {"id": "C2", "text": "The collateral is all inventory and accounts receivable of the debtor."},
+]
+for c in answer_with_citations("Who is the secured party and what is the collateral?", chunks):
+    mark = "✓" if c["verified"] else "⚠ UNVERIFIED"
+    print(f'{mark} {c["text"]}  [{c["chunk_id"]}: "{c["quote"]}"]')</code></pre>
+          </div>
+          <div class="code-panel" id="cite-nodejs" role="tabpanel" aria-labelledby="tab-cite-js">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy Node.js code">Copy</button>
+            <pre><code class="language-javascript">// npm install openai
+import OpenAI from 'openai';
+
+const client = new OpenAI({ baseURL: 'http://localhost:11434/v1', apiKey: 'ollama' });
+
+// Tool the model MUST use: answer split into claims, each citing one chunk
+const citeTool = {
+  type: 'function',
+  function: {
+    name: 'answer_with_citations',
+    description: 'Answer as a list of claims. Every claim cites the chunk it came from and quotes the exact supporting text.',
+    parameters: {
+      type: 'object',
+      properties: {
+        claims: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              text:     { type: 'string', description: 'One sentence of the answer' },
+              chunk_id: { type: 'string', description: "ID of the supporting chunk, e.g. 'C2'" },
+              quote:    { type: 'string', description: 'Verbatim span from that chunk' },
+            },
+            required: ['text', 'chunk_id', 'quote'],
+          },
+        },
+      },
+      required: ['claims'],
+    },
+  },
+};
+
+const norm = (s) => s.replace(/\s+/g, ' ').trim().toLowerCase();
+
+async function answerWithCitations(question, chunks) {
+  const context = chunks.map(c => `[${c.id}] ${c.text}`).join('\n\n');
+  const byId = Object.fromEntries(chunks.map(c => [c.id, c.text]));
+
+  const resp = await client.chat.completions.create({
+    model: 'mistral',
+    tools: [citeTool],
+    tool_choice: { type: 'function', function: { name: 'answer_with_citations' } },
+    messages: [
+      { role: 'system', content: 'Answer ONLY from the chunks. Cite a chunk id and an exact quote for every claim.' },
+      { role: 'user', content: `Chunks:\n${context}\n\nQuestion: ${question}` },
+    ],
+  });
+
+  const { claims } = JSON.parse(resp.choices[0].message.tool_calls[0].function.arguments);
+
+  // VERIFY — the citation only counts once code confirms it
+  for (const claim of claims) {
+    const chunkText = byId[claim.chunk_id] || '';
+    claim.verified = chunkText !== '' && norm(chunkText).includes(norm(claim.quote));
+  }
+  return claims;
+}
+
+const chunks = [
+  { id: 'C1', text: 'UCC-1 filing 2024-001 names Acme Capital as the secured party.' },
+  { id: 'C2', text: 'The collateral is all inventory and accounts receivable of the debtor.' },
+];
+for (const c of await answerWithCitations('Who is the secured party and what is the collateral?', chunks)) {
+  const mark = c.verified ? '✓' : '⚠ UNVERIFIED';
+  console.log(`${mark} ${c.text}  [${c.chunk_id}: "${c.quote}"]`);
+}</code></pre>
+          </div>
+        </div>
+
+        <div class="output-label">Expected Output:</div>
+        <div class="output-block">&#10003; Acme Capital is the secured party.  [C1: "Acme Capital as the secured party"]
+&#10003; The collateral is all inventory and accounts receivable.  [C2: "all inventory and accounts receivable of the debtor"]</div>
+
+        <div class="checkpoint">
+          <div class="checkpoint-label">&#x2714; What Just Happened?</div>
+          <p>The model proposed citations; <em>your code</em> confirmed them. Each claim came back with a <code>chunk_id</code> and a <code>quote</code>, and the <code>verified</code> flag is only <code>True</code> after the quote was found verbatim in that chunk. If the model had cited <code>C3</code> (which doesn't exist) or misquoted <code>C1</code>, that claim would render as <strong>&#26a0; UNVERIFIED</strong> &mdash; surfaced to the user instead of silently trusted. That verification step is exactly what a native citations API does for you on a managed model; here you own it, and it works on any chat model.</p>
+        </div>
+
+        <h3>Chunk Attribution vs Verified Citations &mdash; Pick Per Job</h3>
+        <div class="animation-container" aria-label="Chunk attribution versus verified citations decision matrix" style="padding:1.25rem;">
+          <div class="animation-title">Two Levels of Provenance</div>
           <table style="width:100%;border-collapse:collapse;font-size:0.88rem;">
             <thead>
               <tr style="background:var(--bg-surface);">
                 <th style="padding:0.6rem 0.75rem;text-align:left;font-family:'Bricolage Grotesque',sans-serif;font-size:0.8rem;color:var(--text-secondary);border-bottom:1px solid var(--code-border);">Concern</th>
-                <th style="padding:0.6rem 0.75rem;text-align:left;font-family:'Bricolage Grotesque',sans-serif;font-size:0.8rem;color:#06B6D4;border-bottom:1px solid var(--code-border);">Build RAG</th>
-                <th style="padding:0.6rem 0.75rem;text-align:left;font-family:'Bricolage Grotesque',sans-serif;font-size:0.8rem;color:#10B981;border-bottom:1px solid var(--code-border);">Use Citations</th>
+                <th style="padding:0.6rem 0.75rem;text-align:left;font-family:'Bricolage Grotesque',sans-serif;font-size:0.8rem;color:#06B6D4;border-bottom:1px solid var(--code-border);">Chunk Attribution</th>
+                <th style="padding:0.6rem 0.75rem;text-align:left;font-family:'Bricolage Grotesque',sans-serif;font-size:0.8rem;color:#10B981;border-bottom:1px solid var(--code-border);">Verified Citations</th>
               </tr>
             </thead>
             <tbody>
-              <tr><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);">Corpus size</td><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Millions of docs &mdash; need vector search to narrow down</td><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">A small candidate set (&lt;20 docs) per request</td></tr>
-              <tr><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);">Provenance requirement</td><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">"Roughly attributable" via chunk metadata</td><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);"><strong>Sentence-level character spans</strong> &mdash; audit-grade</td></tr>
-              <tr><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);">Hallucination risk</td><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">the model may paraphrase outside the sources</td><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Each cited claim is grounded in a specific span</td></tr>
-              <tr><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);">Token cost</td><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Pay only for top-K retrieved chunks</td><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Pay for all candidate documents (cap ~20)</td></tr>
-              <tr><td style="padding:0.55rem 0.75rem;">Best stack</td><td style="padding:0.55rem 0.75rem;color:var(--text-secondary);">Vector DB + the model (this module's pipeline)</td><td style="padding:0.55rem 0.75rem;color:var(--text-secondary);"><strong>Vector DB shortlist &rarr; pass top-K to Citations</strong></td></tr>
+              <tr><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);">Granularity</td><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">"These chunks informed the answer"</td><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);"><strong>Each claim tied to a chunk + verified quote</strong></td></tr>
+              <tr><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);">Hallucination protection</td><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">the model may paraphrase beyond the sources</td><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Unverifiable claims are flagged or dropped</td></tr>
+              <tr><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);">Cost / latency</td><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">Just return the retrieved chunk ids &mdash; ~free</td><td style="padding:0.55rem 0.75rem;border-bottom:1px solid var(--code-border);color:var(--text-secondary);">A few more output tokens + a local validation pass</td></tr>
+              <tr><td style="padding:0.55rem 0.75rem;">Best for</td><td style="padding:0.55rem 0.75rem;color:var(--text-secondary);">Internal tools, search UX, "show sources"</td><td style="padding:0.55rem 0.75rem;color:var(--text-secondary);"><strong>Audit-grade: legal, medical, regulated finance</strong></td></tr>
             </tbody>
           </table>
         </div>
 
-        <p>The strongest production pattern combines them: use your RAG pipeline to find the top ~10 candidate chunks, then pass those chunks <em>as citation-enabled documents</em> in the request. You get the scale of vector search and the audit-grade provenance of Citations in the same call.</p>
+        <p>Both build on the same RAG pipeline &mdash; vector search finds the top-K chunks; the only question is whether you add the verification layer. Start with chunk attribution for everyday features and reach for verified citations the moment a wrong, unsourced claim would have real consequences.</p>
 
         <div class="callout-cert">
           <span class="box-label" style="color:#D4A843;">&#127891; Cert Tip &mdash; Domain 5.6 (Provenance)</span>
-          <p>The exam tests recognition that <em>provenance</em> is a first-class API feature, not something you bolt on after the fact. Anti-pattern: asking the model in the prompt to "include citations like [1] [2]" and parsing them out &mdash; the model can fabricate citation numbers. Correct pattern: pass documents as citation-enabled content blocks and read structured <code>citations[]</code> from the response.</p>
+          <p>The exam tests recognition that <em>provenance</em> is a design requirement, not an afterthought. On a managed model you might lean on a native citations API; on open-source models you implement the same guarantee yourself. Either way the principle is identical: <strong>never render a citation you haven't verified.</strong> The anti-pattern is asking the model for "[1] [2]" style references and displaying them as-is &mdash; the model can fabricate the numbers. The correct pattern is to require a chunk id + verbatim quote per claim and confirm both against the retrieved sources before showing them.</p>
         </div>
       </section>
 
