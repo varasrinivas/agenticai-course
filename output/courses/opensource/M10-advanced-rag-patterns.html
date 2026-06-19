@@ -731,6 +731,8 @@ export function recursiveChunks(
           <p><span class="term-tooltip" tabindex="0">BM25<span class="tooltip-content" role="tooltip">Best Match 25 — a probabilistic ranking algorithm that scores documents by term frequency (how often a query term appears in the document) and inverse document frequency (how rare that term is across all documents). It handles exact keyword matching efficiently and is the backbone of Elasticsearch and most search engines built before neural embeddings.</span></span> (Best Match 25) is a probabilistic ranking function that scores documents by how often query terms appear in them, weighted by how rare those terms are across all documents. It excels at exact keyword matches — product codes, drug IDs, person names — that dense embeddings blur into neighborhood similarity. <span class="term-tooltip" tabindex="0">Reciprocal Rank Fusion<span class="tooltip-content" role="tooltip">A rank aggregation method that combines ranked lists from multiple retrieval systems. Each document's RRF score = sum of 1/(k + rank_i) across all lists, where k is a smoothing constant (typically 60). This prevents a single very-high-ranked result from dominating while rewarding consistently high-ranked results across systems.</span></span> (RRF) merges the BM25 ranked list and the dense embedding ranked list by computing a combined score of 1/(k+rank) for each result in each list, then sorting by combined score.</p>
         </div>
 
+        <p><strong>The intuition: RRF is ranked-choice voting.</strong> Each retriever &mdash; BM25 and dense &mdash; casts a ballot, which is just its ranked list. A document&rsquo;s final score is the <em>sum of its votes</em>, and a vote is worth more the higher the document placed: a #1 finish is worth 1/(60+1)&nbsp;=&nbsp;0.0164, a #3 finish 1/(60+3)&nbsp;=&nbsp;0.0159. Why add 60? It deliberately shrinks the gap between rank&nbsp;1 and rank&nbsp;2 so no single list can crown the winner by itself. Here&rsquo;s the payoff, and the whole reason hybrid search works: a document that lands mid-pack in <em>both</em> lists (two modest votes) beats a document that&rsquo;s #1 in only <em>one</em> list (a single big vote) &mdash; 0.0159&nbsp;+&nbsp;0.0159&nbsp;=&nbsp;0.0318 is greater than 0.0164. <strong>Agreement across two different retrieval methods is a stronger signal than a high score from either one alone.</strong> Watch that happen in the animation below: the two documents that appear in <em>both</em> lists rise to the top, while documents that scored well in only one list fall behind.</p>
+
         <!-- Animation 2: Hybrid Search Merge -->
         <div class="animation-container" aria-label="Animation showing BM25 and dense results merging via RRF">
           <div class="animation-title">Hybrid Search &mdash; BM25 + Dense → RRF Fusion</div>
@@ -761,14 +763,14 @@ export function recursiveChunks(
           <div style="margin-top:0.5rem;padding-bottom:2.5rem;">
             <div style="font-family:'Bricolage Grotesque',sans-serif;font-size:0.7rem;font-weight:700;color:var(--text-muted);text-transform:uppercase;letter-spacing:0.05em;margin-bottom:0.4rem">Merged Ranking (RRF)</div>
             <div style="display:flex;flex-direction:column;gap:0.3rem" id="merged-results">
-              <div class="hybrid-merged" id="m1"><span>Drug Interactions</span><span class="rrf-score">rrf: 0.031 + 0.016 = 0.047</span></div>
-              <div class="hybrid-merged" id="m2"><span>Doc #FDA-123-456</span><span class="rrf-score">rrf: 0.016 + 0.016 = 0.032</span></div>
-              <div class="hybrid-merged" id="m3"><span>Side Effects Overview</span><span class="rrf-score">rrf: 0 + 0.031 = 0.031</span></div>
-              <div class="hybrid-merged" id="m4"><span>Doc #FDA-789-012</span><span class="rrf-score">rrf: 0.031 + 0 = 0.031</span></div>
-              <div class="hybrid-merged" id="m5"><span>Contraindications</span><span class="rrf-score">rrf: 0 + 0.016 = 0.016</span></div>
+              <div class="hybrid-merged" id="m1"><span>Drug Interactions</span><span class="rrf-score">dense #1 + bm25 #3: 0.0164 + 0.0159 = 0.0323</span></div>
+              <div class="hybrid-merged" id="m2"><span>Doc #FDA-123-456</span><span class="rrf-score">bm25 #1 + dense #3: 0.0164 + 0.0159 = 0.0323</span></div>
+              <div class="hybrid-merged" id="m3"><span>Side Effects Overview</span><span class="rrf-score">dense #2 only: 0.0161 = 0.0161</span></div>
+              <div class="hybrid-merged" id="m4"><span>Doc #FDA-789-012</span><span class="rrf-score">bm25 #2 only: 0.0161 = 0.0161</span></div>
+              <div class="hybrid-merged" id="m5"><span>Contraindications</span><span class="rrf-score">dense #4 only: 0.0156 = 0.0156</span></div>
             </div>
           </div>
-          <div class="anim-static-fallback">BM25 ranked list (lexical) and Dense ranked list (semantic) are merged via Reciprocal Rank Fusion. Documents appearing in both lists get boosted scores. "Drug Interactions" (rank 3 in BM25, rank 1 in dense) becomes the top merged result.</div>
+          <div class="anim-static-fallback">BM25 ranked list (lexical) and Dense ranked list (semantic) are merged via Reciprocal Rank Fusion (k=60). The two documents that appear in <em>both</em> lists &mdash; "Drug Interactions" and "Doc #FDA-123-456" &mdash; each collect two votes (~0.0323) and rise to the top, outranking documents that scored well in only one list (~0.0161).</div>
           <div class="animation-controls">
             <button class="anim-btn" onclick="hybridAnim.toggle()" id="hybrid-play" aria-label="Play or pause hybrid search animation">&#9654;</button>
             <button class="anim-btn" onclick="hybridAnim.restart()" aria-label="Restart hybrid search animation">&#8635;</button>
