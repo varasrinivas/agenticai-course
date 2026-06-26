@@ -1,0 +1,62 @@
+$ cd starter && python test_contract.py        # no Ollama needed — deterministic
+[triage] analyzing 2 log line(s)
+[triage] done in 0ms, exit=0
+[triage] analyzing 2 log line(s)
+[triage] done in 0ms, exit=0
+[triage] analyzing 2 log line(s)
+[triage] done in 0ms, exit=3
+[triage] analyzing 2 log line(s)
+[triage] done in 0ms, exit=2
+[triage] analyzing 2 log line(s)
+[triage] done in 0ms, exit=0
+  [PASS] clean                          exit=0 (expected 0)
+  [PASS] non-critical anomaly           exit=0 (expected 0)
+  [PASS] critical -> needs review       exit=3 (expected 3)
+  [PASS] model junk -> bad output       exit=2 (expected 2)
+  [PASS] fenced JSON is tolerated       exit=0 (expected 0)
+
+all contract cases green (no Ollama needed)
+
+(Note how the [triage] lines are on STDERR and the PASS table is on STDOUT.
+Redirect 2>/dev/null and the [triage] lines vanish — that separation is the
+whole point. These five cases are deterministic, so this must pass for everyone.)
+
+
+$ cat sample.log | python triage_agent.py 2>/dev/null | jq .
+{
+  "ok": true,
+  "data": {
+    "anomalies": [
+      {"line": "... disk usage at 91% on /var", "reason": "disk nearly full", "severity": "medium"},
+      {"line": "... connection pool exhausted, 0 free of 50", "reason": "db saturation", "severity": "high"},
+      {"line": "... HTTP 500 on /api/orders (db timeout)", "reason": "user-facing errors", "severity": "high"},
+      {"line": "... 14 failed logins for user=admin", "reason": "possible brute force", "severity": "high"}
+    ],
+    "clean": false,
+    "tokens": {"prompt": 214, "completion": 96}
+  },
+  "error": null,
+  "meta": {"exit_code": 0, "latency_ms": 7180}
+}
+
+$ echo "exit=$?"      # PIPESTATUS of the agent, before jq
+exit=0
+
+(Model output is NOT deterministic. Mistral may flag fewer/more lines or rate
+the pool-exhaustion + HTTP 500 pair as `critical` instead of `high` — in which
+case the agent raises NeedsReview and exits 3, and the envelope's data is still
+attached so the review queue has context. Both are correct outcomes; the
+CONTRACT — one JSON object on stdout, logs on stderr, exit in {0,1,2,3} — is what
+must hold every time.)
+
+
+$ cd starter && bash run_triage.sh sample.log ; echo "wrapper exit=$?"
+[triage] analyzing 10 log line(s)
+[triage] done in 7180ms, exit=0
+[wrapper] OK -> reports.jsonl
+wrapper exit=0
+
+(The wrapper captured the agent's exit code and routed the JSON to reports.jsonl.
+Had the agent exited 3, it would have gone to review_queue.jsonl instead; exit 2
+would log + escalate without retrying. The wrapper itself always exits 0 so cron
+does not treat a routed result as its own failure.)
