@@ -1,10 +1,23 @@
 """
 M16 — In-process SDK guardrails using can_use_tool
 
-The .claude/settings.json hooks (injection_blocker, pii_redactor) fire
-when this script is run via Claude Code. For purely-Python invocation,
-this file additionally wires a `can_use_tool` permission gate so the
-same guardrails apply outside Claude Code too.
+The .claude/settings.json PreToolUse hooks (injection_blocker,
+pii_redactor) fire when this script is run via Claude Code. This file
+wires the SAME two guardrails in-process via `can_use_tool`, so they
+also apply when the agent runs as a plain Python program.
+
+The two paths are equal in power — both can block and both can rewrite.
+Only the expression differs:
+
+    block    hook: permissionDecision "deny"
+             here: PermissionResultDeny(message=...)
+
+    rewrite  hook: hookSpecificOutput.updatedInput
+             here: PermissionResultAllow(updated_input=...)
+
+What is NOT interchangeable is mutating the input in place. In both
+modes the result is read from what you return, so a gate that edits
+`tool_input` and returns a bare Allow has done nothing at all.
 
 Run:
     pip install claude-agent-sdk
@@ -54,10 +67,19 @@ async def gate(tool_name, tool_input, context):
     for v in tool_input.values():
         if isinstance(v, str) and is_injection(v):
             return PermissionResultDeny(message="Prompt injection detected — refusing tool call")
-    # Redact in-place so the tool sees clean input even if Claude proposed PII.
-    for k, v in list(tool_input.items()):
-        if isinstance(v, str):
-            tool_input[k] = redact(v)
+
+    # Redact PII before the tool sees it.
+    #
+    # Mutating tool_input in place does NOT work — the SDK passes you a copy
+    # and reads the result off the PermissionResult. Redaction has to travel
+    # back through `updated_input`, or it silently does not happen and the
+    # tool receives the raw SSN.
+    redacted = {
+        k: (redact(v) if isinstance(v, str) else v)
+        for k, v in tool_input.items()
+    }
+    if redacted != tool_input:
+        return PermissionResultAllow(updated_input=redacted)
     return PermissionResultAllow()
 
 

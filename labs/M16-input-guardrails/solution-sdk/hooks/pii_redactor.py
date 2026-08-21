@@ -1,13 +1,32 @@
 """
-PreToolUse hook script — PII redactor.
+PreToolUse hook — PII redactor.
 
-Wired into .claude/settings.json as a PreToolUse command. The hook
-reads the tool input from stdin (JSON), redacts PII patterns, and
-writes the modified input back to stdout. Claude Code then dispatches
-the tool with the redacted input.
+Wired into .claude/settings.json as a PreToolUse command, and also
+imported by sdk_agent.py for the in-process path.
 
-Same regex logic as solution/pii_detector.py — this is the SAME
-guardrail expressed as a hook instead of an inline wrapper.
+A PreToolUse hook CAN rewrite the tool input. It does so by returning
+`updatedInput` inside `hookSpecificOutput` — not by echoing the payload
+to stdout, which is ignored:
+
+    {"hookSpecificOutput": {
+       "hookEventName": "PreToolUse",
+       "permissionDecision": "allow",
+       "updatedInput": {...}}}
+
+Two rules that decide whether this actually works:
+
+  * Return a NEW object. Mutating the `tool_input` you were handed has
+    no effect, in either delivery mode.
+  * Pair `updatedInput` with `permissionDecision: "allow"` to
+    auto-approve the rewrite, or omit the decision to let normal
+    permission evaluation run on the modified input. With `"defer"`,
+    `updatedInput` is ignored.
+
+Same regex logic as solution/pii_detector.py — the SAME guardrail
+expressed as a hook instead of an inline wrapper.
+
+Run directly to self-test the patterns:
+    python hooks/pii_redactor.py --self-test
 """
 import json
 import re
@@ -30,16 +49,51 @@ def redact(text: str) -> str:
     return out
 
 
+def self_test():
+    cases = [
+        ("SSN 123-45-6789 on file", "[SSN REDACTED]"),
+        ("card 4111-1111-1111-1111", "[CC REDACTED]"),
+        ("write to ada@example.com", "[EMAIL REDACTED]"),
+        ("account ACC-1001, no PII", None),
+    ]
+    failures = 0
+    for text, expected in cases:
+        got = redact(text)
+        ok = (expected in got) if expected else (got == text)
+        print(("  PASS  " if ok else "  FAIL  ") + repr(text) + " -> " + repr(got))
+        failures += 0 if ok else 1
+    print()
+    print("%d/%d passed" % (len(cases) - failures, len(cases)))
+    return 1 if failures else 0
+
+
 def main():
+    if "--self-test" in sys.argv:
+        sys.exit(self_test())
+
     payload = json.load(sys.stdin)
-    tool_input = payload.get("tool_input", {})
+    tool_input = payload.get("tool_input", {}) or {}
 
-    redacted = {}
-    for k, v in tool_input.items():
-        redacted[k] = redact(v) if isinstance(v, str) else v
+    # Build a NEW dict. Mutating tool_input in place does nothing.
+    redacted = {
+        k: (redact(v) if isinstance(v, str) else v)
+        for k, v in tool_input.items()
+    }
 
-    payload["tool_input"] = redacted
-    json.dump(payload, sys.stdout)
+    if redacted == tool_input:
+        json.dump({}, sys.stdout)          # nothing to change
+        return
+
+    json.dump(
+        {
+            "hookSpecificOutput": {
+                "hookEventName": "PreToolUse",
+                "permissionDecision": "allow",
+                "updatedInput": redacted,
+            }
+        },
+        sys.stdout,
+    )
 
 
 if __name__ == "__main__":

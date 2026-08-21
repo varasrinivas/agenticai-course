@@ -1,0 +1,43 @@
+{
+  "_comment": "ECS Fargate task for the migration agent. Run as a TASK, not a service -- a migration finishes. See ../README.md for why, and note that CUTOVER_APPROVED is deliberately absent from this definition.",
+  "family": "ucc-migration-agent",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "2048",
+  "memory": "4096",
+  "executionRoleArn": "arn:aws:iam::ACCOUNT_ID:role/ecsTaskExecutionRole",
+  "taskRoleArn": "arn:aws:iam::ACCOUNT_ID:role/uccMigrationTaskRole",
+  "containerDefinitions": [
+    {
+      "name": "migration-agent",
+      "image": "ACCOUNT_ID.dkr.ecr.REGION.amazonaws.com/ucc-migration-agent:latest",
+      "essential": true,
+      "command": ["python", "coordinator.py", "--migrate-all"],
+      "environment": [
+        { "name": "ORACLE_USER", "value": "migration_reader" },
+        { "name": "ORACLE_SCHEMA", "value": "MERIDIAN" },
+        { "name": "PG_DATABASE", "value": "meridian" },
+        { "name": "PG_USER", "value": "migration" },
+        { "name": "PG_TARGET_SCHEMA", "value": "ucc_migrated" },
+        { "name": "ARTIFACT_DIR", "value": "/tmp/artifacts" },
+        { "name": "ARTIFACT_BUCKET", "value": "s3://ACCOUNT-migration-artifacts" },
+        { "name": "TOKEN_BUDGET", "value": "400000" }
+      ],
+      "secrets": [
+        { "name": "ANTHROPIC_API_KEY", "valueFrom": "arn:aws:secretsmanager:REGION:ACCOUNT_ID:secret:anthropic-api-key" },
+        { "name": "ORACLE_PASSWORD", "valueFrom": "arn:aws:secretsmanager:REGION:ACCOUNT_ID:secret:oracle-reader-password" },
+        { "name": "ORACLE_DSN", "valueFrom": "arn:aws:secretsmanager:REGION:ACCOUNT_ID:secret:oracle-dsn" },
+        { "name": "PG_HOST", "valueFrom": "arn:aws:secretsmanager:REGION:ACCOUNT_ID:secret:aurora-endpoint" },
+        { "name": "PG_PASSWORD", "valueFrom": "arn:aws:secretsmanager:REGION:ACCOUNT_ID:secret:pg-migration-password" }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/ucc-migration-agent",
+          "awslogs-region": "REGION",
+          "awslogs-stream-prefix": "migration"
+        }
+      }
+    }
+  ]
+}

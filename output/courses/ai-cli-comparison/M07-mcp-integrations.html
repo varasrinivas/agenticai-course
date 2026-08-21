@@ -265,11 +265,11 @@ body{background:var(--bg-primary);color:var(--text-primary);font-family:var(--fo
           <h2 id="claude-mcp-head"><span class="accent">Claude Code</span> MCP Configuration</h2>
         </div>
 
-        <p>Claude Code's MCP configuration lives in <code>.claude/settings.json</code> under the <code>mcpServers</code> key. It supports two <abbr class="tt" data-tip="transport: how the MCP client communicates with the MCP server. 'stdio' means the server is a local process communicating via standard input/output. 'http' or 'sse' means the server is a remote HTTP endpoint." tabindex="0">transport</abbr> types: <code>stdio</code> (local process) and HTTP/SSE (remote server).</p>
+        <p>Claude Code's MCP configuration lives in <code>.mcp.json</code> at the project root under the <code>mcpServers</code> key &mdash; <em>not</em> in <code>.claude/settings.json</code>, which has no <code>mcpServers</code> key and silently ignores one. (User-scoped servers go in <code>~/.claude.json</code>; <code>.claude/settings.json</code> is for permissions, hooks and env.) It supports two <abbr class="tt" data-tip="transport: how the MCP client communicates with the MCP server. 'stdio' means the server is a local process communicating via standard input/output. 'http' or 'sse' means the server is a remote HTTP endpoint." tabindex="0">transport</abbr> types: <code>stdio</code> (local process) and HTTP/SSE (remote server).</p>
 
         <div class="code-block-wrap">
           <div class="code-block-header">
-            <span class="code-block-lang">.claude/settings.json — MCP server config</span>
+            <span class="code-block-lang">.mcp.json — MCP server config (project scope)</span>
             <button class="copy-btn" aria-label="Copy code to clipboard" data-target="claude-mcp-json">Copy</button>
           </div>
           <pre><code class="language-json" id="claude-mcp-json">{
@@ -282,10 +282,11 @@ body{background:var(--bg-primary);color:var(--text-primary);font-family:var(--fo
       }
     },
     "github": {
-      "command": "npx",
-      "args": ["-y", "@anthropic/mcp-server-github"],
+      "command": "docker",
+      "args": ["run", "-i", "--rm", "-e", "GITHUB_PERSONAL_ACCESS_TOKEN",
+               "ghcr.io/github/github-mcp-server"],
       "env": {
-        "GITHUB_TOKEN": "${env:GITHUB_TOKEN}"
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "${env:GITHUB_PAT}"
       }
     },
     "remote-stripe": {
@@ -295,9 +296,20 @@ body{background:var(--bg-primary);color:var(--text-primary);font-family:var(--fo
         "Authorization": "Bearer ${env:STRIPE_KEY}"
       }
     }
-  },
+  }
+}</code></pre>
+        </div>
+
+        <p>Permissions are a <em>separate</em> concern and live in the other file. This is the split that trips people up: the server definitions go in <code>.mcp.json</code>, but which of their tools Claude may call without asking goes in <code>.claude/settings.json</code>.</p>
+
+        <div class="code-block-wrap">
+          <div class="code-block-header">
+            <span class="code-block-lang">.claude/settings.json &mdash; permissions for those servers</span>
+            <button class="copy-btn" aria-label="Copy code to clipboard" data-target="claude-mcp-perms">Copy</button>
+          </div>
+          <pre><code class="language-json" id="claude-mcp-perms">{
   "permissions": {
-    "allow": ["mcp__postgres-reader__query", "mcp__github__list_prs"]
+    "allow": ["mcp__postgres-reader__query", "mcp__github__list_pull_requests"]
   }
 }</code></pre>
         </div>
@@ -389,7 +401,7 @@ gemini extensions install --path ./mcp-servers/my-server/
           <span class="callout-icon" aria-hidden="true">&#9432;</span>
           <div class="callout-body">
             <strong>Google partner extensions</strong>
-            <p>Gemini CLI has first-party integrations with Google Workspace (Docs, Sheets, Gmail, Drive), Figma, Postman, and other enterprise tools. These are available via <code>gemini extensions install @google/mcp-*</code> and are maintained by Google. Claude Code can access many of the same services via MCP servers, but they are not bundled — you install them separately (e.g., <code>npx -y @anthropic/mcp-server-github</code>).</p>
+            <p>Gemini CLI has first-party integrations with Google Workspace (Docs, Sheets, Gmail, Drive), Figma, Postman, and other enterprise tools. These are available via <code>gemini extensions install @google/mcp-*</code> and are maintained by Google. Claude Code can access many of the same services via MCP servers, but they are not bundled — you install them separately, and each one ships however its maintainer chose — the GitHub server is a container (<code>ghcr.io/github/github-mcp-server</code>) or a hosted endpoint, not an npm package.</p>
           </div>
         </div>
 
@@ -503,7 +515,7 @@ gemini extensions install --path ./mcp-servers/my-server/
           <div>
             <div class="code-block-wrap">
               <div class="code-block-header">
-                <span class="code-block-lang" style="color:var(--claude-gold);">.claude/settings.json</span>
+                <span class="code-block-lang" style="color:var(--claude-gold);">.mcp.json</span>
                 <button class="copy-btn" aria-label="Copy code to clipboard" data-target="claude-pg-cfg">Copy</button>
               </div>
               <pre><code class="language-json" id="claude-pg-cfg">{
@@ -675,7 +687,7 @@ await server.connect(transport);</code></pre>
             <thead>
               <tr>
                 <th>Field</th>
-                <th class="claude-th">Claude Code (.claude/settings.json)</th>
+                <th class="claude-th">Claude Code (.mcp.json)</th>
                 <th class="gemini-th">Gemini CLI (GEMINI.md)</th>
               </tr>
             </thead>
@@ -713,7 +725,7 @@ await server.connect(transport);</code></pre>
           <div class="checkpoint-label">What Just Happened?</div>
           <p>You now understand MCP's portability story and how each tool implements it:</p>
           <ul>
-            <li>Claude Code: JSON config in .claude/settings.json, hooks for pre/post tool interception, stdio and HTTP transports.</li>
+            <li>Claude Code: JSON config in <code>.mcp.json</code>, hooks in <code>.claude/settings.json</code> for pre/post tool interception, stdio and HTTP transports.</li>
             <li>Gemini CLI: YAML-in-markdown in GEMINI.md, npm-style extension registry, OAuth 2.0 for remote servers, Google partner extensions.</li>
             <li>Copilot CLI: No MCP in the CLI — MCP lives in VS Code. The terminal <code>gh copilot</code> does not connect to MCP servers.</li>
             <li>Portability: the MCP server code is identical for both tools — only the 6-line config block changes.</li>
@@ -739,7 +751,7 @@ await server.connect(transport);</code></pre>
             <button class="quiz-option" onclick="checkAnswer(this,false,'q1')" aria-label="Option C"><span class="opt-key">C</span>MCP encrypts all data sent between the AI and your tools</button>
             <button class="quiz-option" onclick="checkAnswer(this,false,'q1')" aria-label="Option D"><span class="opt-key">D</span>MCP replaces the need for API keys by using OAuth tokens automatically</button>
           </div>
-          <div class="quiz-feedback" id="q1-feedback">Correct. The fundamental promise of MCP is the "write once, use everywhere" property. Before MCP, every AI tool required a separate, proprietary integration — the same Postgres connector written in Anthropic's format, then again in Google's format, then again for Cursor. MCP standardizes the interface so the server code is identical regardless of which client connects. Your team writes the Postgres MCP server once, then configures it in .claude/settings.json for Claude Code and in GEMINI.md for Gemini CLI — the server process is the same.</div>
+          <div class="quiz-feedback" id="q1-feedback">Correct. The fundamental promise of MCP is the "write once, use everywhere" property. Before MCP, every AI tool required a separate, proprietary integration — the same Postgres connector written in Anthropic's format, then again in Google's format, then again for Cursor. MCP standardizes the interface so the server code is identical regardless of which client connects. Your team writes the Postgres MCP server once, then configures it in <code>.mcp.json</code> for Claude Code and in GEMINI.md for Gemini CLI — the server process is the same.</div>
         </div>
 
         <div class="quiz-question" id="q2">
@@ -751,7 +763,7 @@ await server.connect(transport);</code></pre>
             <button class="quiz-option" onclick="checkAnswer(this,false,'q2')" aria-label="Option C"><span class="opt-key">C</span>It will work if they add the MCP server URL to their .gitconfig</button>
             <button class="quiz-option" onclick="checkAnswer(this,false,'q2')" aria-label="Option D"><span class="opt-key">D</span>It will work with the --mcp flag added to gh copilot suggest</button>
           </div>
-          <div class="quiz-feedback" id="q2-feedback">Correct. The gh copilot CLI does not have MCP support. MCP integration for GitHub Copilot exists only in the IDE (VS Code, JetBrains) via the github.copilot.chat.mcp.servers setting. The terminal gh copilot suggest/explain commands are a separate, simpler product. For terminal-based MCP usage, Claude Code (configure in .claude/settings.json) or Gemini CLI (configure in GEMINI.md) are the right tools. There is no --mcp flag.</div>
+          <div class="quiz-feedback" id="q2-feedback">Correct. The gh copilot CLI does not have MCP support. MCP integration for GitHub Copilot exists only in the IDE (VS Code, JetBrains) via the github.copilot.chat.mcp.servers setting. The terminal gh copilot suggest/explain commands are a separate, simpler product. For terminal-based MCP usage, Claude Code (configure in <code>.mcp.json</code>) or Gemini CLI (configure in GEMINI.md) are the right tools. There is no --mcp flag.</div>
         </div>
 
         <div class="quiz-question" id="q3">
@@ -954,7 +966,7 @@ function checkAnswer(btn,isCorrect,qId){
     const topPad=30;
     // Headers
     ctx.font='bold 12px Inter,sans-serif';
-    ctx.fillStyle='#D4A843'; ctx.textAlign='left'; ctx.fillText('Claude Code (.claude/settings.json)',120+pad,topPad-8);
+    ctx.fillStyle='#D4A843'; ctx.textAlign='left'; ctx.fillText('Claude Code (.mcp.json)',120+pad,topPad-8);
     ctx.fillStyle='#4285F4'; ctx.textAlign='left'; ctx.fillText('Gemini CLI (GEMINI.md)',120+colW+pad*2+10,topPad-8);
     const visCount=Math.floor(fields.length*prog+0.5);
     fields.slice(0,visCount).forEach((f,i)=>{
@@ -988,6 +1000,7 @@ function checkAnswer(btn,isCorrect,qId){
   if(prefRM){p=1;draw(1);}else{playing=true;animId=requestAnimationFrame(animate);}
 })();
 </script>
+
 
 <!-- course-assistant-widget:start -->
 <style>

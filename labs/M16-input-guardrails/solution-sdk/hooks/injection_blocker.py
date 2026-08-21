@@ -31,10 +31,31 @@ def main():
 
     for v in tool_input.values():
         if isinstance(v, str) and is_injection(v):
-            sys.stderr.write(f"BLOCKED: prompt injection detected in tool input\n")
-            sys.exit(2)  # non-zero → Claude Code blocks the tool call
+            reason = "Prompt injection detected in tool input"
+            sys.stderr.write("BLOCKED: " + reason + "\n")
+            # Two ways to block. Exit 2 blocks unconditionally -- it wins even
+            # over a JSON "allow". The structured form below is preferred
+            # because the reason reaches the model, so it stops rather than
+            # rephrasing and retrying.
+            json.dump(
+                {
+                    "hookSpecificOutput": {
+                        "hookEventName": "PreToolUse",
+                        "permissionDecision": "deny",
+                        "permissionDecisionReason": reason,
+                    }
+                },
+                sys.stdout,
+            )
+            sys.exit(0)
 
-    json.dump(payload, sys.stdout)
+    # Nothing to say. `{}` means "allow, unchanged".
+    #
+    # Echoing the payload back would NOT work as a pass-through: stdout is
+    # parsed as a decision object, not as a replacement payload. To rewrite
+    # the input you set hookSpecificOutput.updatedInput -- see
+    # pii_redactor.py, which does exactly that.
+    json.dump({}, sys.stdout)
 
 
 if __name__ == "__main__":

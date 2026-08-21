@@ -153,18 +153,108 @@ You are the filing-search specialist. ...
 ```
 
 ### Hooks — `.claude/settings.json`
+
+**The nesting is three levels deep, and `command` never sits on the matcher.** A matcher entry is
+a *group*: it pairs a `matcher` with a `hooks` array of handler objects. Flattening it to
+`{"matcher": ..., "command": ...}` parses as JSON, writes to disk without complaint, and silently
+never fires — which is the worst failure mode available, because the lab looks correct and the
+guardrail is not there.
+
 ```json
 {
   "hooks": {
     "PreToolUse": [
-      { "matcher": "search_filings", "command": "python hooks/validate_query.py" }
+      {
+        "matcher": "mcp__ucc__search_filings",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python hooks/validate_query.py",
+            "timeout": 5
+          }
+        ]
+      }
     ],
     "PostToolUse": [
-      { "matcher": "*", "command": "python hooks/redact_pii.py" }
+      {
+        "matcher": "*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python hooks/redact_pii.py",
+            "timeout": 10
+          }
+        ]
+      }
     ]
   }
 }
 ```
+
+The three levels are: **event** (`PreToolUse`) → **matcher group** (`{matcher, hooks}`) →
+**handlers** (`{type, command, timeout}`).
+
+- **Match-all** is `"*"`, `""`, or omitting `matcher` entirely. A matcher string is matched as a
+  regex, so `"mcp__oracle_src__.*"` matches every tool on that MCP server and `"Edit|Write"`
+  matches either.
+- **`timeout`** is seconds, and belongs on the *handler*, beside `type` and `command` — not on
+  the matcher group.
+- **Blocking from a `PreToolUse` hook** has two forms. Exit `2` with the reason on stderr blocks
+  unconditionally. Or exit `0` and print structured JSON, which is the preferred path because the
+  reason reaches the model:
+
+```json
+{
+  "hookSpecificOutput": {
+    "hookEventName": "PreToolUse",
+    "permissionDecision": "deny",
+    "permissionDecisionReason": "Source database is read-only: DROP rejected"
+  }
+}
+```
+
+`permissionDecision` is one of `"allow"`, `"deny"`, `"ask"`, `"defer"`. Exit `2` wins over the
+JSON — a `"permissionDecision": "allow"` cannot override it. When several hooks apply,
+`deny` > `defer` > `ask` > `allow`.
+
+- **Rewriting the tool input from a `PreToolUse` hook** uses `updatedInput` in the same block:
+
+```json
+{
+  "hookSpecificOutput": {
+    "hookEventName": "PreToolUse",
+    "permissionDecision": "allow",
+    "updatedInput": { "file_path": "./sandbox/config.yaml" }
+  }
+}
+```
+
+Return a *new* object rather than mutating `tool_input` — mutating it in place has no effect.
+Omitting `permissionDecision` still applies the modified input and lets normal permission
+evaluation proceed; with `"defer"`, `updatedInput` is ignored. `PostToolUse` has the mirror
+field, `updatedToolOutput`, for replacing a result before the model sees it. Return `{}` to allow
+unchanged.
+
+**Settings hooks vs `can_use_tool`.** Two delivery mechanisms, and a Tier 3 lab usually needs
+both: `can_use_tool` in `ClaudeAgentOptions` covers the agent running as a Python program, and
+`.claude/settings.json` covers a student running plain `claude` in the same directory.
+
+They are equal in *power* — both can allow, deny, and rewrite. What differs is where they run and
+how the rewrite is expressed:
+
+| | settings.json hook | `can_use_tool` |
+|---|---|---|
+| Runs as | a subprocess, per tool call | in-process |
+| Deny | `permissionDecision: "deny"`, or exit 2 | `PermissionResultDeny(message=...)` |
+| Rewrite | `hookSpecificOutput.updatedInput` | `PermissionResultAllow(updated_input=...)` |
+| Sees | the JSON payload on stdin | the Python objects directly |
+
+SDK callback hooks (`HookMatcher`) use the **same JSON output format** as shell command hooks, so
+one implementation can serve both. Point them at the same code — a guardrail enforced in one mode
+and missing in the other is worse than one consistently absent, because nobody knows which mode
+they are in. `labs/capstone-8-oracle-to-postgres/solution/hooks_cli.py` is the canonical adapter:
+settings.json can only invoke *commands*, so that module reads the payload on stdin and
+dispatches to the same functions `can_use_tool` calls.
 
 ## Per-Module Tier Index
 
@@ -196,6 +286,7 @@ You are the filing-search specialist. ...
 | CAPSTONE-1..5 | 3 | All domains. Spec-driven. |
 | CAPSTONE-6 | 1 | Non-agent baseline (intentional) |
 | CAPSTONE-7 | 3 | Already spec-driven by name |
+| CAPSTONE-8 | 3 | Standalone (no domain letter). Spec-driven. Legacy Oracle → PostgreSQL migration; five subagents, three `PreToolUse` guards, HITL cutover gate |
 
 ## Generator Rules
 
@@ -204,7 +295,7 @@ When `/generate-module`, `/generate-capstone`, or `/generate-lab-repo` runs:
 1. **Look up the module's tier** from the table above. If absent, default to Tier 1 with a warning.
 2. **Tier 1**: Generate raw-API labs. Do NOT import `claude-agent-sdk`.
 3. **Tier 2**: Generate `solution/` (raw) AND `solution-sdk/` (SDK). The brief and HTML must walk through both, with a side-by-side comparison section.
-4. **Tier 3**: Generate `solution/` using the SDK. If the module is in the spec-driven set (M15B + capstones 1–5, 7), also generate `spec/agent-spec.md` and an `appendix/manual-loop.py` showing the under-the-hood version.
+4. **Tier 3**: Generate `solution/` using the SDK. If the module is in the spec-driven set (M15B + capstones 1–5, 7, 8), also generate `spec/agent-spec.md` and an `appendix/manual-loop.py` showing the under-the-hood version.
 5. **Always** include the SDK pattern cheat sheet imports verbatim — do not invent alternative APIs.
 6. **Never** mock the SDK by reimplementing `query()` with `client.messages.create()`. If an offline test is needed, use the `claude-agent-sdk` test patterns (see `capstone-4-agent-team/domain-a-healthcare/sdk_tests/`).
 
@@ -214,5 +305,5 @@ When `/review-module` or `/consistency-check` runs, fail the review if:
 - A Tier 2 module ships only one solution folder.
 - A Tier 3 module's primary `solution/` does not import `claude-agent-sdk`.
 - M26's lab simulates the SDK.
-- Any capstone in 1–5/7 is missing `spec/agent-spec.md`.
+- Any capstone in 1–5/7/8 is missing `spec/agent-spec.md`.
 - A lab uses `claude_agent_sdk` but reimplements `query()` as a wrapper around `client.messages.create()`.

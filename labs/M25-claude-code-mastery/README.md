@@ -18,11 +18,12 @@ In this lab you build a complete Claude Code configuration for a **UCC Filing Pi
 | 1 | 10 min | `.claude/CLAUDE.md` | Project-level configuration with identity, standards, domain rules | CLAUDE.md hierarchy, project identity |
 | 2 | 5 min | `src/api/CLAUDE.md` | Directory-level overrides for the API layer | Directory-scoped rules, rule inheritance |
 | 3 | 10 min | `.claude/commands/check-filing.md` | Custom slash command for filing validation | Slash commands, `$ARGUMENTS`, domain automation |
-| 4 | 10 min | `.claude/settings.json` | Hook-based guardrails and permission scoping | PreToolUse, PostToolUse, allow/deny lists |
-| 5 | 10 min | `.github/workflows/claude-review.yml` | CI pipeline for automated PR review | Claude in CI, `--output-format json`, session isolation |
-| 6 | 10 min | `validate_config.py` / `.js` | Run the validator to check your work | Self-assessment, configuration completeness |
+| 4 | 10 min | `.claude/settings.json` + `.claude/hooks/*.py` | Hook-based guardrails and permission scoping | PreToolUse, PostToolUse, allow/deny lists |
+| 5 | 5 min | `.mcp.json` | Project-scoped MCP server config | Config scope: why this is NOT settings.json |
+| 6 | 10 min | `.github/workflows/claude-review.yml` | CI pipeline for automated PR review | Claude in CI, `--output-format json`, session isolation |
+| 7 | 10 min | `validate_config.py` / `.js` | Run the validator to check your work | Self-assessment, configuration completeness |
 
-**Total time: ~55 minutes**
+**Total time: ~60 minutes**
 
 ---
 
@@ -78,18 +79,76 @@ Build a slash command that Claude Code users can invoke with `/check-filing UCC-
 
 **File:** `starter/.claude/settings.json`
 
-Configure Claude Code's behavior with hooks and permissions. Fill in:
+Configure Claude Code's behavior with hooks and permissions. The starter gives you the correct
+*structure* — you fill in the values marked TODO, and write the two hook scripts.
 
-1. **PreToolUse hook** -- Block the `Write` tool from creating or modifying files in `data/production/`. This is a safety guardrail.
-2. **PostToolUse hook** -- Log all `Bash` tool invocations to `audit.log` for compliance tracking.
-3. **Permissions** -- Define `allow` and `deny` lists. Allow read tools freely, allow writes only to `src/` and `tests/`, deny writes to production data and destructive shell commands.
-4. **MCP Servers** -- Configure a PostgreSQL MCP server.
+1. **PreToolUse hook** — block the `Write` tool from creating or modifying files under
+   `data/production/`. Write `.claude/hooks/block_production_writes.py`.
+2. **PostToolUse hook** — log every `Bash` invocation to `audit.log`. Write
+   `.claude/hooks/audit_log.py`.
+3. **Permissions** — fill in `allow` and `deny`. Allow read tools freely, allow writes only to
+   `src/` and `tests/`, deny writes to production data and destructive shell commands.
 
-**Checkpoint:** The file is valid JSON. It has `hooks.PreToolUse`, `hooks.PostToolUse`, `permissions.allow`, `permissions.deny`, and `mcpServers` keys.
+Three things about hooks that are easy to get wrong, and all fail *silently*:
+
+**The shape is three levels deep.** Event → `{matcher, hooks: [...]}` → `{type, command, timeout}`.
+Putting `command` directly on the matcher is valid JSON, saves without complaint, and never fires.
+Nothing errors — the guardrail simply is not there.
+
+```json
+"PreToolUse": [
+  {
+    "matcher": "Write",
+    "hooks": [
+      { "type": "command", "command": "python .claude/hooks/block_production_writes.py", "timeout": 5 }
+    ]
+  }
+]
+```
+
+**Hooks read stdin, not argv.** The payload arrives as JSON on standard input. There is no
+`$TOOL_INPUT` shell variable; a command that passes one hands your script an empty string, and it
+approves everything.
+
+**Blocking and rewriting live in the same output block.** A PreToolUse hook returns
+`hookSpecificOutput.permissionDecision` — `allow`, `deny`, `ask`, or `defer` — and can *also*
+return `updatedInput` to rewrite the tool's arguments before it runs. Exit 2 blocks
+unconditionally and beats any JSON. When several hooks apply, `deny` > `defer` > `ask` > `allow`.
+
+The trap: to rewrite, you must **return a new object**. Mutating the `tool_input` you were handed
+does nothing, and printing a modified payload to stdout does nothing either — stdout is parsed as
+a decision object. See M16 for a redactor that gets this right.
+
+**Checkpoint:** The file is valid JSON with `hooks.PreToolUse`, `hooks.PostToolUse`,
+`permissions.allow` and `permissions.deny`, both hook scripts exist, and no `mcpServers` key —
+see Step 5.
 
 ---
 
-## Step 5: GitHub Actions CI Integration (10 min)
+## Step 5: MCP Server Configuration (5 min)
+
+**File:** `starter/.mcp.json`
+
+Configure a PostgreSQL MCP server so Claude Code can query the filing database directly.
+
+This is a separate file on purpose. **`settings.json` has no `mcpServers` key** — a server
+declared there is silently ignored, the same class of bug as a flattened hook. Config lives in
+different files by scope:
+
+| Scope | File | Shared with |
+|---|---|---|
+| Project | `.mcp.json` (committed) | everyone on the repo |
+| User | `~/.claude.json` | just you, across all projects |
+
+Read the connection string from the environment (`${DATABASE_URL}`) rather than hardcoding it —
+`.mcp.json` is committed.
+
+**Checkpoint:** `.mcp.json` is valid JSON with a non-empty `mcpServers` object, and no database
+password appears in it.
+
+---
+
+## Step 6: GitHub Actions CI Integration (10 min)
 
 **File:** `starter/.github/workflows/claude-review.yml`
 
@@ -105,7 +164,7 @@ Create a GitHub Actions workflow that uses Claude Code to review PRs automatical
 
 ---
 
-## Step 6: Validation (10 min)
+## Step 7: Validation (10 min)
 
 Run the provided validation script to check that all your files are correct:
 
@@ -120,7 +179,8 @@ node validate_config.js
 The validator checks:
 - All required files exist
 - CLAUDE.md files have required sections
-- settings.json is valid JSON with correct structure
+- settings.json has correctly NESTED hooks, and the scripts they name exist
+- MCP servers are in .mcp.json, not settings.json
 - Slash command references `$ARGUMENTS`
 - GitHub Actions workflow contains required elements
 

@@ -1,0 +1,150 @@
+# CAPSTONE-8: Legacy Migration Agent — Oracle → PostgreSQL
+
+**Domain**: C — Public Records / UCC (a state SOS filing system running on legacy Oracle)
+**Difficulty**: ★★★★★
+**Skills Practiced**: MCP servers (M07), multi-tool orchestration (M06), planning & task
+decomposition (M13), multi-agent systems (M14), input guardrails (M16), output guardrails + HITL
+(M17), evaluation & testing (M18), tracing & logging (M19), deployment (M22B), spec-driven
+development (M15B, M26)
+**Estimated Time**: 6–8 hours
+**Prerequisites**: M07, M13, M14, M15B, M16, M17, M18, M22B. Docker Desktop with ~6 GB free disk.
+**SDK Tier**: **Tier 3** per `prompts/19-sdk-tier-policy.md`. The primary solution uses
+`claude-agent-sdk`; subagents are declared as `.claude/agents/<name>.md`; hooks live in
+`.claude/settings.json`; `spec/agent-spec.md` is mandatory and drives `/generate-from-spec`. The
+hand-rolled loop is confined to `appendix/manual-loop.py`, labeled "under the hood — for
+understanding, not for production."
+
+---
+
+## Business Context
+
+Meridian Public Records runs the UCC filing system for a consortium of eleven Secretary of State
+offices. The system has been on Oracle since 2003. The database is 6 TB, the licence renewal is
+$1.4M/year, and the two DBAs who wrote the PL/SQL retired in 2021. Leadership has approved a move
+to PostgreSQL. The estimate from the systems integrator was 14 months and $2.1M — most of it
+human hours spent reading DDL, hand-translating packages, and reconciling row counts.
+
+Migration is a *reading* problem before it is a *writing* problem. Someone has to look at
+`NUMBER(12,0)` and decide whether it becomes `bigint` or `numeric(12,0)`. Someone has to notice
+that `UCC_FILING.LAPSE_DATE` is an Oracle `DATE`, which carries a time component, so mapping it to
+`date` silently truncates 14:32:07 to midnight and changes which filings appear to have lapsed.
+Someone has to know that Oracle treats the empty string as NULL and PostgreSQL does not, so a
+column that was "always populated" in Oracle arrives in PostgreSQL with thousands of zero-length
+strings that every `IS NULL` check now misses.
+
+That reading work is exactly what an agent is good at — and exactly where an agent will confidently
+produce a plausible, wrong answer if you let it. This capstone is as much about the guardrails and
+the validator as it is about the translation.
+
+---
+
+## What the Student Builds
+
+A coordinator agent plus five specialist subagents, running against two live containers
+(`gvenzl/oracle-free` as the read-only source, `postgres:16` as the target).
+
+```
+migration-coordinator  (claude-sonnet-4-6)
+  |- schema-translator     Oracle DDL  ->  PostgreSQL DDL + a type-mapping decision log
+  |- data-migrator         batched extract -> COPY load; LOB, DATE and encoding handling
+  |- plsql-converter       packages / procedures / functions / triggers -> PL/pgSQL
+  |- appsql-rewriter       scans app/ source, rewrites Oracle-only SQL
+  |- migration-validator   row counts, checksums, NULL-vs-empty diffs, FK integrity, spot checks
+```
+
+Two MCP servers expose the databases:
+
+| Server | Tools |
+|---|---|
+| `oracle_src` (READ-ONLY) | `oracle_describe_schema`, `oracle_get_ddl`, `oracle_get_plsql_source`, `oracle_sample_rows`, `oracle_row_count`, `oracle_checksum` |
+| `pg_target` | `pg_apply_ddl`, `pg_copy_load`, `pg_query`, `pg_row_count`, `pg_checksum`, `pg_cutover` |
+
+Plus a filesystem tool `scan_app_sql` for the application-code pass and `write_artifact` for
+emitting generated `.sql` files.
+
+---
+
+## The Legacy Oracle Schema
+
+Six tables, two packages, two views, one materialized view. Every object is chosen because it
+contains at least one thing that does not translate cleanly.
+
+| Object | The trap it plants |
+|---|---|
+| `UCC_FILING` | `FILING_ID NUMBER(12)` fed by `SEQ_FILING_ID` + a `BEFORE INSERT` trigger; `FILED_DATE`/`LAPSE_DATE` are Oracle `DATE` (time component); `COLLATERAL_DESC CLOB` |
+| `UCC_DEBTOR` | `MAILING_ADDRESS_2 VARCHAR2(120)` holds the empty string for ~1,400 rows — the empty-string/NULL trap |
+| `UCC_SECURED_PARTY` | `TAX_ID RAW(16)`; `VARCHAR2(60 BYTE)` vs `CHAR` length semantics |
+| `UCC_AMENDMENT` | Self-referencing `PARENT_AMENDMENT_ID` walked with `CONNECT BY PRIOR` |
+| `STATE_SOS_SOURCE` | `LAST_SYNC TIMESTAMP WITH LOCAL TIME ZONE`; a `NUMBER` column with no precision |
+| `FILING_AUDIT` | `DOC_IMAGE BLOB`; written by an autonomous-transaction procedure |
+
+## The Oracle-ism Registry (this list is the curriculum)
+
+**Types** — `NUMBER(p,s)` to `numeric` / `bigint` / `integer` (the choice depends on scale and
+range, and the agent must justify it); `VARCHAR2(n BYTE)` vs `CHAR` semantics to `varchar(n)`;
+`DATE` to `timestamp(0)` **not** `date`; `TIMESTAMP WITH LOCAL TIME ZONE` to `timestamptz`;
+`CLOB` to `text`; `BLOB` to `bytea`; `RAW(16)` to `uuid`.
+
+**Identity** — `CREATE SEQUENCE` + `BEFORE INSERT FOR EACH ROW` trigger becomes
+`GENERATED BY DEFAULT AS IDENTITY`, then `setval()` to the current high-water mark.
+
+**The empty-string trap** — Oracle stores the empty string as NULL; PostgreSQL stores it as a
+zero-length string. Any naive `INSERT ... SELECT` or CSV round-trip converts Oracle NULLs into
+PostgreSQL empty strings, and every `IS NULL` predicate in the application silently starts
+returning fewer rows. **This is the planted bug the validator must catch.**
+
+**Identifier case** — Oracle folds unquoted identifiers to UPPER, PostgreSQL folds to lower.
+Quoting `"UCC_FILING"` in the generated DDL locks you into uppercase forever.
+
+**SQL dialect** — `SYSDATE`/`SYSTIMESTAMP` to `now()`; `NVL`/`NVL2` to `COALESCE`;
+`DECODE` to `CASE`; `TO_CHAR(d,'MM/DD/YYYY')` to `to_char(d,'MM/DD/YYYY')` (mask differences on
+`RR`, `HH24`, `MI`); `ROWNUM <= n` to `LIMIT n`; `(+)` outer joins to `LEFT JOIN`;
+`CONNECT BY PRIOR` to `WITH RECURSIVE`; `MERGE` to `INSERT ... ON CONFLICT`; `FROM DUAL` omitted;
+`ROWID` to `ctid` (and why you should not); synonyms to search_path or views.
+
+**PL/SQL** — packages have no PostgreSQL equivalent (a schema plus functions);
+`%ROWTYPE` to `RECORD`; `BULK COLLECT` to array aggregation or set-returning functions;
+`PRAGMA AUTONOMOUS_TRANSACTION` to `dblink` / background worker (and the honest answer that this
+usually needs a design change); `EXCEPTION WHEN NO_DATA_FOUND` exists in both, `WHEN OTHERS` is
+discouraged in both.
+
+---
+
+## Guardrails (the load-bearing safety design)
+
+1. `PreToolUse` on `oracle_*` — deny anything that is not `SELECT`, `DBMS_METADATA.GET_DDL`, or an
+   `ALL_*`/`USER_*` dictionary read. The source database is read-only **enforced in code, not by
+   convention**. Returns `PermissionResultDeny`.
+2. `PreToolUse` on `pg_apply_ddl` — deny `DROP DATABASE`, `DROP SCHEMA ... CASCADE`, and any object
+   created outside the `ucc_migrated` schema.
+3. `can_use_tool` HITL gate on `pg_cutover` — always returns a human-approval prompt carrying the
+   validation summary. The migration cannot complete unattended.
+4. `PostToolUse` — append `{ts, tool, params, rows, duration_ms}` to `migration_audit.jsonl` with
+   connection strings and passwords redacted.
+
+## Observability
+
+`observability/tracer.py` emits one span per migrated object (name, phase, model, input/output
+tokens, duration, subagent). `report.py` renders a console dashboard plus
+`migration_report.html` / `migration_report.json`: objects translated, percentage auto-converted,
+manual-review queue, per-table row and checksum reconciliation, and total token cost.
+
+## Test Outline
+
+**Happy path (3)** — full schema translation of all six tables; `PKG_RISK_CALC` converted and
+callable; 5,000 rows migrated with matching checksums.
+**Edge (3)** — a `DATE` with a non-midnight time survives the round trip; the `CONNECT BY`
+amendment chain returns the same tree as the recursive CTE; `RAW(16)` to `uuid` round trip.
+**Error / adversarial (4)** — a `DROP TABLE` attempt against Oracle is denied by the hook;
+`DROP SCHEMA public CASCADE` against PostgreSQL is denied; `pg_cutover` blocks on HITL approval;
+**the `MAILING_ADDRESS_2` empty-string divergence is detected and reported non-zero** — a clean
+report there means the validator is broken, not that the migration is good.
+
+## Going Further (all OPTIONAL)
+
+1. Add a `performance-advisor` subagent that reads Oracle execution plans and proposes PostgreSQL
+   indexes.
+2. Emit a Flyway/Liquibase changeset instead of raw DDL.
+3. Add change-data-capture for a zero-downtime cutover (logical replication + `pglogical`).
+4. Run the same spec against a MySQL target and diff what the agent produces.
+5. Wire the migration report into Grafana alongside the M19/M20 dashboards.

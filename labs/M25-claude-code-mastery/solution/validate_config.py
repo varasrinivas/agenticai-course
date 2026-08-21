@@ -8,8 +8,10 @@ Checks:
   1. .claude/CLAUDE.md exists and has required sections
   2. src/api/CLAUDE.md exists and has API-specific content
   3. .claude/commands/check-filing.md exists and references $ARGUMENTS
-  4. .claude/settings.json is valid JSON with hooks and permissions
-  5. .github/workflows/claude-review.yml exists with required content
+  4. .claude/settings.json is valid JSON, with correctly NESTED hooks
+     (event -> {matcher, hooks:[...]} -> {type, command}) and permissions
+  5. .mcp.json declares project-scoped MCP servers (NOT settings.json)
+  6. .github/workflows/claude-review.yml exists with required content
 """
 
 import json
@@ -225,6 +227,73 @@ class Validator:
             "hooks.PostToolUse should be a non-empty array",
         )
 
+        # Structure, not just presence.
+        #
+        # A flattened hook -- {"matcher": ..., "command": ...} -- is valid
+        # JSON, saves without complaint, and never fires. Checking only that
+        # the array is non-empty passes that file, which is exactly how the
+        # broken shape survived in this lab for as long as it did.
+        groups = [
+            g
+            for g in (pre_hooks + post_hooks)
+            if isinstance(g, dict)
+        ]
+        flattened = [g for g in groups if "command" in g and "hooks" not in g]
+        self.check(
+            "settings.json hooks use the nested handler shape",
+            bool(groups) and not flattened,
+            "Each matcher entry needs a 'hooks' array of {type, command}. "
+            "Putting 'command' directly on the matcher parses fine and never fires.",
+        )
+
+        handlers = [
+            h
+            for g in groups
+            for h in (g.get("hooks") or [])
+            if isinstance(h, dict)
+        ]
+        self.check(
+            "settings.json hook handlers declare type and command",
+            bool(handlers)
+            and all(h.get("type") and h.get("command") for h in handlers),
+            "Every handler needs both 'type' (usually \"command\") and 'command'",
+        )
+
+        # Hooks receive their payload on stdin. There is no $TOOL_INPUT shell
+        # variable, so a command that passes one receives an empty string and
+        # approves everything.
+        argv_style = [
+            h for h in handlers
+            if "$TOOL_INPUT" in str(h.get("command", ""))
+            or "$TOOL_NAME" in str(h.get("command", ""))
+        ]
+        self.check(
+            "settings.json hook commands read stdin, not argv",
+            not argv_style,
+            "Hook payloads arrive as JSON on stdin. $TOOL_INPUT / $TOOL_NAME "
+            "are not real shell variables — the script would get an empty string.",
+        )
+
+        # Referenced hook scripts must exist, or the hook errors on every fire.
+        missing_scripts = []
+        for h in handlers:
+            for token in str(h.get("command", "")).split():
+                if token.endswith(".py") and not self.file_exists(token):
+                    missing_scripts.append(token)
+        self.check(
+            "settings.json hook scripts exist on disk",
+            not missing_scripts,
+            f"Referenced but missing: {missing_scripts}",
+        )
+
+        # MCP servers are not a settings.json concern.
+        self.check(
+            "settings.json does not declare mcpServers",
+            "mcpServers" not in data,
+            "settings.json has no mcpServers key — a server declared there is "
+            "silently ignored. Project-scoped servers belong in .mcp.json.",
+        )
+
         # Check permissions
         permissions = data.get("permissions", {})
         allow = permissions.get("allow", [])
@@ -239,6 +308,32 @@ class Validator:
             "settings.json has permissions.deny",
             isinstance(deny, list) and len(deny) > 0,
             "permissions.deny should be a non-empty array",
+        )
+
+    def validate_mcp_config(self):
+        """Check 5: .mcp.json — project-scoped MCP servers."""
+        content = self.read_file(".mcp.json")
+
+        self.check(
+            "MCP config .mcp.json exists",
+            content is not None,
+            "Project-scoped MCP servers belong in .mcp.json, not settings.json",
+        )
+        if content is None:
+            self.check("MCP config declares mcpServers", False, "File not found")
+            return
+
+        try:
+            data = json.loads(content)
+        except json.JSONDecodeError as e:
+            self.check("MCP config declares mcpServers", False, str(e))
+            return
+
+        servers = data.get("mcpServers", {})
+        self.check(
+            "MCP config declares mcpServers",
+            isinstance(servers, dict) and len(servers) > 0,
+            "mcpServers should be a non-empty object",
         )
 
     def validate_github_workflow(self):
@@ -305,8 +400,9 @@ class Validator:
             "API CLAUDE.md": "Step 2: Directory-Level CLAUDE.md",
             "Slash command": "Step 3: Custom Slash Command",
             "settings.json": "Step 4: Settings with Hooks",
-            "GitHub Actions": "Step 5: GitHub Actions CI",
-            "Workflow": "Step 5: GitHub Actions CI",
+            "MCP config": "Step 5: MCP Server Configuration",
+            "GitHub Actions": "Step 6: GitHub Actions CI",
+            "Workflow": "Step 6: GitHub Actions CI",
         }
 
         for ok, name, detail in self.results:
@@ -350,6 +446,7 @@ class Validator:
         self.validate_api_claude_md()
         self.validate_slash_command()
         self.validate_settings()
+        self.validate_mcp_config()
         self.validate_github_workflow()
         self.print_report()
         return 0 if self.failed == 0 else 1

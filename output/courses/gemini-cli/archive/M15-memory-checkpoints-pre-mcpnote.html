@@ -1,0 +1,1137 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>M15: Memory &amp; Checkpoints | Gemini CLI Course</title>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;700;800&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg-primary: #070B14;
+      --bg-secondary: #0D1220;
+      --bg-card: #111829;
+      --bg-surface: #16202E;
+      --text-primary: #E8ECF1;
+      --text-secondary: #94A3B8;
+      --text-muted: #64748B;
+      --gemini-blue: #4285F4;
+      --gemini-purple: #8B5CF6;
+      --gemini-teal: #06B6D4;
+      --gemini-blue-muted: rgba(66, 133, 244, 0.15);
+      --gemini-purple-muted: rgba(139, 92, 246, 0.12);
+      --gemini-teal-muted: rgba(6, 182, 212, 0.12);
+      --accent-primary: #8B5CF6;
+      --accent-hover: #A78BFA;
+      --accent-muted: rgba(139, 92, 246, 0.15);
+      --success: #10B981;
+      --success-bg: rgba(16, 185, 129, 0.1);
+      --warning: #F59E0B;
+      --warning-bg: rgba(245, 158, 11, 0.1);
+      --error: #F43F5E;
+      --error-bg: rgba(244, 63, 94, 0.1);
+      --info: #8B5CF6;
+      --info-bg: rgba(139, 92, 246, 0.1);
+      --code-bg: #060A10;
+      --code-border: #1C2A3E;
+      --code-text: #C9D1D9;
+      --transition-fast: 150ms;
+      --transition-normal: 300ms;
+      --transition-slow: 500ms;
+    }
+
+    body {
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      font-family: 'Source Sans 3', sans-serif;
+      font-size: 1.05rem;
+      line-height: 1.7;
+      min-height: 100vh;
+    }
+
+    .top-progress {
+      position: fixed; top: 0; left: 0; right: 0;
+      height: 3px; background: var(--bg-surface); z-index: 200;
+    }
+    .top-progress .fill {
+      height: 100%;
+      background: linear-gradient(90deg, var(--gemini-purple), var(--gemini-teal));
+      width: 94.12%; /* 16/17 */
+      border-radius: 0 2px 2px 0;
+      transition: width var(--transition-slow);
+    }
+
+    .course-header {
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--code-border);
+      padding: 1.1rem 2rem;
+      margin-top: 3px;
+    }
+    .course-header-inner {
+      max-width: 1200px; margin: 0 auto;
+      display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem;
+    }
+    .course-title {
+      font-family: 'Bricolage Grotesque', sans-serif;
+      font-size: 0.9rem; font-weight: 600; color: var(--text-secondary);
+    }
+    .track-badge {
+      display: inline-flex; align-items: center; gap: 0.5rem;
+      background: var(--gemini-purple-muted);
+      border: 1px solid var(--gemini-purple);
+      border-radius: 20px; padding: 0.25rem 0.75rem;
+      font-family: 'Bricolage Grotesque', sans-serif;
+      font-size: 0.78rem; font-weight: 600; color: var(--gemini-purple);
+    }
+    .track-badge .dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--gemini-purple);
+      box-shadow: 0 0 6px var(--gemini-purple);
+    }
+    .header-meta {
+      display: flex; gap: 1.5rem; font-size: 0.82rem; color: var(--text-muted);
+    }
+    .header-meta span { display: flex; align-items: center; gap: 0.35rem; }
+
+    .page-container {
+      max-width: 1200px; margin: 0 auto; padding: 2rem;
+      display: grid; grid-template-columns: 240px 1fr; gap: 3rem;
+    }
+    @media (max-width: 900px) {
+      .page-container { grid-template-columns: 1fr; }
+      .sidebar-nav { display: none; }
+    }
+
+    .sidebar-nav {
+      position: sticky; top: 2rem;
+      height: calc(100vh - 4rem);
+      overflow-y: auto;
+      padding-right: 1rem;
+    }
+    .sidebar-nav::-webkit-scrollbar { width: 3px; }
+    .sidebar-nav::-webkit-scrollbar-thumb { background: var(--bg-surface); border-radius: 3px; }
+    .sidebar-title {
+      font-family: 'Bricolage Grotesque', sans-serif;
+      font-size: 0.72rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.1em;
+      color: var(--text-muted); margin-bottom: 1rem;
+    }
+    .sidebar-nav a {
+      display: block; padding: 0.4rem 0.75rem; margin-bottom: 0.12rem;
+      font-family: 'Bricolage Grotesque', sans-serif;
+      font-size: 0.8rem; font-weight: 600;
+      color: var(--text-muted); text-decoration: none;
+      border-left: 2px solid transparent; border-radius: 0 4px 4px 0;
+      transition: all var(--transition-fast);
+    }
+    .sidebar-nav a:hover { color: var(--text-primary); background: var(--bg-surface); }
+    .sidebar-nav a.active {
+      color: var(--gemini-purple); border-left-color: var(--gemini-purple);
+      background: var(--gemini-purple-muted);
+    }
+    .sidebar-nav a.sub { padding-left: 1.5rem; font-size: 0.76rem; font-weight: 400; }
+
+    .content { max-width: 800px; }
+    .section { margin-bottom: 4rem; }
+
+    h1 {
+      font-family: 'Bricolage Grotesque', sans-serif;
+      font-weight: 800; font-size: 2.2rem; line-height: 1.2;
+      margin-bottom: 0.75rem;
+      background: linear-gradient(135deg, var(--gemini-purple), var(--gemini-teal));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    h2 {
+      font-family: 'Bricolage Grotesque', sans-serif;
+      font-weight: 700; font-size: 1.5rem;
+      color: var(--text-primary); margin: 2.5rem 0 1rem; padding-top: 1rem;
+      border-top: 1px solid var(--code-border);
+    }
+    h2:first-of-type { border-top: none; }
+    h3 {
+      font-family: 'Bricolage Grotesque', sans-serif;
+      font-weight: 600; font-size: 1.2rem;
+      color: var(--text-primary); margin: 2rem 0 0.75rem;
+    }
+    p { margin-bottom: 1rem; }
+    ul, ol { margin: 0.5rem 0 1rem 1.5rem; }
+    li { margin-bottom: 0.4rem; }
+    strong { font-weight: 600; color: var(--text-primary); }
+
+    .module-hero {
+      background: linear-gradient(135deg, rgba(139,92,246,0.08) 0%, rgba(6,182,212,0.06) 100%);
+      border: 1px solid var(--code-border);
+      border-radius: 16px; padding: 2rem; margin-bottom: 3rem;
+    }
+    .module-num {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 0.8rem; color: var(--gemini-purple);
+      letter-spacing: 0.12em; text-transform: uppercase;
+      margin-bottom: 0.5rem; display: block;
+    }
+    .module-hero p { color: var(--text-secondary); margin-bottom: 0; }
+
+    .objectives-list { list-style: none; margin-left: 0; }
+    .objectives-list li { padding: 0.5rem 0 0.5rem 2.25rem; position: relative; }
+    .objectives-list li::before {
+      content: ''; position: absolute; left: 0; top: 0.85rem;
+      width: 16px; height: 16px; border-radius: 4px;
+      border: 2px solid var(--gemini-purple);
+      background: rgba(139, 92, 246, 0.08);
+    }
+
+    .analogy-box, .tech-def-box, .callout-why, .callout-warning, .callout-gotcha, .callout-tip {
+      border-left: 4px solid; border-radius: 0 8px 8px 0;
+      padding: 1.25rem 1.5rem; margin: 1.5rem 0;
+    }
+    .analogy-box { background: rgba(139,92,246,0.06); border-left-color: var(--gemini-purple); }
+    .tech-def-box { background: var(--info-bg); border-left-color: var(--gemini-purple); }
+    .callout-why { background: var(--success-bg); border-left-color: var(--success); }
+    .callout-warning { background: var(--warning-bg); border-left-color: var(--warning); }
+    .callout-gotcha { background: var(--error-bg); border-left-color: var(--error); }
+    .callout-tip { background: rgba(6,182,212,0.08); border-left-color: var(--gemini-teal); }
+    .box-label {
+      font-family: 'Bricolage Grotesque', sans-serif;
+      font-weight: 700; font-size: 0.85rem;
+      display: block; margin-bottom: 0.5rem;
+    }
+    .analogy-box .box-label { color: var(--gemini-purple); }
+    .tech-def-box .box-label { color: var(--gemini-purple); }
+    .callout-why .box-label { color: var(--success); }
+    .callout-warning .box-label { color: var(--warning); }
+    .callout-gotcha .box-label { color: var(--error); }
+    .callout-tip .box-label { color: var(--gemini-teal); }
+
+    .term-tooltip {
+      position: relative; color: var(--gemini-purple);
+      cursor: help; border-bottom: 1px dashed rgba(139,92,246,0.6);
+    }
+    .term-tooltip .tooltip-content {
+      position: absolute; bottom: calc(100% + 8px); left: 50%;
+      transform: translateX(-50%);
+      background: var(--bg-card); border: 1px solid var(--gemini-purple);
+      border-radius: 8px; padding: 0.75rem 1rem;
+      font-size: 0.83rem; color: var(--text-primary);
+      width: 280px; opacity: 0; pointer-events: none;
+      transition: opacity var(--transition-fast);
+      z-index: 100; line-height: 1.5;
+      box-shadow: 0 4px 24px rgba(0,0,0,0.5);
+    }
+    .term-tooltip:hover .tooltip-content,
+    .term-tooltip:focus .tooltip-content { opacity: 1; pointer-events: auto; }
+
+    .code-single {
+      background: var(--code-bg); border: 1px solid var(--code-border);
+      border-radius: 12px; margin: 1.5rem 0; overflow: hidden; position: relative;
+    }
+    .code-single pre {
+      margin: 0; padding: 1.25rem; overflow-x: auto;
+      font-family: 'JetBrains Mono', monospace; font-size: 0.83rem; line-height: 1.65;
+    }
+    .code-label {
+      display: inline-block; padding: 0.25rem 0.75rem;
+      background: var(--bg-surface); border-bottom: 1px solid var(--code-border);
+      border-right: 1px solid var(--code-border);
+      font-family: 'JetBrains Mono', monospace; font-size: 0.72rem;
+      color: var(--text-muted); border-radius: 0 0 8px 0;
+    }
+    .code-annotation {
+      background: var(--bg-surface); border-left: 3px solid var(--gemini-purple);
+      padding: 0.6rem 1rem; margin: 0; font-size: 0.82rem;
+      color: var(--text-secondary); font-style: italic;
+      border-top: 1px solid var(--code-border);
+    }
+    .code-annotation strong { color: var(--gemini-purple); font-style: normal; }
+    .copy-btn {
+      position: absolute; top: 0.6rem; right: 0.6rem;
+      background: var(--bg-surface); border: 1px solid var(--code-border);
+      color: var(--text-muted); padding: 0.28rem 0.6rem;
+      border-radius: 6px; font-size: 0.72rem; cursor: pointer;
+      font-family: 'JetBrains Mono', monospace;
+      transition: all var(--transition-fast);
+    }
+    .copy-btn:hover { color: var(--gemini-purple); border-color: var(--gemini-purple); }
+
+    .animation-container {
+      background: var(--bg-secondary); border: 1px solid var(--code-border);
+      border-radius: 12px; padding: 1.75rem; margin: 2rem 0;
+      position: relative; overflow: hidden;
+    }
+    .animation-title {
+      font-family: 'Bricolage Grotesque', sans-serif;
+      font-size: 0.8rem; font-weight: 700; color: var(--text-muted);
+      text-transform: uppercase; letter-spacing: 0.06em;
+      margin-bottom: 1.25rem;
+    }
+    .animation-controls {
+      display: flex; gap: 0.5rem;
+      position: absolute; bottom: 1rem; right: 1rem;
+    }
+    .anim-btn {
+      background: var(--bg-card); border: 1px solid var(--code-border);
+      color: var(--text-primary); width: 34px; height: 34px;
+      border-radius: 8px; cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1rem; transition: all var(--transition-fast);
+    }
+    .anim-btn:hover { border-color: var(--gemini-purple); color: var(--gemini-purple); }
+    .anim-btn:focus { outline: 2px solid var(--gemini-purple); outline-offset: 2px; }
+
+    /* Memory level card */
+    .mem-level {
+      display: flex; gap: 1rem; align-items: flex-start;
+      padding: 1rem 1.25rem; border: 1px solid var(--code-border);
+      border-bottom: none; background: var(--bg-card);
+    }
+    .mem-level:first-child { border-radius: 10px 10px 0 0; }
+    .mem-level:last-child { border-bottom: 1px solid var(--code-border); border-radius: 0 0 10px 10px; }
+    .mem-level-badge {
+      font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; font-weight: 700;
+      padding: 0.2rem 0.55rem; border-radius: 4px; flex-shrink: 0; margin-top: 2px;
+      white-space: nowrap;
+    }
+    .badge-global { background: rgba(139,92,246,0.2); color: var(--gemini-purple); }
+    .badge-project { background: rgba(6,182,212,0.15); color: var(--gemini-teal); }
+    .badge-session { background: rgba(66,133,244,0.15); color: var(--gemini-blue); }
+    .mem-level-body h4 {
+      font-family: 'Bricolage Grotesque', sans-serif;
+      font-size: 0.92rem; font-weight: 700; margin-bottom: 0.2rem; color: var(--text-primary);
+    }
+    .mem-level-body p { font-size: 0.85rem; color: var(--text-secondary); margin: 0; }
+    .mem-level-body code {
+      font-family: 'JetBrains Mono', monospace; font-size: 0.78rem;
+      color: var(--gemini-purple); background: var(--gemini-purple-muted);
+      padding: 0.1rem 0.4rem; border-radius: 3px;
+    }
+
+    /* Memory load order animation */
+    .load-step {
+      display: flex; align-items: center; gap: 1rem;
+      padding: 0.65rem 1rem; border-radius: 8px;
+      border: 1px solid var(--code-border); background: var(--bg-card);
+      margin-bottom: 0.4rem;
+      opacity: 0.15; transition: all 0.45s ease;
+    }
+    .load-step.active { opacity: 1; border-color: var(--gemini-purple); box-shadow: 0 0 8px rgba(139,92,246,0.2); }
+    .load-step.done { opacity: 0.75; border-color: var(--success); }
+    .load-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--text-muted); flex-shrink: 0; transition: background 0.4s; }
+    .load-step.active .load-dot { background: var(--gemini-purple); box-shadow: 0 0 6px var(--gemini-purple); }
+    .load-step.done .load-dot { background: var(--success); }
+    .load-step-name { font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; color: var(--text-secondary); flex: 1; }
+    .load-step.active .load-step-name { color: var(--text-primary); }
+    .load-step-status { font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; color: var(--text-muted); }
+    .load-step.active .load-step-status { color: var(--gemini-purple); }
+    .load-step.done .load-step-status { color: var(--success); }
+
+    /* Checkpoint restore animation */
+    .checkpoint-step {
+      display: flex; align-items: center; gap: 1rem;
+      padding: 0.65rem 1rem; border-radius: 8px;
+      border: 1px solid var(--code-border); background: var(--bg-card);
+      margin-bottom: 0.4rem;
+      opacity: 0.15; transition: all 0.45s ease;
+    }
+    .checkpoint-step.active { opacity: 1; border-color: var(--gemini-teal); box-shadow: 0 0 8px rgba(6,182,212,0.2); }
+    .checkpoint-step.done { opacity: 0.75; border-color: var(--success); }
+    .cp-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--text-muted); flex-shrink: 0; transition: background 0.4s; }
+    .checkpoint-step.active .cp-dot { background: var(--gemini-teal); box-shadow: 0 0 6px var(--gemini-teal); }
+    .checkpoint-step.done .cp-dot { background: var(--success); }
+    .checkpoint-step-name { font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; color: var(--text-secondary); flex: 1; }
+    .checkpoint-step.active .checkpoint-step-name { color: var(--text-primary); }
+    .checkpoint-step-status { font-family: 'JetBrains Mono', monospace; font-size: 0.72rem; color: var(--text-muted); }
+    .checkpoint-step.active .checkpoint-step-status { color: var(--gemini-teal); }
+    .checkpoint-step.done .checkpoint-step-status { color: var(--success); }
+
+    /* File preview box */
+    .file-preview {
+      background: var(--code-bg); border: 1px solid var(--code-border);
+      border-radius: 12px; margin: 1.5rem 0; overflow: hidden;
+    }
+    .file-preview-header {
+      background: var(--bg-surface); padding: 0.5rem 1rem;
+      border-bottom: 1px solid var(--code-border);
+      font-family: 'JetBrains Mono', monospace; font-size: 0.78rem; color: var(--text-muted);
+      display: flex; align-items: center; gap: 0.5rem;
+    }
+    .file-preview pre {
+      margin: 0; padding: 1.25rem; overflow-x: auto;
+      font-family: 'JetBrains Mono', monospace; font-size: 0.83rem; line-height: 1.7;
+      color: var(--code-text);
+    }
+
+    /* Branch comparison table */
+    .branch-table { width: 100%; border-collapse: collapse; margin: 1.5rem 0; font-size: 0.86rem; }
+    .branch-table th {
+      background: var(--bg-surface); padding: 0.55rem 1rem;
+      text-align: left; font-family: 'Bricolage Grotesque', sans-serif;
+      font-weight: 700; font-size: 0.78rem; color: var(--text-muted);
+      text-transform: uppercase; letter-spacing: 0.06em;
+      border-bottom: 1px solid var(--code-border);
+    }
+    .branch-table td {
+      padding: 0.6rem 1rem; border-bottom: 1px solid rgba(28,42,62,0.5); vertical-align: top;
+    }
+    .branch-table tr:hover td { background: var(--bg-surface); }
+    .branch-ok { color: var(--success); font-weight: 600; }
+    .branch-warn { color: var(--warning); font-weight: 600; }
+
+    .quiz-question {
+      background: var(--bg-card); border: 1px solid var(--code-border);
+      border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem;
+    }
+    .quiz-question h4 {
+      font-family: 'Bricolage Grotesque', sans-serif;
+      font-weight: 600; margin-bottom: 1rem; font-size: 1rem; line-height: 1.5;
+    }
+    .quiz-option {
+      padding: 0.75rem 1rem; margin: 0.5rem 0;
+      border: 1px solid var(--code-border); border-radius: 8px;
+      cursor: pointer; transition: all var(--transition-fast);
+      display: flex; align-items: flex-start; gap: 0.75rem;
+    }
+    .quiz-option:hover { border-color: var(--gemini-purple); background: var(--gemini-purple-muted); }
+    .quiz-option.correct { border-color: var(--success); background: var(--success-bg); }
+    .quiz-option.incorrect { border-color: var(--error); background: var(--error-bg); }
+    .quiz-option.disabled { pointer-events: none; }
+    .quiz-marker {
+      width: 22px; height: 22px; border-radius: 50%;
+      border: 2px solid var(--code-border); flex-shrink: 0; margin-top: 1px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.72rem; font-weight: 700;
+    }
+    .quiz-option.correct .quiz-marker { border-color: var(--success); color: var(--success); }
+    .quiz-option.incorrect .quiz-marker { border-color: var(--error); color: var(--error); }
+    .quiz-feedback {
+      margin-top: 0.75rem; padding: 0.75rem; border-radius: 8px;
+      font-size: 0.88rem; display: none; line-height: 1.5;
+    }
+    .quiz-feedback.show { display: block; }
+    .quiz-feedback.correct-fb { background: var(--success-bg); color: var(--success); }
+    .quiz-feedback.incorrect-fb { background: var(--error-bg); color: var(--error); }
+    .quiz-score {
+      background: linear-gradient(135deg, rgba(139,92,246,0.1), rgba(6,182,212,0.08));
+      border: 1px solid var(--code-border);
+      border-radius: 12px; padding: 2rem; text-align: center; margin-top: 2rem;
+    }
+    .quiz-score .score-num {
+      font-family: 'Bricolage Grotesque', sans-serif;
+      font-size: 3rem; font-weight: 800;
+      background: linear-gradient(135deg, var(--gemini-purple), var(--gemini-teal));
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .quiz-score p { color: var(--text-secondary); margin-bottom: 0; }
+
+    .module-nav {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 1.5rem 0; margin: 2rem 0;
+      border-top: 1px solid var(--code-border);
+    }
+    .module-nav a {
+      display: flex; align-items: center; gap: 0.5rem;
+      color: var(--gemini-purple); text-decoration: none;
+      font-family: 'Bricolage Grotesque', sans-serif; font-weight: 600;
+      font-size: 0.88rem; padding: 0.5rem 1.1rem;
+      border: 1px solid var(--code-border); border-radius: 8px;
+      transition: all var(--transition-fast);
+    }
+    .module-nav a:hover { border-color: var(--gemini-purple); background: var(--gemini-purple-muted); }
+
+    .checkpoint-callout {
+      background: linear-gradient(90deg, rgba(139,92,246,0.07), rgba(6,182,212,0.05));
+      border: 1px solid var(--code-border); border-radius: 10px;
+      padding: 1rem 1.25rem; margin: 1.5rem 0;
+      display: flex; gap: 0.75rem; align-items: flex-start;
+    }
+    .checkpoint-callout-icon { font-size: 1.25rem; flex-shrink: 0; }
+    .checkpoint-callout h4 {
+      font-family: 'Bricolage Grotesque', sans-serif;
+      font-size: 0.85rem; font-weight: 700; color: var(--gemini-purple); margin-bottom: 0.25rem;
+    }
+    .checkpoint-callout p { font-size: 0.88rem; color: var(--text-secondary); margin: 0; }
+
+    .what-happened {
+      background: var(--gemini-purple-muted); border: 1px solid rgba(139,92,246,0.3);
+      border-radius: 10px; padding: 1rem 1.25rem; margin: 1.5rem 0;
+    }
+    .what-happened h4 {
+      font-family: 'Bricolage Grotesque', sans-serif;
+      font-size: 0.82rem; font-weight: 700; color: var(--gemini-purple);
+      margin-bottom: 0.4rem; text-transform: uppercase; letter-spacing: 0.05em;
+    }
+    .what-happened p { font-size: 0.88rem; color: var(--text-secondary); margin: 0; }
+
+    .section-bridge {
+      text-align: center; padding: 1.5rem; margin: 2rem 0;
+      color: var(--text-muted); font-size: 0.9rem; font-style: italic;
+      border-top: 1px dashed var(--code-border);
+      border-bottom: 1px dashed var(--code-border);
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.001ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.001ms !important;
+      }
+    }
+    @media (max-width: 768px) {
+      .page-container { padding: 1rem; gap: 0; }
+      h1 { font-size: 1.8rem; }
+      .module-nav { flex-direction: column; gap: 0.75rem; }
+    }
+  .home-btn{display:inline-flex;align-items:center;gap:0.4rem;color:var(--text-secondary);text-decoration:none;font-family:'Bricolage Grotesque',sans-serif;font-weight:600;font-size:0.82rem;padding:0.3rem 0.8rem;border:1px solid var(--code-border);border-radius:6px;transition:all 150ms;white-space:nowrap}
+.home-btn:hover{color:var(--gemini-blue);border-color:var(--gemini-blue);background:var(--gemini-blue-bg);text-decoration:none}</style>
+</head>
+<body>
+
+<div class="top-progress" role="progressbar" aria-valuenow="94" aria-valuemin="0" aria-valuemax="100" aria-label="Course progress: Module 16 of 17">
+  <div class="fill"></div>
+</div>
+
+<header class="course-header">
+  <div class="course-header-inner">
+    <a href="index.html" class="home-btn" aria-label="Course Home">&#8962; Home</a>
+    <div class="course-title">Gemini CLI: From Zero to Production</div>
+    <div class="track-badge"><span class="dot"></span> Track 5 · Power Usage</div>
+    <div class="header-meta">
+      <span>Module 16 of 17</span>
+      <span>~45 min</span>
+      <span>Advanced</span>
+    </div>
+  </div>
+</header>
+
+<div class="page-container">
+  <nav class="sidebar-nav" aria-label="Module sections">
+    <div class="sidebar-title">In this module</div>
+    <a href="#memory-architecture" class="active">Memory Architecture</a>
+    <a href="#slash-memory" class="sub">/memory commands</a>
+    <a href="#gemini-md-deep">Advanced GEMINI.md</a>
+    <a href="#checkpoints">Checkpoints</a>
+    <a href="#session-branching" class="sub">Session branching</a>
+    <a href="#cross-session">Cross-Session Strategy</a>
+    <a href="#quiz">Knowledge Check</a>
+  </nav>
+
+  <main class="content" id="main-content">
+
+    <div class="module-hero">
+      <span class="module-num">Module 15 · Track 5 — Power Usage</span>
+      <h1>Memory &amp; Checkpoints</h1>
+      <p>Every conversation with Gemini CLI starts fresh — unless you design it not to. Memory and checkpoints are the architecture that turns ephemeral sessions into a coherent, long-running AI pair programmer that knows your project deeply, remembers your conventions, and can recover from any misstep without losing your work.</p>
+    </div>
+
+    <div class="section" id="objectives">
+      <h2>What You'll Learn</h2>
+      <ul class="objectives-list">
+        <li>Understand the three-level memory hierarchy: Global, Project, and Session</li>
+        <li>Use <code>/memory add</code>, <code>/memory list</code>, and <code>/memory remove</code> effectively</li>
+        <li>Author an advanced GEMINI.md with model selection, MCP blocks, and caching hints</li>
+        <li>Create manual checkpoints and restore project state after a bad refactor</li>
+        <li>Use session branching to explore alternative implementation strategies safely</li>
+        <li>Build a cross-session memory strategy for multi-week projects</li>
+      </ul>
+    </div>
+
+    <!-- ===== SECTION: MEMORY ARCHITECTURE ===== -->
+    <section class="section" id="memory-architecture">
+      <h2>Three-Level Memory Architecture</h2>
+
+      <div class="analogy-box">
+        <span class="box-label">Analogy — Personal Notes, Team Wiki, Standup Notes</span>
+        <p>Think of the three memory levels like a developer's note-taking system. Your <em>personal dotfiles and IDE config</em> (global GEMINI.md) travel everywhere you go — your preferred code style, your timezone, your name. The <em>team wiki for a specific project</em> (project GEMINI.md) lives in the repo and contains project-specific rules everyone working on it should follow. Your <em>daily standup sticky notes</em> (<code>/memory add</code> in session) capture what's relevant right now — "today I'm focusing on the auth module, ignore the legacy endpoints." The pain without this structure: you repeat yourself every single session, re-establishing context that should be permanent.</p>
+      </div>
+
+      <!-- Memory levels display -->
+      <div style="margin: 1.5rem 0;">
+        <div class="mem-level">
+          <span class="mem-level-badge badge-global">GLOBAL</span>
+          <div class="mem-level-body">
+            <h4>Global GEMINI.md</h4>
+            <p>Path: <code>%USERPROFILE%\.gemini\GEMINI.md</code> (Windows) / <code>~/.gemini/GEMINI.md</code> (Unix). Loaded for <em>every</em> Gemini CLI session, regardless of directory. Ideal for: your name, coding preferences, preferred languages, default model, recurring MCP servers.</p>
+          </div>
+        </div>
+        <div class="mem-level">
+          <span class="mem-level-badge badge-project">PROJECT</span>
+          <div class="mem-level-body">
+            <h4>Project GEMINI.md</h4>
+            <p>Path: <code>./GEMINI.md</code> in the current working directory (or any parent up to the repo root). Loaded only when Gemini CLI is run from within that directory tree. Ideal for: project stack, coding standards, database schema summaries, team contacts, deployment targets.</p>
+          </div>
+        </div>
+        <div class="mem-level">
+          <span class="mem-level-badge badge-session">SESSION</span>
+          <div class="mem-level-body">
+            <h4>Session Memory</h4>
+            <p>Added via <code>/memory add "..."</code> during an active session. Appended to <code>~/.gemini/GEMINI.md</code> under a <code>## Session Notes</code> section. Persists across sessions once written. Ideal for: transient context like "currently debugging the payment webhook," "ignore the legacy v1 endpoints for now."</p>
+          </div>
+        </div>
+      </div>
+
+      <!-- Animation: load order -->
+      <div class="animation-container" id="anim1" aria-label="Memory load order animation">
+        <div class="animation-title">Animation — Memory Load Order on Session Start</div>
+        <div id="anim1-steps" style="padding-bottom: 3rem;">
+          <div class="load-step" id="ld0"><div class="load-dot"></div><div class="load-step-name">gemini (session starts)</div><div class="load-step-status">waiting</div></div>
+          <div class="load-step" id="ld1"><div class="load-dot"></div><div class="load-step-name">1. Load ~/.gemini/GEMINI.md (global preferences)</div><div class="load-step-status">waiting</div></div>
+          <div class="load-step" id="ld2"><div class="load-dot"></div><div class="load-step-name">2. Walk up directory tree, find project GEMINI.md</div><div class="load-step-status">waiting</div></div>
+          <div class="load-step" id="ld3"><div class="load-dot"></div><div class="load-step-name">3. Merge project GEMINI.md (overrides where specified)</div><div class="load-step-status">waiting</div></div>
+          <div class="load-step" id="ld4"><div class="load-dot"></div><div class="load-step-name">4. Session Notes from previous /memory add calls available</div><div class="load-step-status">waiting</div></div>
+          <div class="load-step" id="ld5"><div class="load-dot"></div><div class="load-step-name">Context assembled — session is personalized and project-aware</div><div class="load-step-status">waiting</div></div>
+        </div>
+        <div class="animation-controls">
+          <button class="anim-btn" aria-label="Play animation" onclick="anim1Play()">&#9654;</button>
+          <button class="anim-btn" aria-label="Pause animation" onclick="anim1Pause()">&#10074;&#10074;</button>
+          <button class="anim-btn" aria-label="Restart animation" onclick="anim1Restart()">&#8635;</button>
+        </div>
+      </div>
+    </section>
+
+    <div class="section-bridge">Understanding the load order tells you exactly where to put each piece of context. Now let's use the /memory commands to add context dynamically during a live session.</div>
+
+    <!-- ===== SECTION: /memory ===== -->
+    <section class="section" id="slash-memory">
+      <h2>/memory Commands</h2>
+
+      <div class="tech-def-box">
+        <span class="box-label">Technical Definition — What /memory add Actually Does</span>
+        <p>The <span class="term-tooltip" tabindex="0">/memory add command<span class="tooltip-content">A Gemini CLI built-in command that appends a text entry to the ## Session Notes section of your global ~/.gemini/GEMINI.md file. The entry is immediately active in the current session and persists to all future sessions until removed with /memory remove &lt;id&gt;.</span></span> is not just a conversational hint — it <strong>writes to your filesystem</strong>. The text is appended to <code>~/.gemini/GEMINI.md</code> under a <code>## Session Notes</code> section with a timestamp and auto-generated ID. It survives session restarts because it becomes part of the global GEMINI.md that's loaded at the start of every session.</p>
+      </div>
+
+      <div class="code-single">
+        <div class="code-label">terminal — /memory commands</div>
+        <button class="copy-btn" aria-label="Copy code" onclick="copyCode(this)">copy</button>
+        <pre><code class="language-bash"># Add a persistent context note
+/memory add "Use TypeScript strict mode for all new files"
+
+# Add project-specific database context
+/memory add "DB: Postgres 16, connection string in .env as DATABASE_URL"
+
+# Add a temporary focus note
+/memory add "Currently working on auth module — ignore legacy v1 endpoints"
+
+# List all active session notes with their IDs
+/memory list
+
+# Output:
+# [mem-1] Use TypeScript strict mode for all new files
+# [mem-2] DB: Postgres 16, connection string in .env as DATABASE_URL
+# [mem-3] Currently working on auth module — ignore legacy v1 endpoints
+
+# Remove a note by ID when no longer relevant
+/memory remove mem-3</code></pre>
+      </div>
+      <div class="code-annotation">
+        <strong>WHAT:</strong> Each entry gets a unique ID like <code>mem-1</code>, <code>mem-2</code>. <strong>WHY:</strong> The ID lets you surgically remove individual notes without editing the GEMINI.md file manually. <strong>GOTCHA:</strong> <code>/memory add</code> only writes to the global GEMINI.md — it does NOT write to the project GEMINI.md. Put project-wide rules in the project file directly.
+      </div>
+
+      <h3>What Gets Written to GEMINI.md</h3>
+      <div class="file-preview">
+        <div class="file-preview-header">&#128196; ~/.gemini/GEMINI.md (after /memory add calls)</div>
+        <pre><code class="language-markdown"># Global Gemini CLI Config
+## Preferences
+- Name: Vara Srinivas
+- Default model: gemini-2.5-pro
+- Timezone: America/New_York
+
+## Session Notes
+&lt;!-- Added 2026-06-09 --&gt;
+- [mem-1] Use TypeScript strict mode for all new files
+- [mem-2] DB: Postgres 16, connection string in .env as DATABASE_URL</code></pre>
+      </div>
+
+      <div class="what-happened">
+        <h4>What Just Happened?</h4>
+        <p>The two <code>/memory add</code> calls above created two bullet points under <code>## Session Notes</code>. These are now part of the system context for every future Gemini CLI session on this machine — until you explicitly remove them with <code>/memory remove</code>. Think of it as writing to your AI's long-term memory.</p>
+      </div>
+    </section>
+
+    <!-- ===== SECTION: ADVANCED GEMINI.MD ===== -->
+    <section class="section" id="gemini-md-deep">
+      <h2>Advanced GEMINI.md</h2>
+
+      <p>A well-crafted GEMINI.md does far more than list preferences. It configures model behavior, registers MCP servers, and provides stable context that benefits from <span class="term-tooltip" tabindex="0">token caching<span class="tooltip-content">Gemini's context caching feature reuses the computed KV cache for stable content (like a long GEMINI.md) across multiple requests. This reduces both latency and token cost when the same prefix appears in many prompts.</span></span>.</p>
+
+      <div class="callout-tip">
+        <span class="box-label">Token Caching Tip</span>
+        <p>Put your most stable content (project description, schema, style rules) at the <strong>top</strong> of GEMINI.md. Gemini's context caching computes the KV cache once for stable content, then reuses it across requests in the same project. A well-structured 2,000-token GEMINI.md loaded 50 times per day saves roughly 100,000 input tokens — that's real cost reduction at scale.</p>
+      </div>
+
+      <h3>Backend API Project Template</h3>
+      <div class="file-preview">
+        <div class="file-preview-header">&#128196; ./GEMINI.md — project-level, backend API</div>
+        <pre><code class="language-markdown"># Project: TaskFlow API
+## Stack
+- Runtime: Node.js 22 LTS, TypeScript 5.4 (strict mode)
+- Framework: Express 5 + Zod for validation
+- Database: PostgreSQL 16 via Prisma ORM
+- Auth: JWT (RS256), tokens in Authorization header
+- Testing: Vitest + Supertest, coverage target ≥ 80%
+- Linting: ESLint flat config + Prettier
+
+## Conventions
+- All new files: TypeScript strict mode, no `any` without comment
+- Error handling: always return { error: string, code: string } shape
+- Database queries: use Prisma transactions for multi-step writes
+- Environment variables: all in .env, validated with zod at startup
+- Branch naming: feat/*, fix/*, chore/*
+- Commit style: Conventional Commits
+
+## MCP Servers
+```json
+{
+  "mcpServers": {
+    "github": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-github"],
+      "env": { "GITHUB_TOKEN": "${GITHUB_TOKEN}" }
+    },
+    "postgres": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-postgres"],
+      "env": { "DATABASE_URL": "${DATABASE_URL}" }
+    }
+  }
+}
+```
+
+## Model Config
+- model: gemini-2.5-pro
+- temperature: 0.2  # Low for consistent code generation
+
+## Contacts (for GitHub issue assignment)
+- vara = @vara-srinivas
+- devops = @devops-team</code></pre>
+      </div>
+      <div class="code-annotation">
+        <strong>WHAT:</strong> The MCP servers block registers the GitHub and Postgres MCP servers so they're available in every session without re-specifying them. <strong>WHY:</strong> Environment variables use <code>${VAR}</code> syntax so secrets never appear in GEMINI.md itself. <strong>GOTCHA:</strong> The <code>temperature</code> setting in GEMINI.md overrides the CLI default but can still be overridden per-prompt with <code>--temperature</code>.
+      </div>
+    </section>
+
+    <div class="section-bridge">Memory tells Gemini what you know. Checkpoints protect what you've built. Together they make extended, complex refactoring sessions safe.</div>
+
+    <!-- ===== SECTION: CHECKPOINTS ===== -->
+    <section class="section" id="checkpoints">
+      <h2>Checkpoints</h2>
+
+      <div class="analogy-box">
+        <span class="box-label">Analogy — Git Stash for Your Entire AI Work Session</span>
+        <p>Imagine a surgeon who, before making any major incision, takes a complete photograph of the patient's current state. Before every significant change in Plan Mode, Gemini CLI does exactly this. The <em>pain</em> of working without checkpoints: Gemini makes 8 correct file edits, then on edit 9 breaks something critical — and you have to manually undo or <code>git checkout</code> file by file, hoping you remember which ones changed. The <em>mapping</em>: checkpoints snapshot the entire working state — every file, every pending change — so you can restore to any previous moment in seconds.</p>
+      </div>
+
+      <h3>Auto-Checkpoints in Plan Mode</h3>
+      <p>In Plan Mode (<code>/plan</code>), Gemini CLI automatically saves a checkpoint before executing each step. The checkpoint ID appears in the Plan output so you always know what to restore if something goes wrong.</p>
+
+      <h3>Manual Checkpoint Commands</h3>
+      <div class="code-single">
+        <div class="code-label">terminal — checkpoint workflow</div>
+        <button class="copy-btn" aria-label="Copy code" onclick="copyCode(this)">copy</button>
+        <pre><code class="language-bash"># Save a named checkpoint before a risky refactor
+/checkpoint save "before refactor"
+
+# Output: Checkpoint saved: cp-20260609-143201 "before refactor"
+# Location: %USERPROFILE%\.gemini\checkpoints\cp-20260609-143201\
+
+# ... Gemini makes changes, something breaks ...
+
+# List all available checkpoints
+/restore list
+
+# Output:
+# cp-20260609-143201  "before refactor"          3 min ago   47 files
+# cp-20260609-131055  "auto: plan step 3/7"       1 hour ago  44 files
+# cp-20260609-094422  "before auth refactor"      4 hours ago 38 files
+
+# Restore to the named checkpoint
+/restore cp-20260609-143201
+
+# Output: Restoring 47 files to state "before refactor"...
+# Restored successfully. Your working directory matches checkpoint cp-20260609-143201.</code></pre>
+      </div>
+      <div class="code-annotation">
+        <strong>WHAT:</strong> Checkpoints are stored as file snapshots in <code>%USERPROFILE%\.gemini\checkpoints\</code>. Each checkpoint is a directory containing copies of every file that was modified since the previous checkpoint. <strong>GOTCHA:</strong> Checkpoints do NOT snapshot your database state, only files. If Gemini ran migrations, you'll need to handle those separately.
+      </div>
+
+      <!-- Animation: checkpoint recovery -->
+      <div class="animation-container" id="anim2" aria-label="Checkpoint recovery animation">
+        <div class="animation-title">Animation — Realistic Recovery Scenario</div>
+        <div id="anim2-steps" style="padding-bottom: 3rem;">
+          <div class="checkpoint-step" id="cp0"><div class="cp-dot"></div><div class="checkpoint-step-name">/checkpoint save "before auth refactor"  →  cp-001 created</div><div class="checkpoint-step-status">waiting</div></div>
+          <div class="checkpoint-step" id="cp1"><div class="cp-dot"></div><div class="checkpoint-step-name">Gemini: refactors 12 files across auth module</div><div class="checkpoint-step-status">waiting</div></div>
+          <div class="checkpoint-step" id="cp2"><div class="cp-dot"></div><div class="checkpoint-step-name">vitest: 4 tests fail — JWT validation broken</div><div class="checkpoint-step-status">waiting</div></div>
+          <div class="checkpoint-step" id="cp3"><div class="cp-dot"></div><div class="checkpoint-step-name">/restore list  →  cp-001 "before auth refactor" visible</div><div class="checkpoint-step-status">waiting</div></div>
+          <div class="checkpoint-step" id="cp4"><div class="cp-dot"></div><div class="checkpoint-step-name">/restore cp-001  →  12 files reverted</div><div class="checkpoint-step-status">waiting</div></div>
+          <div class="checkpoint-step" id="cp5"><div class="cp-dot"></div><div class="checkpoint-step-name">vitest: all 47 tests passing again — clean state</div><div class="checkpoint-step-status">waiting</div></div>
+        </div>
+        <div class="animation-controls">
+          <button class="anim-btn" aria-label="Play animation" onclick="anim2Play()">&#9654;</button>
+          <button class="anim-btn" aria-label="Pause animation" onclick="anim2Pause()">&#10074;&#10074;</button>
+          <button class="anim-btn" aria-label="Restart animation" onclick="anim2Restart()">&#8635;</button>
+        </div>
+      </div>
+
+      <div class="callout-why">
+        <span class="box-label">Why It Matters</span>
+        <p>The average multi-file refactor with Gemini CLI touches 8–15 files. Without checkpoints, a broken refactor requires reading each modified file, understanding what changed, and manually reverting. With checkpoints, recovery is one command and takes under 5 seconds. Teams using checkpoints report 3x faster iteration on large refactors because the fear of "what if it breaks" disappears.</p>
+      </div>
+    </section>
+
+    <!-- ===== SECTION: SESSION BRANCHING ===== -->
+    <section class="section" id="session-branching">
+      <h2>Session Branching</h2>
+
+      <p><span class="term-tooltip" tabindex="0">Session branching<span class="tooltip-content">The practice of saving a checkpoint, exploring one implementation approach to completion, then restoring the checkpoint and trying an alternative approach. Like git branches but for AI-assisted work sessions — you can compare two approaches before committing to one.</span></span> is the technique of using checkpoints to explore multiple implementation strategies in parallel — the same way you'd use git branches for code, but for the AI work session itself.</p>
+
+      <div class="code-single">
+        <div class="code-label">terminal — branching workflow</div>
+        <button class="copy-btn" aria-label="Copy code" onclick="copyCode(this)">copy</button>
+        <pre><code class="language-bash"># Starting point: working rate-limiter implementation needed
+/checkpoint save "before rate-limiter — clean state"
+# → cp-branch-base created
+
+# ── APPROACH A: in-memory rate limiting with Map ──
+# Ask Gemini to implement using in-memory Map + sliding window
+# Gemini modifies: src/middleware/rateLimiter.ts, src/app.ts, tests/
+
+# After implementation, run tests to evaluate
+# vitest: 52/52 passing, no Redis dependency
+
+/checkpoint save "approach-A: in-memory sliding window"
+# → cp-branch-A created
+
+# ── Restore and try Approach B ──
+/restore cp-branch-base
+# Back to clean state
+
+# APPROACH B: Redis-backed rate limiting with ioredis
+# Ask Gemini to implement using Redis + sliding window
+# Gemini modifies: src/middleware/rateLimiter.ts, docker-compose.yml, src/app.ts
+
+# vitest: 52/52 passing, requires Redis sidecar
+
+/checkpoint save "approach-B: Redis sliding window"
+# → cp-branch-B created</code></pre>
+      </div>
+
+      <h3>Comparing the Two Approaches</h3>
+      <table class="branch-table" role="table">
+        <thead>
+          <tr>
+            <th scope="col">Criterion</th>
+            <th scope="col">Approach A (In-Memory)</th>
+            <th scope="col">Approach B (Redis)</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td>Dependencies</td>
+            <td class="branch-ok">None</td>
+            <td>ioredis + Redis sidecar</td>
+          </tr>
+          <tr>
+            <td>Multi-instance support</td>
+            <td class="branch-warn">No (per-process state)</td>
+            <td class="branch-ok">Yes (shared state)</td>
+          </tr>
+          <tr>
+            <td>Restart behavior</td>
+            <td class="branch-warn">State lost on restart</td>
+            <td class="branch-ok">Persistent</td>
+          </tr>
+          <tr>
+            <td>Local dev complexity</td>
+            <td class="branch-ok">Zero setup</td>
+            <td>Requires Docker</td>
+          </tr>
+          <tr>
+            <td>Production suitability</td>
+            <td>Single-instance only</td>
+            <td class="branch-ok">Production-ready</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="what-happened">
+        <h4>What Just Happened?</h4>
+        <p>You explored two complete implementations in the same session without permanently committing to either. The comparison table above was generated by asking Gemini to compare the two checkpoints — it read both <code>cp-branch-A</code> and <code>cp-branch-B</code> and produced the analysis. You then chose Approach B and restored that checkpoint as your working state.</p>
+      </div>
+    </section>
+
+    <!-- ===== SECTION: CROSS-SESSION ===== -->
+    <section class="section" id="cross-session">
+      <h2>Cross-Session Strategy for Long Projects</h2>
+
+      <p>A multi-week project spanning many Gemini CLI sessions needs deliberate memory architecture. Here's a practical pattern that keeps context sharp and sessions efficient:</p>
+
+      <div class="code-single">
+        <div class="code-label">strategy — weekly session structure</div>
+        <button class="copy-btn" aria-label="Copy code" onclick="copyCode(this)">copy</button>
+        <pre><code class="language-markdown"># Weekly Cross-Session Pattern
+
+## Start of week (Monday session)
+1. Review /memory list — prune stale notes
+2. Update project GEMINI.md with any new decisions from last week
+3. /checkpoint save "week-N start"
+
+## During the week (each session)
+- /memory add for any new constraints discovered
+- /checkpoint save before any significant refactor
+- Keep session notes current ("now implementing X, skip Y")
+
+## End of week (Friday session)
+1. /memory list — document key decisions made
+2. Update project GEMINI.md ## Status section with progress
+3. /checkpoint save "week-N end — &lt;summary of state&gt;"
+4. Prune old checkpoints older than 2 weeks:
+   /restore list --older-than 14d
+   (manual deletion from %USERPROFILE%\.gemini\checkpoints\)</code></pre>
+      </div>
+
+      <div class="callout-tip">
+        <span class="box-label">Tip — GEMINI.md as a Living Document</span>
+        <p>Treat your project GEMINI.md the same way you'd treat a team <strong>ADR (Architecture Decision Record)</strong>. Every significant decision made with Gemini CLI — "we chose Redis over in-memory," "the webhook endpoint is /api/webhooks/stripe," "auth tokens expire in 15 minutes" — gets a one-line entry in GEMINI.md. This means the next session starts with full institutional memory, not just code.</p>
+      </div>
+
+      <div class="checkpoint-callout">
+        <div class="checkpoint-callout-icon">&#9989;</div>
+        <div>
+          <h4>Checkpoint — You Now Have Production-Grade Memory and Recovery</h4>
+          <p>You have a three-level memory hierarchy, /memory commands for live context, an advanced GEMINI.md template, checkpoint-based recovery, and a session branching pattern for safe experimentation. These are the tools that separate occasional Gemini CLI users from power users who use it as their primary coding environment.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== QUIZ ===== -->
+    <section class="section" id="quiz">
+      <h2>Knowledge Check</h2>
+      <p>Five questions on memory architecture, /memory commands, and checkpoints.</p>
+
+      <div class="quiz-question" id="q1">
+        <h4>1. You run <code>/memory add "Ignore the legacy v1 endpoints"</code>. Where is this note written?</h4>
+        <div class="quiz-option" onclick="answer(this,'q1',false)" role="button" tabindex="0">
+          <div class="quiz-marker">A</div><span>To the project's <code>./GEMINI.md</code> file</span>
+        </div>
+        <div class="quiz-option" onclick="answer(this,'q1',false)" role="button" tabindex="0">
+          <div class="quiz-marker">B</div><span>Only to the current session's in-memory context — not persisted</span>
+        </div>
+        <div class="quiz-option" onclick="answer(this,'q1',true)" role="button" tabindex="0">
+          <div class="quiz-marker">C</div><span>To <code>~/.gemini/GEMINI.md</code> (global), under a <code>## Session Notes</code> section</span>
+        </div>
+        <div class="quiz-option" onclick="answer(this,'q1',false)" role="button" tabindex="0">
+          <div class="quiz-marker">D</div><span>To a separate <code>~/.gemini/session-notes.md</code> file</span>
+        </div>
+        <div class="quiz-feedback correct-fb" id="q1-correct">Correct! <code>/memory add</code> always writes to the global GEMINI.md, not the project one. This ensures the note persists across sessions. Use <code>/memory remove &lt;id&gt;</code> to clean up when the note is no longer relevant.</div>
+        <div class="quiz-feedback incorrect-fb" id="q1-incorrect">The note is written to the global <code>~/.gemini/GEMINI.md</code> file under <code>## Session Notes</code>. It persists across sessions because it becomes part of the global context file loaded at every session start.</div>
+      </div>
+
+      <div class="quiz-question" id="q2">
+        <h4>2. In the memory load order, if both the global GEMINI.md and the project GEMINI.md specify a <code>model</code> setting, which one takes precedence?</h4>
+        <div class="quiz-option" onclick="answer(this,'q2',false)" role="button" tabindex="0">
+          <div class="quiz-marker">A</div><span>The global GEMINI.md always takes precedence</span>
+        </div>
+        <div class="quiz-option" onclick="answer(this,'q2',true)" role="button" tabindex="0">
+          <div class="quiz-marker">B</div><span>The project GEMINI.md overrides the global setting</span>
+        </div>
+        <div class="quiz-option" onclick="answer(this,'q2',false)" role="button" tabindex="0">
+          <div class="quiz-marker">C</div><span>The later-added <code>/memory add</code> always wins</span>
+        </div>
+        <div class="quiz-option" onclick="answer(this,'q2',false)" role="button" tabindex="0">
+          <div class="quiz-marker">D</div><span>They are merged additively — both models run in parallel</span>
+        </div>
+        <div class="quiz-feedback correct-fb" id="q2-correct">Correct! The load order is Global → Project → Session. Each level can override the previous. Project-level settings are more specific, so they take precedence over global defaults. This is the same layering principle as CSS specificity.</div>
+        <div class="quiz-feedback incorrect-fb" id="q2-incorrect">The project GEMINI.md is loaded after and overrides the global GEMINI.md. The order is: Global (base defaults) → Project (project-specific overrides) → Session notes (ephemeral additions). Later-loaded settings win for explicit overrides.</div>
+      </div>
+
+      <div class="quiz-question" id="q3">
+        <h4>3. What does <code>/checkpoint save "before refactor"</code> actually store on disk?</h4>
+        <div class="quiz-option" onclick="answer(this,'q3',false)" role="button" tabindex="0">
+          <div class="quiz-marker">A</div><span>A git commit with the message "before refactor"</span>
+        </div>
+        <div class="quiz-option" onclick="answer(this,'q3',true)" role="button" tabindex="0">
+          <div class="quiz-marker">B</div><span>A snapshot directory in <code>~/.gemini/checkpoints/</code> with copies of all modified files</span>
+        </div>
+        <div class="quiz-option" onclick="answer(this,'q3',false)" role="button" tabindex="0">
+          <div class="quiz-marker">C</div><span>The current conversation history and prompt context</span>
+        </div>
+        <div class="quiz-option" onclick="answer(this,'q3',false)" role="button" tabindex="0">
+          <div class="quiz-marker">D</div><span>A database snapshot including schema and data</span>
+        </div>
+        <div class="quiz-feedback correct-fb" id="q3-correct">Correct! Checkpoints are file-system snapshots stored in <code>~/.gemini/checkpoints/&lt;id&gt;/</code>. They do NOT create git commits (though you should still commit to git separately). They also do NOT snapshot database state — only files.</div>
+        <div class="quiz-feedback incorrect-fb" id="q3-incorrect">Checkpoints store file-system snapshots in <code>~/.gemini/checkpoints/</code>. They are independent of git (no git commits are made). They do not include database state. Think of them as a quick "undo everything" mechanism for files only.</div>
+      </div>
+
+      <div class="quiz-question" id="q4">
+        <h4>4. Why should you place stable, long-lived content (project description, schema) at the TOP of GEMINI.md?</h4>
+        <div class="quiz-option" onclick="answer(this,'q4',false)" role="button" tabindex="0">
+          <div class="quiz-marker">A</div><span>The CLI only reads the first 1,000 tokens of GEMINI.md</span>
+        </div>
+        <div class="quiz-option" onclick="answer(this,'q4',false)" role="button" tabindex="0">
+          <div class="quiz-marker">B</div><span>It makes the file easier for humans to read</span>
+        </div>
+        <div class="quiz-option" onclick="answer(this,'q4',true)" role="button" tabindex="0">
+          <div class="quiz-marker">C</div><span>Gemini's context caching reuses the KV cache for stable content, reducing token cost and latency</span>
+        </div>
+        <div class="quiz-option" onclick="answer(this,'q4',false)" role="button" tabindex="0">
+          <div class="quiz-marker">D</div><span>Later content in GEMINI.md is automatically truncated by the CLI</span>
+        </div>
+        <div class="quiz-feedback correct-fb" id="q4-correct">Correct! Token caching works on the prefix of the context window. Stable content at the top of GEMINI.md creates a consistent prefix that gets cached after the first request. This can save tens of thousands of input tokens per day on active projects.</div>
+        <div class="quiz-feedback incorrect-fb" id="q4-incorrect">The reason is token caching. Gemini caches the KV computation for stable content prefixes. If stable content is at the top, it gets cached and reused across requests — reducing both cost and latency. Changing content at the top invalidates the cache.</div>
+      </div>
+
+      <div class="quiz-question" id="q5">
+        <h4>5. You want to try two different approaches to implementing a feature and pick the better one. Which checkpoint workflow supports this?</h4>
+        <div class="quiz-option" onclick="answer(this,'q5',false)" role="button" tabindex="0">
+          <div class="quiz-marker">A</div><span>Save a checkpoint after each approach, then use <code>/restore diff</code> to compare them</span>
+        </div>
+        <div class="quiz-option" onclick="answer(this,'q5',false)" role="button" tabindex="0">
+          <div class="quiz-marker">B</div><span>Implement both approaches in the same files using feature flags, then checkpoint once</span>
+        </div>
+        <div class="quiz-option" onclick="answer(this,'q5',true)" role="button" tabindex="0">
+          <div class="quiz-marker">C</div><span>Save a base checkpoint, implement Approach A, save a new checkpoint, restore base, implement Approach B, compare the two saved checkpoints</span>
+        </div>
+        <div class="quiz-option" onclick="answer(this,'q5',false)" role="button" tabindex="0">
+          <div class="quiz-marker">D</div><span>Session branching requires opening two separate terminal windows with different sessions</span>
+        </div>
+        <div class="quiz-feedback correct-fb" id="q5-correct">Correct! This is the session branching pattern. Save base → implement A → save A checkpoint → restore base → implement B → save B checkpoint. Now you have both implementations saved and can restore either one to make the final decision.</div>
+        <div class="quiz-feedback incorrect-fb" id="q5-incorrect">The session branching pattern works like this: save a base checkpoint, implement Approach A completely, save that as its own checkpoint, then restore the base checkpoint and implement Approach B. You now have both approaches saved and can restore either one.</div>
+      </div>
+
+      <div class="quiz-score" id="quiz-score" style="display:none;">
+        <div class="score-num" id="score-display">0/5</div>
+        <p id="score-message">Quiz complete!</p>
+      </div>
+    </section>
+
+    <nav class="module-nav" aria-label="Module navigation">
+      <a href="M14-headless-cicd.html">&#8592; M14: Headless CI/CD</a>
+      <a href="M16-shell-automation.html">M16: Shell Automation &#8594;</a>
+    </nav>
+
+  </main>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-core.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/plugins/autoloader/prism-autoloader.min.js"></script>
+<script>
+  function copyCode(btn) {
+    const panel = btn.closest('.code-single, .code-panel');
+    const code = panel ? panel.querySelector('code') : null;
+    if (code) {
+      navigator.clipboard.writeText(code.innerText).then(() => {
+        btn.textContent = 'copied!';
+        setTimeout(() => btn.textContent = 'copy', 1800);
+      });
+    }
+  }
+
+  const sections = document.querySelectorAll('section[id]');
+  const navLinks = document.querySelectorAll('.sidebar-nav a');
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(e => {
+      if (e.isIntersecting) {
+        navLinks.forEach(a => a.classList.remove('active'));
+        const link = document.querySelector(`.sidebar-nav a[href="#${e.target.id}"]`);
+        if (link) link.classList.add('active');
+      }
+    });
+  }, { rootMargin: '-20% 0px -70% 0px' });
+  sections.forEach(s => observer.observe(s));
+
+  // Animation 1: load order
+  let a1t=null,a1s=0,a1r=false;
+  const a1ids=['ld0','ld1','ld2','ld3','ld4','ld5'];
+  const a1st=['starting...','loading global...','searching project...','merging...','session notes active','ready'];
+  function anim1Reset(){a1ids.forEach(id=>{const e=document.getElementById(id);e.classList.remove('active','done');e.querySelector('.load-step-status').textContent='waiting';});a1s=0;}
+  function anim1Tick(){
+    if(a1s>0){const p=document.getElementById(a1ids[a1s-1]);p.classList.remove('active');p.classList.add('done');p.querySelector('.load-step-status').textContent='done';}
+    if(a1s<a1ids.length){const c=document.getElementById(a1ids[a1s]);c.classList.add('active');c.querySelector('.load-step-status').textContent=a1st[a1s];a1s++;a1t=setTimeout(anim1Tick,850);}else{a1r=false;}
+  }
+  function anim1Play(){if(!a1r){a1r=true;anim1Tick();}}
+  function anim1Pause(){clearTimeout(a1t);a1r=false;}
+  function anim1Restart(){anim1Pause();anim1Reset();anim1Play();}
+
+  // Animation 2: checkpoint recovery
+  let a2t=null,a2s=0,a2r=false;
+  const a2ids=['cp0','cp1','cp2','cp3','cp4','cp5'];
+  const a2st=['saving...','modifying...','failing...','listing...','restoring...','all green'];
+  function anim2Reset(){a2ids.forEach(id=>{const e=document.getElementById(id);e.classList.remove('active','done');e.querySelector('.checkpoint-step-status').textContent='waiting';});a2s=0;}
+  function anim2Tick(){
+    if(a2s>0){const p=document.getElementById(a2ids[a2s-1]);p.classList.remove('active');p.classList.add('done');p.querySelector('.checkpoint-step-status').textContent='done';}
+    if(a2s<a2ids.length){const c=document.getElementById(a2ids[a2s]);c.classList.add('active');c.querySelector('.checkpoint-step-status').textContent=a2st[a2s];a2s++;a2t=setTimeout(anim2Tick,900);}else{a2r=false;}
+  }
+  function anim2Play(){if(!a2r){a2r=true;anim2Tick();}}
+  function anim2Pause(){clearTimeout(a2t);a2r=false;}
+  function anim2Restart(){anim2Pause();anim2Reset();anim2Play();}
+
+  // Quiz
+  const quizState={};
+  let correctCount=0;
+  const correctAnswers={q1:'C',q2:'B',q3:'B',q4:'C',q5:'C'};
+  function answer(optionEl,qId,isCorrect){
+    if(quizState[qId])return;
+    quizState[qId]=true;
+    const allOptions=optionEl.closest('.quiz-question').querySelectorAll('.quiz-option');
+    allOptions.forEach(o=>{o.classList.add('disabled');o.setAttribute('aria-disabled','true');});
+    const marker=optionEl.querySelector('.quiz-marker');
+    if(isCorrect){
+      optionEl.classList.add('correct');marker.textContent='✓';correctCount++;
+      document.getElementById(qId+'-correct').classList.add('show');
+    }else{
+      optionEl.classList.add('incorrect');marker.textContent='✗';
+      document.getElementById(qId+'-incorrect').classList.add('show');
+      allOptions.forEach(o=>{if(o.querySelector('.quiz-marker').textContent===correctAnswers[qId])o.classList.add('correct');});
+    }
+    if(Object.keys(quizState).length===5){
+      const scoreEl=document.getElementById('quiz-score');
+      scoreEl.style.display='block';
+      document.getElementById('score-display').textContent=correctCount+'/5';
+      document.getElementById('score-message').textContent=
+        correctCount===5?'Perfect! You have mastered Gemini CLI memory architecture.':
+        correctCount>=3?'Good understanding. Review checkpoint storage and /memory behavior.':
+        'Review the three-level memory hierarchy and checkpoint sections.';
+    }
+  }
+</script>
+<!-- course-assistant-widget:start -->
+<style>
+#caw-fab{position:fixed;bottom:1.5rem;right:1.5rem;z-index:99990;background:#D4A843;color:#0A1628;border:none;border-radius:28px;padding:0.7rem 1.2rem;font-weight:700;font-size:0.95rem;cursor:pointer;box-shadow:0 4px 18px rgba(0,0,0,0.45);font-family:inherit}
+#caw-fab:hover{filter:brightness(1.08)}
+#caw-overlay{position:fixed;inset:0;z-index:99991;background:rgba(4,10,20,0.72);display:flex;align-items:center;justify-content:center;padding:2rem}
+#caw-overlay[hidden]{display:none}
+#caw-panel{width:min(1100px,100%);height:min(760px,100%);background:#0A1628;border:1px solid #D4A843;border-radius:14px;display:flex;flex-direction:column;overflow:hidden}
+#caw-bar{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:0.5rem 1rem;background:#111D33;border-bottom:1px solid #21262D;color:#E8ECF1;font-size:0.85rem;font-family:sans-serif}
+#caw-bar a{color:#D4A843;text-decoration:none}
+#caw-close{background:none;border:none;color:#94A3B8;font-size:1.3rem;cursor:pointer;line-height:1}
+#caw-close:hover{color:#E8ECF1}
+#caw-frame{flex:1;border:none;width:100%;background:#0A1628}
+@media (max-width:768px){#caw-overlay{padding:0}#caw-panel{border-radius:0}}
+@media print{#caw-fab,#caw-overlay{display:none!important}}
+</style>
+<button id="caw-fab" aria-haspopup="dialog" aria-label="Open course search and ask assistant">💬 Ask the Course</button>
+<div id="caw-overlay" hidden role="dialog" aria-modal="true" aria-label="Course search assistant">
+  <div id="caw-panel">
+    <div id="caw-bar">
+      <span>Course Assistant — search or ask, fully offline</span>
+      <span><a href="search-assistant.html" target="_blank" rel="noopener">Open full page ↗</a> &nbsp; <button id="caw-close" aria-label="Close assistant">✕</button></span>
+    </div>
+    <iframe id="caw-frame" title="Course search assistant"></iframe>
+  </div>
+</div>
+<script>
+(function(){
+  var fab=document.getElementById('caw-fab'),ov=document.getElementById('caw-overlay'),
+      fr=document.getElementById('caw-frame'),cl=document.getElementById('caw-close');
+  function open(){ if(!fr.src) fr.src='search-assistant.html'; ov.hidden=false; fab.hidden=true; }
+  function close(){ ov.hidden=true; fab.hidden=false; fab.focus(); }
+  fab.addEventListener('click',open);
+  cl.addEventListener('click',close);
+  ov.addEventListener('click',function(e){ if(e.target===ov) close(); });
+  document.addEventListener('keydown',function(e){ if(e.key==='Escape'&&!ov.hidden) close(); });
+})();
+</script>
+<!-- course-assistant-widget:end -->
+</body>
+</html>
