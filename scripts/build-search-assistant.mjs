@@ -528,8 +528,24 @@ function injectWidget(courseDir) {
       if (end === -1) { console.warn(`  ! broken widget markers, skipped: ${f}`); continue; }
       html = html.slice(0, start) + html.slice(end + WIDGET_END.length);
     }
-    if (!/<\/body>/i.test(html)) { console.warn(`  ! no </body>, skipped: ${f}`); continue; }
-    html = html.replace(/<\/body>/i, WIDGET_HTML + '\n</body>');
+
+    // Anchor on the LAST </body>, not the first. A page whose code samples
+    // show a complete HTML document contains earlier </body> tags inside
+    // those samples, and injecting before one of them drops the whole widget
+    // into a code block — which is what happened to
+    // opensource/M20-monitoring.html, where the widget landed inside a Python
+    // triple-quoted string.
+    const close = html.toLowerCase().lastIndexOf('</body>');
+    if (close === -1) { console.warn(`  ! no </body>, skipped: ${f}`); continue; }
+
+    // Trim the gap the removed widget left behind before re-inserting.
+    // Stripping the block leaves the whitespace that preceded it and the
+    // insertion adds its own, so without this every run grows the file by a
+    // few blank lines and shows up as a diff on every page in the course.
+    // One blank line between the page and the widget makes a rebuild of an
+    // unchanged page a no-op.
+    const head = html.slice(0, close).replace(/\s*$/, '');
+    html = `${head}\n\n${WIDGET_HTML}\n${html.slice(close)}`;
     fs.writeFileSync(p, html, 'utf8');
     injected++;
   }
