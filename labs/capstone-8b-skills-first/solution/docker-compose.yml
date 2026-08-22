@@ -1,0 +1,136 @@
+# =====================================================================
+# Two live databases plus the migration agent.
+#
+# FIRST BOOT TAKES 1-3 MINUTES. Oracle Free initializes the pluggable
+# database and then runs every script in legacy-oracle/ in order. The
+# agent service waits on Oracle's healthcheck rather than on a timer,
+# because "sleep 90" is the kind of thing that works on your laptop and
+# fails in CI.
+#
+# Disk: the Oracle image is ~2.5 GB pulled, ~4 GB on disk once the
+# database is created. Check `docker system df` before you start.
+#
+# Apple Silicon / ARM: Oracle publishes x86_64 only. The platform
+# override below runs it under emulation -- it works, and it is slow.
+# If that is not acceptable, run with the fixtures profile instead:
+#     docker compose --profile fixtures up
+# which skips Oracle entirely and replays canned responses from
+# legacy-oracle/fixtures/. Everything except phase 3 still runs.
+# =====================================================================
+
+services:
+  oracle:
+    image: gvenzl/oracle-free:23-slim
+    platform: linux/amd64          # no ARM build exists; emulated on Apple Silicon
+    container_name: meridian-oracle
+    environment:
+      ORACLE_PASSWORD: ${ORACLE_SYS_PASSWORD:-MeridianSys#2003}
+      APP_USER: meridian
+      APP_USER_PASSWORD: ${ORACLE_APP_PASSWORD:-MeridianLegacy#2003}
+    ports:
+      - "1521:1521"
+    volumes:
+      # Scripts run once, in lexical order, on first boot only. Delete
+      # the volume to re-seed: docker compose down -v
+      - ../legacy-oracle:/container-entrypoint-initdb.d:ro
+      - oracle-data:/opt/oracle/oradata
+    healthcheck:
+      test: ["CMD", "healthcheck.sh"]
+      interval: 15s
+      timeout: 10s
+      retries: 40                  # 40 x 15s = 10 min ceiling for a cold start
+      start_period: 60s
+    profiles: ["default", "full"]
+
+  postgres:
+    image: postgres:16-alpine
+    container_name: meridian-postgres
+    environment:
+      POSTGRES_DB: meridian
+      POSTGRES_USER: migration
+      POSTGRES_PASSWORD: ${PG_PASSWORD:-migration}
+      # Match the legacy database's collation behaviour closely enough
+      # that ORDER BY on debtor names does not silently reorder.
+      POSTGRES_INITDB_ARGS: "--encoding=UTF8 --locale=C"
+    ports:
+      - "5432:5432"
+    volumes:
+      - pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U migration -d meridian"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  agent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: meridian-agent
+    depends_on:
+      oracle:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    environment:
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:?ANTHROPIC_API_KEY is required}
+      ORACLE_USER: migration_reader
+      ORACLE_PASSWORD: ${ORACLE_READER_PASSWORD:-ReadOnly#2026}
+      ORACLE_DSN: oracle:1521/FREEPDB1
+      ORACLE_SCHEMA: MERIDIAN
+      PG_HOST: postgres
+      PG_PORT: "5432"
+      PG_DATABASE: meridian
+      PG_USER: migration
+      PG_PASSWORD: ${PG_PASSWORD:-migration}
+      PG_TARGET_SCHEMA: ucc_migrated
+      APP_SOURCE_DIR: /work/app
+      ARTIFACT_DIR: /work/artifacts
+      # Deliberately NOT set. Cutover requires a human to pass
+      # --approve-cutover, which the agent cannot do for itself.
+      # CUTOVER_APPROVED:
+    volumes:
+      - ./:/work/solution
+      - ../app:/work/app:ro
+      - ./artifacts:/work/artifacts
+    working_dir: /work/solution
+    # Override to run: docker compose run --rm agent python coordinator.py --migrate-all
+    command: ["python", "coordinator.py", "--migrate-all"]
+
+  # ---------------------------------------------------------------
+  # Fixtures profile: PostgreSQL + agent only, Oracle replaced by
+  # canned tool responses. For students who cannot run the Oracle
+  # image. Phases 1, 2, 4 and 5 all work; phase 3 reports that it
+  # cannot move real rows.
+  # ---------------------------------------------------------------
+  agent-fixtures:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: meridian-agent-fixtures
+    profiles: ["fixtures"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:?ANTHROPIC_API_KEY is required}
+      FIXTURE_MODE: "1"
+      FIXTURE_DIR: /work/fixtures
+      PG_HOST: postgres
+      PG_DATABASE: meridian
+      PG_USER: migration
+      PG_PASSWORD: ${PG_PASSWORD:-migration}
+      PG_TARGET_SCHEMA: ucc_migrated
+      APP_SOURCE_DIR: /work/app
+      ARTIFACT_DIR: /work/artifacts
+    volumes:
+      - ./:/work/solution
+      - ../app:/work/app:ro
+      - ../legacy-oracle/fixtures:/work/fixtures:ro
+      - ./artifacts:/work/artifacts
+    working_dir: /work/solution
+    command: ["python", "coordinator.py", "--migrate-all"]
+
+volumes:
+  oracle-data:
+  pg-data:

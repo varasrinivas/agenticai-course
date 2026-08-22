@@ -1,0 +1,110 @@
+$ python coordinator.py --phase validate
+
+=== PHASE 5 / 5  VALIDATE ========================================
+
+  -> migration-validator
+
+VALIDATION REPORT -- Meridian UCC filing system
+Source: MERIDIAN@FREEPDB1   Target: ucc_migrated@meridian
+
+DEFECTS (2)
+-----------------------------------------------------------------------
+[BLOCKER] empty_string_divergence -- ucc_debtor.mailing_address_2
+    1,412 empty strings in PostgreSQL. Oracle reported 1,412 NULLs here;
+    PostgreSQL reports only 0. 1,412 Oracle NULLs were converted to empty
+    strings by the load. Every IS NULL query against this column now
+    returns fewer rows than it did. Re-load with null_as set.
+
+[WARNING] spot_check -- ucc_filing.status[filing_id=1042]
+    Filing CA-2019-000042 is ACTIVE with lapse_date 2021-06-30. Not a
+    migration defect -- this drift exists in the Oracle source too. Raised
+    because it will look like a migration bug to whoever reads the data
+    next.
+
+PER-TABLE RECONCILIATION
+-----------------------------------------------------------------------
+TABLE                 ORACLE       PG    ROWS  CHKSUM   NULLS  EMPTY   FK
+ucc_debtor             7,418    7,418      OK      OK    FAIL   FAIL   OK
+ucc_filing             5,000    5,000      OK      OK      OK     OK   OK
+ucc_secured_party      5,000    5,000      OK      OK      OK     OK   OK
+ucc_amendment          1,251    1,251      OK      OK      OK     OK   OK
+filing_audit             385      385      OK      OK      OK     OK   OK
+state_sos_source          11       11      OK      OK      OK     OK   OK
+-----------------------------------------------------------------------
+TOTAL                 19,065   19,065
+
+  Checks passed : 34
+  Checks failed :  2
+  Blockers      :  1
+
+SPOT CHECK -- 20 rows per table, matched on primary key
+-----------------------------------------------------------------------
+  ucc_filing        20/20 identical
+                    (filed_date 2019-04-02 14:32:07 preserved -- the DATE
+                     mapped to timestamp(0), not date)
+  ucc_debtor        17/20 identical
+                    debtor_id=1  mailing_address_2: Oracle=None PostgreSQL=''
+                    debtor_id=3  mailing_address_2: Oracle=None PostgreSQL=''
+                    debtor_id=9  mailing_address_2: Oracle=None PostgreSQL=''
+                    Oracle NULL became a PostgreSQL empty string -- the
+                    load did not set null_as.
+  ucc_secured_party 20/20 identical
+                    (tax_id RAW(16) -> uuid round-tripped intact)
+
+CUTOVER: NOT RECOMMENDED -- 1 blocker outstanding.
+
+Wrote artifacts/validation_summary.json
+
+==============================================================================
+  MIGRATION REPORT                                        2026-08-20 15:41
+==============================================================================
+
+  PHASE         OBJECTS      TOKENS      TIME   ERRORS
+  ----------------------------------------------------------------------
+  discover            1       3,204      8.2s        0
+  schema              6      41,880     71.4s        0
+  data                6      12,455     94.1s        0
+  plsql               4      38,192     62.7s        0
+  appsql              1      14,903     26.5s        0
+  validate            1       9,641     19.8s        0
+  ----------------------------------------------------------------------
+  TOTAL              19     120,275      4.7m        0
+
+  Budget    : 120,275/400,000 output tokens (30%)
+  Est. cost : $1.80 (output tokens only)
+
+  Slowest objects:
+       31.2s  schema:UCC_FILING
+       28.9s  plsql:PKG_RISK_CALC
+       24.6s  data:UCC_DEBTOR
+
+  Most tokens:
+      14,903  appsql
+      12,408  plsql:PKG_RISK_CALC
+      11,022  schema:UCC_FILING
+
+==============================================================================
+
+Token usage: 120,275/400,000 output tokens (30%)
+Reports: artifacts/migration_report.html
+Audit log: migration_audit.jsonl
+
+
+-----------------------------------------------------------------------------
+NOTE FOR THE STUDENT
+
+That BLOCKER is the point of the exercise, not a bug in the lab.
+
+The first run is SUPPOSED to fail this check, because the default
+data-migrator prompt does not force `null_as` and Claude will often let it
+default. Fix it in the subagent definition, re-run phase 3, and re-validate:
+
+    python coordinator.py --phase data
+    python coordinator.py --phase validate
+
+The second run should show `NULLS OK  EMPTY OK` on ucc_debtor and
+`Blockers: 0`.
+
+If your FIRST run came back clean, do not celebrate -- check that the
+validator actually ran. An empty defect list and a validator that never
+executed look identical in the JSON.

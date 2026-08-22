@@ -1,0 +1,1943 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Capstone 8B &mdash; Legacy Migration Agent, Skills-First | Building AI Agents with Claude</title>
+  <meta name="description" content="Rebuild the Oracle to PostgreSQL migration agent with Agent Skills instead of subagents - five skills with references and bundled checkers, a per-phase skill map, identical guardrails - then measure which architecture actually did better and publish the result even when it is unflattering.">
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;700;800&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg-primary: #0A1628; --bg-secondary: #111D33; --bg-card: #162033; --bg-surface: #1A2740;
+      --text-primary: #E8ECF1; --text-secondary: #94A3B8; --text-muted: #64748B;
+      --accent-primary: #D4A843; --accent-hover: #E5BC5A; --accent-muted: rgba(212,168,67,0.15);
+      --success: #10B981; --success-bg: rgba(16,185,129,0.1);
+      --warning: #F59E0B; --warning-bg: rgba(245,158,11,0.1);
+      --error: #F43F5E; --error-bg: rgba(244,63,94,0.1);
+      --info: #3B82F6; --info-bg: rgba(59,130,246,0.1);
+      --track-capstones: #D4A843; --track-color: var(--track-capstones);
+      --code-bg: #0D1117; --code-border: #21262D; --code-text: #C9D1D9;
+      --transition-fast: 150ms; --transition-normal: 300ms; --transition-slow: 500ms;
+    }
+    body { background: var(--bg-primary); color: var(--text-primary); font-family: 'Source Sans 3', sans-serif; font-size: 1.05rem; line-height: 1.7; min-height: 100vh; }
+    .course-header { background: var(--bg-secondary); border-bottom: 1px solid var(--code-border); padding: 1.25rem 2rem; }
+    .course-header-inner { max-width: 1200px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; }
+    .course-title { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.95rem; font-weight: 600; color: var(--text-secondary); }
+    .track-badge { display: inline-flex; align-items: center; gap: 0.5rem; background: rgba(212,168,67,0.15); border: 1px solid var(--track-color); border-radius: 20px; padding: 0.25rem 0.75rem; font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.8rem; font-weight: 600; color: var(--track-color); }
+    .track-badge .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--track-color); }
+    .diff-badge { display: inline-flex; gap: 0.25rem; } .diff-star { color: var(--accent-primary); font-size: 0.9rem; } .diff-star.empty { opacity: 0.3; }
+    .header-meta { display: flex; gap: 1.5rem; font-size: 0.85rem; color: var(--text-muted); }
+    .page-container { max-width: 1200px; margin: 0 auto; padding: 2rem; display: grid; grid-template-columns: 240px 1fr; gap: 3rem; }
+    .sidebar-nav { position: sticky; top: 2rem; height: calc(100vh - 4rem); overflow-y: auto; padding-right: 1rem; }
+    .sidebar-nav::-webkit-scrollbar { width: 3px; } .sidebar-nav::-webkit-scrollbar-thumb { background: var(--bg-surface); border-radius: 3px; }
+    .sidebar-title { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); margin-bottom: 1rem; }
+    .sidebar-nav a { display: block; padding: 0.4rem 0.75rem; margin-bottom: 0.15rem; font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.82rem; font-weight: 600; color: var(--text-muted); text-decoration: none; border-left: 2px solid transparent; border-radius: 0 4px 4px 0; transition: all var(--transition-fast); }
+    .sidebar-nav a:hover { color: var(--text-primary); background: var(--bg-surface); }
+    .sidebar-nav a.active { color: var(--accent-primary); border-left-color: var(--accent-primary); background: var(--accent-muted); }
+    .content { max-width: 800px; } .section { margin-bottom: 4rem; }
+    h1 { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 2.25rem; line-height: 1.2; margin-bottom: 0.75rem; }
+    h2 { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 1.5rem; color: var(--text-primary); margin: 2.5rem 0 1rem; padding-top: 1rem; border-top: 1px solid var(--code-border); }
+    h2:first-of-type { border-top: none; }
+    h3 { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 600; font-size: 1.25rem; color: var(--text-primary); margin: 2rem 0 0.75rem; }
+    h4 { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 600; font-size: 1.1rem; color: var(--text-primary); margin: 1.5rem 0 0.5rem; }
+    p { margin-bottom: 1rem; } ul, ol { margin: 0.5rem 0 1rem 1.5rem; } li { margin-bottom: 0.4rem; } strong { font-weight: 600; }
+    a { color: var(--accent-primary); text-decoration: none; } a:hover { text-decoration: underline; }
+    .analogy-box, .tech-def-box, .callout-why, .callout-warning, .callout-security, .callout-cost, .callout-cert { border-left: 4px solid; border-radius: 0 8px 8px 0; padding: 1.25rem 1.5rem; margin: 1.5rem 0; }
+    .analogy-box { background: var(--accent-muted); border-left-color: var(--accent-primary); }
+    .tech-def-box { background: var(--info-bg); border-left-color: var(--info); }
+    .callout-why { background: var(--success-bg); border-left-color: var(--success); }
+    .callout-warning { background: var(--warning-bg); border-left-color: var(--warning); }
+    .callout-security { background: var(--error-bg); border-left-color: var(--error); }
+    .callout-cost { background: var(--warning-bg); border-left-color: var(--accent-primary); }
+    .callout-cert { background: rgba(212,168,67,0.06); border-left-color: var(--accent-primary); }
+    .analogy-box .box-label { color: var(--accent-primary); } .tech-def-box .box-label { color: var(--info); } .callout-why .box-label { color: var(--success); } .callout-warning .box-label { color: var(--warning); } .callout-security .box-label { color: var(--error); } .callout-cost .box-label { color: var(--accent-primary); } .callout-cert .box-label { color: var(--accent-primary); }
+    .term-tooltip { position: relative; color: var(--accent-primary); cursor: help; border-bottom: 1px dashed var(--accent-primary); }
+    .term-tooltip .tooltip-content { position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); background: var(--bg-card); border: 1px solid var(--accent-primary); border-radius: 8px; padding: 0.75rem 1rem; font-size: 0.85rem; color: var(--text-primary); width: 280px; opacity: 0; pointer-events: none; transition: opacity var(--transition-fast); z-index: 10; line-height: 1.5; box-shadow: 0 4px 20px rgba(0,0,0,0.4); }
+    .term-tooltip:hover .tooltip-content, .term-tooltip:focus .tooltip-content { opacity: 1; pointer-events: auto; }
+    .code-block-wrapper { background: var(--code-bg); border: 1px solid var(--code-border); border-radius: 12px; margin: 1.5rem 0; overflow: hidden; }
+    .code-tabs { display: flex; gap: 0; border-bottom: 1px solid var(--code-border); background: var(--bg-surface); }
+    .code-tab { padding: 0.5rem 1.25rem; background: none; border: none; font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; color: var(--text-muted); transition: all var(--transition-fast); }
+    .code-tab:hover { color: var(--text-primary); } .code-tab.active { color: var(--accent-primary); border-bottom-color: var(--accent-primary); }
+    .code-panel { display: none; position: relative; } .code-panel.active { display: block; }
+    .code-panel pre { margin: 0; padding: 1.25rem; overflow-x: auto; font-family: 'JetBrains Mono', monospace; font-size: 0.85rem; line-height: 1.6; }
+    .code-panel pre code { background: none; color: var(--code-text); }
+    .copy-btn { position: absolute; top: 0.75rem; right: 0.75rem; background: var(--bg-surface); border: 1px solid var(--code-border); color: var(--text-muted); padding: 0.3rem 0.6rem; border-radius: 6px; font-size: 0.75rem; cursor: pointer; font-family: 'JetBrains Mono', monospace; transition: all var(--transition-fast); }
+    .copy-btn:hover { color: var(--accent-primary); border-color: var(--accent-primary); }
+    .output-block { background: var(--code-bg); border: 1px solid var(--code-border); border-radius: 8px; padding: 1rem 1.25rem; margin: 0.75rem 0 1.5rem; font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; color: var(--success); line-height: 1.5; white-space: pre-wrap; overflow-x: auto; }
+    .output-label { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.25rem; }
+    .checkpoint { background: var(--success-bg); border: 1px solid var(--success); border-radius: 8px; padding: 1rem 1.25rem; margin: 1.5rem 0; }
+    .checkpoint-label { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 0.85rem; color: var(--success); margin-bottom: 0.4rem; }
+    .bridge { background: var(--bg-surface); border-radius: 8px; padding: 1rem 1.25rem; margin: 2rem 0; font-style: italic; color: var(--text-secondary); border-left: 3px solid var(--text-muted); }
+
+    /* Animation containers */
+    .animation-container { background: var(--bg-secondary); border: 1px solid var(--code-border); border-radius: 12px; padding: 2rem; margin: 2rem 0; position: relative; min-height: 300px; overflow: hidden; }
+    .animation-title { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.85rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 1.25rem; }
+    .animation-controls { display: flex; gap: 0.5rem; position: absolute; bottom: 1rem; right: 1rem; z-index: 5; }
+    .anim-btn { background: var(--bg-card); border: 1px solid var(--code-border); color: var(--text-primary); width: 36px; height: 36px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 1rem; transition: all var(--transition-fast); }
+    .anim-btn:hover { border-color: var(--accent-primary); color: var(--accent-primary); }
+    .state-cell.visible { opacity: 1; }
+    .agent-cell.pass { background: var(--success-bg); border-color: var(--success); color: var(--success); }
+    .agent-cell.fail { background: var(--error-bg); border-color: var(--error); color: var(--error); }
+    .agent-cell.warn { background: var(--warning-bg); border-color: var(--warning); color: var(--warning); }
+    .swarm-summary.visible { opacity: 1; } .format-tab.active { border-bottom-color: var(--accent-primary); color: var(--accent-primary); } .format-panel.active { display: block; }
+    .result-pill.visible { opacity: 1; } .error-tab.active { border-bottom-color: var(--error); color: var(--error); } .error-panel.active { display: block; }
+
+    /* File tree */
+    .file-tree { font-family: 'JetBrains Mono', monospace; font-size: 0.8rem; line-height: 1.8; color: var(--text-secondary); background: var(--bg-card); border: 1px solid var(--code-border); border-radius: 8px; padding: 1.25rem; white-space: pre; overflow-x: auto; }
+    .file-tree .dir { color: var(--info); font-weight: 600; }
+    .file-tree .tool { color: var(--success); } .file-tree .mock { color: var(--info); } .file-tree .agent { color: var(--accent-primary); } .file-tree .config { color: var(--text-muted); }
+
+    /* Test table */
+    .test-table { width: 100%; border-collapse: collapse; margin: 1rem 0; font-size: 0.85rem; }
+    .test-table th { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.75rem; font-weight: 700; text-align: left; padding: 0.5rem 0.75rem; border-bottom: 2px solid var(--code-border); color: var(--text-muted); }
+    .test-table td { padding: 0.5rem 0.75rem; border-bottom: 1px solid rgba(33,38,45,0.5); color: var(--text-secondary); vertical-align: top; }
+
+    /* Quiz */
+    .quiz-section { margin: 3rem 0; }
+    .quiz-question { background: var(--bg-card); border: 1px solid var(--code-border); border-radius: 12px; padding: 1.5rem; margin: 1.25rem 0; }
+    .quiz-question h4 { font-family: 'Bricolage Grotesque', sans-serif; font-size: 1rem; font-weight: 700; color: var(--text-primary); margin-bottom: 1rem; }
+    .quiz-options { list-style: none; margin: 0; padding: 0; }
+    .quiz-options li { margin: 0.4rem 0; }
+    .quiz-options label { display: flex; align-items: flex-start; gap: 0.75rem; padding: 0.6rem 0.75rem; border-radius: 8px; cursor: pointer; transition: background var(--transition-fast); font-size: 0.95rem; color: var(--text-secondary); }
+    .quiz-options label:hover { background: var(--bg-surface); }
+    .quiz-options input[type="radio"] { margin-top: 0.25rem; accent-color: var(--accent-primary); }
+    .quiz-feedback { margin-top: 0.75rem; padding: 0.75rem 1rem; border-radius: 8px; font-size: 0.9rem; display: none; }
+    .quiz-feedback.correct { background: var(--success-bg); color: var(--success); display: block; }
+    .quiz-feedback.incorrect { background: var(--error-bg); color: var(--error); display: block; }
+    .quiz-check-btn { background: var(--accent-primary); color: var(--bg-primary); border: none; padding: 0.5rem 1.25rem; border-radius: 8px; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 0.85rem; cursor: pointer; margin-top: 0.75rem; transition: background var(--transition-fast); }
+    .quiz-check-btn:hover { background: var(--accent-hover); }
+
+    /* Nav */
+    .module-nav { display: flex; justify-content: space-between; align-items: center; padding: 1.5rem 0; margin: 2rem 0; border-top: 1px solid var(--code-border); }
+    .module-nav a { display: flex; align-items: center; gap: 0.5rem; color: var(--accent-primary); text-decoration: none; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 600; font-size: 0.9rem; padding: 0.5rem 1rem; border: 1px solid var(--code-border); border-radius: 8px; transition: all var(--transition-fast); }
+    .module-nav a:hover { border-color: var(--accent-primary); background: var(--accent-muted); text-decoration: none; }
+
+    /* Step styling */
+    .step { background: var(--bg-card); border: 1px solid var(--code-border); border-radius: 12px; padding: 1.5rem; margin: 1.5rem 0; }
+    .step-header { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 1.1rem; color: var(--accent-primary); margin-bottom: 0.75rem; }
+    .step-meta { display: flex; gap: 1rem; font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; color: var(--text-muted); margin-bottom: 1rem; }
+    .troubleshoot { background: var(--warning-bg); border-radius: 6px; padding: 0.75rem 1rem; margin-top: 1rem; font-size: 0.9rem; }
+    .troubleshoot-title { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 0.8rem; color: var(--warning); margin-bottom: 0.5rem; }
+
+    @media (max-width: 900px) {
+      .page-container { grid-template-columns: 1fr; }
+      .sidebar-nav { position: fixed; bottom: 0; left: 0; right: 0; height: auto; z-index: 100; background: var(--bg-secondary); border-top: 1px solid var(--code-border); padding: 0.75rem 1rem; display: flex; gap: 0.25rem; overflow-x: auto; }
+      .sidebar-title { display: none; } .sidebar-nav a { white-space: nowrap; font-size: 0.75rem; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+    }
+
+    /* ---- Capstone-8 additions. Everything above is the shared course shell. ---- */
+    .type-table { width:100%; border-collapse:collapse; font-size:0.88rem; margin:1.25rem 0; }
+    .type-table th, .type-table td { padding:0.55rem 0.7rem; border-bottom:1px solid var(--code-border); text-align:left; vertical-align:top; }
+    .type-table th { color:var(--text-secondary); font-size:0.72rem; text-transform:uppercase; letter-spacing:0.06em; font-weight:600; }
+    .type-table code { font-family:'JetBrains Mono',monospace; font-size:0.82rem; color:var(--accent-primary); background:var(--code-bg); padding:0.1rem 0.35rem; border-radius:3px; }
+    .type-table tr.danger td { background:rgba(244,63,94,0.07); }
+    .type-table tr.danger code { color:var(--error); }
+    .table-scroll { overflow-x:auto; -webkit-overflow-scrolling:touch; }
+
+    /* migration pipeline animation */
+    .mig-pipeline { display:flex; align-items:stretch; gap:0.5rem; flex-wrap:wrap; justify-content:center; margin:1.5rem 0; }
+    .mig-phase { flex:1 1 150px; min-width:140px; background:var(--bg-surface); border:1px solid var(--code-border); border-radius:8px; padding:0.85rem 0.7rem; text-align:center; opacity:0.25; transition:opacity 0.45s, border-color 0.45s, transform 0.45s; }
+    .mig-phase.active { opacity:1; border-color:var(--accent-primary); transform:translateY(-3px); }
+    .mig-phase.done { opacity:0.85; border-color:var(--success); }
+    .mig-phase .n { font-family:'JetBrains Mono',monospace; font-size:0.7rem; color:var(--text-muted); }
+    .mig-phase .t { font-weight:700; font-size:0.9rem; margin:0.25rem 0; color:var(--text-primary); }
+    .mig-phase .d { font-size:0.75rem; color:var(--text-secondary); line-height:1.4; }
+    .mig-gate { flex:1 1 150px; min-width:140px; background:rgba(245,158,11,0.1); border:1px dashed var(--warning); border-radius:8px; padding:0.85rem 0.7rem; text-align:center; opacity:0.25; transition:opacity 0.45s; }
+    .mig-gate.active { opacity:1; }
+    .mig-gate .t { font-weight:700; font-size:0.9rem; color:var(--warning); }
+
+    /* subagent fan-out */
+    .fanout { display:flex; flex-direction:column; align-items:center; gap:0.75rem; margin:1.25rem 0; }
+    .fanout-coord { background:var(--accent-muted); border:1px solid var(--accent-primary); color:var(--accent-primary); font-weight:700; padding:0.6rem 1.4rem; border-radius:8px; font-family:'JetBrains Mono',monospace; font-size:0.85rem; }
+    .fanout-row { display:flex; gap:0.6rem; flex-wrap:wrap; justify-content:center; }
+    .fanout-agent { background:var(--bg-surface); border:1px solid var(--code-border); border-radius:6px; padding:0.5rem 0.7rem; font-family:'JetBrains Mono',monospace; font-size:0.74rem; color:var(--text-secondary); opacity:0.2; transition:opacity 0.4s, border-color 0.4s, color 0.4s; min-width:130px; text-align:center; }
+    .fanout-agent.active { opacity:1; border-color:var(--info); color:var(--text-primary); }
+    .fanout-agent.done { opacity:1; border-color:var(--success); color:var(--success); }
+    .fanout-agent.refused { opacity:1; border-color:var(--warning); color:var(--warning); }
+
+    /* the empty-string trap, side by side */
+    .trap-grid { display:grid; grid-template-columns:1fr 1fr; gap:1rem; margin:1.25rem 0; }
+    @media (max-width:768px) { .trap-grid { grid-template-columns:1fr; } }
+    .trap-side { background:var(--code-bg); border:1px solid var(--code-border); border-radius:8px; padding:1rem; }
+    .trap-side h5 { font-family:'JetBrains Mono',monospace; font-size:0.8rem; color:var(--text-secondary); margin-bottom:0.6rem; text-transform:uppercase; letter-spacing:0.05em; }
+    .trap-side.oracle { border-left:3px solid var(--info); }
+    .trap-side.pg { border-left:3px solid var(--accent-primary); }
+    .trap-row { display:flex; justify-content:space-between; gap:0.6rem; font-family:'JetBrains Mono',monospace; font-size:0.8rem; padding:0.35rem 0; border-bottom:1px dashed var(--code-border); }
+    .trap-row:last-child { border-bottom:none; }
+    .trap-val { color:var(--text-muted); }
+    .trap-row.hit .trap-val { color:var(--error); font-weight:600; }
+    .trap-row.ok .trap-val { color:var(--success); }
+    .trap-verdict { margin-top:0.75rem; font-size:0.82rem; padding:0.6rem 0.75rem; border-radius:6px; opacity:0; transition:opacity 0.5s; }
+    .trap-verdict.visible { opacity:1; }
+    .trap-verdict.bad { background:var(--error-bg); color:var(--error); }
+    .trap-verdict.good { background:var(--success-bg); color:var(--success); }
+
+    /* guardrail gate animation */
+    .gate-track { display:flex; flex-direction:column; gap:0.5rem; margin:1.25rem 0; }
+    .gate-call { display:flex; align-items:center; gap:0.75rem; background:var(--bg-surface); border:1px solid var(--code-border); border-radius:6px; padding:0.6rem 0.85rem; font-family:'JetBrains Mono',monospace; font-size:0.8rem; opacity:0.25; transition:opacity 0.4s, border-color 0.4s; }
+    .gate-call.shown { opacity:1; }
+    .gate-call.allowed { border-color:var(--success); }
+    .gate-call.denied { border-color:var(--error); }
+    .gate-verdict { margin-left:auto; font-weight:700; font-size:0.72rem; padding:0.15rem 0.5rem; border-radius:4px; }
+    .gate-call.allowed .gate-verdict { background:var(--success-bg); color:var(--success); }
+    .gate-call.denied .gate-verdict { background:var(--error-bg); color:var(--error); }
+    .gate-why { font-size:0.72rem; color:var(--text-muted); padding:0 0.85rem 0.5rem 2rem; font-family:'Source Sans 3',sans-serif; }
+
+    /* reconciliation bars */
+    .recon { margin:1.25rem 0; }
+    .recon-row { display:grid; grid-template-columns:150px 1fr 90px; gap:0.75rem; align-items:center; padding:0.4rem 0; font-size:0.82rem; }
+    .recon-name { font-family:'JetBrains Mono',monospace; color:var(--text-secondary); }
+    .recon-bar { height:14px; background:var(--code-bg); border-radius:7px; overflow:hidden; }
+    .recon-fill { height:100%; width:0; background:var(--success); transition:width 1s ease-out; }
+    .recon-fill.fail { background:var(--error); }
+    .recon-status { font-family:'JetBrains Mono',monospace; font-size:0.75rem; text-align:right; opacity:0; transition:opacity 0.4s; }
+    .recon-status.visible { opacity:1; }
+    .recon-status.ok { color:var(--success); }
+    .recon-status.bad { color:var(--error); }
+
+    /* package -> schema morph */
+    .morph { display:grid; grid-template-columns:1fr auto 1fr; gap:1rem; align-items:center; margin:1.25rem 0; }
+    @media (max-width:768px) { .morph { grid-template-columns:1fr; } }
+    .morph-box { background:var(--code-bg); border:1px solid var(--code-border); border-radius:8px; padding:0.9rem; font-family:'JetBrains Mono',monospace; font-size:0.76rem; line-height:1.7; white-space:pre; overflow-x:auto; }
+    .morph-arrow { font-size:1.6rem; color:var(--accent-primary); text-align:center; }
+    .morph-line { opacity:0.25; transition:opacity 0.4s; display:block; }
+    .morph-line.lit { opacity:1; }
+    .morph-line.drop { color:var(--error); text-decoration:line-through; }
+    .morph-line.add { color:var(--success); }
+
+    /* divergence lattice */
+    .lattice { display:grid; grid-template-columns:repeat(auto-fit,minmax(190px,1fr)); gap:0.6rem; margin:1.25rem 0; }
+    .lat-card { background:var(--bg-surface); border:1px solid var(--code-border); border-radius:8px; padding:0.75rem; opacity:0.2; transition:opacity 0.4s, border-color 0.4s; }
+    .lat-card.shown { opacity:1; }
+    .lat-card.trap { border-color:var(--error); }
+    .lat-from { font-family:'JetBrains Mono',monospace; font-size:0.8rem; color:var(--info); }
+    .lat-to { font-family:'JetBrains Mono',monospace; font-size:0.8rem; color:var(--accent-primary); margin-top:0.2rem; }
+    .lat-note { font-size:0.72rem; color:var(--text-muted); margin-top:0.4rem; line-height:1.4; }
+    .lat-card.trap .lat-note { color:var(--error); }
+
+    @media (prefers-reduced-motion: reduce) {
+      .mig-phase, .mig-gate, .fanout-agent, .gate-call, .lat-card, .recon-status, .trap-verdict, .morph-line { opacity:1 !important; transform:none !important; }
+      .recon-fill { transition:none !important; }
+    }
+  </style>
+</head>
+<body>
+
+<header class="course-header">
+  <div class="course-header-inner">
+    <div>
+      <div class="course-title">Building AI Agents with Claude</div>
+      <div style="display:flex;align-items:center;gap:1rem;margin-top:0.5rem;flex-wrap:wrap;">
+        <span class="track-badge"><span class="dot"></span> Capstone Project 8B</span>
+        <span class="diff-badge" aria-label="Difficulty: 5 of 5 stars"><span class="diff-star">&#9733;</span><span class="diff-star">&#9733;</span><span class="diff-star">&#9733;</span><span class="diff-star">&#9733;</span><span class="diff-star">&#9733;</span></span>
+      </div>
+    </div>
+    <div class="header-meta"><span>Capstone 8B &mdash; Bonus</span><span>8&ndash;10 hours</span><span>Agent Skills</span></div>
+  </div>
+</header>
+
+<div class="module-nav" style="max-width:1200px;margin:0 auto;padding:0.75rem 2rem;border-top:none;">
+  <a href="CAPSTONE-8-oracle-to-postgres-migration.html">&larr; Capstone 8: Subagent Build</a>
+          <a href="index.html" aria-label="Course Home" title="Course Home" style="font-size:1.2rem;">&#x1F3E0; Home</a>
+  <a href="index.html">Course Home &rarr;</a>
+</div>
+
+<div class="page-container">
+  <nav class="sidebar-nav" aria-label="Capstone sections">
+    <div class="sidebar-title">Capstone 8B</div>
+    <a href="#brief">Project Brief</a>
+    <a href="#prerequisites">Prerequisites</a>
+    <a href="#decision">Skill or Subagent?</a>
+    <a href="#anim-architectures">Two Architectures</a>
+    <a href="#anatomy">Anatomy of a Skill</a>
+    <a href="#frontmatter">The Frontmatter Trap</a>
+    <a href="#anim-disclosure">Progressive Disclosure</a>
+    <a href="#anim-phasemap">The Phase &rarr; Skill Map</a>
+    <a href="#shared">One File, Two Phases</a>
+    <a href="#anim-context">Context Growth</a>
+    <a href="#tool-vs-script">Tool or Script?</a>
+    <a href="#anim-validator">The Validator Problem</a>
+    <a href="#anim-guardrails">Guardrails, Unchanged</a>
+    <a href="#silent-failure">When a Skill Does Not Load</a>
+    <a href="#file-tree">File Structure</a>
+    <a href="#spec-driven">Spec-Driven Build</a>
+    <a href="#build-guide">Build Guide</a>
+    <a href="#measuring">Measuring It Yourself</a>
+    <a href="#testing">Test Cases</a>
+    <a href="#troubleshooting">Troubleshooting</a>
+    <a href="#extensions">Going Further</a>
+    <a href="#quiz">Knowledge Check</a>
+    <a href="#references">References</a>
+  </nav>
+
+  <main class="content">
+    <h1>Capstone 8B &mdash; Legacy Migration Agent, Skills-First</h1>
+    <p style="color:var(--text-secondary);font-size:1.1rem;margin-bottom:2rem;">Build the Oracle&nbsp;&rarr;&nbsp;PostgreSQL migration agent again &mdash; same schema, same planted defects, same twenty evaluation cases &mdash; with <strong>Agent Skills instead of subagents</strong>. Then measure which architecture actually did better, and write down the answer even when it is unflattering.</p>
+
+    <!-- ===== PROJECT BRIEF ===== -->
+    <section class="section" id="brief">
+      <h2 id="brief-heading">Project Brief</h2>
+
+      <p>You already built this system. Meridian Public Records, eleven Secretary of State offices, 6&nbsp;TB of <span class="term-tooltip">UCC<span class="tooltip-content"><strong>Uniform Commercial Code</strong> &mdash; the body of US law governing secured transactions. A UCC-1 financing statement is the public filing a lender makes to claim an interest in a borrower's assets.</span></span> filings on Oracle since 2003, both PL/SQL authors retired in 2021. In Capstone 8 you migrated it with a coordinator and five specialist subagents.</p>
+
+      <p>Now look back at three of those five specialists &mdash; <code>schema-translator</code>, <code>plsql-converter</code>, <code>appsql-rewriter</code>. Read their prompts again. None of them is really <em>delegating work</em>. Each one is a <strong>rulebook that happens to have a context window attached to it</strong>: the Oracle&nbsp;&rarr;&nbsp;PostgreSQL type matrix, the PL/SQL construct catalog, the rewrite rules.</p>
+
+      <p>That is what <span class="term-tooltip">Agent Skills<span class="tooltip-content"><strong>Agent Skill</strong> &mdash; a directory under <code>.claude/skills/</code> containing a <code>SKILL.md</code> with YAML frontmatter, optionally alongside <code>references/</code> (material loaded on demand) and <code>scripts/</code> (executables the agent runs). Claude loads a skill when the request matches its <code>description</code>.</span></span> exist to hold. So this capstone takes the rulebooks out of the subagents and ships them as skills.</p>
+
+      <div class="analogy-box">
+        <p><strong>Think about the difference between handing a job to a colleague and handing yourself a manual.</strong></p>
+        <p>Before: you have a hard task and two ways to get help. You can call in a specialist &mdash; brief them, wait, take their answer. Or you can pull the reference manual off the shelf and do it yourself.</p>
+        <p>The pain is that these feel interchangeable and are not. The specialist gives you something you cannot give yourself: <em>an opinion formed without knowing what you already decided.</em> The manual gives you something the specialist cannot: it is the same manual you hand to the person who checks your work afterwards, so the two of you cannot be working from different editions.</p>
+        <p>Mapping onto this project: a <strong>subagent</strong> is the colleague &mdash; separate context, independent read, and no memory of your reasoning. A <strong>skill</strong> is the manual &mdash; loaded into your own context, shared with every phase that needs it, and unable to tell you anything you did not just work out yourself. Capstone 8 was built out of colleagues. This one is built out of manuals. Neither is the right answer everywhere, and this lab is how you find out where each one belongs.</p>
+      </div>
+
+      <div class="callout-warning">
+        <p><strong>Do Capstone 8 first.</strong> This is a comparison, and a comparison needs a baseline. If you have not built the subagent version and seen its numbers, most of this page will read as assertion rather than evidence.</p>
+      </div>
+
+      <p>The thesis, stated once, because every section below returns to it:</p>
+
+      <div class="tech-def-box">
+        <p><strong>Skills are knowledge loaded <em>into</em> the current context. Subagents are work delegated <em>to</em> a separate one.</strong></p>
+        <p>Collapsing five subagents into one context buys shared knowledge and costs independence &mdash; and the phase that needs independence most is the one that checks the work.</p>
+      </div>
+
+      <p>The deliverable includes one artifact Capstone 8 does not produce: <code>evaluation/architecture_comparison.md</code>, a measured comparison of the two builds on the same problem. It is scored on honesty, not on the numbers being favourable. <strong>A comparison that flatters the newer architecture is a failed deliverable</strong> &mdash; it is worth nothing to the person who reads it deciding what to build next.</p>
+    </section>
+
+    <!-- ===== PREREQUISITES ===== -->
+    <section class="section" id="prerequisites">
+      <h2 id="prerequisites-heading">Prerequisites</h2>
+      <ul>
+        <li><strong>Capstone 8, completed and run.</strong> You need its <code>artifacts/migration_report.json</code> for the baseline column.</li>
+        <li><strong>M25 &mdash; Claude Code Mastery</strong> for the six configuration layers, and <strong>M26</strong> for hooks and the Agent SDK.</li>
+        <li>Docker (or Rancher Desktop) with ~6&nbsp;GB free. Oracle Free 23c is a large image.</li>
+        <li>Python 3.11+, an <code>ANTHROPIC_API_KEY</code>, and roughly $2 of budget per full run.</li>
+      </ul>
+      <div class="callout-cost">
+        <p><strong>Budget note.</strong> Capstone 8's reference run cost $1.78 in output tokens. 8B has no per-phase model routing &mdash; every phase runs on Sonnet, where Capstone 8 sent the mechanical phases to Haiku. Expect 8B to cost more, and treat that difference as one of the things you are measuring rather than a surprise.</p>
+      </div>
+    </section>
+
+    <!-- ===== SKILL OR SUBAGENT ===== -->
+    <section class="section" id="decision">
+      <h2 id="decision-heading">Skill or Subagent?</h2>
+
+      <p>The question is not "which is better". It is "which problem am I solving". Two properties separate them, and everything else follows:</p>
+
+      <div class="table-scroll">
+      <table class="type-table">
+        <thead><tr><th>&nbsp;</th><th>Subagent</th><th>Skill</th></tr></thead>
+        <tbody>
+          <tr><td><strong>Context</strong></td><td>Its own, fresh</td><td>Yours, shared</td></tr>
+          <tr><td><strong>Reuse</strong></td><td>Copy the prompt</td><td>One file, many loaders</td></tr>
+          <tr><td><strong>Model</strong></td><td>Chosen per specialist</td><td>Whatever the caller is</td></tr>
+          <tr><td><strong>Cost when idle</strong></td><td>None &mdash; not invoked</td><td>None &mdash; not loaded</td></tr>
+          <tr><td><strong>Cost when used</strong></td><td>A whole extra turn</td><td>Tokens in your window</td></tr>
+          <tr><td><strong>Can ship code</strong></td><td>No &mdash; needs a tool</td><td>Yes &mdash; <code>scripts/</code></td></tr>
+          <tr><td><strong>Independent judgement</strong></td><td><strong>Yes</strong></td><td><strong>No</strong></td></tr>
+        </tbody>
+      </table>
+      </div>
+
+      <p>Run Capstone 8's five specialists through that last row and they sort themselves:</p>
+
+      <div class="table-scroll">
+      <table class="type-table">
+        <thead><tr><th>Specialist</th><th>What it actually is</th><th>Becomes</th></tr></thead>
+        <tbody>
+          <tr><td><code>schema-translator</code></td><td>The type-mapping rulebook</td><td><strong>Skill</strong></td></tr>
+          <tr><td><code>plsql-converter</code></td><td>The construct catalog + refusal rules</td><td><strong>Skill</strong></td></tr>
+          <tr><td><code>appsql-rewriter</code></td><td>The rewrite rulebook</td><td><strong>Skill</strong></td></tr>
+          <tr><td><code>data-migrator</code></td><td>Long per-table work, wants its own window</td><td>Arguably either</td></tr>
+          <tr><td><code>migration-validator</code></td><td>Must not have seen the work it audits</td><td><strong>Subagent</strong></td></tr>
+        </tbody>
+      </table>
+      </div>
+
+      <p>Notice that the honest answer already includes a subagent. <strong>This lab converts all five anyway</strong> &mdash; not because that is the right production design, but because converting the one that should not be converted is how you measure what the conversion costs. You cannot price independence without giving it up once.</p>
+
+      <div class="callout-cert">
+        <p><strong>&#127891; Cert Tip.</strong> The Claude Certified Architect exam asks you to place a capability into the right configuration layer &mdash; CLAUDE.md, skills, slash commands, hooks, subagents, MCP. The reliable discriminator is the one in the table above: <em>does this need a separate context, or does it need to be shared?</em> Reusable procedural knowledge is a skill. Work that needs isolation or a different model is a subagent. Deterministic enforcement is a hook, never either.</p>
+      </div>
+    </section>
+
+    <!-- ===== ANIMATION 1: TWO ARCHITECTURES ===== -->
+    <section class="section" id="anim-architectures">
+      <h2 id="anim-architectures-heading">Animation 1: The Same Five Phases, Two Shapes</h2>
+      <p>Both builds run the identical pipeline: discover, schema, data, code, validate. Watch where the <em>knowledge</em> lives as each phase fires.</p>
+
+      <div class="animation-container" id="arch-container" aria-label="Comparison of subagent and skills architectures">
+        <div class="animation-title">Subagents vs Skills &mdash; same pipeline</div>
+        <div id="archStage" class="fanout"></div>
+        <div class="animation-controls">
+          <button class="anim-btn" id="arch-play" onclick="archAnim.toggle()" aria-label="Play or pause">&#9654;</button>
+          <button class="anim-btn" onclick="archAnim.restart()" aria-label="Restart">&#8635;</button>
+        </div>
+      </div>
+
+      <p><strong>What just happened?</strong> On the left, each phase hands its object to a specialist that starts from nothing and returns an answer. Five contexts, five fresh starts, five prompts that each carry their own copy of whatever rules they need.</p>
+
+      <p>On the right, one context runs the whole way through. Skills slide in when a phase needs them and slide out when it does not. The pipeline is identical; only the location of the knowledge moved.</p>
+
+      <div class="bridge">Moving the knowledge is easy to describe and hard to price. The next three animations put numbers on the three things that actually change: what gets loaded, when, and what has seen what.</div>
+    </section>
+
+    <!-- ===== ANATOMY ===== -->
+    <section class="section" id="anatomy">
+      <h2 id="anatomy-heading">Anatomy of a Skill</h2>
+
+      <p>A skill is a directory, not a file. Three parts, each with a different loading cost:</p>
+
+      <div class="file-tree">.claude/skills/oracle-pg-typing/
+├── SKILL.md                        always loaded when the skill loads
+├── references/
+│   ├── type-matrix.md              loaded only when the agent asks for it
+│   └── number-precision.md         loaded only when the agent asks for it
+└── scripts/
+    └── check_mapping.py            EXECUTED, never loaded into context</div>
+
+      <p>That third row is the one people underuse. A <code>scripts/</code> file can be run without its source ever entering the context window &mdash; the agent pays for the <em>output</em>, not the program. For anything deterministic, that is strictly better than reasoning:</p>
+
+      <div class="code-block-wrapper">
+        <div class="code-tabs">
+          <button class="code-tab active" onclick="switchTab(this,'anat-bash')">Terminal</button>
+          <button class="code-tab" onclick="switchTab(this,'anat-out')">Output</button>
+        </div>
+        <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+        <div class="code-panel active" id="anat-bash">
+<pre><code class="language-bash">python .claude/skills/oracle-pg-typing/scripts/check_mapping.py \
+       --ddl ../legacy-oracle/01_schema.sql</code></pre>
+        </div>
+        <div class="code-panel" id="anat-out">
+<pre><code class="language-bash">  filed_date  DATE  -&gt;  timestamp(0)
+    [confident] Oracle DATE carries a TIME component. Mapping it to `date`
+    silently truncates 14:32:07 to midnight, which changes which rows
+    appear to have lapsed.
+? records_expected  NUMBER  -&gt;  numeric
+    [check_data] NUMBER with no declared precision can carry a scale;
+    narrowing it to an integer type would silently truncate.
+
+46 columns, 20 need a look at the data.</code></pre>
+        </div>
+      </div>
+
+      <p>Forty-six columns triaged, deterministically, for the cost of forty lines of output. The model now spends its judgement on the twenty that genuinely need it instead of re-deriving whether <code>NUMBER(9)</code> fits in an <code>int</code>.</p>
+
+      <div class="checkpoint">
+        <div class="checkpoint-label">What Just Happened?</div>
+        <p>The skill did not tell Claude the answer and it did not make Claude work the answer out. It <em>handed Claude a program</em> and told it when to run it. The mapping table is now unit-tested, diffable in review, and identical on a bad day &mdash; three properties a paragraph in a prompt can never have.</p>
+      </div>
+
+      <p>Here is the real <code>SKILL.md</code> from the lab, trimmed to its skeleton. Note how short it is: the long material lives in <code>references/</code> and is pulled in only when the agent hits the case.</p>
+
+      <div class="code-block-wrapper">
+        <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+<pre><code class="language-markdown">---
+name: oracle-pg-typing
+description: This skill should be used when mapping Oracle column types to
+  PostgreSQL 16 -- when the user or the migration asks to "translate a table",
+  "generate DDL", "map this column", "what does NUMBER(9) become", or when any
+  Oracle type name (NUMBER, VARCHAR2, DATE, RAW, CLOB, TIMESTAMP WITH LOCAL
+  TIME ZONE) needs a PostgreSQL equivalent.
+allowed-tools: [Read, Bash, mcp__oracle_src__oracle_get_ddl,
+  mcp__oracle_src__oracle_sample_rows, mcp__pg_target__pg_apply_ddl,
+  mcp__migration_local__write_artifact]
+---
+
+# Oracle to PostgreSQL type mapping
+
+## The rule that governs everything else
+
+**The DDL tells you the declared type. The rows tell you what the column
+actually holds. Those are different questions, and the mapping depends on
+the second one.**
+
+So the procedure is always two reads, never one.
+
+## Step 1 -- Run the checker before you reason
+
+Load `references/type-matrix.md` for the full table, and
+`references/number-precision.md` for the NUMBER(p,s) rules. Do not load
+either speculatively -- they are long, and you need the context for the rows.</code></pre>
+      </div>
+
+      <div class="callout-why">
+        <p><strong>Why it matters.</strong> The <code>description</code> is not documentation &mdash; it is the <em>trigger</em>. It is the only thing Claude reads when deciding whether this skill is relevant, and it is read against the user's phrasing, not yours. A description reading "Type mapping utilities" never fires. One that names the exact phrases a caller would use &mdash; and the type names that appear in the work &mdash; fires reliably. Write it in the third person, and put the vocabulary of the problem in it.</p>
+      </div>
+    </section>
+    <!-- ===== FRONTMATTER TRAP ===== -->
+    <section class="section" id="frontmatter">
+      <h2 id="frontmatter-heading">The Frontmatter Trap</h2>
+
+      <p>Skill frontmatter has a small, fixed set of keys. Two are required and the rest are optional:</p>
+
+      <div class="table-scroll">
+      <table class="type-table">
+        <thead><tr><th>Key</th><th>Required</th><th>What it does</th></tr></thead>
+        <tbody>
+          <tr><td><code>name</code></td><td><strong>Yes</strong></td><td>Must match the directory name</td></tr>
+          <tr><td><code>description</code></td><td><strong>Yes</strong></td><td>Decides whether the skill is ever loaded</td></tr>
+          <tr><td><code>allowed-tools</code></td><td>No</td><td>Restricts what the skill may call</td></tr>
+          <tr><td><code>version</code></td><td>No</td><td>Informational</td></tr>
+          <tr><td><code>user-invocable</code></td><td>No</td><td>Whether a person can call it by name</td></tr>
+          <tr><td><code>tools</code>, <code>license</code>, <code>argument-hint</code>, <code>disable-model-invocation</code></td><td>No</td><td>Situational</td></tr>
+        </tbody>
+      </table>
+      </div>
+
+      <div class="callout-warning">
+        <p><strong>There is no <code>context:</code> key.</strong> Not <code>context: fork</code>, not anything else. Across the fifty-eight skills shipped in the official Anthropic plugin marketplace, <code>context</code> appears zero times, and <code>plugin-dev/skills/skill-development/SKILL.md</code> lists only <code>name</code> and <code>description</code> as required.</p>
+        <p>This matters more than a typo normally would, because <strong>an unrecognised key is ignored silently rather than rejected</strong>. A skill written around <code>context: fork</code> loads, runs, and behaves nothing like its author intended &mdash; with no error anywhere to tell them.</p>
+      </div>
+
+      <p>That silent-ignore behaviour is why the lab asserts the contract at build time instead of hoping to notice at runtime:</p>
+
+      <div class="code-block-wrapper">
+        <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+<pre><code class="language-python">REQUIRED_KEYS = {"name", "description"}
+OPTIONAL_KEYS = {
+    "version", "allowed-tools", "tools", "user-invocable",
+    "license", "argument-hint", "disable-model-invocation",
+}
+KNOWN_KEYS = REQUIRED_KEYS | OPTIONAL_KEYS
+
+
+@pytest.mark.parametrize("skill", SKILL_NAMES)
+def test_no_invented_frontmatter_keys(skill, parsed):
+    data, _ = parsed[skill]
+    unknown = set(data) - KNOWN_KEYS
+    assert not unknown, (
+        f"{skill}: unrecognised frontmatter key(s) {sorted(unknown)}. "
+        f"Claude Code ignores unknown keys silently."
+    )
+    assert "context" not in data, (
+        f"{skill}: `context:` is not a Claude Code skill frontmatter field."
+    )</code></pre>
+      </div>
+
+      <p>The same file also checks that <code>name</code> matches its directory, that <code>allowed-tools</code> names only tools this project actually provides, and that the <code>description</code> is long enough to carry trigger phrases. Forty-five assertions, all of them about things that fail quietly.</p>
+
+      <div class="checkpoint">
+        <div class="checkpoint-label">What Just Happened?</div>
+        <p>You wrote a test for a configuration file. That feels excessive until you internalise the failure mode: a broken subagent throws, a broken tool call throws, a broken <em>skill</em> just does not load &mdash; and the agent cheerfully improvises the type mapping from memory. The run goes green. This is the only class of bug in the whole capstone with no runtime signal at all.</p>
+      </div>
+    </section>
+
+    <!-- ===== ANIMATION 2: PROGRESSIVE DISCLOSURE ===== -->
+    <section class="section" id="anim-disclosure">
+      <h2 id="anim-disclosure-heading">Animation 2: Progressive Disclosure, Measured</h2>
+      <p>A subagent prompt loads whole, every time it is invoked. A skill loads in layers. Watch the token counter as the agent works through one table and only pulls in what it hits.</p>
+
+      <div class="animation-container" id="disc-container" aria-label="Progressive disclosure of skill references">
+        <div class="animation-title">What is actually in the context window</div>
+        <div id="discStage"></div>
+        <div class="animation-controls">
+          <button class="anim-btn" id="disc-play" onclick="discAnim.toggle()" aria-label="Play or pause">&#9654;</button>
+          <button class="anim-btn" onclick="discAnim.restart()" aria-label="Restart">&#8635;</button>
+        </div>
+      </div>
+
+      <p><strong>What just happened?</strong> The skill's entry point is small enough to keep resident. The long material &mdash; the full type matrix, the <code>NUMBER(p,s)</code> bands &mdash; arrives only when the agent meets a column that needs it, and the <code>scripts/</code> file never enters the window at all.</p>
+
+      <p>The comparison against the subagent is not automatically favourable, and you should be suspicious of any page that tells you it is. A subagent's prompt is loaded once <em>per invocation, into a context that is then thrown away</em>. A skill's material is loaded into a context that <em>persists for the rest of the run</em>. Which wins depends on how many times the phase repeats and how much of the reference material actually gets touched.</p>
+
+      <div class="callout-why">
+        <p><strong>Why it matters.</strong> Phase 2 runs six times, once per table. Under subagents, each run pays the <code>schema-translator</code> prompt and then discards it &mdash; six identical charges, zero residue. Under skills, the material is paid for once and then <em>stays</em>, competing with the DDL and sample rows for the rest of the migration. Six tables is roughly where these two trade places. Your job in <code>architecture_comparison.md</code> is to find out which side of that line this migration falls on, and to say so with numbers rather than with a diagram.</p>
+      </div>
+    </section>
+
+    <!-- ===== ANIMATION 3: PHASE MAP ===== -->
+    <section class="section" id="anim-phasemap">
+      <h2 id="anim-phasemap-heading">Animation 3: The Phase &rarr; Skill Map</h2>
+      <p>A subagent's <code>tools:</code> frontmatter stops it reaching things it has no business touching. The skills build needs the same containment, and gets it from the SDK.</p>
+
+      <div class="animation-container" id="map-container" aria-label="Which skills each phase loads">
+        <div class="animation-title">PHASE_SKILLS &mdash; what each phase may load</div>
+        <div id="mapStage"></div>
+        <div class="animation-controls">
+          <button class="anim-btn" id="map-play" onclick="mapAnim.toggle()" aria-label="Play or pause">&#9654;</button>
+          <button class="anim-btn" onclick="mapAnim.restart()" aria-label="Restart">&#8635;</button>
+        </div>
+      </div>
+
+      <div class="code-block-wrapper">
+        <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+<pre><code class="language-python">PHASE_SKILLS: dict[str, list[str]] = {
+    "discover": [],
+    "schema":   ["oracle-pg-typing"],
+    "data":     ["nullability-preservation"],
+    "code":     ["plsql-conversion", "appsql-rewriting"],
+    "validate": ["migration-validation", "nullability-preservation"],
+    "cutover":  [],
+}</code></pre>
+      </div>
+
+      <p>Three decisions in that map are worth defending out loud:</p>
+
+      <ul>
+        <li><strong><code>discover</code> loads nothing.</strong> Taking an inventory needs no rulebook. Loading the type matrix here would put it in the window for the whole run to no purpose.</li>
+        <li><strong><code>data</code> cannot load <code>migration-validation</code>.</strong> The phase doing the work must not be able to reach the procedure that decides whether the work was correct. It could not mark its own homework even if it tried.</li>
+        <li><strong><code>nullability-preservation</code> appears twice.</strong> That is the next section, and it is the strongest argument this architecture has.</li>
+      </ul>
+    </section>
+
+    <!-- ===== SHARED SKILL ===== -->
+    <section class="section" id="shared">
+      <h2 id="shared-heading">One File, Two Phases</h2>
+
+      <p>Go back to Capstone 8 and open two files side by side: <code>.claude/agents/data-migrator.md</code> and <code>.claude/agents/migration-validator.md</code>. Both contain a description of the empty-string trap. They have to &mdash; the loader needs to know how to avoid it, and the validator needs to know how to detect it.</p>
+
+      <p>They are two copies of one rule, and nothing keeps them in step.</p>
+
+      <div class="trap-grid">
+        <div class="trap-row">
+          <div class="trap-side"><strong>Capstone 8</strong><br>the rule, written twice</div>
+          <div class="trap-val"><code>data-migrator.md</code> &mdash; "set <code>null_as</code>"<br><code>migration-validator.md</code> &mdash; "empty-string count must be zero"</div>
+          <div class="trap-verdict">Free to drift</div>
+        </div>
+        <div class="trap-row">
+          <div class="trap-side"><strong>Capstone 8B</strong><br>the rule, written once</div>
+          <div class="trap-val"><code>nullability-preservation/SKILL.md</code><br>loaded by <code>data</code> <em>and</em> <code>validate</code></div>
+          <div class="trap-verdict">Cannot disagree</div>
+        </div>
+      </div>
+
+      <p>Edit the rule in 8B and both phases change together, because there is only one of it. That property is asserted, not assumed:</p>
+
+      <div class="code-block-wrapper">
+        <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+<pre><code class="language-python">def test_nullability_skill_is_shared_by_two_phases():
+    """The reuse argument, asserted rather than claimed.
+
+    If this ever becomes one phase, the architecture's headline benefit over
+    copy-pasted subagent prompts has quietly gone away.
+    """
+    mapping = _phase_skills()
+    phases = [p for p, skills in mapping.items()
+              if "nullability-preservation" in skills]
+    assert sorted(phases) == ["data", "validate"]</code></pre>
+      </div>
+
+      <p>The same idea shows up once more in the lab, one level down. <code>plsql-conversion</code> ships <em>no scanner of its own</em> &mdash; it calls the one bundled with <code>appsql-rewriting</code>. One construct catalog, two consumers, so the phase that rewrites application SQL and the phase that converts PL/SQL can never disagree about what counts as an Oracle-ism.</p>
+
+      <div class="checkpoint">
+        <div class="checkpoint-label">What Just Happened?</div>
+        <p>This is the clearest win in the whole comparison, and it has nothing to do with tokens. Two prompts that say the same thing are a latent bug: someone tightens one, the other keeps the old wording, and six months later the loader and the validator have different ideas about what a correct load looks like. One file cannot develop that problem.</p>
+      </div>
+    </section>
+
+    <!-- ===== ANIMATION 4: CONTEXT GROWTH ===== -->
+    <section class="section" id="anim-context">
+      <h2 id="anim-context-heading">Animation 4: Context Growth Across Six Tables</h2>
+      <p>Phases 2 and 3 each iterate the six tables. Watch what happens to the context window under each architecture.</p>
+
+      <div class="animation-container" id="ctx-container" aria-label="Context growth comparison">
+        <div class="animation-title">Context occupancy, table by table</div>
+        <div id="ctxStage"></div>
+        <div class="animation-controls">
+          <button class="anim-btn" id="ctx-play" onclick="ctxAnim.toggle()" aria-label="Play or pause">&#9654;</button>
+          <button class="anim-btn" onclick="ctxAnim.restart()" aria-label="Restart">&#8635;</button>
+        </div>
+      </div>
+
+      <p><strong>What just happened?</strong> The subagent line is a sawtooth &mdash; each table gets a fresh window that is discarded when the specialist returns. The skills line climbs and does not come back down, because every table's DDL, sample rows and decisions stay in the one conversation.</p>
+
+      <p>Read that carefully, because the shape alone does not tell you which is better. A monotonic climb is only a problem if it reaches the ceiling; below the ceiling, the accumulated context is <em>the thing that lets phase 4 remember what phase 2 decided</em>. Six tables and 19,065 rows is comfortably inside a 200K window. Six hundred tables would not be.</p>
+
+      <div class="callout-cost">
+        <p><strong>Where this actually bites.</strong> Not on this schema. The failure mode arrives when a migration has enough objects that the accumulated context crosses the compaction threshold mid-run &mdash; and the phase that gets compacted is, by construction, the earliest one, which holds the type decisions everything downstream depends on. If you are sizing this pattern for a real 6&nbsp;TB migration rather than a 19,065-row teaching schema, that is the number to compute first.</p>
+      </div>
+    </section>
+
+    <!-- ===== TOOL VS SCRIPT ===== -->
+    <section class="section" id="tool-vs-script">
+      <h2 id="tool-vs-script-heading">Tool or Script? The One That Moved</h2>
+
+      <p>Capstone 8's <code>tools_local.py</code> exposed two MCP tools. 8B's exposes one. <code>scan_app_sql</code> is gone, and the same regex now ships as <code>appsql-rewriting/scripts/find_oracleisms.py</code>.</p>
+
+      <div class="table-scroll">
+      <table class="type-table">
+        <thead><tr><th>&nbsp;</th><th>MCP tool</th><th>Skill script</th></tr></thead>
+        <tbody>
+          <tr><td>Present in the tool list</td><td>Every request, always</td><td>Never &mdash; it is a file</td></tr>
+          <tr><td>Costs context when unused</td><td>Yes, its schema</td><td>No</td></tr>
+          <tr><td>Where its rationale lives</td><td>Somewhere else entirely</td><td>Next to it, in <code>SKILL.md</code></td></tr>
+          <tr><td>Enforces a boundary</td><td>Can</td><td>Cannot</td></tr>
+        </tbody>
+      </table>
+      </div>
+
+      <p>That last row is why <code>write_artifact</code> <strong>stays</strong> a tool. It is not knowledge &mdash; it is the thing that confines every generated file to <code>artifacts/</code>, and that boundary has to hold in phases where no relevant skill is loaded at all. A capability that must always be true cannot live somewhere that is only sometimes loaded.</p>
+
+      <div class="tech-def-box">
+        <p><strong>The rule:</strong> if it is <em>knowledge about how to do something</em>, it belongs in a skill, next to the prose explaining when to use it. If it is <em>a capability or a boundary that must hold regardless of context</em>, it belongs in a tool.</p>
+      </div>
+
+      <p>Read the module docstring the lab ships in place of the deleted tool &mdash; the absence is documented, because a future reader will otherwise assume it was an oversight:</p>
+
+      <div class="code-block-wrapper">
+        <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+<pre><code class="language-python">"""Local (non-database) tools: artifact writing.
+
+## What is NOT here, and why
+
+The subagent build of this migration (Capstone 8) also exposed a
+`scan_app_sql` MCP tool here. In the skills build it is gone -- the same
+scanning logic now ships as
+`.claude/skills/appsql-rewriting/scripts/find_oracleisms.py`, and the agent
+runs it with Bash.
+
+  MCP tool     always present, described in every request's tool list,
+               costs context whether or not this phase needs it, and its
+               *rationale* lives somewhere else entirely.
+
+  Skill script loaded only when the skill loads, and it sits next to the
+               SKILL.md that explains when to run it and how to read the
+               output.
+
+`write_artifact` stays an MCP tool, because it is genuinely a capability
+rather than knowledge: it enforces the artifacts/ confinement boundary, and
+that boundary must hold in every phase regardless of which skills happen to
+be loaded.
+"""</code></pre>
+      </div>
+    </section>
+    <!-- ===== ANIMATION 5: THE VALIDATOR PROBLEM ===== -->
+    <section class="section" id="anim-validator">
+      <h2 id="anim-validator-heading">Animation 5: The Validator Problem</h2>
+
+      <p>This is the cost. Everything above was instrumentation for measuring it.</p>
+
+      <div class="animation-container" id="val-container" aria-label="Validator context comparison">
+        <div class="animation-title">Phase 5 begins &mdash; what has the validator seen?</div>
+        <div id="valStage"></div>
+        <div class="animation-controls">
+          <button class="anim-btn" id="val-play" onclick="valAnim.toggle()" aria-label="Play or pause">&#9654;</button>
+          <button class="anim-btn" onclick="valAnim.restart()" aria-label="Restart">&#8635;</button>
+        </div>
+      </div>
+
+      <p>In Capstone 8, <code>migration-validator</code> started from an empty context. It had never seen the reasoning that chose <code>timestamp(0)</code> over <code>date</code>, or the decision to let <code>null_as</code> default. When it said "all clear", that was an opinion formed independently of the work.</p>
+
+      <p>In 8B, phase 5 <em>is</em> phases 2 through 4. Everything it is auditing is already in its context, written by it, and &mdash; from its point of view &mdash; already justified.</p>
+
+      <div class="callout-security">
+        <p><strong>A validator that reports "all clear" on a broken load is worse than no validator</strong>, because it converts an unknown risk into a false assurance. Nobody re-checks a migration that passed.</p>
+      </div>
+
+      <p>The lab compensates in two places. First, in the skill itself:</p>
+
+      <div class="code-block-wrapper">
+        <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+<pre><code class="language-markdown">### The bias you are running with
+
+In the subagent build of this migration, validation ran in its own context and
+had never seen the loading decisions. **Here it does not.** You are the same
+context that chose the type mappings and ran the loads. You will be inclined to
+accept your own work.
+
+Two rules follow, and they are not optional:
+
+1. **Re-derive every number from the database.** Never report a count you
+   remember writing. If you did not just query it, you do not know it.
+2. **Assume the load is broken until a query says otherwise.** Start from
+   suspicion, not from your recollection that phase 3 went fine.</code></pre>
+      </div>
+
+      <p>Second, in the phase prompt, which says the same thing in the imperative. And then &mdash; because an instruction is a hope, not a mechanism &mdash; the lab makes you <strong>measure whether it worked</strong>.</p>
+
+      <div class="tech-def-box">
+        <p><strong>The experiment.</strong> Run phase 3 deliberately broken, with <code>null_as</code> omitted. Then run phase 5 and record two things: did it report the defect, and did it <em>re-query</em> or did it cite phase 3? Repeat three times, because one trial tells you nothing.</p>
+      </div>
+
+      <p>The second column is answerable from the audit log rather than from the prose the agent produced:</p>
+
+      <div class="code-block-wrapper">
+        <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+<pre><code class="language-python">import json
+calls = [json.loads(l) for l in open("migration_audit.jsonl", encoding="utf-8")]
+reads = [c for c in calls
+         if "pg_query" in c["tool_name"] or "pg_row_count" in c["tool_name"]]
+print(f"{len(reads)} target reads during the run")</code></pre>
+      </div>
+
+      <p>If phase 5 emitted no reads against the target, it did not re-derive anything &mdash; it reported from memory, and a clean result from it means <em>nothing at all</em>. That is a measurable property, not a vibe, and it is the single most important number in the whole comparison.</p>
+
+      <div class="callout-why">
+        <p><strong>Why it matters.</strong> There is a defensible answer to this lab in which the honest conclusion is <em>"keep four skills and put the validator back as a subagent"</em>. If your measurements support that, write it down and say why. The course is not trying to sell you skills; it is trying to give you the evidence to choose. A capstone whose conclusion was fixed before the experiment ran would be worth nothing.</p>
+      </div>
+    </section>
+
+    <!-- ===== ANIMATION 6: GUARDRAILS ===== -->
+    <section class="section" id="anim-guardrails">
+      <h2 id="anim-guardrails-heading">Animation 6: Guardrails, Unchanged</h2>
+
+      <p>Three <code>PreToolUse</code> guards and a <code>PostToolUse</code> audit log. They are byte-identical to Capstone 8's, and the point of showing them again is that nothing about them needed to move.</p>
+
+      <div class="animation-container" id="guard-container" aria-label="Three guards that run before the tool does">
+        <div class="animation-title">Three guards that run before the tool does</div>
+        <div id="guardStage" class="gate-track"></div>
+        <div class="animation-controls">
+          <button class="anim-btn" id="guard-play" onclick="guardAnim.toggle()" aria-label="Play or pause">&#9654;</button>
+          <button class="anim-btn" onclick="guardAnim.restart()" aria-label="Restart">&#8635;</button>
+        </div>
+      </div>
+
+      <p><strong>What just happened?</strong> Nothing changed &mdash; and that is the finding. Guardrails sit <em>between the agent and the tools</em>, so they are indifferent to how the agent's knowledge is organised. <code>hooks.py</code>, <code>hooks_cli.py</code> and <code>.claude/settings.json</code> carried across untouched.</p>
+
+      <div class="callout-cert">
+        <p><strong>&#127891; Cert Tip.</strong> This is the layering principle the exam keeps returning to. A validation check written <em>inside</em> a tool protects that tool. A <code>can_use_tool</code> callback protects every tool that exists now and every tool anyone adds later &mdash; and, as this capstone demonstrates, it keeps protecting them through an architecture rewrite. Enforcement belongs in hooks. Never in a prompt, and never in a skill.</p>
+      </div>
+    </section>
+
+    <!-- ===== SILENT FAILURE ===== -->
+    <section class="section" id="silent-failure">
+      <h2 id="silent-failure-heading">When a Skill Silently Does Not Load</h2>
+
+      <p>Two <code>ClaudeAgentOptions</code> fields make skills work. <strong>Both are required, and omitting either produces no error.</strong></p>
+
+      <div class="code-block-wrapper">
+        <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+<pre><code class="language-python">return ClaudeAgentOptions(
+    model=model,
+    system_prompt=system_prompt,
+    mcp_servers={...},
+    can_use_tool=hooks.can_use_tool,
+    hooks=[HookMatcher(matcher="*", hooks=[hooks.audit_log])],
+    # Without this, `.claude/skills/` is never read and every skill
+    # silently does not exist. The agent then improvises the type
+    # mapping from memory and the run looks like it worked.
+    setting_sources=["project"],
+    # Per-phase allowlist. `None` would mean "no skills"; `"all"` would
+    # mean every discovered skill in every phase, which defeats the
+    # scoping this architecture depends on.
+    skills=skills,
+)</code></pre>
+      </div>
+
+      <p>Miss <code>setting_sources</code> and the skills directory is never opened. Miss <code>skills</code> and nothing is selected. In both cases Claude answers from its own knowledge of Oracle and PostgreSQL &mdash; which is <em>quite good</em>, and that is precisely the problem. The DDL it generates will be plausible. It will also have decided <code>DATE</code> on its own.</p>
+
+      <div class="troubleshoot">
+        <div class="troubleshoot-title">Prove a skill actually ran</div>
+        <p>Do not trust a green run. Check the audit log for an execution of a bundled script:</p>
+<pre><code class="language-bash">grep -c "check_mapping" migration_audit.jsonl    # must be &gt; 0
+python coordinator.py --list-skills             # sanity-check the map first</code></pre>
+        <p>A zero means the skill never loaded, whatever the migration report says.</p>
+      </div>
+
+      <div class="checkpoint">
+        <div class="checkpoint-label">What Just Happened?</div>
+        <p>You added a verification step for something that has no failure signal. Notice the pattern across this whole capstone: skills fail <em>quietly</em>, so every safeguard around them is an assertion you write yourself &mdash; a build-time test on the frontmatter, a runtime grep on the audit log. Subagents did not need either, because a missing subagent throws.</p>
+      </div>
+    </section>
+
+    <!-- ===== FILE STRUCTURE ===== -->
+    <section class="section" id="file-tree">
+      <h2 id="file-tree-heading">File Structure</h2>
+
+      <p>Everything that is not agent logic ships complete. You build the skills, the phase map, the guardrails, and the comparison.</p>
+
+      <div class="file-tree">labs/capstone-8b-skills-first/
+├── README.md
+├── spec/agent-spec.md              read next to Capstone 8's -- diff §5 and §12
+│
+├── legacy-oracle/                  IDENTICAL to Capstone 8, deliberately
+├── app/                            IDENTICAL -- same rewrite targets
+│
+├── starter/                        YOUR WORKSPACE
+│   ├── .claude/
+│   │   ├── skills/
+│   │   │   ├── oracle-pg-typing/
+│   │   │   │   ├── SKILL.md                TODO(1)-(6)
+│   │   │   │   ├── references/type-matrix.md
+│   │   │   │   ├── references/number-precision.md
+│   │   │   │   └── scripts/check_mapping.py     TODO(1)-(12)
+│   │   │   ├── plsql-conversion/
+│   │   │   │   ├── SKILL.md                TODO(1)-(6)
+│   │   │   │   └── references/{construct-catalog,refusal-template}.md
+│   │   │   ├── appsql-rewriting/
+│   │   │   │   ├── SKILL.md                TODO(1)-(5)
+│   │   │   │   └── scripts/find_oracleisms.py   TODO(1)-(10)
+│   │   │   ├── nullability-preservation/
+│   │   │   │   ├── SKILL.md                the most important file here
+│   │   │   │   └── scripts/compare_nulls.py     TODO(1)-(7)
+│   │   │   └── migration-validation/
+│   │   │       ├── SKILL.md                TODO(1)-(6)
+│   │   │       ├── references/check-catalog.md
+│   │   │       └── scripts/compare_checksums.py TODO(1)-(11)
+│   │   ├── commands/{migrate,validate,report}.md
+│   │   └── settings.json           identical to Capstone 8 -- do not edit
+│   ├── coordinator.py              PHASE_SKILLS + the two SDK options
+│   ├── tools_local.py              write_artifact ONLY
+│   ├── hooks.py                    the three guards + the audit log
+│   ├── tools_oracle.py             ships complete
+│   ├── tools_postgres.py           ships complete
+│   └── evaluation/architecture_comparison.md    the deliverable
+│
+├── solution/                       the reference build, 199 tests green
+├── tests/                          same suite + test_skills_wellformed.py
+├── expected_output/                what a good run looks like
+└── appendix/manual-loop.py         raw API, for contrast only</div>
+
+      <p>Note what is <strong>absent</strong> from the root, compared with Capstone 8: no <code>type_mapping.py</code>, no <code>oracle_constructs.py</code>, no <code>validation.py</code>, and no <code>.claude/agents/</code> at all. That logic moved inside the skills that explain it. If you generate this project from the spec and those files come back, the generator produced the Capstone 8 shape.</p>
+    </section>
+
+    <!-- ===== SPEC-DRIVEN ===== -->
+    <section class="section" id="spec-driven">
+      <h2 id="spec-driven-heading">Spec-Driven: Build It Twice</h2>
+
+      <p>This is a Tier 3 capstone, so the spec is the source and the solution is the reference:</p>
+
+      <div class="code-block-wrapper">
+        <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+<pre><code class="language-bash">/generate-from-spec spec/agent-spec.md      # writes into generated/
+diff -r generated/ solution/                # where they differ, decide who is right</code></pre>
+      </div>
+
+      <p>Then do the thing this capstone makes possible and Capstone 8 alone does not: <strong>read the two specs side by side.</strong></p>
+
+      <div class="table-scroll">
+      <table class="type-table">
+        <thead><tr><th>Section</th><th>Capstone 8 vs 8B</th></tr></thead>
+        <tbody>
+          <tr><td>1. Business Context</td><td>Same problem, different architecture paragraph</td></tr>
+          <tr><td>2. Agent Configuration</td><td><strong>Differs</strong> &mdash; no model routing; adds skill discovery</td></tr>
+          <tr><td>4. Tools</td><td><strong>Differs</strong> &mdash; one local tool instead of two</td></tr>
+          <tr><td>5. Subagents / <strong>Skills</strong></td><td><strong>Entirely different</strong></td></tr>
+          <tr><td>6. Hooks</td><td>Identical</td></tr>
+          <tr><td>7. Guardrails</td><td>Identical</td></tr>
+          <tr><td>8. Sessions</td><td>Identical mechanism, one new consequence</td></tr>
+          <tr><td>9. Deployment</td><td>Identical</td></tr>
+          <tr><td>10. Tests</td><td>Same, plus <code>test_skills_wellformed.py</code></td></tr>
+          <tr><td>11. Evaluation</td><td>Identical &mdash; that is what makes scores comparable</td></tr>
+          <tr><td>12. File Structure</td><td><strong>Differs</strong></td></tr>
+        </tbody>
+      </table>
+      </div>
+
+      <p>Four sections differ out of twelve. <strong>Everything you would call "the safety architecture" is in the eight that do not.</strong> That is the most reusable thing on this page: the skills-versus-subagents question is a question about where knowledge lives, and it is close to orthogonal to how the system is made safe.</p>
+
+      <div class="bridge">Two specs, four differing sections, one identical evaluation set. Everything is now in place to run both and find out which one was actually better &mdash; which is the only part of this capstone that can tell you something you did not already believe.</div>
+    </section>
+    <!-- ===== BUILD GUIDE ===== -->
+    <section class="section" id="build-guide">
+      <h2 id="build-guide-heading">Step-by-Step Build Guide</h2>
+
+      <div class="step">
+        <div class="step-header">Step 1 &mdash; Bring up both databases</div>
+        <div class="step-meta">~5 minutes, most of it waiting</div>
+        <p><strong>What &amp; why:</strong> the same two containers as Capstone 8. Oracle Free 23c seeds itself from <code>legacy-oracle/*.sql</code> on first boot and is slow about it.</p>
+        <div class="code-block-wrapper">
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+<pre><code class="language-bash"># Credentials
+cp starter/.env.example starter/.env
+# Edit starter/.env and add your ANTHROPIC_API_KEY
+
+pip install -r requirements.txt
+
+docker compose -f starter/docker-compose.yml up -d
+
+# WAIT. This is the step people skip.
+# oracle must read "healthy", not just "running".
+docker compose -f starter/docker-compose.yml ps</code></pre>
+        </div>
+        <div class="output-label">Expected output</div>
+        <div class="output-block">NAME       IMAGE                          STATUS
+oracle     gvenzl/oracle-free:23-slim     Up 3 minutes (healthy)
+postgres   postgres:16-alpine             Up 3 minutes (healthy)</div>
+        <div class="checkpoint">
+          <div class="checkpoint-label">Checkpoint</div>
+          <p>Confirm the legacy schema seeded &mdash; <code>UCC_DEBTOR</code> must report 7,418 rows. If Oracle says <code>(unhealthy)</code>, give it another two minutes before investigating; first boot is genuinely slow.</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-header">Step 2 &mdash; Build the checkers before the prose</div>
+        <div class="step-meta">~2 hours &middot; no API key needed</div>
+        <p><strong>What &amp; why:</strong> counter-intuitive ordering, and it is deliberate. The <code>scripts/</code> are pure Python, unit-tested, and free to run. More importantly, <strong>running them over the real schema is how you discover what the skills need to say.</strong> Write the prose first and you will document the traps you already knew about.</p>
+        <div class="code-block-wrapper">
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+<pre><code class="language-bash"># Work through the TODOs in these four files:
+#   oracle-pg-typing/scripts/check_mapping.py          TODO(1)-(12)
+#   appsql-rewriting/scripts/find_oracleisms.py        TODO(1)-(10)
+#   nullability-preservation/scripts/compare_nulls.py  TODO(1)-(7)
+#   migration-validation/scripts/compare_checksums.py  TODO(1)-(11)
+
+# Each carries its own cases:
+python starter/.claude/skills/oracle-pg-typing/scripts/check_mapping.py --self-test
+
+# Then point it at the real thing -- this is the discovery step:
+python starter/.claude/skills/oracle-pg-typing/scripts/check_mapping.py \
+       --ddl legacy-oracle/01_schema.sql</code></pre>
+        </div>
+        <div class="output-label">Expected output</div>
+        <div class="output-block">11/11 passed
+
+  filed_date  DATE  -&gt;  timestamp(0)
+    [confident] Oracle DATE carries a TIME component...
+? records_expected  NUMBER  -&gt;  numeric
+    [check_data] NUMBER with no declared precision can carry a scale...
+
+46 columns, 20 need a look at the data.</div>
+        <div class="checkpoint">
+          <div class="checkpoint-label">Checkpoint</div>
+          <p>Those twenty flagged columns are the content of <code>SKILL.md</code>'s traps section. Run the scanner too &mdash; <code>find_oracleisms.py --dir legacy-oracle --refuse-only</code> should surface exactly one construct, in <code>PKG_FILING_MAINT.log_audit</code>. That one construct is the entire refusal lesson.</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-header">Step 3 &mdash; Write the five SKILL.md files</div>
+        <div class="step-meta">~2 hours</div>
+        <p><strong>What &amp; why:</strong> now you know what the schema actually contains, write the procedures. Start with <code>nullability-preservation</code> &mdash; it is the shortest and the most consequential, and two phases depend on it.</p>
+        <p>Uses Step 2: every trap you document should be one the checker flagged.</p>
+        <div class="code-block-wrapper">
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+<pre><code class="language-bash">TEST_TARGET=starter pytest tests/test_skills_wellformed.py -v</code></pre>
+        </div>
+        <div class="output-label">Expected output (fresh starter)</div>
+        <div class="output-block">45 tests: 39 passed, 6 failed
+
+FAILED test_bundled_script_self_test_passes[oracle-pg-typing-check_mapping.py]
+FAILED test_bundled_script_self_test_passes[appsql-rewriting-find_oracleisms.py]
+FAILED test_bundled_script_self_test_passes[nullability-preservation-compare_nulls.py]
+FAILED test_bundled_script_self_test_passes[migration-validation-compare_checksums.py]
+FAILED test_phase_skill_map_references_real_skills
+FAILED test_nullability_skill_is_shared_by_two_phases</div>
+        <div class="checkpoint">
+          <div class="checkpoint-label">Checkpoint</div>
+          <p>Those six failures are your work list, not a problem. The 39 that pass are already checking your frontmatter is valid, your <code>allowed-tools</code> resolve, and your <code>references/</code> exist. The last two failures clear in Step 4.</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-header">Step 4 &mdash; Wire the coordinator</div>
+        <div class="step-meta">~1 hour</div>
+        <p><strong>What &amp; why:</strong> <code>PHASE_SKILLS</code> plus the two <code>ClaudeAgentOptions</code> fields. This is the step where a mistake produces no error at all, so verify it explicitly.</p>
+        <p>Uses Step 3: every skill named in the map must exist on disk.</p>
+        <div class="code-block-wrapper">
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+<pre><code class="language-bash">cd starter
+python coordinator.py --list-skills</code></pre>
+        </div>
+        <div class="output-label">Expected output</div>
+        <div class="output-block">discover   (none)
+schema     oracle-pg-typing
+data       nullability-preservation
+code       plsql-conversion, appsql-rewriting
+validate   migration-validation, nullability-preservation
+cutover    (none)</div>
+        <div class="checkpoint">
+          <div class="checkpoint-label">Checkpoint</div>
+          <p><code>nullability-preservation</code> appears on two lines. If it does not, re-read the section on why the loader and the validator must read one file. <code>test_nullability_skill_is_shared_by_two_phases</code> should now pass.</p>
+        </div>
+        <div class="troubleshoot">
+          <div class="troubleshoot-title">The map looks right but nothing loads</div>
+          <p>You almost certainly set <code>skills=</code> and forgot <code>setting_sources=["project"]</code>. There is no error for this. Run one phase and grep the audit log &mdash; <code>grep -c check_mapping migration_audit.jsonl</code> must be greater than zero.</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-header">Step 5 &mdash; Run it, and expect the first run to fail</div>
+        <div class="step-meta">~10 minutes per run &middot; ~$2</div>
+        <p><strong>What &amp; why:</strong> the first end-to-end run is <em>designed</em> to fail check 4. Nothing yet forces <code>null_as</code>, so 1,412 Oracle NULLs land as empty strings.</p>
+        <div class="code-block-wrapper">
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+<pre><code class="language-bash">python coordinator.py --migrate-all</code></pre>
+        </div>
+        <div class="output-label">Expected output</div>
+        <div class="output-block">=== PHASE 5 / 5  VALIDATE ========================================
+    skills: migration-validation, nullability-preservation
+    NOTE: this phase audits work done earlier in THIS context.
+
+DEFECTS (1)
+  [BLOCKER] empty_string_divergence -- ucc_debtor.mailing_address_2
+      Oracle NULL count:     1412
+      PostgreSQL NULL count:    0
+      PostgreSQL '' count:   1412
+      -&gt; Every IS NULL query against this column now returns fewer rows.
+         filing_repository.debtors_missing_address_line_2 returns 0.
+         Re-load with null_as set.
+
+Blockers: 1    Warnings: 0
+Cutover must not proceed while a blocker is open.</div>
+        <div class="callout-warning">
+          <p><strong>If your first run comes back clean, do not celebrate.</strong> Check that the validator actually ran. An empty defect list and a validator that never executed look identical in the JSON &mdash; and in this architecture the validator has every reason to believe its own earlier work. Confirm <code>artifacts/validation_summary.json</code> has a non-zero <code>checks_passed</code>, and that phase 5 emitted reads against the target.</p>
+        </div>
+        <div class="checkpoint">
+          <div class="checkpoint-label">Checkpoint</div>
+          <p>Fix it in <code>nullability-preservation/SKILL.md</code>, then <code>--phase data</code> and <code>--phase validate</code>. The second run should show zero blockers. Keep the first run's output &mdash; it is data for the comparison.</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <div class="step-header">Step 6 &mdash; The cutover gate</div>
+        <div class="step-meta">~2 minutes</div>
+        <p><strong>What &amp; why:</strong> unchanged from Capstone 8. Verify it still bites after an architecture rewrite.</p>
+        <div class="code-block-wrapper">
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+<pre><code class="language-bash">python coordinator.py --phase cutover                     # must be denied
+python coordinator.py --phase cutover --approve-cutover   # only a human</code></pre>
+        </div>
+        <div class="output-label">Expected output (first command)</div>
+        <div class="output-block">CUTOVER REQUIRES HUMAN APPROVAL.
+Current validation state: 6 tables validated, 36 checks passed, 0 failed
+A person must read artifacts/validation_report.html and re-run:
+    python coordinator.py --phase cutover --approve-cutover
+Do not attempt to work around this.</div>
+      </div>
+
+      <div class="step">
+        <div class="step-header">Step 7 &mdash; Fill in the comparison</div>
+        <div class="step-meta">~1 hour &middot; the actual deliverable</div>
+        <p><strong>What &amp; why:</strong> everything above was instrumentation. This is the capstone.</p>
+        <p>Uses Steps 5 and 6, plus Capstone 8's <code>expected_output/migration_report.json</code> for the baseline column.</p>
+        <div class="code-block-wrapper">
+          <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+<pre><code class="language-bash">python evaluation/test_suite.py            # must score >= 18/20
+
+# The validator-independence trials -- run this THREE times:
+#   1. break phase 3 (omit null_as)
+#   2. python coordinator.py --phase validate
+#   3. record whether it caught its own mistake, and whether it re-queried
+python - &lt;&lt;'EOF'
+import json
+calls = [json.loads(l) for l in open("migration_audit.jsonl", encoding="utf-8")]
+reads = [c for c in calls
+         if "pg_query" in c["tool_name"] or "pg_row_count" in c["tool_name"]]
+print(f"{len(reads)} target reads during the run")
+EOF</code></pre>
+        </div>
+        <div class="checkpoint">
+          <div class="checkpoint-label">Checkpoint</div>
+          <p>Every number in <code>architecture_comparison.md</code> comes from an artifact, not from console scrollback. And if 8B did worse &mdash; on cost, on the evaluation score, or on catching its own defect &mdash; the file says so. That is the deliverable being graded.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===== MEASURING ===== -->
+    <section class="section" id="measuring">
+      <h2 id="measuring-heading">Measuring It Yourself</h2>
+
+      <p>The baseline column is pre-filled from Capstone 8's reference run &mdash; a clean second run, after the empty-string defect was fixed. <strong>The 8B column is deliberately empty on this page</strong>, because publishing invented numbers for the new architecture would destroy the one thing this capstone teaches.</p>
+
+      <div class="table-scroll">
+      <table class="type-table">
+        <thead><tr><th>Measure</th><th>Capstone 8</th><th>Capstone 8B</th><th>Source</th></tr></thead>
+        <tbody>
+          <tr><td>Total output tokens</td><td>118,940</td><td>&mdash;</td><td><code>total_output_tokens</code></td></tr>
+          <tr><td>Wall clock</td><td>279.4 s</td><td>&mdash;</td><td><code>total_ms</code></td></tr>
+          <tr><td>Estimated cost</td><td>$1.78</td><td>&mdash;</td><td><code>estimated_usd</code></td></tr>
+          <tr><td>Spans</td><td>19</td><td>&mdash;</td><td><code>spans</code></td></tr>
+          <tr><td>Tables validated</td><td>6</td><td>&mdash;</td><td><code>validation_summary.json</code></td></tr>
+          <tr><td>Checks passed</td><td>36</td><td>&mdash;</td><td><code>validation_summary.json</code></td></tr>
+          <tr><td>Manual-review items</td><td>3</td><td>&mdash;</td><td><code>manual_review_queue</code></td></tr>
+          <tr><td>Evaluation score</td><td>&mdash;</td><td>&mdash;</td><td><code>test_suite.py</code></td></tr>
+        </tbody>
+      </table>
+      </div>
+
+      <p>Capstone 8 queued three items for manual review. <strong>A migration that queues fewer is not doing better</strong> &mdash; it is either finding less or guessing more:</p>
+
+      <ol>
+        <li><code>PKG_FILING_MAINT.log_audit</code> &mdash; <code>PRAGMA AUTONOMOUS_TRANSACTION</code>, no in-process equivalent</li>
+        <li><code>MV_STATE_ROLLUP</code> &mdash; PostgreSQL materialized views have no fast refresh and no query rewrite</li>
+        <li><code>RiskReportDao.java:lapsingSoon</code> &mdash; <code>date - date</code> is a NUMBER in Oracle and an INTERVAL in PostgreSQL, and the Java reads it with <code>rs.getInt()</code></li>
+      </ol>
+
+      <p>Before you measure, <strong>write down a prediction</strong>. Which phases should get cheaper under skills, and which more expensive? What happens to <code>schema</code>, which runs six times and reloads the same rulebook each time? Then check yourself. The gap between your prediction and the measurement is the part worth keeping.</p>
+    </section>
+
+    <!-- ===== TESTING ===== -->
+    <section class="section" id="testing">
+      <h2 id="testing-heading">Test Cases</h2>
+
+      <p>The twenty evaluation scenarios are <strong>identical to Capstone 8's</strong>. That is what makes the two scores comparable, and it is why you must not "improve" them.</p>
+
+      <div class="code-block-wrapper">
+        <button class="copy-btn" onclick="copyCode(this)">Copy</button>
+<pre><code class="language-bash">pytest tests/ -v                       # grades solution/ by default
+TEST_TARGET=starter pytest tests/ -v   # grades your work
+python evaluation/test_suite.py        # the 20 scenarios; >= 18 to pass</code></pre>
+      </div>
+
+      <div class="table-scroll">
+      <table class="test-table">
+        <thead><tr><th>File</th><th>What it holds</th></tr></thead>
+        <tbody>
+          <tr><td><code>test_skills_wellformed.py</code></td><td><strong>New in 8B.</strong> 45 assertions: frontmatter validity, no invented keys, description quality, <code>allowed-tools</code> resolvable, scripts import / self-test / run standalone, references exist, <code>PHASE_SKILLS</code> consistency, two-phase sharing</td></tr>
+          <tr><td><code>test_type_mapping.py</code></td><td>The mapping table &mdash; imported from the skill script, by path</td></tr>
+          <tr><td><code>test_plsql_conversion.py</code></td><td>The construct registry and the refusal set</td></tr>
+          <tr><td><code>test_validator_catches_empty_string.py</code></td><td>The planted defect, the spot-check, and that the loader and validator agree</td></tr>
+          <tr><td><code>test_hooks_readonly.py</code></td><td>Oracle writes denied, reads allowed</td></tr>
+          <tr><td><code>test_hooks_pg_guard.py</code></td><td>Target schema fenced</td></tr>
+          <tr><td><code>test_cutover_hitl.py</code></td><td>Cutover impossible without the human flag</td></tr>
+        </tbody>
+      </table>
+      </div>
+
+      <p>The solution suite is <strong>199 tests green</strong>. A fresh starter gives 39 passes and 160 failures.</p>
+
+      <div class="callout-why">
+        <p><strong>Why the tests load skill scripts by path.</strong> <code>.claude/skills/*/scripts/</code> is deliberately not on <code>sys.path</code>, and <code>test_bundled_script_runs_standalone</code> runs each script with an emptied <code>PYTHONPATH</code>. An agent that loads a skill gets the file and nothing else &mdash; if the script only works when the solution directory happens to be importable, it does not work.</p>
+      </div>
+    </section>
+
+    <!-- ===== TROUBLESHOOTING ===== -->
+    <section class="section" id="troubleshooting">
+      <h2 id="troubleshooting-heading">Troubleshooting</h2>
+
+      <div class="troubleshoot">
+        <div class="troubleshoot-title">The run completed and no skill was ever used</div>
+        <p>Both <code>setting_sources=["project"]</code> and <code>skills=[...]</code> must be set on <code>ClaudeAgentOptions</code>. Neither produces an error when missing. Verify with <code>grep -c check_mapping migration_audit.jsonl</code>.</p>
+      </div>
+
+      <div class="troubleshoot">
+        <div class="troubleshoot-title">A skill exists but never fires</div>
+        <p>Almost always the <code>description</code>. It is matched against the caller's phrasing, so it needs the actual vocabulary of the request &mdash; type names, verbs like "translate a table". "Type mapping helper" matches nothing. Check <code>name</code> matches the directory too.</p>
+      </div>
+
+      <div class="troubleshoot">
+        <div class="troubleshoot-title">Frontmatter looks right, test says unrecognised key</div>
+        <p>You used a key Claude Code does not read &mdash; most likely <code>context:</code>. Remove it. Only <code>name</code> and <code>description</code> are required; see the frontmatter table above for the optional set.</p>
+      </div>
+
+      <div class="troubleshoot">
+        <div class="troubleshoot-title">Validation passes on the very first run</div>
+        <p>Suspicious, not good. Nothing has forced <code>null_as</code> yet, so check 4 should fail. Confirm the validator ran: non-zero <code>checks_passed</code> in <code>artifacts/validation_summary.json</code>, and target reads in the audit log for phase 5.</p>
+      </div>
+
+      <div class="troubleshoot">
+        <div class="troubleshoot-title">Oracle container never turns healthy</div>
+        <p>First boot seeds the whole schema and takes 1&ndash;3 minutes, longer on slower disks. Watch <code>docker compose logs -f oracle</code> for <code>DATABASE IS READY TO USE!</code> before investigating anything else.</p>
+      </div>
+
+      <div class="troubleshoot">
+        <div class="troubleshoot-title">Context runs out partway through phase 4</div>
+        <p>Expected behaviour of a single-context design on a larger schema, and worth recording rather than working around. Run phases separately with <code>--phase</code>; the session file carries the state even though the conversation does not. Note in the comparison that this is a cost the subagent build does not pay.</p>
+      </div>
+    </section>
+
+    <!-- ===== EXTENSIONS ===== -->
+    <section class="section" id="extensions">
+      <h2 id="extensions-heading">Going Further <span style="color:var(--text-muted);font-weight:400;">(all OPTIONAL)</span></h2>
+      <ul>
+        <li><strong>Add a sixth skill to the spec.</strong> Put <code>index-strategy</code> in <code>spec/agent-spec.md</code>, regenerate, and compare the cost of that change against adding a sixth <em>subagent</em> to Capstone 8's spec.</li>
+        <li><strong>Give phase 5 its independence back.</strong> Run <code>--phase validate</code> in a fresh process, so it has the session file but not the conversation. Does the validator behave more like Capstone 8's? Record it &mdash; this is a cheap experiment with a genuinely uncertain answer.</li>
+        <li><strong>Build the hybrid.</strong> Keep the four knowledge skills and restore <code>migration-validator</code> as a subagent. Measure whether it recovers Capstone 8's validator reliability while keeping 8B's shared knowledge. <strong>If the measurements support the hybrid, that is the right answer</strong> and your write-up should say so.</li>
+        <li><strong>Make a skill user-invocable.</strong> Add <code>user-invocable: true</code> to <code>oracle-pg-typing</code> and call it directly from Claude Code to triage a table by hand.</li>
+      </ul>
+    </section>
+    <!-- ===== QUIZ ===== -->
+    <section class="section quiz-section" id="quiz">
+      <h2 id="quiz-heading">Knowledge Check</h2>
+
+      <div class="quiz-question" id="q1">
+        <h4>Q1: You are deciding whether a capability belongs in a skill or a subagent. Which single property settles it most reliably?</h4>
+        <ul class="quiz-options">
+          <li><label><input type="radio" name="q1" value="a"> How many tokens the capability's instructions occupy</label></li>
+          <li><label><input type="radio" name="q1" value="b"> Whether the work needs a context that has <em>not</em> seen the caller's reasoning</label></li>
+          <li><label><input type="radio" name="q1" value="c"> Whether the capability needs to call MCP tools</label></li>
+          <li><label><input type="radio" name="q1" value="d"> Whether it will be invoked more than once per run</label></li>
+        </ul>
+        <button class="quiz-check-btn" onclick="checkQuiz('q1','b')">Check Answer</button>
+        <div class="quiz-feedback" id="q1-feedback"></div>
+      </div>
+
+      <div class="quiz-question" id="q2">
+        <h4>Q2: A skill's <code>SKILL.md</code> declares <code>context: fork</code> in its frontmatter. What happens at runtime?</h4>
+        <ul class="quiz-options">
+          <li><label><input type="radio" name="q2" value="a"> The skill runs in a separate context window, keeping intermediate files out of the main session</label></li>
+          <li><label><input type="radio" name="q2" value="b"> Claude Code refuses to load the skill and logs a frontmatter validation error</label></li>
+          <li><label><input type="radio" name="q2" value="c"> The key is not one Claude Code reads, so it is ignored silently and the skill behaves as though it were absent</label></li>
+          <li><label><input type="radio" name="q2" value="d"> The skill loads but its <code>allowed-tools</code> are ignored</label></li>
+        </ul>
+        <button class="quiz-check-btn" onclick="checkQuiz('q2','c')">Check Answer</button>
+        <div class="quiz-feedback" id="q2-feedback"></div>
+      </div>
+
+      <div class="quiz-question" id="q3">
+        <h4>Q3: <code>PHASE_SKILLS</code> maps <code>nullability-preservation</code> to both the <code>data</code> phase and the <code>validate</code> phase. What does that duplication buy?</h4>
+        <ul class="quiz-options">
+          <li><label><input type="radio" name="q3" value="a"> Nothing &mdash; loading the same skill twice wastes context and should be removed</label></li>
+          <li><label><input type="radio" name="q3" value="b"> The phase that performs the load and the phase that checks it read one file, so they cannot develop different ideas about what a correct load is</label></li>
+          <li><label><input type="radio" name="q3" value="c"> It makes the validation phase run faster because the skill is already cached</label></li>
+          <li><label><input type="radio" name="q3" value="d"> It gives the validator permission to re-run the load if it finds a defect</label></li>
+        </ul>
+        <button class="quiz-check-btn" onclick="checkQuiz('q3','b')">Check Answer</button>
+        <div class="quiz-feedback" id="q3-feedback"></div>
+      </div>
+
+      <div class="quiz-question" id="q4">
+        <h4>Q4: A student wires up five skills, runs the migration, and gets clean-looking DDL for all six tables. What must they check before believing it?</h4>
+        <ul class="quiz-options">
+          <li><label><input type="radio" name="q4" value="a"> That the DDL compiles against PostgreSQL 16</label></li>
+          <li><label><input type="radio" name="q4" value="b"> That <code>migration_audit.jsonl</code> contains an execution of a bundled skill script &mdash; because a skill that never loaded produces plausible output and no error</label></li>
+          <li><label><input type="radio" name="q4" value="c"> That the token budget was not exceeded</label></li>
+          <li><label><input type="radio" name="q4" value="d"> That every table has a primary key</label></li>
+        </ul>
+        <button class="quiz-check-btn" onclick="checkQuiz('q4','b')">Check Answer</button>
+        <div class="quiz-feedback" id="q4-feedback"></div>
+      </div>
+
+      <div class="quiz-question" id="q5">
+        <h4>Q5: <code>scan_app_sql</code> moved from an MCP tool to a skill-bundled script, but <code>write_artifact</code> stayed a tool. What distinguishes them?</h4>
+        <ul class="quiz-options">
+          <li><label><input type="radio" name="q5" value="a"> <code>write_artifact</code> is called more often, so it is cheaper as a tool</label></li>
+          <li><label><input type="radio" name="q5" value="b"> Skill scripts cannot write files, only read them</label></li>
+          <li><label><input type="radio" name="q5" value="c"> <code>write_artifact</code> enforces the <code>artifacts/</code> confinement boundary, which must hold in every phase &mdash; including ones where no skill is loaded</label></li>
+          <li><label><input type="radio" name="q5" value="d"> MCP tools are faster than subprocess calls</label></li>
+        </ul>
+        <button class="quiz-check-btn" onclick="checkQuiz('q5','c')">Check Answer</button>
+        <div class="quiz-feedback" id="q5-feedback"></div>
+      </div>
+
+      <div class="quiz-question" id="q6">
+        <h4>Q6: Your measurements show 8B's validator missed the planted empty-string defect in two of three trials, where Capstone 8's subagent caught it every time. What does <code>architecture_comparison.md</code> say?</h4>
+        <ul class="quiz-options">
+          <li><label><input type="radio" name="q6" value="a"> Re-run until you get three clean trials, then report those</label></li>
+          <li><label><input type="radio" name="q6" value="b"> Report the result and recommend the shape the evidence supports &mdash; likely skills for the rulebooks, a subagent for the validator</label></li>
+          <li><label><input type="radio" name="q6" value="c"> Report the token savings instead, since those are favourable</label></li>
+          <li><label><input type="radio" name="q6" value="d"> Strengthen the wording in <code>SKILL.md</code> until the validator passes, then report only the final numbers</label></li>
+        </ul>
+        <button class="quiz-check-btn" onclick="checkQuiz('q6','b')">Check Answer</button>
+        <div class="quiz-feedback" id="q6-feedback"></div>
+      </div>
+    </section>
+
+    <!-- ===== REFERENCES ===== -->
+    <section class="section" id="references">
+      <h2 id="references-heading">References &amp; Resources</h2>
+
+      <h3 id="ref-lab">The lab</h3>
+      <ul>
+        <li><code>labs/capstone-8b-skills-first/README.md</code> &mdash; setup and the done-when list</li>
+        <li><code>labs/capstone-8b-skills-first/spec/agent-spec.md</code> &mdash; the canonical spec; read it beside Capstone 8's</li>
+        <li><code>labs/capstone-8b-skills-first/solution/.claude/skills/</code> &mdash; the five reference skills</li>
+        <li><code>labs/capstone-8b-skills-first/tests/test_skills_wellformed.py</code> &mdash; the frontmatter contract, asserted</li>
+        <li><code>labs/capstone-8b-skills-first/solution/evaluation/architecture_comparison.md</code> &mdash; the deliverable</li>
+      </ul>
+
+      <h3 id="ref-course">Elsewhere in this course</h3>
+      <ul>
+        <li><a href="CAPSTONE-8-oracle-to-postgres-migration.html">Capstone 8</a> &mdash; the subagent build. Required reading for this one.</li>
+        <li><a href="M25-claude-code-mastery.html">M25 &mdash; Claude Code Mastery</a> &mdash; the six configuration layers</li>
+        <li><a href="M26-hooks-sessions-agent-sdk.html">M26 &mdash; Hooks, Sessions &amp; the Agent SDK</a> &mdash; where the guardrails come from</li>
+        <li><a href="M14-multi-agent-systems.html">M14 &mdash; Multi-Agent Systems</a> &mdash; when delegation genuinely earns its cost</li>
+      </ul>
+
+      <h3 id="ref-external">Primary sources for the frontmatter contract</h3>
+      <ul>
+        <li><code>plugin-dev/skills/skill-development/SKILL.md</code> in the official Anthropic plugin marketplace &mdash; the authority on required vs optional keys and the <code>scripts/</code> / <code>references/</code> / <code>assets/</code> layout</li>
+        <li>The fifty-eight skills shipped in that marketplace &mdash; a survey of which keys are used in practice, and confirmation that <code>context</code> is not among them</li>
+      </ul>
+
+      <div class="callout-why">
+        <p><strong>What you built.</strong> The same migration system twice, and the evidence to say which shape was right. The five skills are the visible artifact; the comparison file is the transferable one. Most teams pick an agent architecture by taste and then defend it. You now have a method for picking one by measurement &mdash; including the discipline to publish the result when it disagrees with what you hoped.</p>
+      </div>
+    </section>
+
+    <div class="module-nav">
+      <a href="CAPSTONE-8-oracle-to-postgres-migration.html">&larr; Capstone 8: Subagent Build</a>
+        <a href="index.html" aria-label="Course Home" title="Course Home" style="font-size:1.2rem;">&#x1F3E0; Home</a>
+      <a href="index.html">Course Home &rarr;</a>
+    </div>
+
+  </main>
+</div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-sql.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-json.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-yaml.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-typescript.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-markdown.min.js"></script>
+<script>
+// ========== SHARED UI ==========
+function switchTab(btn, panelId) {
+  const wrapper = btn.closest('.code-block-wrapper');
+  wrapper.querySelectorAll('.code-tab').forEach(t => t.classList.remove('active'));
+  wrapper.querySelectorAll('.code-panel').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById(panelId).classList.add('active');
+}
+
+function copyCode(btn) {
+  const wrapper = btn.closest('.code-block-wrapper');
+  const panel = wrapper.querySelector('.code-panel.active') || wrapper;
+  const code = panel.querySelector('code').textContent;
+  navigator.clipboard.writeText(code).then(() => {
+    btn.textContent = 'Copied!';
+    setTimeout(() => btn.textContent = 'Copy', 1500);
+  }).catch(() => {
+    btn.textContent = 'Copy failed';
+    setTimeout(() => btn.textContent = 'Copy', 1500);
+  });
+}
+// ========== QUIZ ==========
+// Each wrong answer gets its own explanation. "Not quite, try again"
+// teaches nothing -- the interesting part of a distractor is why it is
+// plausible.
+const QUIZ_EXPLANATIONS = {
+  q1: {
+    a: 'Token count is a consequence, not the criterion. A short capability that needs an independent read is still a subagent; a long rulebook that wants sharing is still a skill.',
+    b: 'Correct. Context independence is the one property a skill cannot provide at any price. Everything else -- reuse, bundled scripts, model choice -- can be traded off. That is why the validator is the hard case in this capstone.',
+    c: 'Both can reach MCP tools. A skill declares them in allowed-tools; a subagent in its tools frontmatter.',
+    d: 'Repeated invocation affects cost, and it genuinely cuts both ways here -- but it does not decide correctness. A subagent invoked once still gets its own context.'
+  },
+  q2: {
+    a: 'This is what some material claims, and it is the reason the question exists. There is no context key in Claude Code skill frontmatter.',
+    b: 'Unknown keys are not validation errors. If they were, this would be a much smaller problem -- you would find out immediately.',
+    c: 'Correct. Unrecognised frontmatter keys are ignored silently. The skill loads and runs with entirely ordinary behaviour, while its author believes it is running in a forked context. Zero of the 58 official marketplace skills use context, and the shipped skill-development guidance lists only name and description as required.',
+    d: 'allowed-tools is unaffected by the presence of an unrelated key.'
+  },
+  q3: {
+    a: 'It is loaded in two phases, not twice in one. And the point is not efficiency -- see the correct answer.',
+    b: 'Correct. In Capstone 8 that rule was copy-pasted into data-migrator.md and migration-validator.md, free to drift apart. One file cannot develop that problem. test_nullability_skill_is_shared_by_two_phases asserts the sharing so it cannot quietly regress.',
+    c: 'There is no cross-phase skill cache, and speed is not the argument.',
+    d: 'Nothing about loading a skill grants a phase the ability to re-run another. The validate phase has no load tools at all.'
+  },
+  q4: {
+    a: 'Worth doing, and insufficient. Claude knows Oracle and PostgreSQL well enough to emit DDL that compiles perfectly while having decided DATE on its own.',
+    b: 'Correct. Omitting setting_sources or skills produces no error at all -- the agent simply improvises from its own knowledge, and the output is plausible. The audit log is the only evidence that a skill actually participated.',
+    c: 'A run that stayed under budget tells you nothing about whether the skills loaded. If anything, a suspiciously cheap run is weak evidence they did not.',
+    d: 'A schema-level check that the type mapping trap sails straight past.'
+  },
+  q5: {
+    a: 'Call frequency is not the criterion, and scan_app_sql runs on every file in the app directory anyway.',
+    b: 'Skill scripts are ordinary programs and can do whatever the process can.',
+    c: 'Correct. write_artifact is a capability and a boundary, not knowledge. A confinement rule that only holds while some particular skill happens to be loaded is not a confinement rule. scan_app_sql, by contrast, is knowledge -- and it belongs beside the prose explaining when to run it.',
+    d: 'Performance is not the distinction; both are fast relative to a model turn.'
+  },
+  q6: {
+    a: 'Selecting the runs that agree with your conclusion is not measurement. Three trials exist precisely so one lucky result cannot carry the finding.',
+    b: 'Correct. The comparison is scored on honesty, not on the numbers being favourable. A hybrid -- skills for the rulebooks, a subagent for the validator -- is a defensible and well-supported conclusion, and it is the one this evidence points to.',
+    c: 'Reporting only the favourable measure is how a broken architecture reaches production with a good write-up attached.',
+    d: 'Tuning the prompt until the metric passes, then reporting only the final number, hides the fact that the result was fragile. Report both, and say what you changed.'
+  }
+};
+function checkQuiz(qId, correct) {
+  const selected = document.querySelector('input[name="' + qId + '"]:checked');
+  const fb = document.getElementById(qId + '-feedback');
+  if (!selected) {
+    fb.textContent = 'Please select an answer.';
+    fb.className = 'quiz-feedback incorrect';
+    return;
+  }
+  const explanation = (QUIZ_EXPLANATIONS[qId] || {})[selected.value] || '';
+  if (selected.value === correct) {
+    fb.innerHTML = '<strong>Correct.</strong> ' + explanation;
+    fb.className = 'quiz-feedback correct';
+  } else {
+    fb.innerHTML = '<strong>Not quite.</strong> ' + explanation;
+    fb.className = 'quiz-feedback incorrect';
+  }
+}
+
+// ========== SIDEBAR SCROLL HIGHLIGHTING ==========
+const sidebarLinks = document.querySelectorAll('.sidebar-nav a');
+const sections = [];
+sidebarLinks.forEach(link => {
+  const id = link.getAttribute('href').replace('#', '');
+  const el = document.getElementById(id);
+  if (el) sections.push({ id, el, link });
+});
+window.addEventListener('scroll', () => {
+  let current = sections[0];
+  for (const s of sections) {
+    if (s.el.getBoundingClientRect().top <= 120) current = s;
+  }
+  sidebarLinks.forEach(l => l.classList.remove('active'));
+  if (current) current.link.classList.add('active');
+});
+
+// ========== ANIMATION SCAFFOLD ==========
+// Every animation is a list of steps plus a reset. The controller handles
+// play/pause/restart and honours prefers-reduced-motion by jumping to the
+// final state instead of stepping through it.
+const REDUCED_MOTION = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+function makeAnim(playBtnId, steps, reset, stepMs) {
+  let timers = [];
+  let playing = false;
+  const btn = () => document.getElementById(playBtnId);
+
+  function runAll() {
+    steps.forEach(fn => fn());
+    playing = false;
+    if (btn()) btn().innerHTML = '&#9654;';
+  }
+
+  return {
+    play() {
+      if (playing) return;
+      playing = true;
+      if (btn()) btn().innerHTML = '&#10074;&#10074;';
+      if (REDUCED_MOTION) { runAll(); return; }
+      steps.forEach((fn, i) => {
+        timers.push(setTimeout(() => {
+          fn();
+          if (i === steps.length - 1) {
+            playing = false;
+            if (btn()) btn().innerHTML = '&#9654;';
+          }
+        }, i * stepMs));
+      });
+    },
+    pause() {
+      timers.forEach(clearTimeout);
+      timers = [];
+      playing = false;
+      if (btn()) btn().innerHTML = '&#9654;';
+    },
+    toggle() { playing ? this.pause() : this.play(); },
+    restart() { this.pause(); reset(); this.play(); },
+    autoplay(containerId) {
+      const el = document.getElementById(containerId);
+      if (!el) return;
+      if (REDUCED_MOTION) { runAll(); return; }
+      const obs = new IntersectionObserver(entries => {
+        if (entries[0].isIntersecting) { this.play(); obs.disconnect(); }
+      }, { threshold: 0.25 });
+      obs.observe(el);
+    }
+  };
+}
+
+// ========== shared bits for the six animations ==========
+const C = {
+  gold: '#D4A843', blue: '#3B82F6', green: '#10B981',
+  red: '#F43F5E', amber: '#F59E0B', muted: '#64748B', dim: '#94A3B8'
+};
+const PHASES = ['discover', 'schema', 'data', 'code', 'validate'];
+
+function el(tag, style, html) {
+  const node = document.createElement(tag);
+  if (style) node.setAttribute('style', style);
+  if (html !== undefined) node.innerHTML = html;
+  return node;
+}
+
+// ========== ANIMATION 1: TWO ARCHITECTURES ==========
+const archStage = document.getElementById('archStage');
+if (archStage) {
+  archStage.setAttribute('style',
+    'display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;font-family:"JetBrains Mono",monospace;font-size:0.74rem;');
+
+  const panes = [
+    { title: 'CAPSTONE 8 — subagents', sub: '5 contexts', colour: C.blue },
+    { title: 'CAPSTONE 8B — skills', sub: '1 context', colour: C.gold }
+  ].map(p => {
+    const box = el('div', 'border:1px solid #21262D;border-radius:8px;padding:0.85rem;background:#0D1117;min-height:250px;');
+    box.appendChild(el('div',
+      'color:' + p.colour + ';font-weight:600;margin-bottom:0.15rem;', p.title));
+    box.appendChild(el('div', 'color:' + C.muted + ';margin-bottom:0.7rem;', p.sub));
+    const rows = el('div', '');
+    box.appendChild(rows);
+    archStage.appendChild(box);
+    return rows;
+  });
+
+  const ARCH = [
+    { phase: 'discover', left: 'coordinator reads schema', right: 'coordinator reads schema', skill: null },
+    { phase: 'schema',   left: 'schema-translator  [new ctx]', right: 'loads oracle-pg-typing', skill: 'oracle-pg-typing' },
+    { phase: 'data',     left: 'data-migrator      [new ctx]', right: 'loads nullability-preservation', skill: 'nullability-preservation' },
+    { phase: 'code',     left: 'plsql + appsql     [new ctx]', right: 'loads plsql-conversion + appsql-rewriting', skill: 'plsql-conversion' },
+    { phase: 'validate', left: 'migration-validator [new ctx]', right: 'loads migration-validation', skill: 'migration-validation' }
+  ];
+
+  const archSteps = ARCH.map((a, i) => () => {
+    if (i === 0) panes.forEach(p => { p.innerHTML = ''; });   // re-base each run
+    const tone = a.phase === 'validate' ? C.red : C.dim;
+    [0, 1].forEach(side => {
+      const line = el('div',
+        'opacity:0;transition:opacity .35s;margin-bottom:0.5rem;line-height:1.5;');
+      line.appendChild(el('div', 'color:' + C.gold + ';', a.phase));
+      line.appendChild(el('div', 'color:' + tone + ';padding-left:0.9rem;',
+        side === 0 ? a.left : a.right));
+      panes[side].appendChild(line);
+      requestAnimationFrame(() => { line.style.opacity = '1'; });
+    });
+  });
+
+  archSteps.push(() => {
+    [0, 1].forEach(side => {
+      const note = el('div',
+        'opacity:0;transition:opacity .35s;margin-top:0.6rem;padding-top:0.6rem;' +
+        'border-top:1px solid #21262D;color:' + (side === 0 ? C.green : C.red) + ';');
+      note.innerHTML = side === 0
+        ? 'validator never saw phases 2-4<br>&rarr; independent verdict'
+        : 'validator IS phases 2-4<br>&rarr; auditing itself';
+      panes[side].appendChild(note);
+      requestAnimationFrame(() => { note.style.opacity = '1'; });
+    });
+  });
+
+  var archAnim = makeAnim('arch-play', archSteps,
+    () => panes.forEach(p => { p.innerHTML = ''; }), 700);
+  archAnim.autoplay('arch-container');
+}
+
+// ========== ANIMATION 2: PROGRESSIVE DISCLOSURE ==========
+const discStage = document.getElementById('discStage');
+if (discStage) {
+  discStage.setAttribute('style',
+    'font-family:"JetBrains Mono",monospace;font-size:0.76rem;min-height:250px;');
+  const bars = el('div', '');
+  const meter = el('div',
+    'margin-top:0.9rem;padding-top:0.7rem;border-top:1px solid #21262D;color:' + C.gold + ';');
+  discStage.appendChild(bars);
+  discStage.appendChild(meter);
+
+  const DISC = [
+    { label: 'SKILL.md  (the procedure)', tok: 620, colour: C.gold,
+      note: 'loads with the skill' },
+    { label: 'agent reads UCC_FILING DDL', tok: 340, colour: C.dim,
+      note: '' },
+    { label: 'hits DATE — already covered by SKILL.md', tok: 0, colour: C.muted,
+      note: 'no reference needed' },
+    { label: 'hits bare NUMBER — needs the bands', tok: 0, colour: C.muted,
+      note: '' },
+    { label: 'references/number-precision.md', tok: 540, colour: C.blue,
+      note: 'pulled in ONLY now' },
+    { label: 'runs scripts/check_mapping.py', tok: 90, colour: C.green,
+      note: 'output only — source never enters context' }
+  ];
+
+  let total = 0;
+  const discSteps = DISC.map((d, i) => () => {
+    if (i === 0) { bars.innerHTML = ''; total = 0; }          // re-base each run
+    total += d.tok;
+    const row = el('div', 'opacity:0;transition:opacity .35s;margin-bottom:0.45rem;');
+    row.appendChild(el('div', 'color:' + d.colour + ';',
+      d.label + (d.tok ? '   +' + d.tok + ' tok' : '')));
+    if (d.note) row.appendChild(el('div',
+      'color:' + C.muted + ';padding-left:1rem;font-size:0.72rem;', d.note));
+    bars.appendChild(row);
+    requestAnimationFrame(() => { row.style.opacity = '1'; });
+    meter.textContent = 'context from this skill: ' + total + ' tokens';
+  });
+
+  discSteps.push(() => {
+    meter.innerHTML = 'context from this skill: ' + total + ' tokens<br>' +
+      '<span style="color:' + C.muted + '">the full type-matrix.md (1,900 tok) was never loaded — ' +
+      'nothing in this table needed it</span>';
+  });
+
+  var discAnim = makeAnim('disc-play', discSteps, () => {
+    bars.innerHTML = ''; meter.textContent = ''; total = 0;
+  }, 620);
+  discAnim.autoplay('disc-container');
+}
+
+// ========== ANIMATION 3: PHASE -> SKILL MAP ==========
+const mapStage = document.getElementById('mapStage');
+if (mapStage) {
+  const SKILLS = ['oracle-pg-typing', 'nullability-preservation',
+                  'plsql-conversion', 'appsql-rewriting', 'migration-validation'];
+  const MAP = {
+    discover: [], schema: [0], data: [1], code: [2, 3], validate: [4, 1]
+  };
+
+  mapStage.setAttribute('style',
+    'font-family:"JetBrains Mono",monospace;font-size:0.72rem;overflow-x:auto;min-height:250px;');
+  const table = el('table', 'border-collapse:collapse;width:100%;min-width:560px;');
+  const head = el('tr', '');
+  head.appendChild(el('th', 'text-align:left;padding:0.4rem;color:' + C.muted + ';', 'skill'));
+  PHASES.forEach(p => head.appendChild(
+    el('th', 'padding:0.4rem;color:' + C.muted + ';font-weight:600;', p)));
+  table.appendChild(head);
+
+  const cells = {};
+  SKILLS.forEach((s, si) => {
+    const tr = el('tr', '');
+    tr.appendChild(el('td',
+      'padding:0.4rem;color:' + C.dim + ';white-space:nowrap;', s));
+    PHASES.forEach(p => {
+      const td = el('td',
+        'padding:0.4rem;text-align:center;border:1px solid #21262D;' +
+        'background:#0D1117;transition:background .3s,color .3s;color:#0D1117;', '&#9679;');
+      cells[p + ':' + si] = td;
+      tr.appendChild(td);
+    });
+    table.appendChild(tr);
+  });
+  mapStage.appendChild(table);
+  const mapNote = el('div', 'margin-top:0.8rem;color:' + C.muted +
+    ';font-family:"JetBrains Mono",monospace;font-size:0.72rem;min-height:2.4em;');
+  mapStage.appendChild(mapNote);
+
+  const NOTES = {
+    discover: 'discover loads nothing — an inventory needs no rulebook',
+    schema:   'schema loads the type rulebook, and only that',
+    data:     'data CANNOT load migration-validation — it must not mark its own work correct',
+    code:     'code loads two skills; plsql-conversion borrows appsql-rewriting’s scanner',
+    validate: 'validate loads nullability-preservation TOO — the same file the loader read'
+  };
+
+  const mapSteps = PHASES.map(p => () => {
+    MAP[p].forEach(si => {
+      const td = cells[p + ':' + si];
+      const shared = (si === 1);
+      td.style.background = shared ? C.gold : C.blue;
+      td.style.color = shared ? C.gold : C.blue;
+    });
+    mapNote.textContent = NOTES[p];
+  });
+
+  mapSteps.push(() => {
+    mapNote.innerHTML = '<span style="color:' + C.gold + '">' +
+      'nullability-preservation is lit in two columns. One file, two phases, ' +
+      'no way for them to disagree.</span>';
+  });
+
+  var mapAnim = makeAnim('map-play', mapSteps, () => {
+    Object.values(cells).forEach(td => {
+      td.style.background = '#0D1117'; td.style.color = '#0D1117';
+    });
+    mapNote.textContent = '';
+  }, 900);
+  mapAnim.autoplay('map-container');
+}
+
+// ========== ANIMATION 4: CONTEXT GROWTH ==========
+const ctxStage = document.getElementById('ctxStage');
+if (ctxStage) {
+  ctxStage.setAttribute('style',
+    'font-family:"JetBrains Mono",monospace;font-size:0.72rem;min-height:250px;');
+  const TABLES = ['UCC_DEBTOR', 'UCC_FILING', 'UCC_SECURED_PARTY',
+                  'UCC_AMENDMENT', 'FILING_AUDIT', 'STATE_SOS_SOURCE'];
+  // Illustrative shapes, not measured figures -- the point is sawtooth vs climb.
+  const SUB = [18, 17, 16, 15, 14, 13];
+  const SKL = [18, 33, 46, 57, 66, 74];
+
+  const grid = el('div', 'display:grid;grid-template-columns:auto 1fr 1fr;gap:0.35rem 0.9rem;align-items:center;');
+  grid.appendChild(el('div', ''));
+  grid.appendChild(el('div', 'color:' + C.blue + ';font-weight:600;', 'subagents — discarded each table'));
+  grid.appendChild(el('div', 'color:' + C.gold + ';font-weight:600;', 'skills — one growing context'));
+
+  const barRefs = [];
+  TABLES.forEach(t => {
+    grid.appendChild(el('div', 'color:' + C.muted + ';white-space:nowrap;', t.toLowerCase()));
+    const mk = colour => {
+      const track = el('div', 'background:#0D1117;border:1px solid #21262D;border-radius:3px;height:15px;');
+      const fill = el('div', 'height:100%;width:0;background:' + colour + ';transition:width .5s;border-radius:2px;');
+      track.appendChild(fill);
+      grid.appendChild(track);
+      return fill;
+    };
+    barRefs.push([mk(C.blue), mk(C.gold)]);
+  });
+  ctxStage.appendChild(grid);
+  const ctxNote = el('div', 'margin-top:0.9rem;padding-top:0.7rem;border-top:1px solid #21262D;color:' +
+    C.muted + ';min-height:3em;');
+  ctxStage.appendChild(ctxNote);
+
+  const ctxSteps = TABLES.map((t, i) => () => {
+    barRefs[i][0].style.width = SUB[i] + '%';
+    barRefs[i][1].style.width = SKL[i] + '%';
+    ctxNote.textContent = 'after ' + (i + 1) + ' of 6 tables — subagent context resets; skills context carries forward';
+  });
+
+  ctxSteps.push(() => {
+    ctxNote.innerHTML =
+      '<span style="color:' + C.dim + '">A climb is only a problem if it reaches the ceiling. ' +
+      'Below it, the accumulated context is what lets phase 4 remember what phase 2 decided. ' +
+      'Six tables fits comfortably; six hundred would not.</span>';
+  });
+
+  var ctxAnim = makeAnim('ctx-play', ctxSteps, () => {
+    barRefs.forEach(pair => pair.forEach(f => { f.style.width = '0'; }));
+    ctxNote.textContent = '';
+  }, 620);
+  ctxAnim.autoplay('ctx-container');
+}
+
+// ========== ANIMATION 5: THE VALIDATOR PROBLEM ==========
+const valStage = document.getElementById('valStage');
+if (valStage) {
+  valStage.setAttribute('style',
+    'display:grid;grid-template-columns:1fr 1fr;gap:1.5rem;font-family:"JetBrains Mono",monospace;' +
+    'font-size:0.73rem;min-height:250px;');
+
+  const valPanes = [
+    { title: 'CAPSTONE 8 — validator subagent', colour: C.green },
+    { title: 'CAPSTONE 8B — validator in-context', colour: C.red }
+  ].map(p => {
+    const box = el('div', 'border:1px solid #21262D;border-radius:8px;padding:0.85rem;background:#0D1117;');
+    box.appendChild(el('div', 'color:' + p.colour + ';font-weight:600;margin-bottom:0.7rem;', p.title));
+    const body = el('div', '');
+    box.appendChild(body);
+    valStage.appendChild(box);
+    return body;
+  });
+
+  const PRIOR = [
+    'phase 2 — chose timestamp(0) over date',
+    'phase 3 — let null_as default',
+    'phase 4 — refused the autonomous txn'
+  ];
+
+  function valClear() {
+    valPanes.forEach(p => { p.innerHTML = ''; });
+    valStage.querySelectorAll('.val-summary').forEach(n => n.remove());
+  }
+
+  const valSteps = [
+    () => {
+      // Re-base on every run. These steps append, so if a replay ever
+      // overlaps the autoplay pass the panes would otherwise render one run
+      // stacked on top of the other -- which reads as a rendering bug rather
+      // than as an animation.
+      valClear();
+      PRIOR.forEach(line => {
+        valPanes[1].appendChild(el('div',
+          'color:' + C.muted + ';opacity:0.55;margin-bottom:0.3rem;', line));
+      });
+      valPanes[0].appendChild(el('div',
+        'color:' + C.muted + ';margin-bottom:0.3rem;', '(context empty)'));
+    },
+    () => {
+      valPanes[0].appendChild(el('div',
+        'color:' + C.dim + ';margin-top:0.5rem;', 'receives: table names + connection'));
+      valPanes[1].appendChild(el('div',
+        'color:' + C.dim + ';margin-top:0.5rem;', 'receives: the same, plus all of the above'));
+    },
+    () => {
+      valPanes[0].appendChild(el('div',
+        'color:' + C.green + ';margin-top:0.5rem;', 'queries the DB — has no memory to consult'));
+      valPanes[1].appendChild(el('div',
+        'color:' + C.amber + ';margin-top:0.5rem;', 'may query — or may recall phase 3'));
+    },
+    () => {
+      valPanes[0].appendChild(el('div',
+        'color:' + C.green + ';margin-top:0.7rem;padding-top:0.5rem;border-top:1px solid #21262D;',
+        'verdict formed independently'));
+      valPanes[1].appendChild(el('div',
+        'color:' + C.red + ';margin-top:0.7rem;padding-top:0.5rem;border-top:1px solid #21262D;',
+        'verdict on its own work'));
+    },
+    () => {
+      // Only ever one summary, however many times this replays.
+      valStage.querySelectorAll('.val-summary').forEach(n => n.remove());
+      const q = el('div',
+        'grid-column:1 / -1;text-align:center;color:' + C.gold + ';font-size:0.95rem;' +
+        'padding-top:0.9rem;border-top:1px solid #21262D;opacity:0;transition:opacity .4s;',
+        'Both say &ldquo;all clear&rdquo;. Which one do you believe?');
+      q.className = 'val-summary';
+      valStage.appendChild(q);
+      requestAnimationFrame(() => { q.style.opacity = '1'; });
+    }
+  ];
+
+  // Rebuild rather than patch: a reset that only half-clears leaves the
+  // previous run interleaved with the next one, which reads as a rendering
+  // bug rather than as an animation.
+  var valAnim = makeAnim('val-play', valSteps, valClear, 900);
+  valAnim.autoplay('val-container');
+}
+
+// ========== ANIMATION 6: GUARDRAILS, UNCHANGED ==========
+const guardStage = document.getElementById('guardStage');
+if (guardStage) {
+  guardStage.setAttribute('style',
+    'font-family:"JetBrains Mono",monospace;font-size:0.74rem;min-height:250px;');
+
+  const GUARDS = [
+    { call: 'oracle_query("DROP TABLE ucc_filing")',
+      guard: 'enforce_oracle_readonly',
+      verdict: 'DENIED', colour: C.red,
+      why: 'Allow-list, not deny-list. Only SELECT / WITH / metadata reads pass.' },
+    { call: 'pg_apply_ddl("DROP SCHEMA public CASCADE")',
+      guard: 'protect_pg_target',
+      verdict: 'DENIED', colour: C.red,
+      why: 'Nothing is ever dropped. Objects live in ucc_migrated until cutover.' },
+    { call: 'pg_cutover(confirm_token=...)',
+      guard: 'hitl_cutover_gate',
+      verdict: 'DENIED', colour: C.amber,
+      why: 'Only --approve-cutover opens this, via an env var the agent cannot write.' },
+    { call: 'oracle_row_count("UCC_DEBTOR")',
+      guard: 'enforce_oracle_readonly',
+      verdict: 'ALLOWED', colour: C.green,
+      why: 'A read. The guard is a boundary, not an obstacle.' }
+  ];
+
+  const guardRows = el('div', '');
+  guardStage.appendChild(guardRows);
+  const guardNote = el('div',
+    'margin-top:0.9rem;padding-top:0.7rem;border-top:1px solid #21262D;color:' + C.muted + ';min-height:2.4em;');
+  guardStage.appendChild(guardNote);
+
+  const guardSteps = GUARDS.map((g, i) => () => {
+    if (i === 0) guardRows.innerHTML = '';                    // re-base each run
+    const row = el('div',
+      'opacity:0;transition:opacity .35s;margin-bottom:0.6rem;padding-left:0.6rem;' +
+      'border-left:2px solid ' + g.colour + ';');
+    row.appendChild(el('div', 'color:' + C.dim + ';', g.call));
+    row.appendChild(el('div', 'color:' + C.muted + ';font-size:0.7rem;',
+      'PreToolUse &rarr; ' + g.guard));
+    row.appendChild(el('div', 'color:' + g.colour + ';font-weight:600;', g.verdict));
+    guardRows.appendChild(row);
+    requestAnimationFrame(() => { row.style.opacity = '1'; });
+    guardNote.textContent = g.why;
+  });
+
+  guardSteps.push(() => {
+    guardNote.innerHTML = '<span style="color:' + C.gold + '">' +
+      'Every one of these is byte-identical to Capstone 8. Guardrails sit between the agent ' +
+      'and the tools, so reorganising the agent’s knowledge does not touch them.</span>';
+  });
+
+  var guardAnim = makeAnim('guard-play', guardSteps, () => {
+    guardRows.innerHTML = ''; guardNote.textContent = '';
+  }, 800);
+  guardAnim.autoplay('guard-container');
+}
+</script>
+
+<!-- course-assistant-widget:start -->
+<style>
+#caw-fab{position:fixed;bottom:1.5rem;right:1.5rem;z-index:99990;background:#D4A843;color:#0A1628;border:none;border-radius:28px;padding:0.7rem 1.2rem;font-weight:700;font-size:0.95rem;cursor:pointer;box-shadow:0 4px 18px rgba(0,0,0,0.45);font-family:inherit}
+#caw-fab:hover{filter:brightness(1.08)}
+#caw-overlay{position:fixed;inset:0;z-index:99991;background:rgba(4,10,20,0.72);display:flex;align-items:center;justify-content:center;padding:2rem}
+#caw-overlay[hidden]{display:none}
+#caw-panel{width:min(1100px,100%);height:min(760px,100%);background:#0A1628;border:1px solid #D4A843;border-radius:14px;display:flex;flex-direction:column;overflow:hidden}
+#caw-bar{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:0.5rem 1rem;background:#111D33;border-bottom:1px solid #21262D;color:#E8ECF1;font-size:0.85rem;font-family:sans-serif}
+#caw-bar a{color:#D4A843;text-decoration:none}
+#caw-close{background:none;border:none;color:#94A3B8;font-size:1.3rem;cursor:pointer;line-height:1}
+#caw-close:hover{color:#E8ECF1}
+#caw-frame{flex:1;border:none;width:100%;background:#0A1628}
+@media (max-width:768px){#caw-overlay{padding:0}#caw-panel{border-radius:0}}
+@media print{#caw-fab,#caw-overlay{display:none!important}}
+</style>
+<button id="caw-fab" aria-haspopup="dialog" aria-label="Open course search and ask assistant">💬 Ask the Course</button>
+<div id="caw-overlay" hidden role="dialog" aria-modal="true" aria-label="Course search assistant">
+  <div id="caw-panel">
+    <div id="caw-bar">
+      <span>Course Assistant — search or ask, fully offline</span>
+      <span><a href="search-assistant.html" target="_blank" rel="noopener">Open full page ↗</a> &nbsp; <button id="caw-close" aria-label="Close assistant">✕</button></span>
+    </div>
+    <iframe id="caw-frame" title="Course search assistant"></iframe>
+  </div>
+</div>
+<script>
+(function(){
+  var fab=document.getElementById('caw-fab'),ov=document.getElementById('caw-overlay'),
+      fr=document.getElementById('caw-frame'),cl=document.getElementById('caw-close');
+  function open(){ if(!fr.src) fr.src='search-assistant.html'; ov.hidden=false; fab.hidden=true; }
+  function close(){ ov.hidden=true; fab.hidden=false; fab.focus(); }
+  fab.addEventListener('click',open);
+  cl.addEventListener('click',close);
+  ov.addEventListener('click',function(e){ if(e.target===ov) close(); });
+  document.addEventListener('keydown',function(e){ if(e.key==='Escape'&&!ov.hidden) close(); });
+})();
+</script>
+<!-- course-assistant-widget:end -->
+</body>
+</html>

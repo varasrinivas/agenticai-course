@@ -1,0 +1,72 @@
+{
+  "$comment": [
+    "Hook wiring for the Oracle -> PostgreSQL migration agent.",
+    "The three PreToolUse guards run before the tool executes and return a",
+    "denial, so a rejected call never reaches the database. The PostToolUse",
+    "hook writes the audit log. Implementations live in hooks.py."
+  ],
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "mcp__oracle_src__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python -m hooks_cli enforce_oracle_readonly",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "mcp__pg_target__pg_apply_ddl",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python -m hooks_cli protect_pg_target",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "mcp__pg_target__pg_cutover",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python -m hooks_cli hitl_cutover_gate",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python -m hooks_cli audit_log",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  },
+  "permissions": {
+    "deny": [
+      "Bash(dropdb:*)",
+      "Bash(psql:*DROP SCHEMA*)",
+      "Bash(sqlplus:*)",
+      "Write(./legacy-oracle/**)",
+      "Edit(./app/**)"
+    ],
+    "allow": [
+      "Read(./artifacts/**)",
+      "Bash(docker compose:*)",
+      "Bash(pytest:*)"
+    ]
+  },
+  "env": {
+    "PG_TARGET_SCHEMA": "ucc_migrated",
+    "BATCH_SIZE": "10000"
+  }
+}
