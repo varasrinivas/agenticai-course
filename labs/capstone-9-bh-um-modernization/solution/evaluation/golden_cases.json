@@ -1,0 +1,161 @@
+{
+  "$comment": [
+    "The golden set, transcribed from bhauthtrack/db/02_seed.sql.",
+    "",
+    "Each case exercises one branch of PKG_LOC_RULES.EVAL_LOC and carries the",
+    "outcome the legacy system produces. `expected` is the FULL system answer --",
+    "the PL/SQL ladder AND the Java second layer -- because that is what the port",
+    "has to reproduce. Three cases (500002, 500008, 500012) come out differently",
+    "from the two layers, and a port that extracts only the database half gets",
+    "each of them wrong plausibly.",
+    "",
+    "500001 is the branch-7 overlap and is the only case in this set that",
+    "distinguishes a hit-policy decision from a lucky guess.",
+    "",
+    "All data is synthetic, generated from documented seed 20260822."
+  ],
+
+  "cases": [
+    {
+      "auth_id": 500001,
+      "note": "THE OVERLAP. cssrs 4 (+6) and dim1 3 (+4) reach score 10 with dim1>=3, so B7a and B7b BOTH match. First-commit ordering picks 3.7.",
+      "branch": "B7a",
+      "requested_loc": "3.7", "requested_units": 10,
+      "service_code": "H0019", "diagnosis_code": "F33.2",
+      "network_status": "IN",
+      "dims": {"1": 3, "2": 1, "3": 2, "4": 3, "5": 2, "6": 2},
+      "cssrs": 4,
+      "expected": {"outcome": "APPROVED", "granted_loc": "3.7", "granted_units": 10,
+                   "interval_days": 5, "reason_code": null}
+    },
+    {
+      "auth_id": 500002,
+      "note": "B7b clean -- dim1 is 0 so B7a cannot fire. THEN the Java layer steps it down: BWP-2001 has zero open 3.5 beds. Ladder says 3.5; the system says 3.1.",
+      "branch": "B7b + J:C",
+      "requested_loc": "3.5", "requested_units": 14,
+      "service_code": "H0018", "diagnosis_code": "F10.20",
+      "network_status": "IN",
+      "dims": {"1": 0, "2": 1, "3": 2, "4": 3, "5": 3, "6": 2},
+      "cssrs": 4,
+      "in_network_capacity": {"3.5": false, "3.1": true},
+      "expected": {"outcome": "APPROVED", "granted_loc": "3.1", "granted_units": 14,
+                   "interval_days": 14, "reason_code": null}
+    },
+    {
+      "auth_id": 500003,
+      "note": "B3 commits. Dimension 1 of 4 or more justifies medically managed care on its own, before the score is even complete.",
+      "branch": "B3",
+      "requested_loc": "4.0", "requested_units": 5,
+      "service_code": "H0019", "diagnosis_code": "F11.20",
+      "network_status": "IN", "urgency": "EXPEDITED",
+      "dims": {"1": 4, "2": 3, "3": 2, "4": 2, "5": 3, "6": 3},
+      "expected": {"outcome": "APPROVED", "granted_loc": "4.0", "granted_units": 5,
+                   "interval_days": 3, "reason_code": null}
+    },
+    {
+      "auth_id": 500004,
+      "note": "LEGACY_OVERRIDE. Branch 0 commits before anything is read; the dimensions below would have produced 3.5. BHA-2291, ticket body 'per DM request'. DO NOT GUESS -- this belongs in the manual-review queue.",
+      "branch": "B0",
+      "requested_loc": "3.5", "requested_units": 14,
+      "service_code": "H0018", "diagnosis_code": "F32.2",
+      "network_status": "IN", "legacy_override": "Y",
+      "dims": {"1": 0, "2": 2, "3": 3, "4": 3, "5": 3, "6": 2},
+      "cssrs": 3,
+      "expected": {"outcome": "PENDED", "granted_loc": "3.5", "granted_units": 0,
+                   "interval_days": 7, "reason_code": "LEGACY_OVR"}
+    },
+    {
+      "auth_id": 500005,
+      "note": "B1 termed. The ONLY path on which the engine returns DENIED, and it is an administrative denial rather than a clinical one -- which is why it needs no physician. Every clinical adverse determination pends instead.",
+      "branch": "B1",
+      "requested_loc": "2.5", "requested_units": 20,
+      "service_code": "H2036", "diagnosis_code": "F41.1",
+      "network_status": "TERMED",
+      "dims": {"1": 0, "3": 3},
+      "expected": {"outcome": "DENIED", "granted_loc": null, "granted_units": 0,
+                   "interval_days": 0, "reason_code": "PROV_TERMED"}
+    },
+    {
+      "auth_id": 500006,
+      "note": "B9. Residential requested, criteria not met. The engine PENDS rather than denying -- a nurse may approve, only a physician may deny. That separation of duties is encoded as a status.",
+      "branch": "B9",
+      "requested_loc": "3.5", "requested_units": 14,
+      "service_code": "H0018", "diagnosis_code": "F41.1",
+      "network_status": "IN",
+      "dims": {"1": 0, "2": 0, "3": 1, "4": 4, "5": 1, "6": 1},
+      "expected": {"outcome": "PENDED", "granted_loc": "1.0", "granted_units": 0,
+                   "interval_days": 90, "reason_code": "CRITERIA_NOT_MET"}
+    },
+    {
+      "auth_id": 500007,
+      "note": "B6 -- the dimension that inverts. cssrs 4 (+6) and dim3 3 (+3) reach 9; dim4 of 0 SUBTRACTS 3, landing at 2.5 instead of 3.5. Treat all six dimensions as severity and this comes out backwards.",
+      "branch": "B6 + B8",
+      "requested_loc": "2.5", "requested_units": 20,
+      "service_code": "H0035", "diagnosis_code": "F31.32",
+      "network_status": "IN",
+      "dims": {"1": 0, "2": 1, "3": 3, "4": 0, "5": 2, "6": 2},
+      "cssrs": 4,
+      "expected": {"outcome": "APPROVED", "granted_loc": "2.5", "granted_units": 20,
+                   "interval_days": 14, "reason_code": null}
+    },
+    {
+      "auth_id": 500008,
+      "note": "The benefit cap, applied AFTER the ladder decides. Zero residential days remaining caps units to 0 and rewrites the outcome -- but NOT the level. Granted 3.5 for zero days: clinically incoherent, and what the system does.",
+      "branch": "B7b + J:A",
+      "requested_loc": "3.5", "requested_units": 14,
+      "service_code": "H0018", "diagnosis_code": "F10.20",
+      "network_status": "IN",
+      "dims": {"1": 2, "2": 2, "3": 3, "4": 3, "5": 4, "6": 4},
+      "remaining_benefit_days": 0,
+      "expected": {"outcome": "PENDED", "granted_loc": "3.5", "granted_units": 0,
+                   "interval_days": 7, "reason_code": "BENEFIT_EXHAUSTED"}
+    },
+    {
+      "auth_id": 500009,
+      "note": "B1 out-of-network arm falls through (-2), then cssrs 3 (+3) and dim5 3 (+2) reach 3. This is also the authorization with NO consent row -- see test_consent_atomicity.",
+      "branch": "B1(oon) + B8",
+      "requested_loc": "2.1", "requested_units": 30,
+      "service_code": "H0015", "diagnosis_code": "F11.20",
+      "network_status": "OUT",
+      "dims": {"1": 1, "4": 3, "5": 3, "6": 3},
+      "cssrs": 3,
+      "expected": {"outcome": "APPROVED", "granted_loc": "2.1", "granted_units": 30,
+                   "interval_days": 30, "reason_code": null}
+    },
+    {
+      "auth_id": 500010,
+      "note": "The EDI case. The 278 carries no assessment, so all six dimensions are zero -- INCLUDING dimension 4, which fires the readiness penalty. Every EDI-submitted residential request therefore pends, carrying a reason code saying clinical criteria were not met when no clinical information was ever transmitted.",
+      "branch": "B6 + B9",
+      "requested_loc": "3.5", "requested_units": 14,
+      "service_code": "H0018", "diagnosis_code": "F10.20",
+      "network_status": "IN",
+      "dims": {"1": 0, "2": 0, "3": 0, "4": 0, "5": 0, "6": 0},
+      "expected": {"outcome": "PENDED", "granted_loc": "1.0", "granted_units": 0,
+                   "interval_days": 90, "reason_code": "CRITERIA_NOT_MET"}
+    },
+    {
+      "auth_id": 500011,
+      "note": "B3 commits at 4.0 even though 3.7 was requested. The ladder can grant a HIGHER level than the one asked for; a port that only ever approves-or-denies the requested level cannot express this.",
+      "branch": "B3",
+      "requested_loc": "3.7", "requested_units": 10,
+      "service_code": "H0019", "diagnosis_code": "F11.20",
+      "network_status": "IN", "urgency": "EXPEDITED",
+      "dims": {"1": 4, "4": 1},
+      "expected": {"outcome": "APPROVED", "granted_loc": "4.0", "granted_units": 5,
+                   "interval_days": 3, "reason_code": null}
+    },
+    {
+      "auth_id": 500012,
+      "note": "The frequency pend. Three adverse determinations in the rolling year pend the case regardless of the ladder. PARITY: the medical side applies no equivalent limitation. Flagged by compliance in 2016, never actioned. Neither port nor drop this silently -- escalate it.",
+      "branch": "B7b + J:B",
+      "requested_loc": "3.5", "requested_units": 14,
+      "service_code": "H0018", "diagnosis_code": "F33.2",
+      "network_status": "IN",
+      "dims": {"3": 3, "5": 3, "6": 3},
+      "cssrs": 4,
+      "prior_denials_rolling_year": 3,
+      "expected": {"outcome": "PENDED", "granted_loc": "3.5", "granted_units": 14,
+                   "interval_days": 7, "reason_code": "FREQUENCY_REVIEW"}
+    }
+  ]
+}

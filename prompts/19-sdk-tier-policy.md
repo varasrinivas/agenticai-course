@@ -152,6 +152,63 @@ tools:
 You are the filing-search specialist. ...
 ```
 
+### Skills — `.claude/skills/<name>/SKILL.md`
+
+**New to this corpus as of CAPSTONE-9.** A Skill is knowledge or a runbook, loaded on demand by
+description match. It shares the caller's context, so it is the right home for something several
+subagents need and the wrong home for anything that has to sequence, isolate, or block.
+
+```markdown
+---
+name: behavioral-health-um
+description: Behavioral-health UM domain knowledge — ASAM levels and the six dimensions,
+  concurrent review cadence, 42 CFR Part 2, MHPAEA parity, BH code sets, and the
+  reviewer-licensure rule. Load before reading, classifying or generating anything in a
+  behavioral-health prior-authorization system.
+allowed-tools: Read, Grep        # optional; advisory, not enforced
+---
+
+Body. Keep the entry point SHORT and make it route:
+
+| Reference | Load it when |
+|---|---|
+| `references/asam-levels.md` | Classifying a level of care, or writing a decision table |
+| `references/part2-redisclosure.md` | Anything touching consent, disclosure, logging, eventing |
+```
+
+A skill directory may bundle files, and bundling is most of the point:
+
+```
+.claude/skills/behavioral-health-um/
+├── SKILL.md              # the entry point — a router, not the whole body of knowledge
+├── references/           # loaded on demand; stays out of context until something needs it
+│   ├── asam-levels.md
+│   └── part2-redisclosure.md
+└── scripts/              # RUN, not recalled
+    └── validate_bh_codes.py
+```
+
+**Skill vs subagent vs slash command:**
+
+| | Skill | Subagent | Slash command |
+|---|---|---|---|
+| Loaded | on demand, by description | when delegated to | when a person types it |
+| Context | shares the caller's | **its own window** | shares the caller's |
+| Bundles files | **yes** | no | no |
+| Restricts tools | advisory | **enforced** | no |
+| Blocks a tool call | no | no — hooks do that | no |
+
+**The test:** does it decide, branch, parallelize, or block? Subagent. Same steps every time?
+Skill. An entry point a human invokes? Slash command.
+
+**Three anti-patterns to reject in review:**
+1. The same domain ontology pasted into N subagent prompts. It drifts the moment one is edited and
+   costs tokens on every turn. One Skill, loaded on demand.
+2. A Skill that "orchestrates". It cannot sequence a phase, isolate a context window, or block a
+   call. Writing "then delegate to the validator" in a Skill produces a suggestion, not a control.
+3. A slash command where a Skill belongs. If the agent should reach for it mid-run on its own, it
+   is a Skill.
+
 ### Hooks — `.claude/settings.json`
 
 **The nesting is three levels deep, and `command` never sits on the matcher.** A matcher entry is
@@ -287,6 +344,8 @@ dispatches to the same functions `can_use_tool` calls.
 | CAPSTONE-6 | 1 | Non-agent baseline (intentional) |
 | CAPSTONE-7 | 3 | Already spec-driven by name |
 | CAPSTONE-8 | 3 | Standalone (no domain letter). Spec-driven. Legacy Oracle → PostgreSQL migration; five subagents, three `PreToolUse` guards, HITL cutover gate |
+| CAPSTONE-8B | 3 | Skills-first rebuild of Capstone 8. Spec-driven. |
+| **CAPSTONE-9** | **3** | Standalone (no domain letter); uses DOMAIN A-BH. Spec-driven. Legacy Spring MVC/JSP monolith → distributed platform. Coordinator + 8 subagents, **4 Skills**, 5 hooks, 10 parity checks, HITL finalization gate. Two gated phases: 9A backend, 9B frontend. FIRST module in the corpus to use `.claude/skills/` |
 
 ## Generator Rules
 
@@ -295,7 +354,7 @@ When `/generate-module`, `/generate-capstone`, or `/generate-lab-repo` runs:
 1. **Look up the module's tier** from the table above. If absent, default to Tier 1 with a warning.
 2. **Tier 1**: Generate raw-API labs. Do NOT import `claude-agent-sdk`.
 3. **Tier 2**: Generate `solution/` (raw) AND `solution-sdk/` (SDK). The brief and HTML must walk through both, with a side-by-side comparison section.
-4. **Tier 3**: Generate `solution/` using the SDK. If the module is in the spec-driven set (M15B + capstones 1–5, 7, 8), also generate `spec/agent-spec.md` and an `appendix/manual-loop.py` showing the under-the-hood version.
+4. **Tier 3**: Generate `solution/` using the SDK. If the module is in the spec-driven set (M15B + capstones 1–5, 7, 8, 8B, 9), also generate `spec/agent-spec.md` and an `appendix/manual-loop.py` showing the under-the-hood version.
 5. **Always** include the SDK pattern cheat sheet imports verbatim — do not invent alternative APIs.
 6. **Never** mock the SDK by reimplementing `query()` with `client.messages.create()`. If an offline test is needed, use the `claude-agent-sdk` test patterns (see `capstone-4-agent-team/domain-a-healthcare/sdk_tests/`).
 

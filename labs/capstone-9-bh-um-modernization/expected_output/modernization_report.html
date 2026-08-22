@@ -1,0 +1,89 @@
+<!doctype html><meta charset='utf-8'>
+<title>BH UM modernization report</title>
+<style>
+body{font:14px/1.55 -apple-system,Segoe UI,Roboto,sans-serif;margin:0;
+     background:#f6f7f9;color:#1a1a1a}
+.wrap{max-width:960px;margin:0 auto;padding:28px 20px 60px}
+h1{font-size:22px;margin:0 0 4px}h2{font-size:16px;margin:30px 0 10px;
+   border-bottom:1px solid #d8dbe0;padding-bottom:5px}
+.state{display:inline-block;padding:4px 12px;border-radius:3px;font-weight:600;
+       font-size:13px;letter-spacing:.02em}
+.ready{background:#dcefdc;color:#22551f}.notready{background:#fbe3e3;color:#7a1f1f}
+table{border-collapse:collapse;width:100%;margin:10px 0;background:#fff}
+th,td{border:1px solid #dfe2e6;padding:6px 9px;text-align:left;vertical-align:top}
+th{background:#eef1f5;font-weight:600}
+.v-must-not-port{background:#fbe3e3}.v-must-build-new{background:#fdf3d8}
+.v-extend{background:#eef4fb}.v-port-as-is{background:#f4f7f4}
+.harm{color:#7a1f1f;font-weight:600}
+.blocking{background:#fbe3e3;border:1px solid #7a1f1f;padding:10px 14px;margin:14px 0}
+.clean-suspect{background:#fbe3e3;font-weight:600}
+.muted{color:#666;font-size:12px}
+code{background:#eef1f5;padding:1px 4px;border-radius:2px;font-size:12px}
+</style><div class='wrap'>
+<h1>Behavioral health UM modernization</h1>
+<span class='state notready'>NOT READY</span>
+<div class='blocking'><strong>Blocking:</strong><ul>
+<li>check 1 (rules divergence) came back clean and is expected to be non-zero. Suspect the validator before the port.</li>
+<li>check 2 (protected-content leak) came back clean and is expected to be non-zero. Suspect the validator before the port.</li>
+<li>check 3 (narrative round-trip) came back clean and is expected to be non-zero. Suspect the validator before the port.</li>
+<li>check 4 (consent atomicity) came back clean and is expected to be non-zero. Suspect the validator before the port.</li>
+</ul></div>
+<h2>Gap register</h2>
+<p class='muted'>port-as-is: 2 &middot; extend: 3 &middot; must-build-new: 7 &middot; must-not-port: 3</p>
+<table><tr><th>Capability</th><th>Verdict</th><th>Evidence</th><th>Harm / requirement</th><th>Backlog</th></tr>
+<tr class='v-must-not-port'><td>cleartext PHI in logs, events and search</td><td>must-not-port</td><td>donor interpolates member identifiers into log statements, ships plain JSON to an unauthenticated broker, and indexes cases into Elasticsearch with no TLS anywhere.</td><td class='harm'>This content is 42 CFR Part 2 protected. The monolith had ONE log sink; decomposition multiplies it into one per service plus a broker plus an index. Copying the idiom produces unlawful disclosure at several sinks instead of one, and nobody decided to make it worse -- fan-out is simply what the architecture does with a field.</td><td>not listed -- their domain is HIPAA-only</td></tr>
+<tr class='v-must-not-port'><td>consent enforcement as a feature flag</td><td>must-not-port</td><td>the donor applies its flag idiom uniformly to all seven capabilities and ships SECURITY_ENABLED=false by default.</td><td class='harm'>A week of CONSENT_ENABLED=false is an unlawful disclosure, not a slow page. A regulatory control that can be switched off in configuration is a default, not a control. Mirror the idiom for capabilities; never for consent, the disclosure accounting, or licensure checks.</td><td>not listed</td></tr>
+<tr class='v-must-not-port'><td>validated-then-discarded free-text field</td><td>must-not-port</td><td>the intake DTO validates `notes` with @IsOptional @IsString @Length(0,2000) and then drops it: not a column, not an entity field, not in either event payload.</td><td class='harm'>In behavioral health that field is simultaneously the medical-necessity evidence a reviewer reads AND the Part 2 protected content. Two failures at once, and the 201 response hides both -- the caller believes the clinical justification was recorded.</td><td>not listed</td></tr>
+<tr class='v-must-build-new'><td>concurrent review</td><td>must-build-new</td><td>nothing in the reference platform corresponds. The legacy BH_LOC_REVIEW table carries REVIEW_SEQ, NEXT_REVIEW_DUE and a per-level cadence; the donor schema has 2 tables and no review history at all.</td><td>A review ladder keyed (auth_id, review_seq) with a unique constraint, a next-review date derived from the GRANTED LEVEL, and a boundary timer that escalates when it passes.</td><td>not listed -- the concept does not exist in their domain</td></tr>
+<tr class='v-must-build-new'><td>decision audit and disclosure accounting</td><td>must-build-new</td><td>donor has no audit table, no createdBy/updatedBy, no transition history, and transitionTo() is unguarded. The legacy system has an audit trigger, but it records CHANGES to records, not DISCLOSURES of them.</td><td>Two separate things: a guarded transition history with actor attribution, AND a disclosure register recording recipient, scope, consent id and timestamp. They answer different questions and only the second satisfies Part 2.</td><td>agrees -- their #1 and #2</td></tr>
+<tr class='v-must-build-new'><td>42 CFR Part 2 consent model</td><td>must-build-new</td><td>no consent concept anywhere in the reference platform. Part 2 disclosure requires a consent naming the recipient, stating a purpose and scope, and expiring.</td><td>A consent entity with recipient, type, purpose, scope, signed, expires, revoked and redisclosure-notice-sent; written in the same transaction as the authorization; enforced by a NOT NULL foreign key rather than by convention.</td><td>not listed</td></tr>
+<tr class='v-must-build-new'><td>role-based authorization and reviewer licensure</td><td>must-build-new</td><td>um.security.enabled=false by default, and authentication-only when enabled: no roles, no scopes, no method security. The manual-review task has neither assignee nor candidate group.</td><td>Named roles, method-level checks on every call path (not only the one the UI uses), and a BPMN candidate group resolved from the diagnosis block so a substance-use adverse determination routes to an addiction-medicine reviewer.</td><td>not listed</td></tr>
+<tr class='v-must-build-new'><td>test suite</td><td>must-build-new</td><td>zero tests in the entire reference repository; CI runs `npm test --if-present`, so their absence never fails the build.</td><td>Tests for every item above, and a CI configuration that fails when they are missing rather than passing vacuously.</td><td>not listed</td></tr>
+<tr class='v-must-build-new'><td>entity resolution across the carve-out boundary</td><td>must-build-new</td><td>donor stores one opaque member_id VARCHAR(32) with no member table and no foreign key. Legacy BH_MEMBER carries TWO keys and 3 of 10 seeded members (30%) have no plan identifier at all.</td><td>Carry both identifiers as distinct columns; key anything crossing to the health plan on the plan&#x27;s. Report the unresolvable population as a number rather than resolving it by guesswork.</td><td>not listed</td></tr>
+<tr class='v-must-build-new'><td>frontend</td><td>must-build-new</td><td>one unrouted form. app.config.ts provides only provideHttpClient() -- @angular/router is a declared dependency that was never wired. libs/ui&#x27;s TaskListComponent, CaseSearchComponent and CaseCreateComponent are never imported. Service URL hardcoded.</td><td>Seven routed, role-guarded screens consuming libs/ui, with the rules currently living in JSTL relocated to route guards and server-side checks.</td><td>agrees in part -- their #4, &#x27;Case list + filter endpoint &amp; UI&#x27;</td></tr>
+<tr class='v-extend'><td>decision table</td><td>extend</td><td>camunda/pa-decision.dmn: hitPolicy FIRST, 3 rules, outputs {APPROVED, PENDED}, inputs {Procedure code, Requested units}. No DENIED output and no diagnosis input.</td><td></td><td>agrees -- their #6, &#x27;Extend DMN medical-necessity criteria&#x27;</td></tr>
+<tr class='v-extend'><td>process model</td><td>extend</td><td>camunda/prior-auth.bpmn is one-shot: 6 sequence flows, no cycle, no timerEventDefinition. Correct for a case with one decision.</td><td></td><td>agrees -- their #8, &#x27;SLA turnaround timer + auto-escalation&#x27;</td></tr>
+<tr class='v-extend'><td>referential integrity</td><td>extend</td><td>donor schema has 2 tables and ZERO foreign keys -- a database-per-service consequence, not a preference. The legacy schema has real foreign keys and a composite unique on (AUTH_ID, REVIEW_SEQ).</td><td></td><td>not listed</td></tr>
+<tr class='v-port-as-is'><td>transactional outbox</td><td>port-as-is</td><td>outbox_event table + relay worker + idempotent consumer in um-case-svc. Domain-neutral and correct.</td><td></td><td>not listed -- already built</td></tr>
+<tr class='v-port-as-is'><td>feature-flag capability layering</td><td>port-as-is</td><td>7 flags in apps/um-case-svc/.../application.yml, each gating one capability so the stack stays runnable with any subset enabled</td><td></td><td>not listed -- already built</td></tr>
+</table>
+<h2>Backlog cross-check</h2>
+<p><strong>Agreements (strongest findings)</strong> (5)</p><ul>
+<li>#1 guard case status transitions -&gt; our &#x27;decision audit&#x27; entry</li>
+<li>#2 persist decision rationale + decidedBy -&gt; our &#x27;decision audit&#x27; entry</li>
+<li>#4 case list + filter endpoint &amp; UI -&gt; our &#x27;frontend&#x27; entry</li>
+<li>#6 extend DMN medical-necessity criteria -&gt; our &#x27;decision table&#x27; entry</li>
+<li>#8 SLA turnaround timer + auto-escalation -&gt; our &#x27;process model&#x27; entry</li>
+</ul>
+<p><strong>We found, they did not</strong> (5)</p><ul>
+<li>42 CFR Part 2 consent model -- their domain is HIPAA-only, so the concept does not arise for them</li>
+<li>concurrent review -- a medical case has one decision</li>
+<li>reviewer licensure as a workflow candidate group</li>
+<li>carve-out entity resolution -- they have one identifier and no second organisation to reconcile with</li>
+<li>cleartext PHI fan-out across decomposed sinks</li>
+</ul>
+<p><strong>They list, we missed</strong> (2)</p><ul>
+<li>#7 appeals path + APPEALED status -- IN SCOPE FOR BH TOO and we did not raise it. Behavioral-health denials are appealed at least as often. Added to the queue as a follow-up.</li>
+<li>#10 dead-letter retry + alerting -- their pa.dead-letter topic has no producer and no consumer; we noted the dangling topic but did not carry it into a verdict.</li>
+</ul>
+<h2>Parity checks</h2><table><tr><th>#</th><th>Check</th><th>Count</th><th>Note</th></tr>
+<tr class='clean-suspect'><td>1</td><td>rules divergence</td><td>0</td><td>CLEAN, AND EXPECTED NON-ZERO &mdash; suspect the validator</td></tr>
+<tr class='clean-suspect'><td>2</td><td>protected-content leak</td><td>0</td><td>CLEAN, AND EXPECTED NON-ZERO &mdash; suspect the validator</td></tr>
+<tr class='clean-suspect'><td>3</td><td>narrative round-trip</td><td>0</td><td>CLEAN, AND EXPECTED NON-ZERO &mdash; suspect the validator</td></tr>
+<tr class='clean-suspect'><td>4</td><td>consent atomicity</td><td>0</td><td>CLEAN, AND EXPECTED NON-ZERO &mdash; suspect the validator</td></tr>
+<tr><td>5</td><td>workflow</td><td>0</td><td></td></tr>
+<tr><td>6</td><td>decision table</td><td>0</td><td></td></tr>
+<tr><td>7</td><td>identity</td><td>0</td><td></td></tr>
+<tr><td>8</td><td>screen coverage</td><td>0</td><td></td></tr>
+<tr><td>9</td><td>feature-flag classification</td><td>0</td><td></td></tr>
+<tr><td>10</td><td>term mapping</td><td>0</td><td></td></tr>
+</table>
+<h2>Queued for human decision (5)</h2>
+<table><tr><th>Artifact</th><th>Why</th><th>The question</th></tr>
+<tr><td><code>BH_AUTH.LEGACY_OVERRIDE / PKG_LOC_RULES branch 0</code></td><td>Added under BHA-2291 in 2013. The ticket body reads, in full, &#x27;per DM request&#x27;. No design note, no acceptance criteria, no test. Handled in two places and set on roughly 400 live rows.</td><td><strong>Which determinations was LEGACY_OVERRIDE meant to cover, who authorised it, and what should happen to the ~400 rows that carry it?</strong></td></tr>
+<tr><td><code>LocRulesService adjustment B -- the frequency pend</code></td><td>Three or more adverse determinations in a rolling year pend the case regardless of clinical criteria. Compliance flagged it in 2016: &#x27;The medical side does not apply an equivalent frequency-based pend to med/surg requests. If we keep this we need a comparative analysis on file. -- K.O.&#x27; Never actioned.</td><td><strong>Is this a non-quantitative treatment limitation applied to behavioral health alone, and does a comparative analysis exist? Porting it carries the exposure forward; dropping it changes outcomes for real members. Neither is an engineering decision.</strong></td></tr>
+<tr><td><code>LocRulesService adjustment C -- network-adequacy step-down</code></td><td>No in-network capacity at the granted level steps the member DOWN a level rather than authorising out-of-network. The med/surg side authorises out-of-network.</td><td><strong>Is a capacity-driven step-down a parity exposure? It also runs off a table populated by a Monday spreadsheet upload.</strong></td></tr>
+<tr><td><code>X12278ImportJob.impliedConsent / LegacyAuthEndpoint.impliedConsent</code></td><td>Two independent code paths FABRICATE a Part 2 consent on the submitter&#x27;s behalf, asserting that consent was obtained on paper at the facility. Nobody verifies that, and most requests arrive by one of these paths.</td><td><strong>Who consents when a machine submits? This is a question for a compliance officer, not an architect.</strong></td></tr>
+<tr><td><code>appeals path</code></td><td>The platform team&#x27;s backlog #7 lists an appeals path and an APPEALED status as planned-and-unbuilt. Our register did not raise it; behavioral-health denials are appealed at least as often as medical ones, and the legacy system handles appeals entirely outside itself, in a shared mailbox and a spreadsheet.</td><td><strong>Should the appeals path be in scope for this modernization, or does it stay out-of-system as today?</strong></td></tr>
+</table>
+</div>

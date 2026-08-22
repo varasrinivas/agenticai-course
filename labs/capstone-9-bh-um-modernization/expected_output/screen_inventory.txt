@@ -1,0 +1,153 @@
+SCREEN INVENTORY
+========================================================================
+
+  worklist.jsp         -> /worklist
+                          controller: WorklistController.worklist
+                          roles     : any authenticated user
+      [role-gate-action]
+        rule   : A case pended for an adverse determination offers no action to a non-physician
+        source : <c:when test="${i.status eq 'PENDED' and sessionScope.roleMask lt 4}">
+        today  : WorklistDao.forReviewer() filters PENDED rows in SQL for a non-MD -- BY A DIFFERENT RULE than this one, so the two do not agree
+        -> home: service-check
+      [role-gate-action]  *** UNENFORCED ***
+        rule   : A substance-use diagnosis pended for denial offers no action to a physician who is not addiction-medicine
+        source : <c:when test="${... fn:startsWith(i.diagnosisCode, 'F1') and sessionScope.roleMask lt 16}">
+        today  : NONE in the worklist query -- the SQL does not know about specialty, so these rows sit on every physician's list, counted in the totals and unactionable by most of them
+        -> home: service-check
+      [derived-value]
+        rule   : Days until the continued-stay review is due; negative means the authorization is out of compliance
+        source : TRUNC(NVL(r.NEXT_REVIEW_DUE, SYSDATE) - SYSDATE) AS DAYS_UNTIL_DUE
+        today  : computed in SQL here, and AGAIN in a decision.jsp scriptlet with different rounding
+        -> home: computed-field
+
+  authSubmit.jsp       -> /auth/new
+                          controller: AuthController.newAuth
+                          roles     : bh-intake, bh-nurse
+                          linked from: worklist.jsp
+      [role-gate-screen]
+        rule   : Only intake coordinators and nurses may create a request
+        source : if (!userContext.hasRole(ROLE_INTAKE) && !userContext.hasRole(ROLE_NURSE))
+        today  : AuthController.newAuth redirects
+        -> home: route-guard
+      [derived-value]  *** UNENFORCED ***
+        rule   : ASAM dimension scores are 0-4
+        source : <input type="text" name="dim1" size="2" value="0"/>
+        today  : NONE -- no validation in the controller and no CHECK constraint on the score column. A fat-fingered 40 in dimension 1 approves ASAM 4.0 without comment
+        -> home: decision-input
+
+  authDetail.jsp       -> /auth/:id
+                          controller: AuthController.detail
+                          roles     : any authenticated user
+                          linked from: worklist.jsp, search.jsp
+      [field-visibility]  *** UNENFORCED ***
+        rule   : Intake coordinators are non-clinical and must not read the clinical narrative
+        source : <c:if test="${sessionScope.roleMask ge 2}"> ... clinical tab
+        today  : NONE -- AuthController.detail loads the narrative unconditionally; the guard controls RENDERING, not RETRIEVAL, so the content is in the response body either way
+        -> home: api-omission
+      [field-visibility]  *** UNENFORCED ***
+        rule   : Only physicians may see the audit trail
+        source : <c:if test="${sessionScope.roleMask ge 4}"> ... audit tab
+        today  : NONE -- auditDao.findByAuth is called for every viewer
+        -> home: api-omission
+      [derived-value]
+        rule   : A member with no health-plan identifier cannot be reconciled with the plan
+        source : <c:when test="${empty member.planMemberId}"> ... unresolved to plan
+        today  : Member.isUnresolvedToPlan()
+        -> home: computed-field
+
+  decision.jsp         -> /auth/:id/decide
+                          controller: AuthController.decideForm
+                          roles     : bh-nurse, bh-physician
+                          linked from: worklist.jsp, authDetail.jsp
+      [role-gate-action]
+        rule   : A nurse may approve and may NEVER deny. Only a physician may issue an adverse determination, and a substance-use diagnosis requires an addiction-medicine reviewer
+        source : <c:when test="${sessionScope.roleMask ge 4}"> ... <c:when test="${sessionScope.roleMask ge 16}"> ... btn-deny
+        today  : AuthCaseService.issueDenial -- added in 2014 after an incident, and reached by only 2 of the 4 call paths into the decision logic
+        -> home: workflow-candidate-group
+      [field-visibility]  *** UNENFORCED ***
+        rule   : The clinical narrative is minimum-necessary-restricted to clinical staff
+        source : <c:if test="${sessionScope.roleMask ge 2}"><pre>${auth.clinicalNarrative}</pre></c:if>
+        today  : NONE here -- and SearchController exposes a full-text search over the same column to any authenticated user with no role check at all
+        -> home: api-omission
+      [field-visibility]  *** UNENFORCED ***
+        rule   : A record from a federally assisted SUD program carries a redisclosure prohibition, and the reviewer must be told
+        source : <c:if test="${provider.part2Program}"> ... part2-banner
+        today  : NONE -- this banner is the only place in the application that surfaces Part 2 status, and there is no corresponding server-side control
+        -> home: computed-field
+      [derived-value]  *** UNENFORCED ***
+        rule   : Continued-stay countdown; overdue means the authorization is out of compliance
+        source : long msLeft = lastReview.getNextReviewDue().getTime() - System.currentTimeMillis();
+        today  : NONE -- computed in a scriptlet on every page render, and reimplemented separately in a Crystal report. The two have disagreed since 2015
+        -> home: computed-field
+      [derived-value]  *** UNENFORCED ***
+        rule   : Regulatory turnaround: 72 hours expedited, 14 calendar days standard. Missing it can force an automatic approval depending on line of business
+        source : int allowedHours = "EXPEDITED".equals(a.getUrgency()) ? 72 : 336;
+        today  : NONE -- this is the ONLY implementation of that rule in the codebase
+        -> home: computed-field
+
+  locReview.jsp        -> /auth/:id/review
+                          controller: ReviewController.form
+                          roles     : bh-nurse, bh-physician
+                          linked from: worklist.jsp, authDetail.jsp
+      [derived-value]
+        rule   : Continued-stay review offers the current level or a step DOWN. Stepping up is not offered: an increase in level of care is a new determination with its own turnaround clock and its own appeal rights
+        source : String[] ladder = { "1.0", "2.1", "2.5", "3.1", "3.5", "3.7", "4.0" }; ... for (int i = idx - 1; i >= 0; i--)
+        today  : the ladder also exists in LocRulesService.LADDER and in PKG_LOC_RULES -- three copies, currently in agreement
+        -> home: decision-input
+      [derived-value]  *** UNENFORCED ***
+        rule   : A review more than one full interval late means the member has been at this level with no authorized clinical justification for that period
+        source : if (interval > 0 && daysLate >= interval) { lateBanner = ... }
+        today  : NONE -- no flag, no report, no escalation. The banner tells the reviewer and nothing else reacts
+        -> home: computed-field
+      [role-gate-action]
+        rule   : A continued-stay denial is an adverse determination and requires a physician
+        source : <option value="DENIED">Denied &mdash; adverse determination (physician only)</option>
+        today  : ReviewController.record checks the role -- but does NOT check specialty, and does NOT update BH_AUTH.STATUS, so the case reads DENIED to the worklist and APPROVED to every report
+        -> home: service-check
+
+  consentAdmin.jsp     -> /member/:id/consent
+                          controller: ConsentController.list
+                          roles     : bh-admin
+                          linked from: authDetail.jsp
+      [derived-value]
+        rule   : A consent is usable only if signed, unexpired and unrevoked
+        source : <c:set var="expired" value="${not empty k.expiresTs and k.expiresTs.time lt now}"/>
+        today  : Consent.isUsable() implements exactly this -- and this page does not call it, because a Date comparison did not work in EL and the author worked around it here
+        -> home: computed-field
+      [field-visibility]  *** UNENFORCED ***
+        rule   : Only a FULL_RECORD consent permits the clinical narrative to leave the system
+        source : <c:if test="${k.scope eq 'FULL_RECORD'}">narrative</c:if>
+        today  : NONE -- the queue payload built in AuthCaseService carries the narrative regardless of scope
+        -> home: service-check
+
+  search.jsp           -> /search
+                          controller: SearchController.search
+                          roles     : bh-nurse, bh-physician
+                          linked from: worklist.jsp
+      [role-gate-screen]  *** UNENFORCED ***
+        rule   : Clinical search is for clinical staff
+        source : <c:if test="${sessionScope.roleMask ge 2}"><li><a href="/search">Search</a></li></c:if>  (header.jsp)
+        today  : NONE -- SearchController has no role check at all. Hiding the link is the entire control, and the URL is /search?mode=clinical&q=
+        -> home: service-check
+      [derived-value]
+        rule   : Which member identifier matched -- the carve-out vendor's or the health plan's
+        source : <c:if test="${matchedOn eq 'PLAN_MEMBER_ID'}">
+        today  : SearchController tries one then the other and reports which hit
+        -> home: computed-field
+
+-- RULES WITH NO SERVER-SIDE ENFORCEMENT (11) ------------------------
+  worklist.jsp: A substance-use diagnosis pended for denial offers no action to a physician who is not addiction-medicine
+  authSubmit.jsp: ASAM dimension scores are 0-4
+  authDetail.jsp: Intake coordinators are non-clinical and must not read the clinical narrative
+  authDetail.jsp: Only physicians may see the audit trail
+  decision.jsp: The clinical narrative is minimum-necessary-restricted to clinical staff
+  decision.jsp: A record from a federally assisted SUD program carries a redisclosure prohibition, and the reviewer must be told
+  decision.jsp: Continued-stay countdown; overdue means the authorization is out of compliance
+  decision.jsp: Regulatory turnaround: 72 hours expedited, 14 calendar days standard. Missing it can force an automatic approval depending on line of business
+  locReview.jsp: A review more than one full interval late means the member has been at this level with no authorized clinical justification for that period
+  consentAdmin.jsp: Only a FULL_RECORD consent permits the clinical narrative to leave the system
+  search.jsp: Clinical search is for clinical staff
+
+  These are the rules that vanish in a mechanical port. Each
+  needs a gap-register entry as well as a route.
+

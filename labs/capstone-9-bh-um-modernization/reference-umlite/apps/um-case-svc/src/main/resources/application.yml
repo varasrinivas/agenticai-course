@@ -1,0 +1,94 @@
+server:
+  port: 8081
+
+spring:
+  application:
+    name: um-case-svc
+  datasource:
+    url: jdbc:postgresql://localhost:5432/um_case
+    username: umlite
+    password: umlite
+  jpa:
+    hibernate:
+      ddl-auto: validate   # Flyway owns the schema, not Hibernate
+    properties:
+      hibernate.format_sql: true
+    open-in-view: false
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+  # Phase 5: GraphQL data-as-a-service (M24) — POST /graphql, explorer at /graphiql.
+  graphql:
+    graphiql:
+      enabled: true
+  # Phase 5: Redis for cache-aside (M25) + Elasticsearch search repos (M26). Both connect lazily / are
+  # gated, so the service still boots without Redis or Elasticsearch.
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+    elasticsearch:
+      repositories:
+        enabled: ${SEARCH_ENABLED:false}
+  cache:
+    type: redis
+  # Phase 5: search (M26) — Elasticsearch endpoint.
+  elasticsearch:
+    uris: ${ELASTICSEARCH_URIS:http://localhost:9200}
+  # Phase 5: OIDC (M28) — Keycloak issuer. Only enforced when um.security.enabled=true.
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${OIDC_ISSUER_URI:http://localhost:8087/realms/um-lite}
+  # Phase 2 eventing. The consumer only starts when um.events.enabled=true, so with events
+  # off the service still boots without a broker (KafkaTemplate connects lazily on first send).
+  kafka:
+    bootstrap-servers: ${KAFKA_BROKERS:localhost:9092}
+    consumer:
+      group-id: um-case-svc
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+
+# UM-Lite Phase-2 toggles. Set EVENTS_ENABLED=true (env) to turn the slice event-driven.
+um:
+  events:
+    enabled: ${EVENTS_ENABLED:false}
+    topics:
+      pa-submitted: pa.submitted
+      pa-decisioned: pa.decisioned
+    # Transactional outbox (M14). When on, the consumer writes pa.decisioned to the outbox table
+    # in-transaction and OutboxPublisher polls + sends it. When off, it publishes directly (M12).
+    outbox:
+      enabled: ${OUTBOX_ENABLED:false}
+      poll-ms: 1000
+  # Phase 3 (Track 3): run as a Camunda external-task worker. Off by default so the service still
+  # boots without Camunda; turn on with WORKFLOW_ENABLED=true (and Camunda from docker-compose).
+  workflow:
+    enabled: ${WORKFLOW_ENABLED:false}
+  # Phase 5 toggles (Track 5). Off by default so the service still runs without Redis/ES/replica/Keycloak.
+  cache:
+    enabled: ${CACHE_ENABLED:false}      # M25 — Redis cache-aside
+  search:
+    enabled: ${SEARCH_ENABLED:false}     # M26 — Elasticsearch indexing/search
+  replica:
+    enabled: ${REPLICA_ENABLED:false}    # M27 — route read-only tx to the replica
+    url: ${REPLICA_URL:jdbc:postgresql://localhost:5433/um_case}
+  security:
+    enabled: ${SECURITY_ENABLED:false}   # M28 — OIDC resource server (Keycloak)
+
+# Camunda external task client — where to fetch-and-lock external tasks (the engine's REST API).
+camunda:
+  bpm:
+    client:
+      base-url: ${CAMUNDA_BASE_URL:http://localhost:8088/engine-rest}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

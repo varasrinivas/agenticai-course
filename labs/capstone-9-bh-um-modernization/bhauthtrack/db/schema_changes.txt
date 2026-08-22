@@ -1,0 +1,87 @@
+BHAuthTrack -- schema change log
+================================
+
+There is no migration tool. DDL is applied by hand in each environment by whoever is doing the
+release. This file is the only record of what was applied and when. It is maintained by
+convention, which means it is incomplete.
+
+Where this file and 01_schema.sql disagree, THIS FILE IS CLOSER TO PRODUCTION.
+
+---------------------------------------------------------------------------------------------
+2011-03-14  4.0.0   BHA-0001   Initial schema. BH_MEMBER, BH_PROVIDER, BH_AUTH, BH_LOC_REVIEW,
+                               BH_ASSESSMENT, BH_AUTH_QUEUE, BH_USER_ROLE. Applied by D. Reyes.
+
+2011-08-02  4.0.3   BHA-0142   Added BH_AUDIT_LOG and TRG_BH_AUTH_AUDIT.
+                               Decision from the appeals team: capture OLD and NEW
+                               CLINICAL_NARRATIVE in full so a challenged determination can be
+                               reconstructed. Signed off by appeals; not reviewed by privacy.
+
+2012-01-19  4.0.7   BHA-0311   Added BH_CONSENT for 42 CFR Part 2 tracking.
+                               NOTE: applied to PROD on 2012-01-19 but NOT to UAT until
+                               2012-04-02. Two months of UAT test data has no consent rows.
+
+2012-06-30  4.1.0   BHA-1180   Added BH_MEMBER.PLAN_MEMBER_ID.
+                               *** READ THIS ***
+                               MEMBER_ID is the BRIDGEWAY carve-out identifier and always has
+                               been. The health plan's identifier is PLAN_MEMBER_ID. It is
+                               NULLABLE because the eligibility feed did not carry it until the
+                               2014 feed rewrite. As of the last extract, 31% of BH_MEMBER rows
+                               created before 2014-07 still have PLAN_MEMBER_ID NULL.
+                               Anything that joins to the health plan MUST join on
+                               PLAN_MEMBER_ID. Several reports join on MEMBER_ID instead and
+                               have been quietly wrong since 2012.
+
+2013-02-11  4.1.4   BHA-2291   Added BH_AUTH.LEGACY_OVERRIDE CHAR(1) DEFAULT 'N'.
+                               Ticket body, in full: "per DM request".
+                               No design note, no acceptance criteria, no test.
+                               Handled in PKG_LOC_RULES branch 0 and in
+                               AuthStatusService.advance() case PENDED.
+                               ~400 live rows have it set to 'Y'.
+                               Nobody currently at Bridgeway can explain it.
+
+2013-09-05  4.1.9   BHA-2610   Added BH_AUTH.URGENCY. Expedited requests get 72 hours;
+                               standard get 14 calendar days. The clock itself was never
+                               implemented in the database or the service layer -- it is
+                               computed in decision.jsp and, separately and differently, in
+                               a Crystal report.
+
+2014-04-22  4.2.0   BHA-3104   PROD HOTFIX, applied directly, never back-ported to this repo:
+                               ALTER TABLE BH_AUTH MODIFY (DENIAL_REASON_CODE VARCHAR2(16));
+                               (was VARCHAR2(8) -- reason codes had outgrown it)
+                               01_schema.sql shows the NEW width because someone corrected the
+                               file later, but UAT ran on the OLD width until 2014-11.
+
+2014-11-30  4.2.1   BHA-3390   Added BH_PROVIDER.IS_PART2_PROGRAM.
+                               Backfilled from a spreadsheet supplied by network management.
+                               Accuracy of the backfill has never been audited. AuthCaseService
+                               captures consent unconditionally precisely because this flag has
+                               been wrong before.
+
+2015-07-08  4.2.4   BHA-4102   Added BH_LOC_REVIEW.REVIEWER_CREDENTIAL.
+                               Driven by an audit finding: we could show WHO reviewed but not
+                               whether they were licensed to issue an adverse determination.
+
+2016-03-15  4.2.6   BHA-4788   Added indexes IX_BH_AUTH_STATUS, IX_BH_MEMBER_PLAN.
+                               Last schema change. D. Reyes left the following month.
+
+---------------------------------------------------------------------------------------------
+2016-03-15 to present: no schema changes. Application changes only, and few of those.
+
+---------------------------------------------------------------------------------------------
+TABLES THIS FILE DOES NOT COVER
+---------------------------------------------------------------------------------------------
+Two tables the application reads are NOT in 01_schema.sql and were never part of a release:
+
+  BH_BENEFIT_ACCUM      Created 2013 by the claims integration team in their own schema and
+                        granted to BHAUTH_APP via a synonym. Populated by the nightly claims
+                        feed. LocRulesDao.remainingBenefitDays() reads it. If the feed has not
+                        run, the benefit cap in LocRulesService is applied against stale data.
+                        No staleness check exists.
+
+  BH_FACILITY_CAPACITY  Created 2015 by network management. Populated by a spreadsheet upload
+                        performed on Mondays. LocRulesDao.hasInNetworkCapacity() reads it and
+                        LocRulesService steps a member DOWN a level of care based on what it
+                        says. By Thursday it is fiction.
+
+Both are load-bearing inputs to a clinical decision and neither is under this system's change
+control. Anyone inventorying dependencies from 01_schema.sql alone will miss both.

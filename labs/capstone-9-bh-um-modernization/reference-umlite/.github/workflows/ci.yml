@@ -1,0 +1,51 @@
+# CI/CD pipeline (Phase 6 / Track 6, M35). Build + test on every push; build/push images and deploy to
+# AKS on main. Image promotion: the same digest built once flows dev → stage → prod (no rebuilds).
+name: ci-cd
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  build-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: "21" }
+      - name: Case service — build & test
+        run: cd apps/um-case-svc && ./mvnw -B -q verify
+      - uses: actions/setup-node@v4
+        with: { node-version: "20" }
+      - name: Intake service — build & test
+        run: cd apps/um-intake-svc && npm ci && npm run build && npm test --if-present
+      - name: Intake UI — build
+        run: cd apps/intake-ui && npm ci && npm run build
+
+  images:
+    needs: build-test
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Log in to ACR
+        run: az acr login --name umliteacr
+      - name: Build & push images (tagged by commit SHA — the promotable artifact)
+        run: |
+          for svc in um-case-svc um-intake-svc intake-ui; do
+            docker build -t umliteacr.azurecr.io/$svc:${{ github.sha }} apps/$svc
+            docker push umliteacr.azurecr.io/$svc:${{ github.sha }}
+          done
+
+  deploy:
+    needs: images
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Deploy to AKS via Helm (promote the built SHA — no rebuild)
+        run: |
+          az aks get-credentials --resource-group um-lite --name um-lite-aks
+          helm upgrade --install um-case-svc infra/helm/um-case-svc \
+            --set image.tag=${{ github.sha }}

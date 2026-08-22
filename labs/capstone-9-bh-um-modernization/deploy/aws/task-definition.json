@@ -1,0 +1,90 @@
+{
+  "_comment": [
+    "ECS Fargate TASK, not a service. Six phases run for minutes to hours and",
+    "then finish; a service would restart it forever.",
+    "",
+    "Register with:",
+    "  aws ecs register-task-definition --cli-input-json file://deploy/aws/task-definition.json",
+    "Run with:",
+    "  aws ecs run-task --cluster CLUSTER --task-definition bh-um-modernization \\",
+    "      --launch-type FARGATE --network-configuration ...",
+    "",
+    "NOTE WHAT IS ABSENT: BH_FINALIZATION_APPROVED. It is not in `environment`",
+    "and it is not in `secrets`. Approval is a separate run-task invocation with",
+    "an overridden command -- see finalize-override.json -- because a value in a",
+    "task definition is true for every future execution."
+  ],
+  "family": "bh-um-modernization",
+  "networkMode": "awsvpc",
+  "requiresCompatibilities": ["FARGATE"],
+  "cpu": "1024",
+  "memory": "2048",
+  "executionRoleArn": "arn:aws:iam::ACCOUNT:role/ecsTaskExecutionRole",
+  "taskRoleArn": "arn:aws:iam::ACCOUNT:role/bh-um-modernization-task",
+  "containerDefinitions": [
+    {
+      "name": "agent",
+      "image": "ACCOUNT.dkr.ecr.REGION.amazonaws.com/bh-um-modernization:TAG",
+      "essential": true,
+      "command": ["python", "coordinator.py", "--phase", "all"],
+      "environment": [
+        { "name": "ARTIFACT_DIR", "value": "/mnt/artifacts" },
+        { "name": "AUDIT_LOG", "value": "/mnt/artifacts/modernization_audit.jsonl" },
+        { "name": "BH_EMIT_ROOT", "value": "/mnt/artifacts/bh-um-lite" },
+        { "name": "BH_REFERENCE_ROOT", "value": "/work/reference-umlite" },
+        { "name": "BH_LEGACY_ROOT", "value": "/work/bhauthtrack" },
+        { "name": "BH_BACKLOG_PATH", "value": "/work/reference-umlite/BACKLOG.md" },
+        {
+          "_comment": "Only the synthetic fixture. Widening this to a directory of real extracts defeats the entire protected-content control.",
+          "name": "PHI_ALLOWLIST",
+          "value": "/work/bhauthtrack/db/02_seed.sql"
+        },
+        { "name": "NARRATIVE_EXCERPT_BUDGET", "value": "400" },
+        { "name": "COST_CEILING_OUTPUT_TOKENS", "value": "400000" }
+      ],
+      "secrets": [
+        {
+          "name": "ANTHROPIC_API_KEY",
+          "valueFrom": "arn:aws:secretsmanager:REGION:ACCOUNT:secret:anthropic-api-key"
+        }
+      ],
+      "mountPoints": [
+        { "sourceVolume": "artifacts", "containerPath": "/mnt/artifacts", "readOnly": false },
+        {
+          "_comment": "Evidence. readOnly TRUE -- the PreToolUse hooks already deny every write, and this is the second layer.",
+          "sourceVolume": "sources",
+          "containerPath": "/work",
+          "readOnly": true
+        }
+      ],
+      "logConfiguration": {
+        "logDriver": "awslogs",
+        "options": {
+          "awslogs-group": "/ecs/bh-um-modernization",
+          "awslogs-region": "REGION",
+          "awslogs-stream-prefix": "agent"
+        },
+        "_comment": [
+          "SET A RETENTION POLICY ON THIS LOG GROUP. The protected-content gate",
+          "redacts before every write, but anything reaching CloudWatch has been",
+          "copied into a system with its own retention and its own subscription",
+          "filters. A never-expire default is a never-expire retention on",
+          "whatever the redaction missed.",
+          "",
+          "  aws logs put-retention-policy --log-group-name /ecs/bh-um-modernization \\",
+          "      --retention-in-days 30"
+        ]
+      }
+    }
+  ],
+  "volumes": [
+    {
+      "name": "artifacts",
+      "efsVolumeConfiguration": { "fileSystemId": "fs-ARTIFACTS", "transitEncryption": "ENABLED" }
+    },
+    {
+      "name": "sources",
+      "efsVolumeConfiguration": { "fileSystemId": "fs-SOURCES", "transitEncryption": "ENABLED" }
+    }
+  ]
+}

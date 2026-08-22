@@ -41,6 +41,64 @@ DOMAIN C — PUBLIC RECORDS / UCC DATA ENGINEERING
   task, planning agents for complex ETL workflows, and evaluation/testing on data quality metrics.
 
 
+DOMAIN A-BH — BEHAVIORAL HEALTH UTILIZATION MANAGEMENT  [VARIANT OF DOMAIN A]
+  Status: NOT one of the three primary domains. A variant of Domain A used by CAPSTONE-9, and
+  available to any future module that wants a healthcare domain the clinical material does not
+  already cover. The A/B/C triad above is unchanged.
+
+  Context: Behavioral health prior authorization. For thirty years payers CARVED OUT behavioral
+  health to a separate vendor with its own provider network, its own clinical criteria, its own
+  claims platform, and — crucially — its own member identifiers. Plans are now in-sourcing it, which
+  is why the domain shows up as a migration problem rather than a greenfield one.
+
+  Key data: ASAM levels 0.5–4.0 scored across six dimensions; LOCUS/CALOCUS for psychiatric
+  placement; CPT 90791/90792/90832/90834/90837/90853; ABA 97151–97158; HCPCS H0015/H0018/H0019/
+  H0035/H2036/S9480; ICD-10 chapter F (F10–F19 substance use, F20–F49 psychiatric); PHQ-9, GAD-7,
+  C-SSRS instrument scores; 42 CFR Part 2 consents; X12 278 review requests.
+
+  FOUR THINGS THAT MAKE IT DIFFERENT FROM DOMAIN A, and every one of them breaks an assumption a
+  clinical prior-auth system is built on:
+
+  1. THE CRITERIA ARE A LADDER, NOT A YES/NO. Medical asks "is this procedure necessary for this
+     diagnosis?" Behavioral health asks "at what INTENSITY should this person be treated right
+     now?" — a rung chosen from six independently scored dimensions. An engine that can only
+     approve or deny the level that was REQUESTED is missing the domain.
+     Watch dimension 4: readiness to change INVERTS. A low score argues AGAINST residential
+     placement, because placement without engagement produces an AMA discharge inside 72 hours.
+     Treat all six as severity indicators and you get it backwards, plausibly.
+
+  2. AUTHORIZATION IS A SERIES, NOT AN EVENT. Concurrent review: an initial determination plus
+     recurring continued-stay reviews on a cadence set by level of care — 3 days at ASAM 4.0,
+     7 at 3.5, 14 at PHP. The cadence follows the LEVEL, not the units approved. A next-review
+     date is a REGULATORY DEADLINE, not a reminder. Approval is not terminal.
+
+  3. TWO PRIVACY REGIMES. HIPAA plus 42 CFR Part 2 for records from federally assisted SUD
+     treatment programs. Part 2 requires a consent that NAMES the recipient, states a purpose and
+     scope, expires, and carries a redisclosure notice — plus an accounting of disclosures. A
+     system can be fully HIPAA-compliant and violate Part 2 on every request, and the failure is
+     almost always plumbing rather than policy.
+
+  4. PARITY IS A DESIGN CONSTRAINT. MHPAEA: a limitation applied to BH may be no more restrictive
+     than the comparable med/surg limitation. The hard ones are non-quantitative — review
+     frequency, step therapy, criteria strictness, network standards. These appear in legacy code
+     as rules that look reasonable in isolation. Neither port them silently nor drop them silently.
+
+  THE REVIEWER-LICENSURE RULE (load-bearing, and easy to lose in a port):
+    A nurse may approve. A nurse may NEVER deny. Only a physician may issue an adverse
+    determination — and for SUD or psychiatric level of care, a SAME-SPECIALTY peer reviewer.
+    This is why a PENDED status exists at all: it is the state a case waits in for someone
+    licensed to deny it.
+
+  Why it's great for agents: every one of the four differences above is a place where a
+  well-built general system has no answer, so the agent's job becomes DETECTING INSUFFICIENCY
+  rather than translating. Plus a hard "no PHI in prompts, ever" constraint that forces the
+  question of how you point an agent at a regulated codebase without feeding it regulated data.
+
+  Generator note: all fixtures for this domain MUST be synthetic, generated from a documented
+  seed, and clearly fictional. Codes are real and correctly formatted; the people are not. Any
+  Part 2 or parity behaviour is an EDUCATIONAL MODEL and must carry a "not legal advice" note.
+
+
 CAPSTONE PROJECT 1: [CAPSTONE-1] "First Agent" — Single-Tool Conversational Assistant
   Difficulty: ★☆☆☆☆
   Skills practiced: Tool use basics (M05), conversation management (M08), structured output (M04)

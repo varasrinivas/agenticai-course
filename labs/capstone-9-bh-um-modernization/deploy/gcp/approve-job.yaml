@@ -1,0 +1,47 @@
+# The approval job. SEPARATE FROM THE RUN, ON PURPOSE.
+#
+# This exists as its own resource so that approving a modernization is an act
+# someone performs, with a name attached, after reading the report -- and not a
+# line in a config file that is true forever.
+#
+# Deploy it once; execute it only when a human has read
+# artifacts/modernization_report.html and decided.
+#
+#   gcloud run jobs replace deploy/gcp/approve-job.yaml
+#   gcloud run jobs execute bh-um-finalize --region REGION --wait
+#
+# WHAT NOT TO DO
+#   * Do not add BH_FINALIZATION_APPROVED to the main job. It would be on by
+#     default for every future run.
+#   * Do not grant run.jobs.run on this job to the service account that
+#     executes the main job. The agent must not be able to invoke its own
+#     approval, and IAM is where that is actually enforced.
+apiVersion: run.googleapis.com/v1
+kind: Job
+metadata:
+  name: bh-um-finalize
+spec:
+  template:
+    spec:
+      taskCount: 1
+      template:
+        spec:
+          maxRetries: 0
+          containers:
+            - image: REGION-docker.pkg.dev/PROJECT/modernization/bh-um-modernization-agent:TAG
+              command: ["python"]
+              args: ["coordinator.py", "--phase", "finalize", "--approve"]
+              env:
+                # The only place this variable is ever set, and it is set by
+                # the command above rather than by this list.
+                - name: ARTIFACT_DIR
+                  value: /mnt/artifacts
+              volumeMounts:
+                - name: artifacts
+                  mountPath: /mnt/artifacts
+          volumes:
+            - name: artifacts
+              csi:
+                driver: gcsfuse.run.googleapis.com
+                volumeAttributes:
+                  bucketName: ARTIFACT_BUCKET

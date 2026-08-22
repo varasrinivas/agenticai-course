@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  BHAuthTrack root application context.
+
+  THE TRANSACTION MANAGER IS THE MOST IMPORTANT THING IN THIS FILE.
+
+  <tx:annotation-driven/> plus a DataSourceTransactionManager over one Oracle DataSource is what
+  makes AuthCaseService.submitAndDecide() atomic. Five writes -- authorization, assessments,
+  consent, initial review, outbound queue row -- commit together or roll back together, and the
+  guarantee costs one annotation because everything is in one database.
+
+  That guarantee does not survive being split into services. Whoever decomposes this has to say
+  what replaces it. "We'll write the consent row right after" is not an answer; see the class
+  comment on AuthCaseService for why.
+-->
+<beans xmlns="http://www.springframework.org/schema/beans"
+       xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+       xmlns:context="http://www.springframework.org/schema/context"
+       xmlns:tx="http://www.springframework.org/schema/tx"
+       xsi:schemaLocation="
+         http://www.springframework.org/schema/beans
+         http://www.springframework.org/schema/beans/spring-beans.xsd
+         http://www.springframework.org/schema/context
+         http://www.springframework.org/schema/context/spring-context.xsd
+         http://www.springframework.org/schema/tx
+         http://www.springframework.org/schema/tx/spring-tx.xsd">
+
+  <context:component-scan base-package="com.bridgeway.bhauth.service,
+                                        com.bridgeway.bhauth.dao,
+                                        com.bridgeway.bhauth.security"/>
+
+  <context:property-placeholder location="classpath:bhauth.properties"/>
+
+  <!--
+    One DataSource. One schema. Everything the application touches is behind this bean, which is
+    why there is no such thing as a distributed transaction in BHAuthTrack and no such thing as
+    a partial failure.
+
+    Pool size 20. The Oracle session context that TRG_BH_AUTH_AUDIT reads is set per request on
+    whichever of those 20 connections is current, which is why audit attribution is unreliable.
+  -->
+  <bean id="dataSource" class="org.apache.commons.dbcp.BasicDataSource"
+        destroy-method="close">
+    <property name="driverClassName" value="oracle.jdbc.OracleDriver"/>
+    <property name="url"      value="${bhauth.db.url}"/>
+    <property name="username" value="${bhauth.db.user}"/>
+    <property name="password" value="${bhauth.db.password}"/>
+    <property name="initialSize" value="5"/>
+    <property name="maxActive"   value="20"/>
+    <property name="validationQuery" value="SELECT 1 FROM DUAL"/>
+    <property name="testOnBorrow"    value="true"/>
+  </bean>
+
+  <bean id="jdbcTemplate" class="org.springframework.jdbc.core.JdbcTemplate">
+    <constructor-arg ref="dataSource"/>
+  </bean>
+
+  <bean id="transactionManager"
+        class="org.springframework.jdbc.datasource.DataSourceTransactionManager">
+    <property name="dataSource" ref="dataSource"/>
+  </bean>
+
+  <tx:annotation-driven transaction-manager="transactionManager"/>
+
+  <!--
+    Mail. One relay, no authentication, plaintext on port 25 inside the network. Used by the
+    continued-stay reminder job and by the notification job that poll_queue.sh drives.
+  -->
+  <bean id="mailSender" class="org.springframework.mail.javamail.JavaMailSenderImpl">
+    <property name="host" value="${bhauth.smtp.host}"/>
+    <property name="port" value="25"/>
+  </bean>
+
+  <!--
+    Quartz. Two jobs, both reaching the service layer directly and therefore bypassing every
+    check that lives in a controller or a JSP.
+
+    Note that neither job has a misfire policy. A server restart that spans 02:15 means the 278
+    import does not run that night and nobody is told.
+  -->
+  <bean id="x12ImportJob"
+        class="org.springframework.scheduling.quartz.JobDetailFactoryBean">
+    <property name="jobClass" value="com.bridgeway.bhauth.batch.X12278ImportJob"/>
+    <property name="durability" value="true"/>
+  </bean>
+
+  <bean id="x12ImportTrigger"
+        class="org.springframework.scheduling.quartz.CronTriggerFactoryBean">
+    <property name="jobDetail" ref="x12ImportJob"/>
+    <property name="cronExpression" value="0 15 2 * * ?"/>
+  </bean>
+
+  <bean id="reminderJob"
+        class="org.springframework.scheduling.quartz.JobDetailFactoryBean">
+    <property name="jobClass" value="com.bridgeway.bhauth.batch.ContinuedStayReminderJob"/>
+    <property name="durability" value="true"/>
+  </bean>
+
+  <!--
+    Weekdays only. The continued-stay intervals are in CALENDAR days -- three at ASAM 4.0. A
+    review that comes due on Saturday is first mentioned on Monday, by which time it is overdue.
+    Nothing reconciles the two calendars.
+  -->
+  <bean id="reminderTrigger"
+        class="org.springframework.scheduling.quartz.CronTriggerFactoryBean">
+    <property name="jobDetail" ref="reminderJob"/>
+    <property name="cronExpression" value="0 0 6 * * MON-FRI"/>
+  </bean>
+
+  <bean class="org.springframework.scheduling.quartz.SchedulerFactoryBean">
+    <property name="triggers">
+      <list>
+        <ref bean="x12ImportTrigger"/>
+        <ref bean="reminderTrigger"/>
+      </list>
+    </property>
+    <!-- Quartz jobs are instantiated by Quartz, so @Autowired fields are null unless the job
+         factory is Spring-aware. This is what makes AuthCaseService reachable from a job. -->
+    <property name="jobFactory">
+      <bean class="org.springframework.scheduling.quartz.SpringBeanJobFactory"/>
+    </property>
+  </bean>
+
+</beans>

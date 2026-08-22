@@ -1,0 +1,336 @@
+{
+  "$comment": [
+    "THE REFERENCE ANSWER for the rules conversion. Not the destination -- the",
+    "student's agent produces its own, and the interesting work is diffing the",
+    "two and deciding which is right.",
+    "",
+    "Two things here are the whole lesson.",
+    "",
+    "1. HIT POLICY IS UNIQUE, NOT FIRST. Converting a first-match ladder to",
+    "   FIRST preserves behaviour only while row order survives every edit,",
+    "   every modeller UI and every merge -- an invariant nothing enforces and",
+    "   no test checks. UNIQUE with tightened conditions makes the exclusion",
+    "   explicit, so the table means the same thing on the day someone drags a",
+    "   row, and errors loudly if a future edit reintroduces an overlap.",
+    "",
+    "2. THE TIGHTENED CONDITIONS. Look at B7b, B8a, B8b, B9 and B10: each",
+    "   carries the negation of every row above it. That is ugly, and it is",
+    "   honest -- the exclusions were always there, encoded as position.",
+    "",
+    "The accumulating branches are NOT rows. They are how `score` is computed.",
+    "Emitting one as a row is the most common way to produce a table that is",
+    "subtly and permanently wrong."
+  ],
+  "block": "PKG_LOC_RULES.EVAL_LOC + LocRulesService.evaluate",
+  "layers": [
+    {
+      "name": "plsql_ladder",
+      "order": 1,
+      "can_upgrade": true,
+      "source": "db/03_PKG_LOC_RULES.sql",
+      "note": "Stateful first-match. Mutates v_score across branches."
+    },
+    {
+      "name": "java_adjustments",
+      "order": 2,
+      "can_upgrade": false,
+      "source": "src/main/java/com/bridgeway/bhauth/service/LocRulesService.java",
+      "extra_inputs": [
+        "remaining_benefit_days",
+        "prior_denials_rolling_year",
+        "in_network_capacity"
+      ],
+      "note": "Runs AFTER the ladder has committed, so it can only downgrade or pend, never upgrade. Two of its three inputs live in other teams' schemas and are outside this system's change control. NOT modelled as table rows -- see `post_table_adjustments`."
+    }
+  ],
+  "inputs": [
+    {
+      "name": "score",
+      "type": "number",
+      "label": "Derived severity score",
+      "derived": true,
+      "expression": "0, then the accumulating branches B1oon, B2a, B2b, B3b, B4, B5a, B5b, B6 in order"
+    },
+    {
+      "name": "overlap_upper",
+      "type": "number",
+      "label": "Meets the 3.7 test (score >= 10 and dim1 >= 3)",
+      "derived": true,
+      "expression": "score >= 10 and dim1 >= 3"
+    },
+    {
+      "name": "dim1",
+      "type": "number",
+      "label": "ASAM dim 1 (withdrawal)"
+    },
+    {
+      "name": "dim4",
+      "type": "number",
+      "label": "ASAM dim 4 (readiness)"
+    },
+    {
+      "name": "cssrs",
+      "type": "number",
+      "label": "C-SSRS"
+    },
+    {
+      "name": "requested_residential",
+      "type": "number",
+      "label": "Requested level is 3.1 or above (1/0)"
+    },
+    {
+      "name": "network_termed",
+      "type": "number",
+      "label": "Provider terminated (1/0)"
+    },
+    {
+      "name": "legacy_override",
+      "type": "number",
+      "label": "LEGACY_OVERRIDE set (1/0)"
+    },
+    {
+      "name": "diagnosis_block",
+      "type": "number",
+      "label": "ICD-10 F-block (10=SUD, 20-49=psych)"
+    }
+  ],
+  "branches": [
+    {
+      "id": "B1oon",
+      "kind": "accumulating",
+      "condition": "network_out >= 1",
+      "delta": -2,
+      "note": "Out-of-network penalises and FALLS THROUGH. Terminated commits (B1)."
+    },
+    {
+      "id": "B2a",
+      "kind": "accumulating",
+      "condition": "cssrs >= 4",
+      "delta": 6
+    },
+    {
+      "id": "B2b",
+      "kind": "accumulating",
+      "condition": "cssrs == 3",
+      "delta": 3
+    },
+    {
+      "id": "B3b",
+      "kind": "accumulating",
+      "condition": "dim1 == 3",
+      "delta": 4,
+      "note": "The dim1 >= 4 arm COMMITS (B3). This arm accumulates. Splitting one source branch into a committing row and an accumulating input is the classification that matters."
+    },
+    {
+      "id": "B4",
+      "kind": "accumulating",
+      "condition": "dim2 >= 3 or dim3 >= 3",
+      "delta": 3
+    },
+    {
+      "id": "B5a",
+      "kind": "accumulating",
+      "condition": "dim5 >= 4 and dim6 >= 4",
+      "delta": 5
+    },
+    {
+      "id": "B5b",
+      "kind": "accumulating",
+      "condition": "not (dim5 >= 4 and dim6 >= 4) and (dim5 >= 3 or dim6 >= 3)",
+      "delta": 2
+    },
+    {
+      "id": "B6",
+      "kind": "accumulating",
+      "condition": "dim4 <= 1",
+      "delta": -3,
+      "note": "READINESS INVERTS. A low score argues AGAINST residential placement, because placement without engagement historically produces an AMA discharge inside 72 hours. Treat all six dimensions as severity and this comes out backwards."
+    },
+    {
+      "id": "B0",
+      "kind": "committing",
+      "condition": "legacy_override >= 1",
+      "note": "BHA-2291, ticket body 'per DM request'. Reproduced verbatim and QUEUED for human decision -- see `unconverted`. Not interpreted.",
+      "outputs": {
+        "outcome": "PENDED",
+        "loc": "requested",
+        "units": 0,
+        "reason_code": "LEGACY_OVR"
+      }
+    },
+    {
+      "id": "B1",
+      "kind": "committing",
+      "condition": "legacy_override < 1 and network_termed >= 1",
+      "note": "The ONLY reachable denial, and it is ADMINISTRATIVE rather than clinical -- which is why the engine may issue it without a physician. Every clinical adverse determination pends instead (B9).",
+      "outputs": {
+        "outcome": "DENIED",
+        "loc": null,
+        "units": 0,
+        "interval_days": 0,
+        "reason_code": "PROV_TERMED"
+      }
+    },
+    {
+      "id": "B3",
+      "kind": "committing",
+      "condition": "legacy_override < 1 and network_termed < 1 and dim1 >= 4",
+      "note": "Withdrawal severity alone justifies medically managed care, before the score is complete.",
+      "outputs": {
+        "outcome": "APPROVED",
+        "loc": "4.0",
+        "units": "min(requested, 5)",
+        "interval_days": 3
+      }
+    },
+    {
+      "id": "B7a",
+      "kind": "committing",
+      "condition": "legacy_override < 1 and network_termed < 1 and dim1 < 4 and score >= 10 and dim1 >= 3",
+      "note": "THE OVERLAP, upper half. score >= 10 with dim1 >= 3 also satisfies B7b; in the ladder, first-commit ordering picks this one.",
+      "outputs": {
+        "outcome": "APPROVED",
+        "loc": "3.7",
+        "units": "min(requested, 10)",
+        "interval_days": 5
+      }
+    },
+    {
+      "id": "B7b",
+      "kind": "committing",
+      "condition": "legacy_override < 1 and network_termed < 1 and dim1 < 4 and score >= 8 and overlap_upper < 1",
+      "note": "THE OVERLAP, lower half, TIGHTENED. The exclusion that the ladder encoded as position is now the named input `overlap_upper`. A DMN cell constrains one input, so a cross-input exclusion has to be given a name -- and naming it is an improvement, because the overlap becomes visible on the table rather than implied by which row sits higher.",
+      "outputs": {
+        "outcome": "APPROVED",
+        "loc": "3.5",
+        "units": "min(requested, 14)",
+        "interval_days": 7
+      }
+    },
+    {
+      "id": "B8a",
+      "kind": "committing",
+      "condition": "legacy_override < 1 and network_termed < 1 and dim1 < 4 and score >= 5 and score < 8",
+      "outputs": {
+        "outcome": "APPROVED",
+        "loc": "2.5",
+        "units": "min(requested, 20)",
+        "interval_days": 14
+      }
+    },
+    {
+      "id": "B8b",
+      "kind": "committing",
+      "condition": "legacy_override < 1 and network_termed < 1 and dim1 < 4 and score >= 2 and score < 5",
+      "outputs": {
+        "outcome": "APPROVED",
+        "loc": "2.1",
+        "units": "min(requested, 30)",
+        "interval_days": 30
+      }
+    },
+    {
+      "id": "B9",
+      "kind": "committing",
+      "condition": "legacy_override < 1 and network_termed < 1 and dim1 < 4 and score < 2 and requested_residential >= 1",
+      "note": "NOT A DENIAL, DELIBERATELY. The criteria are not met, but only a physician may issue an adverse determination -- so the engine pends for one. That separation of duties is a control, and converting this row into an automated denial removes it.",
+      "outputs": {
+        "outcome": "PENDED",
+        "loc": "1.0",
+        "units": 0,
+        "interval_days": 90,
+        "reason_code": "CRITERIA_NOT_MET"
+      }
+    },
+    {
+      "id": "B10",
+      "kind": "committing",
+      "condition": "legacy_override < 1 and network_termed < 1 and dim1 < 4 and score < 2 and requested_residential < 1",
+      "outputs": {
+        "outcome": "APPROVED",
+        "loc": "1.0",
+        "units": "min(requested, 12)",
+        "interval_days": 90
+      }
+    }
+  ],
+  "hit_policy": "UNIQUE",
+  "hit_policy_justification": "The source is a stateful first-match ladder, so FIRST is the mechanically faithful choice -- and it is faithful only while row order survives every edit, every modeller UI and every merge, an invariant nothing enforces and no test can check. UNIQUE with conditions tightened by the negation of each row above makes the exclusions explicit rather than positional. The table then means the same thing regardless of row order, and if a future edit reintroduces an overlap the engine errors loudly at evaluation instead of silently returning whichever row happens to sit higher. The cost is verbose conditions; the benefit is that the ordering is no longer load-bearing.",
+  "overlaps": [
+    {
+      "rows": [
+        "B7a",
+        "B7b"
+      ],
+      "witness": {
+        "score": 10,
+        "dim1": 3
+      },
+      "under_first": "3.7",
+      "under_unique": "ERROR - two rules matched",
+      "under_collect": [
+        "3.7",
+        "3.5"
+      ],
+      "under_priority": "whichever of 3.7 / 3.5 the priority list ranks higher",
+      "resolution": "B7b tightened with the derived input `overlap_upper < 1`. Golden case 500001 is exactly this witness.",
+      "note": "This is the 3.5 / 3.7 boundary -- clinically the point where care crosses into medical monitoring, and structurally the point where the ladder's ordering carried information a flat table does not."
+    },
+    {
+      "rows": [
+        "B3",
+        "B7a"
+      ],
+      "witness": {
+        "dim1": 4,
+        "score": 10
+      },
+      "under_first": "4.0",
+      "under_unique": "ERROR - two rules matched",
+      "under_collect": [
+        "4.0",
+        "3.7"
+      ],
+      "resolution": "B7a and every row below tightened with dim1 < 4."
+    }
+  ],
+  "post_table_adjustments": [
+    {
+      "id": "J:A",
+      "name": "benefit maximum",
+      "applies_to": "every APPROVED outcome",
+      "effect": "cap units at remaining_benefit_days; if zero, outcome becomes PENDED / BENEFIT_EXHAUSTED",
+      "note": "Caps units WITHOUT changing the level, so a member can be granted 3.5 for zero days. Clinically incoherent and faithfully reproduced. NOT a table row: it reads an accumulator the decision table has no access to, and it runs after the decision."
+    },
+    {
+      "id": "J:B",
+      "name": "frequency pend",
+      "applies_to": "every APPROVED outcome",
+      "effect": "three or more adverse determinations in the rolling year -> PENDED / FREQUENCY_REVIEW",
+      "parity": "ESCALATED. The medical side applies no equivalent frequency-based pend to med/surg requests, which makes this a non-quantitative treatment limitation applied to behavioral health alone. Compliance flagged it in 2016 and it was never actioned. Ported forward unchanged pending a human decision -- dropping it would change outcomes for real members, and keeping it carries the exposure forward. Neither is an agent's call."
+    },
+    {
+      "id": "J:C",
+      "name": "network-adequacy step-down",
+      "applies_to": "APPROVED at a residential level",
+      "effect": "no in-network capacity at the granted level -> step down one rung, recompute interval from the NEW level",
+      "parity": "ESCALATED. The med/surg side would authorise out-of-network rather than step down. Possible NQTL."
+    }
+  ],
+  "unconverted": [
+    {
+      "id": "B0",
+      "reason": "branches on BH_AUTH.LEGACY_OVERRIDE, added under BHA-2291 in 2013 with a ticket body reading, in full, 'per DM request'. No design note, no acceptance criteria, no test. Handled in two places and set on roughly 400 live rows.",
+      "question": "Which determinations was LEGACY_OVERRIDE meant to cover, who authorised it, and what should happen to the ~400 rows that carry it?",
+      "queued": true,
+      "note": "Reproduced verbatim so behaviour does not change, and queued so a human decides. A conversion reporting 100% automated coverage over this system has guessed at this branch."
+    }
+  ],
+  "derived_inputs": [
+    {
+      "name": "overlap_upper",
+      "condition": "score >= 10 and dim1 >= 3",
+      "note": "The B7a condition, named. B7b tests `overlap_upper < 1` because a decision-table cell constrains exactly one input and the exclusion couples two. Making the overlap an input is what puts it on the face of the table instead of in the row order."
+    }
+  ]
+}

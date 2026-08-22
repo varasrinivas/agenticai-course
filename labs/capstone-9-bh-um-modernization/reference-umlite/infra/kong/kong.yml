@@ -1,0 +1,33 @@
+# Kong API gateway — DB-less declarative config (Phase 5 / Track 5, M29).
+# One front door (http://localhost:8000) routing to the services, with cross-cutting plugins
+# (rate limiting, correlation id) applied at the edge instead of in each service.
+# Services run on the host, so Kong reaches them via host.docker.internal (Docker Desktop).
+_format_version: "3.0"
+
+services:
+  - name: intake-svc
+    url: http://host.docker.internal:3000
+    routes:
+      - name: prior-auth
+        paths: ["/prior-auth"]
+
+  - name: case-svc
+    url: http://host.docker.internal:8081
+    routes:
+      - name: cases
+        paths: ["/api/cases"]
+      - name: graphql
+        paths: ["/graphql"]
+
+plugins:
+  # Rate limit at the edge — protect every upstream service at once.
+  - name: rate-limiting
+    config:
+      minute: 60
+      policy: local
+  # Stamp a correlation id so a request can be traced across services (ties to the event correlationId).
+  - name: correlation-id
+    config:
+      header_name: X-Request-Id
+      generator: uuid
+      echo_downstream: true

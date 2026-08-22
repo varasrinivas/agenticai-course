@@ -1,0 +1,79 @@
+# Kubernetes manifests for the case service (Phase 6 / Track 6, M31). TARGET PATTERN — apply on a
+# cluster (AKS, Track 6 M33). The other services follow the same shape. Shows the core primitives:
+# ConfigMap (non-secret config), Secret (credentials), Deployment (pods + probes), Service (stable
+# in-cluster address), HorizontalPodAutoscaler (scale on load).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: um-case-svc-config
+data:
+  SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/um_case
+  KAFKA_BROKERS: redpanda:9092
+  EVENTS_ENABLED: "true"
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: um-case-svc-secret
+type: Opaque
+stringData:
+  SPRING_DATASOURCE_USERNAME: umlite
+  SPRING_DATASOURCE_PASSWORD: umlite   # in real life: from a sealed secret / Key Vault (M33)
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: um-case-svc
+  labels: { app: um-case-svc }
+spec:
+  replicas: 2
+  selector:
+    matchLabels: { app: um-case-svc }
+  template:
+    metadata:
+      labels: { app: um-case-svc }
+    spec:
+      containers:
+        - name: um-case-svc
+          image: umliteacr.azurecr.io/um-case-svc:latest   # pushed by CI (M35)
+          ports:
+            - containerPort: 8081
+          envFrom:
+            - configMapRef: { name: um-case-svc-config }
+            - secretRef: { name: um-case-svc-secret }
+          readinessProbe:
+            httpGet: { path: /actuator/health, port: 8081 }
+            initialDelaySeconds: 20
+          livenessProbe:
+            httpGet: { path: /actuator/health, port: 8081 }
+            initialDelaySeconds: 30
+          resources:
+            requests: { cpu: "250m", memory: "512Mi" }
+            limits: { cpu: "1", memory: "1Gi" }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: um-case-svc
+spec:
+  selector: { app: um-case-svc }
+  ports:
+    - port: 8081
+      targetPort: 8081
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: um-case-svc
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: um-case-svc
+  minReplicas: 2
+  maxReplicas: 6
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target: { type: Utilization, averageUtilization: 70 }

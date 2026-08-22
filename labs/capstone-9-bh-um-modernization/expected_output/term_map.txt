@@ -1,0 +1,82 @@
+TERM MAP
+==========================================================================
+
+  25 mappings   5 silent traps   8 renamed   8 with no counterpart
+
+-- SAME NAME, DIFFERENT MEANING (5) ------------------------------
+   Read these first. A 1:1 map of any of them compiles,
+   passes, and is wrong.
+
+  [status] APPROVED
+      diverges : Terminal in the clinical platform. In behavioral health an approved authorization RE-ENTERS REVIEW on its cadence — every 3 days at ASAM 4.0, every 7 at 3.5 — until discharge or step-down. The legacy switch loops it back to IN_REVIEW.
+      action   : Do NOT map 1:1. The emitted process must loop, and an approval must schedule its own next review. A state machine that treats APPROVED as an end state deletes concurrent review while every status name still matches.
+      evidence : donor: CaseStatus.APPROVED, reached from Task_AutoDecision and never left. legacy: AuthStatusService.advance() case "APPROVED" sets status to IN_REVIEW.
+      guards   : trap 3
+
+  [status] PENDED
+      diverges : A generic hold in the clinical platform. In behavioral health it is a SEPARATION-OF-DUTIES CONTROL: the state a case waits in for someone LICENSED to deny it. A nurse may approve and may never issue an adverse determination.
+      action   : Preserve the control, not just the value. The criteria-not-met path must still PEND rather than deny, and the review task needs a candidate group carrying the licensure requirement.
+      evidence : donor: CaseStatus.PENDED, set by the gateway when the DMN returns needsReview. legacy: PKG_LOC_RULES branch 9 returns PENDED for CRITERIA_NOT_MET, and AuthStatusService refuses DENIED from a non-physician.
+      guards   : trap 3
+
+  [status] IN_REVIEW
+      diverges : Dead enum value on the clinical side; the busiest state on the behavioral side. Mapping by name copies a value that means nothing onto one that carries the domain's central cycle.
+      action   : Make it reachable and make it the loop target. Then check the rest of the donor's enum for the same shape — a declared value nothing assigns is a capability that was planned and not built.
+      evidence : donor: CaseStatus.IN_REVIEW is declared and NEVER ASSIGNED — no code path sets it. legacy: it is the target of the continued-stay loop, set from APPROVED on every cadence.
+      guards   : trap 3
+
+  [status] DENIED
+      diverges : Unreachable on one side. On the other, reachable ONLY for an administrative fact — a terminated provider — which is why the engine may issue it without a physician. The distinction is 'cannot deny' versus 'must not deny HERE', and they are not the same defect.
+      action   : Make a denial reachable WITH a criterion-traceable reason code, and preserve branch 9's pend. Converting the criteria-not-met path into an automated denial removes a control.
+      evidence : donor: pa-decision.dmn has NO rule that can output DENIED, so the status is unreachable from the engine. legacy: reachable, but only from PKG_LOC_RULES branch 1 (PROV_TERMED); every clinical adverse determination pends for a physician instead.
+      guards   : trap 4
+
+  [field] member_id
+      diverges : One identifier on the clinical side, TWO on the behavioral side. MEMBER_ID is the carve-out vendor's; PLAN_MEMBER_ID is the plan's and is null for 3 of 10 seeded members (31% in production, per BHA-1180).
+      action   : Carry both as distinct columns. Key anything crossing to the health plan on the PLAN identifier. The donor's opaque column accepts either without objecting, so a wrong choice matches by luck for whichever formats coincide and fails silently for the rest.
+      evidence : donor: prior_auth_case.member_id VARCHAR(32), opaque, no member table, no FK. legacy: BH_MEMBER.MEMBER_ID is BRIDGEWAY's carve-out key; the health plan's key is a separate nullable column, PLAN_MEMBER_ID.
+      guards   : trap 6
+
+-- NO COUNTERPART (8) ----------------------------------------------
+  [entity] BH_LOC_REVIEW  (behavioral only)
+      Concurrent review has no analogue in medical prior auth. An authorization is not one decision; it is an initial determination plus a series on a cadence set by level of care.
+      action   : must-build-new. Include the composite unique — it is the only thing preventing a corrupt review ladder, and the donor's schema has no composite uniques at all.
+
+  [entity] BH_CONSENT  (behavioral only)
+      42 CFR Part 2 disclosure requires a consent that NAMES the recipient, states a purpose and scope, and expires. HIPAA has no equivalent requirement, so the clinical platform never needed the concept.
+      action   : must-build-new, written in the same transaction as the authorization and enforced by a NOT NULL foreign key rather than by convention.
+
+  [entity] BH_ASSESSMENT  (behavioral only)
+      The clinical engine decides from the procedure. The behavioral engine decides from a six-dimension assessment, one of which inverts.
+      action   : must-build-new, and pass the dimensions to the decision explicitly rather than having the engine read them from a table that now belongs to another service.
+
+  [role] BH_USER_ROLE.ROLE_MASK  (behavioral only)
+      There is nothing on the clinical side to map roles ONTO. The behavioral side needs them for a rule required by accreditation.
+      action   : must-build-new on both sides of the wire. And do not carry the bitmask: JSTL tests it numerically because it has no bitwise operator, and `roleMask >= 4` is the PERMISSIVE side of that divergence — mask 33 passes it and fails hasRole(MD).
+
+  [status] EXPIRED  (behavioral only)
+      An authorization whose continued-stay cadence was missed. Only reachable in a domain that HAS a cadence.
+      action   : Add it, and make it reachable from the boundary timer rather than from a nightly query nobody watches.
+
+  [status] APPEALED  (clinical only)
+      NEITHER system has it, and both need it. The platform team raised it; our own gap analysis did not.
+      action   : Escalate rather than decide. Behavioral-health denials are appealed at least as often as medical ones, but whether appeals come in-system is a programme decision.
+
+  [field] LEGACY_OVERRIDE  (behavioral only)
+      No counterpart, and no surviving explanation on the side that has it.
+      action   : DO NOT MAP. Reproduce the behaviour verbatim and queue it for human decision. A map that assigns this a meaning has guessed, and nobody at Bridgeway can check the answer.
+
+  [pattern] feature flags  (clinical only)
+      The idiom is worth copying — it is what keeps the platform runnable one capability at a time. But it was designed for capabilities, and this domain has controls.
+      action   : Mirror it for capabilities. Never gate consent enforcement, the disclosure accounting or licensure checks: a control that can be switched off in configuration is a default.
+
+-- RENAMED (8) ----------------------------------------------------
+  [entity] prior_auth_case              -> BH_AUTH
+  [field] procedureCode                -> SERVICE_CODE
+  [field] requestedUnits               -> REQUESTED_UNITS
+  [pattern] outbox_event                 -> BH_AUTH_QUEUE
+  [event] pa.submitted                 -> AUTH_SUBMITTED
+  [event] pa.decisioned                -> AUTH_DECIDED
+  [pattern] transitionTo()               -> AuthStatusService.advance()
+  [entity] intake DTO                   -> authSubmit.jsp form
+

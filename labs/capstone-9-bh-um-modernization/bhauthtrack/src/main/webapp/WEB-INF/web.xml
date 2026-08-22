@@ -1,0 +1,131 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  BHAuthTrack 4.2 -- deployment descriptor.
+
+  One WAR. One servlet. One filter. This file is the complete inventory of what is deployed,
+  and it is the right place to start when working out how many deployables the modernized
+  system needs: everything below runs in one JVM, shares one classloader, one session, one
+  Oracle connection pool and one transaction manager.
+
+  NOTE THE SECURITY SECTION AT THE BOTTOM, or rather note that there isn't one. There are no
+  <security-constraint> elements. Authentication is performed by an upstream reverse proxy and
+  arrives as REMOTE_USER; AuthFilter trusts it. This application cannot verify who is calling it.
+-->
+<web-app xmlns="http://java.sun.com/xml/ns/javaee"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://java.sun.com/xml/ns/javaee
+                             http://java.sun.com/xml/ns/javaee/web-app_3_0.xsd"
+         version="3.0">
+
+  <display-name>BHAuthTrack</display-name>
+
+  <context-param>
+    <param-name>contextConfigLocation</param-name>
+    <param-value>classpath:applicationContext.xml</param-value>
+  </context-param>
+
+  <!-- Rendered in the page header so a reviewer can tell UAT from production at a glance.
+       This has been wrong in UAT since a 2015 deployment. -->
+  <context-param>
+    <param-name>bhauth.env</param-name>
+    <param-value>PROD</param-value>
+  </context-param>
+
+  <listener>
+    <listener-class>
+      org.springframework.web.context.ContextLoaderListener
+    </listener-class>
+  </listener>
+
+  <!-- Required for @SessionScope on UserContext. -->
+  <listener>
+    <listener-class>
+      org.springframework.web.context.request.RequestContextListener
+    </listener-class>
+  </listener>
+
+  <filter>
+    <filter-name>encodingFilter</filter-name>
+    <filter-class>org.springframework.web.filter.CharacterEncodingFilter</filter-class>
+    <init-param>
+      <param-name>encoding</param-name>
+      <param-value>UTF-8</param-value>
+    </init-param>
+    <init-param>
+      <param-name>forceEncoding</param-name>
+      <param-value>true</param-value>
+    </init-param>
+  </filter>
+
+  <!--
+    The security perimeter. See AuthFilter: it trusts REMOTE_USER (or the SM_USER header),
+    loads the role mask from BH_USER_ROLE, and writes it into BOTH the UserContext bean and
+    raw session attributes because the JSPs read the latter directly.
+  -->
+  <filter>
+    <filter-name>authFilter</filter-name>
+    <filter-class>com.bridgeway.bhauth.security.AuthFilter</filter-class>
+  </filter>
+
+  <filter-mapping>
+    <filter-name>encodingFilter</filter-name>
+    <url-pattern>/*</url-pattern>
+  </filter-mapping>
+
+  <filter-mapping>
+    <filter-name>authFilter</filter-name>
+    <url-pattern>/*</url-pattern>
+  </filter-mapping>
+
+  <servlet>
+    <servlet-name>dispatcher</servlet-name>
+    <servlet-class>org.springframework.web.servlet.DispatcherServlet</servlet-class>
+    <init-param>
+      <param-name>contextConfigLocation</param-name>
+      <param-value>/WEB-INF/dispatcher-servlet.xml</param-value>
+    </init-param>
+    <load-on-startup>1</load-on-startup>
+  </servlet>
+
+  <servlet-mapping>
+    <servlet-name>dispatcher</servlet-name>
+    <url-pattern>/</url-pattern>
+  </servlet-mapping>
+
+  <!--
+    The SOAP endpoint. Added 2012 for one trading partner who could not send X12 and has never
+    been retired. It reaches AuthCaseService directly, which makes it the fourth call path into
+    the decision logic -- alongside the controller, the batch importer, and a DBA at a SQL
+    prompt. Three of the four bypass every check that lives in a JSP.
+
+    There is no WSDL in source control. The one the partner uses was emailed to them in 2012.
+  -->
+  <servlet>
+    <servlet-name>legacySoap</servlet-name>
+    <servlet-class>com.bridgeway.bhauth.ws.LegacyAuthEndpoint</servlet-class>
+    <load-on-startup>2</load-on-startup>
+  </servlet>
+
+  <servlet-mapping>
+    <servlet-name>legacySoap</servlet-name>
+    <url-pattern>/services/auth</url-pattern>
+  </servlet-mapping>
+
+  <session-config>
+    <session-timeout>120</session-timeout>
+    <!--
+      No <cookie-config><http-only> and no <secure>. TLS terminates at the proxy and the hop
+      from the proxy to Tomcat is plaintext on the internal network.
+    -->
+  </session-config>
+
+  <welcome-file-list>
+    <welcome-file>index.jsp</welcome-file>
+  </welcome-file-list>
+
+  <error-page>
+    <error-code>500</error-code>
+    <location>/WEB-INF/jsp/error.jsp</location>
+  </error-page>
+
+</web-app>

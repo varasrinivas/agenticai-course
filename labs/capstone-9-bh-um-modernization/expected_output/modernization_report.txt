@@ -1,0 +1,154 @@
+
+==========================================================================
+  MODERNIZATION REPORT -- NOT READY
+==========================================================================
+
+BLOCKING:
+  * check 1 (rules divergence) came back clean and is expected to be non-zero. Suspect the validator before the port.
+  * check 2 (protected-content leak) came back clean and is expected to be non-zero. Suspect the validator before the port.
+  * check 3 (narrative round-trip) came back clean and is expected to be non-zero. Suspect the validator before the port.
+  * check 4 (consent atomicity) came back clean and is expected to be non-zero. Suspect the validator before the port.
+
+GAP REGISTER
+========================================================================
+
+  must-not-port: 3   must-build-new: 7   extend: 3   port-as-is: 2
+
+-- MUST-NOT-PORT (3) -----------------------------------
+  cleartext PHI in logs, events and search
+    evidence : donor interpolates member identifiers into log statements, ships plain JSON to an unauthenticated broker, and indexes cases into Elasticsearch with no TLS anywhere.
+    HARM     : This content is 42 CFR Part 2 protected. The monolith had ONE log sink; decomposition multiplies it into one per service plus a broker plus an index. Copying the idiom produces unlawful disclosure at several sinks instead of one, and nobody decided to make it worse -- fan-out is simply what the architecture does with a field.
+    guards   : trap 5
+    backlog  : not listed -- their domain is HIPAA-only
+
+  consent enforcement as a feature flag
+    evidence : the donor applies its flag idiom uniformly to all seven capabilities and ships SECURITY_ENABLED=false by default.
+    HARM     : A week of CONSENT_ENABLED=false is an unlawful disclosure, not a slow page. A regulatory control that can be switched off in configuration is a default, not a control. Mirror the idiom for capabilities; never for consent, the disclosure accounting, or licensure checks.
+    guards   : trap 7
+    backlog  : not listed
+
+  validated-then-discarded free-text field
+    evidence : the intake DTO validates `notes` with @IsOptional @IsString @Length(0,2000) and then drops it: not a column, not an entity field, not in either event payload.
+    HARM     : In behavioral health that field is simultaneously the medical-necessity evidence a reviewer reads AND the Part 2 protected content. Two failures at once, and the 201 response hides both -- the caller believes the clinical justification was recorded.
+    guards   : trap 2
+    backlog  : not listed
+
+
+-- MUST-BUILD-NEW (7) ----------------------------------
+  concurrent review
+    evidence : nothing in the reference platform corresponds. The legacy BH_LOC_REVIEW table carries REVIEW_SEQ, NEXT_REVIEW_DUE and a per-level cadence; the donor schema has 2 tables and no review history at all.
+    must do  : A review ladder keyed (auth_id, review_seq) with a unique constraint, a next-review date derived from the GRANTED LEVEL, and a boundary timer that escalates when it passes.
+    guards   : trap 3
+    backlog  : not listed -- the concept does not exist in their domain
+
+  decision audit and disclosure accounting
+    evidence : donor has no audit table, no createdBy/updatedBy, no transition history, and transitionTo() is unguarded. The legacy system has an audit trigger, but it records CHANGES to records, not DISCLOSURES of them.
+    must do  : Two separate things: a guarded transition history with actor attribution, AND a disclosure register recording recipient, scope, consent id and timestamp. They answer different questions and only the second satisfies Part 2.
+    guards   : trap 5
+    backlog  : agrees -- their #1 and #2
+
+  42 CFR Part 2 consent model
+    evidence : no consent concept anywhere in the reference platform. Part 2 disclosure requires a consent naming the recipient, stating a purpose and scope, and expiring.
+    must do  : A consent entity with recipient, type, purpose, scope, signed, expires, revoked and redisclosure-notice-sent; written in the same transaction as the authorization; enforced by a NOT NULL foreign key rather than by convention.
+    guards   : trap 8
+    backlog  : not listed
+
+  role-based authorization and reviewer licensure
+    evidence : um.security.enabled=false by default, and authentication-only when enabled: no roles, no scopes, no method security. The manual-review task has neither assignee nor candidate group.
+    must do  : Named roles, method-level checks on every call path (not only the one the UI uses), and a BPMN candidate group resolved from the diagnosis block so a substance-use adverse determination routes to an addiction-medicine reviewer.
+    guards   : trap 10
+    backlog  : not listed
+
+  test suite
+    evidence : zero tests in the entire reference repository; CI runs `npm test --if-present`, so their absence never fails the build.
+    must do  : Tests for every item above, and a CI configuration that fails when they are missing rather than passing vacuously.
+    backlog  : not listed
+
+  entity resolution across the carve-out boundary
+    evidence : donor stores one opaque member_id VARCHAR(32) with no member table and no foreign key. Legacy BH_MEMBER carries TWO keys and 3 of 10 seeded members (30%) have no plan identifier at all.
+    must do  : Carry both identifiers as distinct columns; key anything crossing to the health plan on the plan's. Report the unresolvable population as a number rather than resolving it by guesswork.
+    guards   : trap 6
+    backlog  : not listed
+
+  frontend
+    evidence : one unrouted form. app.config.ts provides only provideHttpClient() -- @angular/router is a declared dependency that was never wired. libs/ui's TaskListComponent, CaseSearchComponent and CaseCreateComponent are never imported. Service URL hardcoded.
+    must do  : Seven routed, role-guarded screens consuming libs/ui, with the rules currently living in JSTL relocated to route guards and server-side checks.
+    guards   : trap 9
+    backlog  : agrees in part -- their #4, 'Case list + filter endpoint & UI'
+
+
+-- EXTEND (3) ------------------------------------------
+  decision table
+    evidence : camunda/pa-decision.dmn: hitPolicy FIRST, 3 rules, outputs {APPROVED, PENDED}, inputs {Procedure code, Requested units}. No DENIED output and no diagnosis input.
+    guards   : trap 4
+    backlog  : agrees -- their #6, 'Extend DMN medical-necessity criteria'
+
+  process model
+    evidence : camunda/prior-auth.bpmn is one-shot: 6 sequence flows, no cycle, no timerEventDefinition. Correct for a case with one decision.
+    guards   : trap 3
+    backlog  : agrees -- their #8, 'SLA turnaround timer + auto-escalation'
+
+  referential integrity
+    evidence : donor schema has 2 tables and ZERO foreign keys -- a database-per-service consequence, not a preference. The legacy schema has real foreign keys and a composite unique on (AUTH_ID, REVIEW_SEQ).
+    backlog  : not listed
+
+
+-- PORT-AS-IS (2) --------------------------------------
+  transactional outbox
+    evidence : outbox_event table + relay worker + idempotent consumer in um-case-svc. Domain-neutral and correct.
+    backlog  : not listed -- already built
+
+  feature-flag capability layering
+    evidence : 7 flags in apps/um-case-svc/.../application.yml, each gating one capability so the stack stays runnable with any subset enabled
+    backlog  : not listed -- already built
+
+
+-- BACKLOG CROSS-CHECK --------------------------------------------------
+  agreements              : 5
+      #1 guard case status transitions -> our 'decision audit' entry
+      #2 persist decision rationale + decidedBy -> our 'decision audit' entry
+      #4 case list + filter endpoint & UI -> our 'frontend' entry
+      #6 extend DMN medical-necessity criteria -> our 'decision table' entry
+      #8 SLA turnaround timer + auto-escalation -> our 'process model' entry
+  we found, they did not  : 5
+      42 CFR Part 2 consent model -- their domain is HIPAA-only, so the concept does not arise for them
+      concurrent review -- a medical case has one decision
+      reviewer licensure as a workflow candidate group
+      carve-out entity resolution -- they have one identifier and no second organisation to reconcile with
+      cleartext PHI fan-out across decomposed sinks
+  they list, we missed    : 2
+      #7 appeals path + APPEALED status -- IN SCOPE FOR BH TOO and we did not raise it. Behavioral-health denials are appealed at least as often. Added to the queue as a follow-up.
+      #10 dead-letter retry + alerting -- their pa.dead-letter topic has no producer and no consumer; we noted the dangling topic but did not carry it into a verdict.
+
+
+PARITY CHECKS
+--------------------------------------------------------------------------
+  [1] rules divergence                   0  <-- CLEAN, AND EXPECTED NON-ZERO
+  [2] protected-content leak             0  <-- CLEAN, AND EXPECTED NON-ZERO
+  [3] narrative round-trip               0  <-- CLEAN, AND EXPECTED NON-ZERO
+  [4] consent atomicity                  0  <-- CLEAN, AND EXPECTED NON-ZERO
+  [5] workflow                           0
+  [6] decision table                     0
+  [7] identity                           0
+  [8] screen coverage                    0
+  [9] feature-flag classification        0
+  [10] term mapping                       0
+
+QUEUED FOR HUMAN DECISION (5)
+--------------------------------------------------------------------------
+  BH_AUTH.LEGACY_OVERRIDE / PKG_LOC_RULES branch 0
+      why : Added under BHA-2291 in 2013. The ticket body reads, in full, 'per DM request'. No design note, no acceptance criteria, no test. Handled in two places and set on roughly 400 live rows.
+      ASK : Which determinations was LEGACY_OVERRIDE meant to cover, who authorised it, and what should happen to the ~400 rows that carry it?
+  LocRulesService adjustment B -- the frequency pend
+      why : Three or more adverse determinations in a rolling year pend the case regardless of clinical criteria. Compliance flagged it in 2016: 'The medical side does not apply an equivalent frequency-based pend to med/surg requests. If we keep this we need a comparative analysis on file. -- K.O.' Never actioned.
+      ASK : Is this a non-quantitative treatment limitation applied to behavioral health alone, and does a comparative analysis exist? Porting it carries the exposure forward; dropping it changes outcomes for real members. Neither is an engineering decision.
+  LocRulesService adjustment C -- network-adequacy step-down
+      why : No in-network capacity at the granted level steps the member DOWN a level rather than authorising out-of-network. The med/surg side authorises out-of-network.
+      ASK : Is a capacity-driven step-down a parity exposure? It also runs off a table populated by a Monday spreadsheet upload.
+  X12278ImportJob.impliedConsent / LegacyAuthEndpoint.impliedConsent
+      why : Two independent code paths FABRICATE a Part 2 consent on the submitter's behalf, asserting that consent was obtained on paper at the facility. Nobody verifies that, and most requests arrive by one of these paths.
+      ASK : Who consents when a machine submits? This is a question for a compliance officer, not an architect.
+  appeals path
+      why : The platform team's backlog #7 lists an appeals path and an APPEALED status as planned-and-unbuilt. Our register did not raise it; behavioral-health denials are appealed at least as often as medical ones, and the legacy system handles appeals entirely outside itself, in a shared mailbox and a spreadsheet.
+      ASK : Should the appeals path be in scope for this modernization, or does it stay out-of-system as today?
+

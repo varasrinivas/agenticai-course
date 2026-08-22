@@ -312,6 +312,92 @@ Incoming Request
 
 ---
 
+## CAPSTONE-9: "Behavioral Health UM Modernization" — Legacy Monolith → Distributed Platform (★★★★★)
+
+Bonus capstone. Standalone (no domain letter); uses DOMAIN A-BH from `03-capstone-domains.md`.
+Six animations, and the ordering matters — 1 and 2 establish what is being produced, 3 through 6
+each carry one trap.
+
+### ARCHITECTURE DIAGRAM (static, shown at the top)
+
+Two source trees on the left, both marked READ-ONLY with a padlock; the agent in the middle; one
+emitted workspace on the right.
+
+```
+  reference-umlite/  ─┐                                  ┌─→ bh-um-lite/
+  (architecture donor) │   coordinator (NO file tools)   │   apps/ camunda/ libs/ infra/
+                       ├──→  8 subagents, isolated ctx ──┤
+  bhauthtrack/        ─┘     5 hooks, 10 parity checks   └─→ THE GAP REGISTER
+  (domain donor)                                              + manual-review queue
+```
+
+Label the coordinator "no file tools" explicitly — that is a design decision, not an omission.
+Label the gap register as the deliverable, visually equal to the workspace and not subordinate.
+
+### ANIMATION 1: Monolith → Distributed, and the Transaction That Is Severed (hero animation)
+
+**Purpose**: Show that decomposition is a decision about GUARANTEES, not about files.
+**Behavior**: `submitAndDecide()`'s five writes appear as one block, then move one at a time to the
+service that will own them. Write 3 (the Part 2 consent) turns red and stays attached to write 1.
+Final state: four of five in `bh-case-svc`, one crossing a seam with an outbox.
+**Key beat**: the closing note says the authorization/consent seam was **rejected** — recording a
+rejection is a result, not an omission.
+
+### ANIMATION 2: Fifteen Capabilities Resolve Into Four Verdicts
+
+**Purpose**: The deliverable, and the discomfort of its distribution.
+**Behavior**: Capability rows resolve one at a time into colour-coded verdict chips. ORDER THEM so
+`port-as-is` lands first and `must-not-port` last — the comfortable verdicts arrive early and the
+uncomfortable shape emerges.
+**Key beat**: on the first `must-not-port`, the note states that the tool REJECTS the entry without
+a named harm. Closing note gives the distribution and says a mostly-`port-as-is` register means the
+architecture was read and the domain was not.
+
+### ANIMATION 3: One Case, Two Engines, Two Answers
+
+**Purpose**: Trap 1 — a stateful first-match ladder becoming a decision table.
+**Behavior**: Split view. Left, the ladder accumulates: C-SSRS 4 (+6), dim1 = 3 (+4), score 10 —
+then branch 7a commits to 3.7 and 7b is marked "true as well, never reached". Right, the flattened
+table lights BOTH rows red. Final step tightens the lower row with a named derived input and it
+turns green.
+**Key beat**: `FIRST` gives the right answer **only while the row order survives**. Reduced-motion
+static must show both rows matching simultaneously — that is the whole point.
+
+### ANIMATION 4: The Narrative Clears HIPAA, Then Fans Out
+
+**Purpose**: Trap 5 — 42 CFR Part 2 reaching sinks with no consent scope.
+**Behavior**: Three stages (submit → HIPAA passes → consent scope is AUTH_DECISION_ONLY), then four
+sinks light in sequence: application log, event payload, search index, audit table.
+**Key beat**: the closing note says the monolith had ONE sink and nobody made it worse — fan-out is
+what a distributed architecture does with a field, so the count going UP is the expected shape.
+
+### ANIMATION 5: Knowledge Plane and Control Plane
+
+**Purpose**: The Skill-vs-agent decision, which is a learning objective in its own right.
+**Behavior**: Two columns. Left fills with the four Skills; right fills with the coordinator, the
+eight subagents, the hooks, the gate, the budget.
+**Key beat**: closing note is the rule of thumb — "decides, branches, parallelizes or blocks →
+agent; same steps every time → Skill."
+
+### ANIMATION 6: A Role Guard Lifts Out of a Template
+
+**Purpose**: Trap 9 — business rules living in JSP scriptlets and JSTL guards.
+**Behavior**: Five rules found in `decision.jsp`, each moving from "still in the template" to a
+named new home: a BPMN candidate group, an API omission, computed fields.
+**Key beat**: closing note gives the count — 20 rules across 7 screens, **11 with no server-side
+enforcement at all** — and states that moving one to `*ngIf` has moved nothing.
+
+### Notes for this capstone specifically
+
+- **No architecture animation of the agent topology.** Capstone 8 covers subagent fan-out and this
+  module links to it rather than repeating it. Six animations is already the ceiling.
+- **Every animation's closing step is a written finding**, not a "done" state. The animations here
+  carry argument, not just mechanism.
+- Reduced-motion static frames must show the FINAL state of each, because in every one of these the
+  final state is the finding.
+
+---
+
 ## Animation Rules for ALL Capstones
 
 1. **Architecture diagram appears FIRST** — before any build steps. The student sees the blueprint before building.

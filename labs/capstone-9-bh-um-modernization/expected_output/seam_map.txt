@@ -1,0 +1,29 @@
+SEAM MAP
+========================================================================
+
+  AuthCaseService.submitAndDecide  (5 writes)
+      BH_AUTH                  the authorization
+                               why atomic: anchor
+      BH_ASSESSMENT            the rules engine's inputs
+                               why atomic: the engine reads these from the database rather than being passed them; a decision computed from missing inputs is not reproducible
+      BH_CONSENT               the Part 2 disclosure permission
+                               why atomic: an authorization from a federally assisted SUD program with no consent record is protected content held with no record of who the member agreed it could be shared with. The 2013 merge comment says the services were combined because split boundaries produced orphaned consent rows.
+      BH_LOC_REVIEW            the initial determination, seq 1
+                               why atomic: NEXT_REVIEW_DUE drives the worklist; an approval without it is an authorization nobody looks at again
+      BH_AUTH_QUEUE            the outbound notification
+                               why atomic: a queue row exists if and only if the authorization committed. This is a transactional outbox, built in 2011 by people who would not have called it that.
+      on failure: everything rolls back and the clinician is told to resubmit. There is no draft, so they retype the narrative -- the most complained-about behaviour in the application, and a direct consequence of the atomicity that makes it correct.
+
+  [REJECTED] authorization | consent: bh-case-svc | bh-consent-svc
+      because: The intermediate state -- protected treatment content held with no record of consent -- is one the organisation cannot be in, even briefly, even with a compensation queued. A disclosure does not compensate: you cannot un-hold content you have already held. So bh-case-svc owns both writes and the seam moves.
+
+  case | notification: bh-case-svc | bh-notify-svc   (eventual-guaranteed)
+      crosses: AuthCaseService.submitAndDecide
+      mechanism   : transactional outbox in bh-case-svc + idempotent consumer keyed on (auth_id, review_seq)
+      window      : under 60s at the configured relay interval; the legacy cron polled every 5 minutes, so this is tighter than what it replaces
+      observable  : SELECT count(*) FROM outbox_event WHERE published_at IS NULL AND created_at < now() - interval '5 minutes'
+      compensation: relay retries with backoff; rows past 3 attempts move to a human queue, because the legacy FAILED state was where rows went to be forgotten
+      alarm       : that count > 0 for 5 consecutive minutes pages the on-call
+
+  intake | case: bh-intake-svc | bh-case-svc   (independent)
+

@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE log4j:configuration SYSTEM "log4j.dtd">
+<!--
+  Log4j 1.x configuration.
+
+  READ THIS TOGETHER WITH AuthCaseService.submitAndDecide(), WHICH LOGS THE CLINICAL NARRATIVE.
+
+  The appender below writes to a rolling file on the application server. That file is backed up
+  nightly to the same network share the reporting team reads from, and it is collected by the
+  log-shipping agent that feeds the enterprise search index. Nothing in this file, and nothing
+  in the code that writes to it, distinguishes a line containing 42 CFR Part 2 protected
+  treatment content from a line containing a connection-pool warning.
+
+  ON THIS SYSTEM THAT IS ONE SINK. A distributed port turns it into several -- application logs
+  per service, a broker, a search index -- and each is a separate copy with a separate retention
+  policy. The leak does not get worse because anyone made it worse; it gets worse because
+  fan-out is what a distributed architecture does.
+
+  Note also that there is no filter, no masking layout and no redaction anywhere below. There is
+  nowhere in this configuration where someone could have decided what does and does not go into
+  a log line, which is why the decision was made line by line in the code instead.
+-->
+<log4j:configuration xmlns:log4j="http://jakarta.apache.org/log4j/">
+
+  <appender name="FILE" class="org.apache.log4j.RollingFileAppender">
+    <param name="File"        value="/opt/tomcat/logs/bhauth.log"/>
+    <param name="MaxFileSize" value="20MB"/>
+    <!-- Twenty files at 20MB. Roughly six weeks of history at current volume, all of it on a
+         volume that is backed up and none of it with an expiry. -->
+    <param name="MaxBackupIndex" value="20"/>
+    <param name="Append"      value="true"/>
+    <layout class="org.apache.log4j.PatternLayout">
+      <param name="ConversionPattern" value="%d{ISO8601} %-5p [%t] %c{1} - %m%n"/>
+    </layout>
+  </appender>
+
+  <!--
+    The audit appender. Added in 2011 alongside BH_AUDIT_LOG, for the same appeals-team reason,
+    and it receives the same content: AuthCaseService logs at INFO and this catches it.
+
+    Never purged. There are lines in here from 2011.
+  -->
+  <appender name="AUDIT" class="org.apache.log4j.DailyRollingFileAppender">
+    <param name="File"           value="/opt/tomcat/logs/bhauth-audit.log"/>
+    <param name="DatePattern"    value="'.'yyyy-MM-dd"/>
+    <layout class="org.apache.log4j.PatternLayout">
+      <param name="ConversionPattern" value="%d{ISO8601} %m%n"/>
+    </layout>
+  </appender>
+
+  <appender name="CONSOLE" class="org.apache.log4j.ConsoleAppender">
+    <layout class="org.apache.log4j.PatternLayout">
+      <param name="ConversionPattern" value="%d{HH:mm:ss} %-5p %c{1} - %m%n"/>
+    </layout>
+  </appender>
+
+  <!-- The service package logs at INFO, which is the level submitAndDecide() logs the
+       narrative at. Raising it to WARN would suppress the narrative and also suppress the
+       decision trail the appeals team relies on. Nobody has separated the two. -->
+  <logger name="com.bridgeway.bhauth.service">
+    <level value="INFO"/>
+    <appender-ref ref="AUDIT"/>
+  </logger>
+
+  <logger name="com.bridgeway.bhauth.batch">
+    <level value="INFO"/>
+  </logger>
+
+  <!-- Left at DEBUG after a 2015 investigation and never turned back down. It logs every
+       statement with its bind parameters, which includes the narrative on every insert. -->
+  <logger name="org.springframework.jdbc.core.JdbcTemplate">
+    <level value="DEBUG"/>
+  </logger>
+
+  <root>
+    <level value="INFO"/>
+    <appender-ref ref="FILE"/>
+    <appender-ref ref="CONSOLE"/>
+  </root>
+
+</log4j:configuration>

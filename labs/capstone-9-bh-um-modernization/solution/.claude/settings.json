@@ -1,0 +1,133 @@
+{
+  "$comment": [
+    "Hook wiring for the behavioral-health UM modernization agent.",
+    "",
+    "Five hooks, and the ordering within PreToolUse matters. The protected-content",
+    "gate runs on every tool because its job is to inspect results BEFORE they reach",
+    "the model -- a hook scoped to the legacy server would miss content arriving",
+    "through any other path. Implementations live in hooks.py; hooks_cli.py is the",
+    "command-line entry point each command below invokes.",
+    "",
+    "The finalization gate ALWAYS denies. That is not a misconfiguration. The agent",
+    "cannot approve its own modernization; a human reads the gap register and re-runs",
+    "with --approve."
+  ],
+  "hooks": {
+    "PreToolUse": [
+      {
+        "$comment": "Protected-content gate. Every tool, no exceptions. Denies narrative-shaped content from any path not on the synthetic-fixture allowlist; truncates over-budget excerpts from allowlisted paths.",
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python -m hooks_cli protected_content_gate",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "$comment": "The reference platform is evidence. It exposes no write tools; this additionally denies path traversal out of the tree.",
+        "matcher": "mcp__reference_src__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python -m hooks_cli enforce_reference_readonly",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "$comment": "Same for the legacy monolith. If the agent could edit it, the parity validator would be diffing against a moving target.",
+        "matcher": "mcp__legacy_src__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python -m hooks_cli enforce_legacy_readonly",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "$comment": "Confine every write to bh-um-lite/. Resolves the path first, so ../ does not escape.",
+        "matcher": "mcp__local__write_artifact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python -m hooks_cli confine_writes",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "$comment": "HITL gate. Always denies, returning the gap register, the rules divergence table and the protected-content scan for a human to read.",
+        "matcher": "mcp__local__finalize_modernization",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python -m hooks_cli hitl_finalization_gate",
+            "timeout": 15
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "$comment": "One audit entry per tool call. Redacts credentials, connection strings and narrative-shaped content before writing.",
+        "matcher": ".*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python -m hooks_cli audit_log",
+            "timeout": 10
+          }
+        ]
+      }
+    ]
+  },
+  "permissions": {
+    "$comment": [
+      "Defence in depth. The hooks above are the enforcement; these deny rules stop",
+      "the obvious shell and filesystem routes around them. Neither source tree is",
+      "writable by any means."
+    ],
+    "deny": [
+      "Write(./bhauthtrack/**)",
+      "Edit(./bhauthtrack/**)",
+      "Write(./reference-umlite/**)",
+      "Edit(./reference-umlite/**)",
+      "Write(./spec/**)",
+      "Edit(./spec/**)",
+      "Bash(rm:*)",
+      "Bash(git checkout:*)",
+      "Bash(git reset:*)",
+      "Bash(curl:*)",
+      "Bash(wget:*)"
+    ],
+    "allow": [
+      "Read(./bh-um-lite/**)",
+      "Read(./artifacts/**)",
+      "Bash(pytest:*)",
+      "Bash(python -m pytest:*)",
+      "Bash(npx nx build:*)",
+      "Bash(docker compose:*)"
+    ]
+  },
+  "env": {
+    "$comment": [
+      "BH_EMIT_ROOT is the only writable path. PHI_ALLOWLIST names the synthetic",
+      "fixtures the protected-content gate will pass through -- everything else",
+      "carrying narrative-shaped content is denied before the model sees it.",
+      "",
+      "There is deliberately no CONSENT_ENABLED flag. A regulatory control that can",
+      "be switched off in configuration is a default, not a control."
+    ],
+    "BH_EMIT_ROOT": "./bh-um-lite",
+    "BH_REFERENCE_ROOT": "./reference-umlite",
+    "BH_LEGACY_ROOT": "./bhauthtrack",
+    "PHI_ALLOWLIST": "./bhauthtrack/db/02_seed.sql",
+    "NARRATIVE_EXCERPT_BUDGET": "400",
+    "COST_CEILING_OUTPUT_TOKENS": "400000",
+    "CIRCUIT_BREAKER_CONSECUTIVE_FAILURES": "3",
+    "AUDIT_LOG": "./modernization_audit.jsonl"
+  }
+}

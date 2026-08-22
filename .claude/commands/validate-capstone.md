@@ -17,8 +17,9 @@ Find the capstone HTML file in `output/courses/claude-agents/` (glob match on th
 if given, the domain). Find the matching lab in `labs/capstone-<n>-<slug>/`.
 
 **Capstone ID forms.** Domain capstones are `CAPSTONE-{1..5,7}-DOMAIN-{A|B|C}`. Standalone
-capstones use a slug instead of a domain — currently `CAPSTONE-6-data-pipeline-testing` and
-`CAPSTONE-8-oracle-to-postgres-migration`. If the argument names a standalone capstone, do not
+capstones use a slug instead of a domain — currently `CAPSTONE-6-data-pipeline-testing`,
+`CAPSTONE-8-oracle-to-postgres-migration`, `CAPSTONE-8B-skills-first-migration` and
+`CAPSTONE-9-behavioral-health-modernization`. If the argument names a standalone capstone, do not
 look for domain variants and skip the domain-letter checks in PASS 11.
 
 Run ALL of the following validation passes:
@@ -100,7 +101,7 @@ that is a pass at one tier is a critical failure at another. Do not apply a sing
 usage" standard across all capstones.
 
 Current assignment: **CAPSTONE-1 through 5 and 7 are Tier 3** (all domains). **CAPSTONE-6 is
-deliberately Tier 1** — the non-agent baseline. **CAPSTONE-8 is Tier 3.** If a capstone is not in
+deliberately Tier 1** — the non-agent baseline. **CAPSTONE-8, CAPSTONE-8B and CAPSTONE-9 are Tier 3.** If a capstone is not in
 the index, default to Tier 1 and raise a warning that the index needs updating.
 
 ### If Tier 1 (CAPSTONE-6, and any capstone the index marks Tier 1)
@@ -111,7 +112,7 @@ the index, default to Tier 1 and raise a warning that the index needs updating.
 - Flag: a Tier 1 capstone that imports the Agent SDK. It is teaching the layer this tier exists
   to expose, and the contrast CAPSTONE-6 is built to demonstrate is lost.
 
-### If Tier 3 (CAPSTONE-1..5, 7, 8)
+### If Tier 3 (CAPSTONE-1..5, 7, 8, 8B, 9)
 - [ ] The primary `solution/` imports from `claude_agent_sdk` — `query`, `tool`,
       `create_sdk_mcp_server`, `ClaudeAgentOptions`, `AssistantMessage`, `HookMatcher`,
       `PermissionResultAllow`, `PermissionResultDeny`
@@ -126,6 +127,10 @@ the index, default to Tier 1 and raise a warning that the index needs updating.
       `tools`, optional `model`) — where the capstone uses subagents
 - [ ] Hooks declared in `.claude/settings.json`
 - [ ] Slash commands in `.claude/commands/` — where applicable
+- [ ] Skills in `.claude/skills/<name>/SKILL.md` — where the capstone uses them. Frontmatter
+      `name` (matching the directory) and `description`; bundled `references/` and `scripts/`
+      must exist if the body points at them. Flag domain knowledge duplicated across subagent
+      prompts instead of living in one Skill
 - [ ] **`spec/agent-spec.md` is present.** Mandatory for every Tier 3 capstone. Its absence is a
       critical issue, not a warning.
 - [ ] The spec follows the 12-section template in `prompts/17-spec-driven-development.md` and ends
@@ -194,7 +199,7 @@ prerequisite modules:
 
 ## PASS 11: Domain-Specific Validation
 
-Skip this pass for standalone capstones with no domain letter (CAPSTONE-6, CAPSTONE-8). Validate
+Skip this pass for standalone capstones with no domain letter (CAPSTONE-6, CAPSTONE-8, 8B, 9). Validate
 those against their own brief in `prompts/modules/CAPSTONE-{N}*.md` instead.
 
 For Healthcare Pre-Auth (Domain A):
