@@ -1,0 +1,962 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0A1628">
+  <title>M10 Mobile: Advanced RAG Patterns | Open Source Agent Course</title>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;700;800&family=Source+Sans+3:wght@400;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg-primary: #0A1628; --bg-secondary: #111D33; --bg-card: #162033; --bg-surface: #1A2740;
+      --text-primary: #E8ECF1; --text-secondary: #B8C2D1; --text-muted: #7A8699;
+      --accent-primary: #D4A843; --accent-hover: #E5BC5A;
+      --success: #10B981; --warning: #F59E0B; --error: #F43F5E; --info: #F97316;
+      --track-color: #F97316; --code-bg: #0D1117; --code-border: #21262D;
+      --mobile-padding: 1rem; --mobile-font-body: 16px; --mobile-font-heading: 22px;
+    }
+    ::selection { background: rgba(249, 115, 22, 0.35); color: var(--text-primary); }
+    html { scroll-behavior: smooth; }
+    body { background: var(--bg-primary); color: var(--text-primary); font-family: 'Source Sans 3', sans-serif; font-size: var(--mobile-font-body); line-height: 1.6; min-height: 100vh; -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+    .deck { height: 100vh; overflow-y: auto; scroll-snap-type: y mandatory; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+    .deck::-webkit-scrollbar { display: none; }
+    .mobile-card { min-height: 100vh; width: 100%; padding: 4rem var(--mobile-padding) 5rem; scroll-snap-align: start; scroll-snap-stop: always; display: flex; flex-direction: column; justify-content: flex-start; position: relative; }
+    .mobile-card.center { justify-content: center; }
+    .mobile-card .card-inner { background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 16px; padding: 1.25rem; width: 100%; position: relative; }
+    h1, h2, h3 { font-family: 'Bricolage Grotesque', sans-serif; line-height: 1.25; color: var(--text-primary); }
+    h1 { font-size: 2rem; font-weight: 800; margin-bottom: 0.5rem; }
+    h2 { font-size: var(--mobile-font-heading); font-weight: 700; margin-bottom: 1rem; }
+    h3 { font-size: 18px; font-weight: 600; margin: 1rem 0 0.5rem; }
+    p { margin-bottom: 0.85rem; color: var(--text-secondary); }
+    p strong { color: var(--text-primary); font-weight: 600; }
+    code { font-family: 'JetBrains Mono', monospace; font-size: 0.92em; color: #FBC99A; background: rgba(249, 115, 22, 0.10); padding: 0.05rem 0.3rem; border-radius: 4px; }
+    .title-meta { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.85rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--track-color); margin-bottom: 0.75rem; }
+    .title-card .module-name { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 2.4rem; line-height: 1.1; color: var(--text-primary); margin-bottom: 1rem; }
+    .title-card .track-row { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1.5rem; }
+    .pill { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.35rem 0.75rem; border-radius: 999px; font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.78rem; font-weight: 600; }
+    .pill-track { background: rgba(249, 115, 22, 0.15); border: 1px solid var(--track-color); color: var(--track-color); }
+    .pill-time { background: rgba(212, 168, 67, 0.12); border: 1px solid var(--accent-primary); color: var(--accent-primary); }
+    .pill-pos { background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); color: var(--text-secondary); }
+    .swipe-hint { margin-top: 2rem; font-size: 0.85rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.4rem; }
+    .swipe-hint .arrow { animation: bounce 1.6s ease-in-out infinite; display: inline-block; }
+    @keyframes bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(4px); } }
+    .section-label { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--track-color); margin-bottom: 0.5rem; }
+    .concept-chip { position: absolute; top: 0.85rem; right: 0.85rem; font-family: 'JetBrains Mono', monospace; font-size: 0.66rem; letter-spacing: 0.05em; color: var(--text-muted); background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.08); padding: 0.25rem 0.5rem; border-radius: 999px; text-transform: uppercase; }
+    .step-list { list-style: none; counter-reset: step; margin: 0.5rem 0; }
+    .step-list li { counter-increment: step; position: relative; padding: 0.75rem 0.75rem 0.75rem 3rem; margin-bottom: 0.6rem; background: rgba(249, 115, 22, 0.06); border-radius: 10px; border-left: 3px solid var(--track-color); color: var(--text-secondary); font-size: 15px; line-height: 1.5; }
+    .step-list li::before { content: counter(step); position: absolute; left: 0.75rem; top: 50%; transform: translateY(-50%); width: 28px; height: 28px; border-radius: 50%; background: var(--track-color); color: #0A1628; display: flex; align-items: center; justify-content: center; font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.85rem; font-weight: 700; }
+    .step-list li strong { color: var(--text-primary); display: block; margin-bottom: 0.15rem; font-family: 'Bricolage Grotesque', sans-serif; }
+    .pseudocode { background: rgba(249, 115, 22, 0.08); border-left: 3px solid var(--track-color); border-radius: 0 8px 8px 0; padding: 1rem; font-family: 'JetBrains Mono', monospace; font-size: 13.5px; line-height: 1.65; overflow-x: auto; -webkit-overflow-scrolling: touch; color: var(--text-primary); white-space: pre; margin: 0.75rem 0; }
+    .pseudocode .kw { color: #C792EA; font-weight: 600; }
+    .pseudocode .str { color: #A5D6A7; }
+    .pseudocode .cmt { color: var(--text-muted); font-style: italic; }
+    .pseudocode .var { color: #82AAFF; }
+    .diagram { background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.07); border-radius: 10px; padding: 0.85rem; margin: 0.75rem 0; display: flex; flex-direction: column; gap: 0.4rem; max-width: 300px; }
+    .diagram .row { display: flex; align-items: center; gap: 0.5rem; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text-secondary); }
+    .diagram .box { flex: 1; background: rgba(249, 115, 22, 0.08); border: 1px solid rgba(249, 115, 22, 0.25); border-radius: 6px; padding: 0.35rem 0.5rem; color: var(--text-primary); text-align: center; }
+    .diagram .arrow-down { text-align: center; color: var(--track-color); font-size: 0.9rem; }
+    .misconception { display: grid; grid-template-columns: auto 1fr; gap: 0.5rem 0.75rem; align-items: start; padding: 0.75rem 0; border-bottom: 1px solid rgba(255, 255, 255, 0.06); }
+    .misconception:last-child { border-bottom: none; }
+    .misconception .icon { font-size: 1.1rem; line-height: 1.4; }
+    .misconception .wrong { color: #F87189; font-weight: 600; }
+    .misconception .right { color: var(--text-primary); margin-top: 0.2rem; font-size: 15px; }
+    .takeaway { background: rgba(212, 168, 67, 0.08); border: 1px solid rgba(212, 168, 67, 0.3); border-radius: 12px; padding: 1rem 1.1rem; margin: 0.75rem 0 0; }
+    .takeaway::before { content: "Key Takeaway"; display: block; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 0.85rem; letter-spacing: 0.05em; text-transform: uppercase; color: var(--accent-primary); margin-bottom: 0.5rem; }
+    .takeaway p { color: var(--text-primary); margin-bottom: 0.5rem; }
+    .takeaway p:last-child { margin-bottom: 0; }
+    .quiz-card { background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 1rem 1.1rem; margin-bottom: 0.75rem; cursor: pointer; min-height: 44px; transition: background 0.2s ease, border-color 0.2s ease; -webkit-tap-highlight-color: transparent; }
+    .quiz-card:hover, .quiz-card:focus { background: rgba(255, 255, 255, 0.06); border-color: var(--track-color); outline: none; }
+    .quiz-card .question { display: flex; gap: 0.5rem; align-items: flex-start; font-weight: 600; color: var(--text-primary); }
+    .quiz-card .question::before { content: "Q"; color: var(--track-color); font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; flex-shrink: 0; width: 22px; }
+    .quiz-card .answer { max-height: 0; overflow: hidden; opacity: 0; transition: max-height 0.3s ease, opacity 0.3s ease, margin-top 0.3s ease, padding-top 0.3s ease; color: var(--text-secondary); font-size: 15px; line-height: 1.55; border-top: 1px solid transparent; }
+    .quiz-card.revealed .answer { max-height: 600px; opacity: 1; margin-top: 0.75rem; padding-top: 0.75rem; border-top-color: rgba(255, 255, 255, 0.08); }
+    .quiz-card .reveal-hint { font-size: 0.78rem; color: var(--text-muted); margin-top: 0.4rem; font-style: italic; }
+    .quiz-card.revealed .reveal-hint { display: none; }
+    .desktop-link-btn { display: block; width: 100%; padding: 1rem 1.25rem; background: linear-gradient(135deg, rgba(249, 115, 22, 0.18), rgba(212, 168, 67, 0.12)); border: 1px solid var(--track-color); border-radius: 14px; color: var(--text-primary); text-decoration: none; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; text-align: center; transition: transform 0.15s ease, box-shadow 0.15s ease; min-height: 56px; }
+    .desktop-link-btn:active { transform: scale(0.98); }
+    .desktop-link-btn .sub { display: block; font-family: 'Source Sans 3', sans-serif; font-weight: 400; font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.2rem; }
+    .module-nav-row { display: flex; justify-content: space-between; gap: 0.5rem; margin-top: 1rem; }
+    .module-nav-btn { flex: 1; padding: 0.85rem 0.75rem; background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 12px; color: var(--text-primary); text-decoration: none; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 600; font-size: 0.85rem; text-align: center; min-height: 44px; display: flex; align-items: center; justify-content: center; gap: 0.3rem; }
+    .module-nav-btn:active { background: rgba(255, 255, 255, 0.08); }
+    .module-nav-btn .lbl { font-size: 0.7rem; color: var(--text-muted); display: block; font-weight: 400; letter-spacing: 0.05em; text-transform: uppercase; }
+    .progress-bar { position: fixed; bottom: 0; left: 0; right: 0; height: 36px; background: rgba(10, 22, 40, 0.92); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border-top: 1px solid rgba(255, 255, 255, 0.08); display: flex; align-items: center; padding: 0 1rem; gap: 0.5rem; font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.72rem; color: var(--text-muted); z-index: 50; }
+    .progress-bar .track { flex: 1; height: 4px; background: rgba(255, 255, 255, 0.08); border-radius: 2px; overflow: hidden; }
+    .progress-bar .track .fill { height: 100%; width: 2.56%; background: linear-gradient(90deg, var(--track-color), var(--accent-primary)); border-radius: 2px; transition: width 0.25s ease; }
+    .progress-bar .count { letter-spacing: 0.05em; color: var(--text-secondary); white-space: nowrap; }
+    .menu-fab { position: fixed; top: 0.85rem; right: 0.85rem; width: 44px; height: 44px; border-radius: 50%; background: rgba(22, 32, 51, 0.92); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border: 1px solid rgba(255, 255, 255, 0.12); color: var(--text-primary); font-size: 1.25rem; cursor: pointer; z-index: 60; display: flex; align-items: center; justify-content: center; -webkit-tap-highlight-color: transparent; }
+    .menu-fab:active { transform: scale(0.95); }
+    .menu-overlay { position: fixed; inset: 0; background: rgba(10, 22, 40, 0.94); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); z-index: 70; display: none; flex-direction: column; padding: 4rem 1.25rem 2rem; overflow-y: auto; }
+    .menu-overlay.open { display: flex; }
+    .menu-overlay a { display: block; padding: 0.75rem 1rem; margin-bottom: 0.4rem; background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 10px; color: var(--text-primary); text-decoration: none; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 600; min-height: 44px; font-size: 14px; }
+    .menu-overlay a:active { background: rgba(249, 115, 22, 0.15); border-color: var(--track-color); }
+    .menu-overlay a.cluster-child { margin-left: 1rem; padding: 0.6rem 0.85rem; min-height: 40px; background: rgba(255, 255, 255, 0.02); font-size: 13px; }
+    .menu-overlay .cluster-header { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 0.78rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--track-color); margin: 1rem 0 0.4rem; padding: 0 0.25rem; }
+    .menu-overlay .menu-num { display: inline-block; font-family: 'JetBrains Mono', monospace; font-size: 0.74rem; color: var(--track-color); margin-right: 0.5rem; width: 1.6rem; }
+    .menu-close { position: absolute; top: 0.85rem; right: 0.85rem; width: 44px; height: 44px; border-radius: 50%; background: rgba(244, 63, 94, 0.15); border: 1px solid var(--error); color: var(--text-primary); font-size: 1.5rem; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+    .index-list { list-style: none; padding: 0; margin: 0.5rem 0 0; }
+    .index-list li { display: block; }
+    .index-list a { display: flex; align-items: baseline; gap: 0.6rem; padding: 0.85rem 1rem; margin-bottom: 0.5rem; background: rgba(249, 115, 22, 0.05); border: 1px solid rgba(249, 115, 22, 0.18); border-radius: 10px; color: var(--text-primary); text-decoration: none; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 600; font-size: 15px; min-height: 44px; -webkit-tap-highlight-color: transparent; }
+    .index-list a:active { background: rgba(249, 115, 22, 0.12); }
+    .index-list .idx-num { font-family: 'JetBrains Mono', monospace; color: var(--track-color); font-weight: 700; flex-shrink: 0; width: 1.5rem; }
+    .index-list .idx-sub { display: block; font-family: 'Source Sans 3', sans-serif; font-weight: 400; font-size: 13px; color: var(--text-muted); margin-top: 0.1rem; }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; } .swipe-hint .arrow { animation: none; } }
+    :focus-visible { outline: 2px solid var(--accent-primary); outline-offset: 2px; border-radius: 6px; }
+    @media (min-width: 600px) { .mobile-card { padding-left: 2rem; padding-right: 2rem; } .mobile-card .card-inner { max-width: 560px; margin: 0 auto; } h1 { font-size: 2.5rem; } }
+  </style>
+</head>
+<body>
+
+<button class="menu-fab" id="menuFab" aria-label="Open section menu" aria-expanded="false" aria-controls="menuOverlay">&#9776;</button>
+
+<nav class="menu-overlay" id="menuOverlay" aria-label="Section menu" aria-hidden="true">
+  <button class="menu-close" id="menuClose" aria-label="Close menu">&times;</button>
+  <h2 style="margin-bottom: 0.75rem; color: var(--text-primary);">Jump to Card</h2>
+  <a href="#card-1"><span class="menu-num">01</span>Title</a>
+  <a href="#card-2"><span class="menu-num">02</span>Concept Index</a>
+
+  <div class="cluster-header">Concept 1 &middot; What Basic RAG Gets Wrong</div>
+  <a class="cluster-child" href="#card-3"><span class="menu-num">03</span>Big Idea</a>
+  <a class="cluster-child" href="#card-4"><span class="menu-num">04</span>Analogy</a>
+  <a class="cluster-child" href="#card-5"><span class="menu-num">05</span>How It Works</a>
+  <a class="cluster-child" href="#card-6"><span class="menu-num">06</span>Decision Framework</a>
+  <a class="cluster-child" href="#card-7"><span class="menu-num">07</span>Misconceptions + Takeaway</a>
+
+  <div class="cluster-header">Concept 2 &middot; Chunking Strategies</div>
+  <a class="cluster-child" href="#card-8"><span class="menu-num">08</span>Big Idea</a>
+  <a class="cluster-child" href="#card-9"><span class="menu-num">09</span>Analogy</a>
+  <a class="cluster-child" href="#card-10"><span class="menu-num">10</span>How It Works</a>
+  <a class="cluster-child" href="#card-11"><span class="menu-num">11</span>Decision Framework</a>
+  <a class="cluster-child" href="#card-12"><span class="menu-num">12</span>Misconceptions + Takeaway</a>
+
+  <div class="cluster-header">Concept 3 &middot; Hybrid Search</div>
+  <a class="cluster-child" href="#card-13"><span class="menu-num">13</span>Big Idea</a>
+  <a class="cluster-child" href="#card-14"><span class="menu-num">14</span>Analogy</a>
+  <a class="cluster-child" href="#card-15"><span class="menu-num">15</span>How It Works</a>
+  <a class="cluster-child" href="#card-16"><span class="menu-num">16</span>Pseudocode</a>
+  <a class="cluster-child" href="#card-17"><span class="menu-num">17</span>Misconceptions + Takeaway</a>
+
+  <div class="cluster-header">Concept 4 &middot; Re-ranking</div>
+  <a class="cluster-child" href="#card-18"><span class="menu-num">18</span>Big Idea</a>
+  <a class="cluster-child" href="#card-19"><span class="menu-num">19</span>Analogy</a>
+  <a class="cluster-child" href="#card-20"><span class="menu-num">20</span>How It Works</a>
+  <a class="cluster-child" href="#card-21"><span class="menu-num">21</span>Decision Framework</a>
+  <a class="cluster-child" href="#card-22"><span class="menu-num">22</span>Misconceptions + Takeaway</a>
+
+  <div class="cluster-header">Concept 5 &middot; Multi-Query Expansion</div>
+  <a class="cluster-child" href="#card-23"><span class="menu-num">23</span>Big Idea</a>
+  <a class="cluster-child" href="#card-24"><span class="menu-num">24</span>Analogy</a>
+  <a class="cluster-child" href="#card-25"><span class="menu-num">25</span>How It Works</a>
+  <a class="cluster-child" href="#card-26"><span class="menu-num">26</span>Pseudocode</a>
+  <a class="cluster-child" href="#card-27"><span class="menu-num">27</span>Misconceptions + Takeaway</a>
+
+  <div class="cluster-header">Concept 6 &middot; Contextual Compression</div>
+  <a class="cluster-child" href="#card-28"><span class="menu-num">28</span>Big Idea</a>
+  <a class="cluster-child" href="#card-29"><span class="menu-num">29</span>Analogy</a>
+  <a class="cluster-child" href="#card-30"><span class="menu-num">30</span>How It Works</a>
+  <a class="cluster-child" href="#card-31"><span class="menu-num">31</span>Decision Framework</a>
+  <a class="cluster-child" href="#card-32"><span class="menu-num">32</span>Misconceptions + Takeaway</a>
+
+  <div class="cluster-header">Concept 7 &middot; Parent-Child Chunking</div>
+  <a class="cluster-child" href="#card-33"><span class="menu-num">33</span>Big Idea</a>
+  <a class="cluster-child" href="#card-34"><span class="menu-num">34</span>Analogy</a>
+  <a class="cluster-child" href="#card-35"><span class="menu-num">35</span>How It Works</a>
+  <a class="cluster-child" href="#card-36"><span class="menu-num">36</span>Pseudocode</a>
+  <a class="cluster-child" href="#card-37"><span class="menu-num">37</span>Misconceptions + Takeaway</a>
+
+  <div class="cluster-header">Wrap-Up</div>
+  <a href="#card-38"><span class="menu-num">38</span>Quick Quiz</a>
+  <a href="#card-39"><span class="menu-num">39</span>Continue on Desktop</a>
+</nav>
+
+<main class="deck" id="deck" role="main">
+
+  <!-- CARD 1: TITLE -->
+  <section class="mobile-card center title-card" id="card-1" aria-label="Title card">
+    <div>
+      <div class="title-meta">Module 9 of 20 &middot; Open Source Track</div>
+      <div class="module-name">Advanced RAG Patterns</div>
+      <p style="color: var(--text-secondary); font-size: 1.05rem; margin-bottom: 1.25rem;">Basic RAG gets you to 60% retrieval quality. The other 40% lives in chunking, hybrid search, re-ranking, and query expansion &mdash; seven techniques that separate a demo from a production system.</p>
+      <div class="track-row">
+        <span class="pill pill-track"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--track-color);"></span>Track 3: Memory &amp; Retrieval</span>
+        <span class="pill pill-time">&#9201; ~22 min read</span>
+        <span class="pill pill-pos">9 / 20</span>
+      </div>
+      <div class="swipe-hint" aria-hidden="true"><span class="arrow">&darr;</span> Scroll to begin &middot; 39 cards &middot; 7 concepts</div>
+    </div>
+  </section>
+
+  <!-- CARD 2: CONCEPT INDEX -->
+  <section class="mobile-card" id="card-2" aria-label="Concept Index">
+    <div class="card-inner">
+      <div class="section-label">What You'll Learn</div>
+      <h2>The 7 concepts of advanced RAG</h2>
+      <p style="font-size: 14px; color: var(--text-muted);">Tap any concept to jump to its 5-card cluster.</p>
+      <ul class="index-list">
+        <li><a href="#card-3"><span class="idx-num">1</span><span><span style="display:block;">What Basic RAG Gets Wrong</span><span class="idx-sub">Four silent failure modes</span></span></a></li>
+        <li><a href="#card-8"><span class="idx-num">2</span><span><span style="display:block;">Chunking Strategies</span><span class="idx-sub">Fixed, sentence, semantic, recursive</span></span></a></li>
+        <li><a href="#card-13"><span class="idx-num">3</span><span><span style="display:block;">Hybrid Search: BM25 + Dense</span><span class="idx-sub">Lexical + semantic, fused by RRF</span></span></a></li>
+        <li><a href="#card-18"><span class="idx-num">4</span><span><span style="display:block;">Re-ranking</span><span class="idx-sub">Cross-encoder precision on top-N</span></span></a></li>
+        <li><a href="#card-23"><span class="idx-num">5</span><span><span style="display:block;">Multi-Query Expansion</span><span class="idx-sub">Many phrasings, one dedup pool</span></span></a></li>
+        <li><a href="#card-28"><span class="idx-num">6</span><span><span style="display:block;">Contextual Compression</span><span class="idx-sub">Keep only the relevant excerpt</span></span></a></li>
+        <li><a href="#card-33"><span class="idx-num">7</span><span><span style="display:block;">Parent-Child Chunking</span><span class="idx-sub">Match small, return big</span></span></a></li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ============ CONCEPT 1: WHAT BASIC RAG GETS WRONG (3-7) ============ -->
+
+  <section class="mobile-card" id="card-3" aria-label="What Basic RAG Gets Wrong - Big Idea">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 1 of 7</span>
+      <div class="section-label">The Big Idea</div>
+      <h2>Basic RAG fails silently</h2>
+      <p>Basic RAG embeds your query, grabs the nearest chunks by cosine distance, and stuffs them into context. When the query is precise and chunks are even, it works beautifully.</p>
+      <p>But real users ask messy questions. When the answer is spread across five chunks, or hinges on an exact product ID, or lives under a word you never typed, the system fails <strong>silently</strong> &mdash; and the model hallucinates with confidence. There are <strong>four repeatable failure modes</strong>, and each has a specific fix that this module builds.</p>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-4" aria-label="What Basic RAG Gets Wrong - Analogy">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 1 of 7</span>
+      <div class="section-label">The Analogy</div>
+      <h2>The rigid card catalogue</h2>
+      <p><strong>BEFORE:</strong> Picture finding a library book using only a card catalogue that matches the exact title the cataloguer typed on the index card &mdash; one-dimensional lookup, nothing more.</p>
+      <p><strong>PAIN:</strong> Search "car" when the card says "automobile" and you find nothing, even though the book is right there on the shelf. Ask "drug interactions for metformin" and you get efficacy studies, because "interaction" and "effect" sit close in embedding space &mdash; the real answer is filed under "contraindications," a word you never used.</p>
+      <p><strong>MAPPING:</strong> Basic RAG is that card catalogue. Advanced RAG adds more ways to find the same shelf: exact-word search, better cutting, a second opinion on relevance, and multiple phrasings of your question.</p>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-5" aria-label="What Basic RAG Gets Wrong - How It Works">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 1 of 7</span>
+      <div class="section-label">How It Works</div>
+      <h2>The four failure modes</h2>
+      <ol class="step-list">
+        <li><strong>Semantic drift</strong>"Side effects of drug X?" pulls efficacy chunks &mdash; nearby in meaning, but wrong. Fix: hybrid BM25 + dense.</li>
+        <li><strong>Exact-match miss</strong>"FDA approval #123-456" fails; dense vectors can't encode rare IDs. Fix: BM25 lexical search.</li>
+        <li><strong>Context split</strong>"Compare Q1 vs Q2" spans a page boundary; fixed chunks cut it apart. Fix: parent-child chunking.</li>
+        <li><strong>Query ambiguity</strong>"Python memory issues" retrieves one facet, misses related framings. Fix: multi-query expansion.</li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-6" aria-label="What Basic RAG Gets Wrong - Decision Framework">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 1 of 7</span>
+      <div class="section-label">Decision Framework</div>
+      <h2>Diagnose then fix</h2>
+      <pre class="pseudocode" aria-label="Decision framework: which RAG fix to add"><span class="kw">IF</span> retrieval grabs the wrong topic:
+  &rarr; add hybrid (BM25 + dense)
+
+<span class="kw">IF</span> exact IDs / codes never match:
+  &rarr; add BM25 lexical search
+
+<span class="kw">IF</span> the answer spans chunk edges:
+  &rarr; use parent-child chunking
+
+<span class="kw">IF</span> the query is broad / ambiguous:
+  &rarr; expand into multiple queries
+
+<span class="cmt"># each fix targets ONE failure —</span>
+<span class="cmt"># stack them, don't guess</span>
+</pre>
+      <p style="font-size: 14px; color: var(--text-muted);">Hybrid search alone lifts recall@5 by 12&ndash;18%; adding a re-ranker lifts precision@5 by a further 15&ndash;22%.</p>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-7" aria-label="What Basic RAG Gets Wrong - Misconceptions and Takeaway">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 1 of 7</span>
+      <div class="section-label">Wrong Mental Models</div>
+      <h2>Misconceptions</h2>
+      <div class="misconception">
+        <div class="icon" aria-hidden="true">&#10060;</div>
+        <div>
+          <div class="wrong">"If retrieval is wrong, I'll see an error."</div>
+          <div class="right">You won't. Basic RAG fails silently &mdash; it returns <em>some</em> chunks every time, and the model confidently answers from the wrong ones. The failure is invisible without an eval set.</div>
+        </div>
+      </div>
+      <div class="misconception">
+        <div class="icon" aria-hidden="true">&#10060;</div>
+        <div>
+          <div class="wrong">"A bigger embedding model fixes everything."</div>
+          <div class="right">It helps semantic drift but does nothing for exact-ID misses or context splits. Those are structural problems that need lexical search and better chunking, not a fancier vector.</div>
+        </div>
+      </div>
+      <div class="takeaway">
+        <p><strong>Basic RAG has four distinct failure modes, and each has its own fix.</strong> Semantic drift, exact-match miss, context split, and query ambiguity.</p>
+        <p>Diagnose which mode is hurting you before reaching for a technique &mdash; the rest of this module is those four fixes.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ CONCEPT 2: CHUNKING STRATEGIES (8-12) ============ -->
+
+  <section class="mobile-card" id="card-8" aria-label="Chunking Strategies - Big Idea">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 2 of 7</span>
+      <div class="section-label">The Big Idea</div>
+      <h2>Where you cut decides what you find</h2>
+      <p><strong>Chunking</strong> splits a long document into pieces that get embedded and indexed. The goal: chunks <em>small enough to retrieve precisely</em> but <em>large enough to hold one complete thought</em>.</p>
+      <p>Naive fixed-size chunking optimizes for neither &mdash; it cuts every N characters whether or not a sentence, paragraph, or section boundary falls there. Everything downstream (search, re-ranking, generation) is capped by how well you chunked. Four strategies trade speed for coherence.</p>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-9" aria-label="Chunking Strategies - Analogy">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 2 of 7</span>
+      <div class="section-label">The Analogy</div>
+      <h2>The newspaper scissors problem</h2>
+      <p><strong>BEFORE:</strong> Imagine clipping articles from a newspaper with scissors that cut every 200 characters regardless of where you are on the page.</p>
+      <p><strong>PAIN:</strong> You slice mid-sentence, through a photo, chopping the headline off the body. When you try to file the clippings, "Drug Recall" ends up filed apart from the drug's actual name &mdash; and search on words can't reassemble your mangled fragments.</p>
+      <p><strong>MAPPING:</strong> Chunking strategy is <em>where you put the scissors down</em>. Sentence-aware cuts at periods; semantic cuts when the topic shifts; recursive respects the document's own structure. The right strategy depends on the document type.</p>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-10" aria-label="Chunking Strategies - How It Works">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 2 of 7</span>
+      <div class="section-label">How It Works</div>
+      <h2>Four strategies</h2>
+      <ol class="step-list">
+        <li><strong>Fixed + overlap</strong>Cut every N chars with an M-char overlap. Fast, no NLP, but cuts mid-word.</li>
+        <li><strong>Sentence-aware</strong>Split at sentence boundaries, group until a target size. Never cuts mid-sentence.</li>
+        <li><strong>Semantic</strong>Embed consecutive sentences, cut where cosine distance spikes (a topic shift). Most coherent, slowest.</li>
+        <li><strong>Recursive</strong>Try paragraph breaks first, then newlines, then sentences, then spaces. Respects structure hierarchy.</li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-11" aria-label="Chunking Strategies - Decision Framework">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 2 of 7</span>
+      <div class="section-label">Decision Framework</div>
+      <h2>Match strategy to document</h2>
+      <pre class="pseudocode" aria-label="Decision framework: which chunking strategy to use"><span class="kw">IF</span> docs are uniform (DB rows)
+   OR speed &gt; quality:
+  &rarr; fixed-size + overlap
+
+<span class="kw">IF</span> prose / tickets / descriptions:
+  &rarr; sentence-aware
+
+<span class="kw">IF</span> dense technical text,
+   topics shift within a page:
+  &rarr; semantic (accept slower + variable size)
+
+<span class="kw">IF</span> structured docs (markdown, legal):
+  &rarr; recursive (respects \n\n &gt; \n &gt; .)
+</pre>
+      <p style="font-size: 14px; color: var(--text-muted);">Semantic chunking is 10&ndash;50x slower than fixed-size on large corpora &mdash; reach for it only when coherence really matters.</p>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-12" aria-label="Chunking Strategies - Misconceptions and Takeaway">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 2 of 7</span>
+      <div class="section-label">Wrong Mental Models</div>
+      <h2>Misconceptions</h2>
+      <div class="misconception">
+        <div class="icon" aria-hidden="true">&#10060;</div>
+        <div>
+          <div class="wrong">"There's one best chunk size for everything."</div>
+          <div class="right">There isn't. The right size and strategy depend on document type &mdash; dialogue, legal contracts, and technical prose all cut differently. Calibrate against your own eval set.</div>
+        </div>
+      </div>
+      <div class="misconception">
+        <div class="icon" aria-hidden="true">&#10060;</div>
+        <div>
+          <div class="wrong">"Semantic chunking is always the best choice."</div>
+          <div class="right">It's the most coherent but the slowest and produces variable sizes. For uniform data or latency-critical pipelines, fixed-size or recursive often wins on the cost/quality tradeoff.</div>
+        </div>
+      </div>
+      <div class="takeaway">
+        <p><strong>Where you cut is a first-class design decision, not a default.</strong> Fixed, sentence-aware, semantic, and recursive each fit a different document type.</p>
+        <p>Every retrieval improvement downstream is limited by chunk quality &mdash; fix chunking first.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ CONCEPT 3: HYBRID SEARCH (13-17) ============ -->
+
+  <section class="mobile-card" id="card-13" aria-label="Hybrid Search - Big Idea">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 3 of 7</span>
+      <div class="section-label">The Big Idea</div>
+      <h2>Two searches, fused into one</h2>
+      <p>Dense embeddings find <em>meaning</em> but blur exact tokens like product codes into neighborhood similarity. <strong>BM25</strong> (Best Match 25) finds <em>exact words</em>, weighting rare terms heavily, but is blind to synonyms.</p>
+      <p>Hybrid search runs both, then merges their ranked lists with <strong>Reciprocal Rank Fusion (RRF)</strong>. Each retriever "votes," and a document scoring 1/(k+rank) in each list gets its votes summed. The result covers both semantic and exact-match queries with one pipeline.</p>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-14" aria-label="Hybrid Search - Analogy">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 3 of 7</span>
+      <div class="section-label">The Analogy</div>
+      <h2>Ranked-choice voting</h2>
+      <p><strong>BEFORE:</strong> Suppose you trust only one search engine to pick the best result &mdash; whatever it ranks #1 wins, full stop.</p>
+      <p><strong>PAIN:</strong> A single engine has blind spots. Dense search crowns a semantically-close-but-wrong doc; lexical search crowns an exact-word match that misses the intent. One big vote from one voter is fragile.</p>
+      <p><strong>MAPPING:</strong> RRF is ranked-choice voting. Each retriever casts a ballot (its ranked list), and a vote is worth more the higher the doc placed. The payoff: a doc landing mid-pack in <em>both</em> lists (two modest votes) beats a doc that's #1 in only <em>one</em> list. Agreement across two methods is a stronger signal than a high score from either alone.</p>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-15" aria-label="Hybrid Search - How It Works">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 3 of 7</span>
+      <div class="section-label">How It Works</div>
+      <h2>The fusion pipeline</h2>
+      <ol class="step-list">
+        <li><strong>Run BM25</strong>Score docs by term frequency &times; rarity; take the top fetch_k as a ranked list.</li>
+        <li><strong>Run dense</strong>Embed the query, query the vector store; take its top fetch_k ranked list.</li>
+        <li><strong>Score with RRF</strong>For each doc in each list add 1/(k+rank), with k=60 smoothing.</li>
+        <li><strong>Sort &amp; take top_k</strong>Docs appearing in both lists rise; return the merged top_k to re-ranking.</li>
+      </ol>
+      <div class="diagram" aria-label="Hybrid search diagram">
+        <div class="row"><span class="box">BM25 list</span><span class="box">Dense list</span></div>
+        <div class="arrow-down">&darr; RRF (k=60) &darr;</div>
+        <div class="row"><span class="box" style="background:rgba(249,115,22,0.14);">Merged ranking</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-16" aria-label="Hybrid Search - Pseudocode">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 3 of 7</span>
+      <div class="section-label">The Pattern</div>
+      <h2>Pseudocode</h2>
+      <pre class="pseudocode" aria-label="Pseudocode for hybrid search with RRF"><span class="kw">FUNCTION</span> hybrid_search(query, k=60):
+  bm25_ranked  = bm25.top(query, <span class="var">fetch_k</span>)
+  dense_ranked = vectors.top(query, <span class="var">fetch_k</span>)
+
+  scores = {}
+  <span class="kw">FOR</span> list <span class="kw">IN</span> [bm25_ranked, dense_ranked]:
+    <span class="kw">FOR</span> rank, doc <span class="kw">IN</span> enumerate(list, 1):
+      scores[doc] += 1 / (k + rank)
+
+  <span class="kw">RETURN</span> top_k(sort_desc(scores))
+
+<span class="cmt"># a doc in BOTH lists collects two</span>
+<span class="cmt"># votes and outranks a lone #1.</span>
+</pre>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-17" aria-label="Hybrid Search - Misconceptions and Takeaway">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 3 of 7</span>
+      <div class="section-label">Wrong Mental Models</div>
+      <h2>Misconceptions</h2>
+      <div class="misconception">
+        <div class="icon" aria-hidden="true">&#10060;</div>
+        <div>
+          <div class="wrong">"Just average the two similarity scores."</div>
+          <div class="right">BM25 scores and cosine scores live on different, unbounded scales &mdash; averaging them is meaningless. RRF uses only <em>rank</em>, not raw scores, which is why it's robust and parameter-light.</div>
+        </div>
+      </div>
+      <div class="misconception">
+        <div class="icon" aria-hidden="true">&#10060;</div>
+        <div>
+          <div class="wrong">"Dense search alone is modern, BM25 is obsolete."</div>
+          <div class="right">Dense embeddings still can't reliably match rare IDs, codes, or names. BM25 nails exactly those. The two are complementary &mdash; hybrid beats either alone.</div>
+        </div>
+      </div>
+      <div class="takeaway">
+        <p><strong>Hybrid search fuses lexical (BM25) and semantic (dense) results with RRF.</strong> Agreement across both methods is a stronger signal than one high score.</p>
+        <p>RRF merges by rank, not raw score, so k=60 keeps any single list from dominating.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ CONCEPT 4: RE-RANKING (18-22) ============ -->
+
+  <section class="mobile-card" id="card-18" aria-label="Re-ranking - Big Idea">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 4 of 7</span>
+      <div class="section-label">The Big Idea</div>
+      <h2>A precise second opinion</h2>
+      <p>Hybrid search hands you ~20 good candidates using a fast <strong>bi-encoder</strong> (query and doc embedded separately, compared by dot product). Great for recall, mediocre for fine-grained relevance.</p>
+      <p>A <strong>cross-encoder</strong> re-ranker reads the query and each document <em>together</em> and outputs one relevance score per pair. It's ~10x more accurate but can't pre-index, so you only run it on the small candidate set &mdash; recall wide, then re-rank narrow.</p>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-19" aria-label="Re-ranking - Analogy">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 4 of 7</span>
+      <div class="section-label">The Analogy</div>
+      <h2>Resume screen, then interview</h2>
+      <p><strong>BEFORE:</strong> Imagine hiring by reading 10,000 resumes in full, one by one, giving each a deep interview. Accurate, but you'd never finish.</p>
+      <p><strong>PAIN:</strong> Deep evaluation doesn't scale to the whole corpus. But a fast keyword skim of every resume (the bi-encoder) is cheap yet shallow &mdash; it lets weak candidates through and ranks them crudely.</p>
+      <p><strong>MAPPING:</strong> So you do both. The fast skim (hybrid retrieval) narrows 10,000 to a shortlist of 20. Then the cross-encoder gives those 20 a real interview &mdash; reading query and document side by side &mdash; and picks the true top 5. Cheap recall first, expensive precision last.</p>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-20" aria-label="Re-ranking - How It Works">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 4 of 7</span>
+      <div class="section-label">How It Works</div>
+      <h2>The re-rank step</h2>
+      <ol class="step-list">
+        <li><strong>Take the candidates</strong>Feed the ~20 docs from hybrid retrieval into the re-ranker.</li>
+        <li><strong>Pair with the query</strong>Build (query, doc) pairs so the model attends across both texts at once.</li>
+        <li><strong>Score jointly</strong>The cross-encoder emits one relevance logit per pair in a single batch.</li>
+        <li><strong>Sort, keep top 5</strong>Order by score, drop the rest. Only these reach the prompt.</li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-21" aria-label="Re-ranking - Decision Framework">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 4 of 7</span>
+      <div class="section-label">Decision Framework</div>
+      <h2>Which re-ranker?</h2>
+      <pre class="pseudocode" aria-label="Decision framework: which re-ranker to use"><span class="kw">IF</span> production, latency budget ~120ms:
+  &rarr; cross-encoder (ms-marco-MiniLM)
+     67MB, CPU, near-SOTA quality
+
+<span class="kw">IF</span> domain-specific relevance rules
+   (clinical, legal) + offline batch:
+  &rarr; LLM re-ranker via Mistral
+     (~2&ndash;8s for 20 docs, custom logic)
+
+<span class="kw">IF</span> latency is critical (&lt; ~10ms):
+  &rarr; skip re-ranking, use bi-encoder
+     order (baseline quality)
+</pre>
+      <p style="font-size: 14px; color: var(--text-muted);">Cross-encoder scores are unbounded logits &mdash; use them only for ordering, never as probabilities.</p>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-22" aria-label="Re-ranking - Misconceptions and Takeaway">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 4 of 7</span>
+      <div class="section-label">Wrong Mental Models</div>
+      <h2>Misconceptions</h2>
+      <div class="misconception">
+        <div class="icon" aria-hidden="true">&#10060;</div>
+        <div>
+          <div class="wrong">"Just cross-encode the whole corpus for best results."</div>
+          <div class="right">You can't &mdash; cross-encoders can't pre-index, so scoring millions of docs per query is infeasible. That's why you retrieve wide with a bi-encoder first, then re-rank a small shortlist.</div>
+        </div>
+      </div>
+      <div class="misconception">
+        <div class="icon" aria-hidden="true">&#10060;</div>
+        <div>
+          <div class="wrong">"An LLM re-ranker is always more accurate."</div>
+          <div class="right">It's slower (2&ndash;8s for 20 docs) and only wins when you need domain logic the MS MARCO model never saw. For general relevance, the cross-encoder is faster <em>and</em> competitive.</div>
+        </div>
+      </div>
+      <div class="takeaway">
+        <p><strong>Retrieve wide with a cheap bi-encoder, then re-rank narrow with a precise cross-encoder.</strong> ~120ms buys a 15&ndash;22% precision@5 lift.</p>
+        <p>The cross-encoder is the production default; save the LLM re-ranker for custom, offline relevance criteria.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ CONCEPT 5: MULTI-QUERY EXPANSION (23-27) ============ -->
+
+  <section class="mobile-card" id="card-23" aria-label="Multi-Query Expansion - Big Idea">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 5 of 7</span>
+      <div class="section-label">The Big Idea</div>
+      <h2>Ask the question five ways</h2>
+      <p><strong>Multi-query expansion</strong> asks the LLM to generate N alternative phrasings of the query, retrieves for each independently, then deduplicates the combined pool before re-ranking.</p>
+      <p>If the query is "memory leak in Python," useful docs might say "garbage collection," "reference counting," or "high RSS" &mdash; none containing your phrase. Variant queries surface all of them into the candidate pool, so retrieval casts a wider net before re-ranking narrows it back down.</p>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-24" aria-label="Multi-Query Expansion - Analogy">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 5 of 7</span>
+      <div class="section-label">The Analogy</div>
+      <h2>Asking around the office</h2>
+      <p><strong>BEFORE:</strong> Imagine looking for a document by asking exactly one coworker, using exactly the words that first came to mind.</p>
+      <p><strong>PAIN:</strong> If you ask for "the churn report" but the team files it as "retention analysis," that one coworker shrugs &mdash; and you conclude it doesn't exist, even though it does.</p>
+      <p><strong>MAPPING:</strong> Multi-query is asking several coworkers, each in different words: "churn," "retention," "cancellations," "attrition." Between them, someone recognizes the request. You then pool everything they hand back and drop the duplicates &mdash; one wide search built from many phrasings.</p>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-25" aria-label="Multi-Query Expansion - How It Works">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 5 of 7</span>
+      <div class="section-label">How It Works</div>
+      <h2>Expand, retrieve, dedup</h2>
+      <ol class="step-list">
+        <li><strong>Generate variants</strong>Ask Mistral for 3&ndash;5 rephrasings using different vocabulary and framings.</li>
+        <li><strong>Retrieve each</strong>Run the full search for every variant, plus the original query.</li>
+        <li><strong>Pool results</strong>Combine all hits into one candidate list, tagging their source variant.</li>
+        <li><strong>Dedup by embedding</strong>Drop near-duplicates by cosine similarity, not text &mdash; it catches paraphrases.</li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-26" aria-label="Multi-Query Expansion - Pseudocode">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 5 of 7</span>
+      <div class="section-label">The Pattern</div>
+      <h2>Pseudocode</h2>
+      <pre class="pseudocode" aria-label="Pseudocode for multi-query expansion"><span class="kw">FUNCTION</span> multi_query(query, n=3):
+  variants = llm_expand(query, n)   <span class="cmt"># temp 0.5</span>
+  variants = [query] + variants     <span class="cmt"># keep original</span>
+
+  pool = []
+  <span class="kw">FOR</span> v <span class="kw">IN</span> variants:
+    pool += search(v)
+
+  <span class="cmt"># dedup by EMBEDDING, not text —</span>
+  <span class="cmt"># catches paraphrase duplicates</span>
+  <span class="kw">RETURN</span> dedup_by_similarity(pool, 0.95)
+</pre>
+      <p style="font-size: 14px; color: var(--text-muted);">Temperature 0.4&ndash;0.7 is the sweet spot: too low gives near-identical variants, too high drifts off-topic.</p>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-27" aria-label="Multi-Query Expansion - Misconceptions and Takeaway">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 5 of 7</span>
+      <div class="section-label">Wrong Mental Models</div>
+      <h2>Misconceptions</h2>
+      <div class="misconception">
+        <div class="icon" aria-hidden="true">&#10060;</div>
+        <div>
+          <div class="wrong">"Dedup by exact text is good enough."</div>
+          <div class="right">Different variants retrieve the <em>same</em> doc phrased slightly differently, or paraphrase near-duplicates. Text matching misses those; embedding-similarity dedup catches them.</div>
+        </div>
+      </div>
+      <div class="misconception">
+        <div class="icon" aria-hidden="true">&#10060;</div>
+        <div>
+          <div class="wrong">"More variants always means better recall."</div>
+          <div class="right">Each variant costs an LLM call plus a retrieval. Beyond a handful you get diminishing returns and off-topic drift &mdash; 3&ndash;5 well-chosen phrasings is usually the sweet spot.</div>
+        </div>
+      </div>
+      <div class="takeaway">
+        <p><strong>Multi-query widens the net: many phrasings, one deduplicated pool.</strong> It fixes query ambiguity by surfacing docs that use different words for the same idea.</p>
+        <p>Always keep the original query, and dedup by embedding, not by raw text.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ CONCEPT 6: CONTEXTUAL COMPRESSION (28-32) ============ -->
+
+  <section class="mobile-card" id="card-28" aria-label="Contextual Compression - Big Idea">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 6 of 7</span>
+      <div class="section-label">The Big Idea</div>
+      <h2>Keep the sentence, drop the page</h2>
+      <p>A retrieved chunk might be 500 tokens where only 40 answer the query. Feeding all 500 into context wastes the model's attention and your token budget.</p>
+      <p><strong>Contextual compression</strong> asks the LLM to extract only the portion of each chunk that directly answers the query, discarding the rest. A 10-chunk context of tight excerpts can outperform a 3-chunk context of full passages &mdash; less noise, more room, better answers.</p>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-29" aria-label="Contextual Compression - Analogy">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 6 of 7</span>
+      <div class="section-label">The Analogy</div>
+      <h2>The highlighter, not the whole book</h2>
+      <p><strong>BEFORE:</strong> Imagine answering a colleague's question by photocopying and handing them ten entire book chapters that each mention the topic somewhere.</p>
+      <p><strong>PAIN:</strong> They now have to re-read hundreds of pages to find the two sentences that matter. The signal is buried in noise, and they may latch onto an irrelevant paragraph instead.</p>
+      <p><strong>MAPPING:</strong> Compression is running a highlighter over each chapter first and handing over only the highlighted lines. Same source material, a fraction of the reading &mdash; and far less chance of getting distracted by the wrong passage.</p>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-30" aria-label="Contextual Compression - How It Works">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 6 of 7</span>
+      <div class="section-label">How It Works</div>
+      <h2>Compress each chunk</h2>
+      <ol class="step-list">
+        <li><strong>Skip short chunks</strong>If a chunk is already under ~150 chars, return it as-is &mdash; nothing to gain.</li>
+        <li><strong>Extract the excerpt</strong>Ask the LLM for the verbatim portion relevant to the query.</li>
+        <li><strong>Handle "not relevant"</strong>If the model finds nothing useful, it returns a marker and the chunk is dropped.</li>
+        <li><strong>Fall back safely</strong>If compression returns empty or errors, keep the full chunk rather than lose it.</li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-31" aria-label="Contextual Compression - Decision Framework">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 6 of 7</span>
+      <div class="section-label">Decision Framework</div>
+      <h2>Compress or not?</h2>
+      <pre class="pseudocode" aria-label="Decision framework: when to use contextual compression"><span class="kw">USE</span> compression <span class="kw">WHEN</span>:
+  - chunks are long (&gt; 400 tokens)
+  - questions are specific
+  - context window is tight
+
+<span class="kw">SKIP</span> compression <span class="kw">WHEN</span>:
+  - chunks already short (&lt; 150 tokens)
+  - question is broad, needs full context
+  - real-time latency is critical
+
+<span class="cmt"># heuristic: if avg compression &lt; 50%,</span>
+<span class="cmt"># the extra LLM call isn't worth it</span>
+</pre>
+      <p style="font-size: 14px; color: var(--text-muted);">Compression adds one LLM call per chunk &mdash; that latency multiplies fast across a candidate set.</p>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-32" aria-label="Contextual Compression - Misconceptions and Takeaway">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 6 of 7</span>
+      <div class="section-label">Wrong Mental Models</div>
+      <h2>Misconceptions</h2>
+      <div class="misconception">
+        <div class="icon" aria-hidden="true">&#10060;</div>
+        <div>
+          <div class="wrong">"Compression is free &mdash; always turn it on."</div>
+          <div class="right">Each chunk costs an extra LLM call, so latency multiplies across the candidate set. If your chunks are already compact, the overhead outweighs the savings.</div>
+        </div>
+      </div>
+      <div class="misconception">
+        <div class="icon" aria-hidden="true">&#10060;</div>
+        <div>
+          <div class="wrong">"The model can compress freely and rephrase."</div>
+          <div class="right">You want <em>verbatim</em> extraction, not a paraphrase &mdash; rephrasing risks altering facts. And always keep a fallback to the full chunk when it returns empty, so you never lose good context.</div>
+        </div>
+      </div>
+      <div class="takeaway">
+        <p><strong>Compression trades an LLM call per chunk for a cleaner, cheaper context.</strong> Extract the relevant excerpt verbatim; drop the noise.</p>
+        <p>Use it for long chunks and specific questions; skip it when chunks are already short or latency is tight.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ CONCEPT 7: PARENT-CHILD CHUNKING (33-37) ============ -->
+
+  <section class="mobile-card" id="card-33" aria-label="Parent-Child Chunking - Big Idea">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 7 of 7</span>
+      <div class="section-label">The Big Idea</div>
+      <h2>Match small, return big</h2>
+      <p>Small chunks retrieve precisely; large chunks give the model enough context to answer coherently. You can't have both from one index &mdash; unless you keep two.</p>
+      <p><strong>Parent-child (small-to-big) chunking</strong> indexes small <em>child</em> chunks (50&ndash;150 tokens) for precise matching, each linked to a larger <em>parent</em> chunk (300&ndash;600 tokens). When a child matches the query, you return its parent to the LLM. Precision on retrieval, richness on generation.</p>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-34" aria-label="Parent-Child Chunking - Analogy">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 7 of 7</span>
+      <div class="section-label">The Analogy</div>
+      <h2>The book index vs. the chapter</h2>
+      <p><strong>BEFORE:</strong> Suppose you had to find and understand a fact using <em>only</em> a book's back-of-book index &mdash; single precise entries, no surrounding text.</p>
+      <p><strong>PAIN:</strong> The index entry "lactic acidosis, p.212" pinpoints the location perfectly, but reading just that line tells you nothing &mdash; no cause, no severity, no context. Precision without context is useless.</p>
+      <p><strong>MAPPING:</strong> Parent-child search uses the precise index entry (the child chunk) to find the spot, then hands you the whole page (the parent chunk) to actually read. You match on the needle but return the paragraph around it.</p>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-35" aria-label="Parent-Child Chunking - How It Works">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 7 of 7</span>
+      <div class="section-label">How It Works</div>
+      <h2>Two collections, one link</h2>
+      <ol class="step-list">
+        <li><strong>Build parents</strong>Split the doc into large 300&ndash;600 token parent chunks; index them for lookup.</li>
+        <li><strong>Build children</strong>Split each parent into small children; store the parent_id in each child's metadata.</li>
+        <li><strong>Search children</strong>Query the small-chunk index for precise matches, fetch a few extra.</li>
+        <li><strong>Return parents</strong>Follow each match's parent_id, dedupe, and return the parent text to the model.</li>
+      </ol>
+      <div class="diagram" aria-label="Parent-child diagram">
+        <div class="row"><span class="box">query &rarr; child index</span></div>
+        <div class="arrow-down">&darr; match child &middot; follow parent_id &darr;</div>
+        <div class="row"><span class="box" style="background:rgba(249,115,22,0.14);">return parent chunk</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-36" aria-label="Parent-Child Chunking - Pseudocode">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 7 of 7</span>
+      <div class="section-label">The Pattern</div>
+      <h2>Pseudocode</h2>
+      <pre class="pseudocode" aria-label="Pseudocode for parent-child chunking"><span class="cmt"># INDEX TIME</span>
+<span class="kw">FOR</span> parent <span class="kw">IN</span> split(doc, ~500):
+  store_parent(parent)
+  <span class="kw">FOR</span> child <span class="kw">IN</span> split(parent, ~120):
+    index_child(child, parent_id=parent.id)
+
+<span class="cmt"># QUERY TIME</span>
+<span class="kw">FUNCTION</span> search(query):
+  hits    = child_index.top(query)
+  parents = unique(h.parent_id <span class="kw">FOR</span> h <span class="kw">IN</span> hits)
+  <span class="kw">RETURN</span> fetch_parents(parents)
+</pre>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-37" aria-label="Parent-Child Chunking - Misconceptions and Takeaway">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 7 of 7</span>
+      <div class="section-label">Wrong Mental Models</div>
+      <h2>Misconceptions</h2>
+      <div class="misconception">
+        <div class="icon" aria-hidden="true">&#10060;</div>
+        <div>
+          <div class="wrong">"Index the parents and just use bigger chunks."</div>
+          <div class="right">Big chunks dilute the embedding &mdash; a specific fact gets averaged into a whole paragraph and matches worse. You need the <em>small</em> chunk for precise matching and the parent only for context.</div>
+        </div>
+      </div>
+      <div class="misconception">
+        <div class="icon" aria-hidden="true">&#10060;</div>
+        <div>
+          <div class="wrong">"The child chunk is what goes in the prompt."</div>
+          <div class="right">No &mdash; the child is only for <em>matching</em>. What reaches the model is the parent. Forget to store the parent_id link and you can't make the jump from match to context.</div>
+        </div>
+      </div>
+      <div class="takeaway">
+        <p><strong>Parent-child splits retrieval from generation: match on small children, return large parents.</strong> It fixes the context-split failure mode.</p>
+        <p>The parent_id in child metadata is the load-bearing link &mdash; without it, there's no jump from match to context.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- CARD 38: QUICK QUIZ -->
+  <section class="mobile-card" id="card-38" aria-label="Quick Quiz">
+    <div class="card-inner">
+      <div class="section-label">Quick Quiz</div>
+      <h2>Test the core insight</h2>
+      <p style="font-size: 14px; color: var(--text-muted);">One question per concept. Tap to reveal the answer.</p>
+
+      <div class="quiz-card" role="button" tabindex="0" aria-expanded="false" aria-label="Quiz question 1">
+        <div class="question">A user searches "FDA approval NDA-021218" and basic RAG misses the doc that's clearly in the corpus. Why, and what's the fix?</div>
+        <div class="reveal-hint">Tap to reveal &darr;</div>
+        <div class="answer"><strong>Exact-match miss &mdash; add BM25 lexical search.</strong> Dense embeddings blur rare IDs and codes into neighborhood similarity, so they can't match an exact string. BM25 scores exact tokens directly and finds it.</div>
+      </div>
+
+      <div class="quiz-card" role="button" tabindex="0" aria-expanded="false" aria-label="Quiz question 2">
+        <div class="question">Semantic chunking decides where to cut based on what signal?</div>
+        <div class="reveal-hint">Tap to reveal &darr;</div>
+        <div class="answer"><strong>Cosine distance between consecutive sentence embeddings.</strong> When adjacent sentences drift far apart in embedding space (a topic shift), it starts a new chunk &mdash; producing the most coherent chunks, at the cost of variable size and speed.</div>
+      </div>
+
+      <div class="quiz-card" role="button" tabindex="0" aria-expanded="false" aria-label="Quiz question 3">
+        <div class="question">Doc A ranks #3 in both BM25 and dense lists. Doc B ranks #1 in dense but is absent from BM25. Which has the higher RRF score?</div>
+        <div class="reveal-hint">Tap to reveal &darr;</div>
+        <div class="answer"><strong>Doc A.</strong> With k=60, two rank-3 votes (2 &times; 1/63 &asymp; 0.0318) beat one rank-1 vote (1/61 &asymp; 0.0164). Agreement across both retrievers outweighs a single top placement &mdash; that's the whole point of hybrid search.</div>
+      </div>
+
+      <div class="quiz-card" role="button" tabindex="0" aria-expanded="false" aria-label="Quiz question 4">
+        <div class="question">You must re-rank 20 candidates and finish under 200ms. Cross-encoder on CPU takes ~120ms. Best strategy?</div>
+        <div class="reveal-hint">Tap to reveal &darr;</div>
+        <div class="answer"><strong>Use the cross-encoder.</strong> At ~120ms it fits the budget with room to spare and gives near-SOTA precision. The LLM re-ranker (2&ndash;8s) would blow the budget; skipping re-ranking leaves quality on the table.</div>
+      </div>
+
+      <div class="quiz-card" role="button" tabindex="0" aria-expanded="false" aria-label="Quiz question 5">
+        <div class="question">Why deduplicate multi-query results by embedding similarity instead of exact text?</div>
+        <div class="reveal-hint">Tap to reveal &darr;</div>
+        <div class="answer"><strong>To catch paraphrase duplicates.</strong> Different query variants retrieve the same idea phrased differently; exact-text matching misses those near-duplicates, while embedding similarity (e.g. threshold 0.95) collapses them into one.</div>
+      </div>
+
+      <div class="quiz-card" role="button" tabindex="0" aria-expanded="false" aria-label="Quiz question 6">
+        <div class="question">Contextual compression cuts a 500-token chunk to a 40-token excerpt. What's the primary risk?</div>
+        <div class="reveal-hint">Tap to reveal &darr;</div>
+        <div class="answer"><strong>Dropping context the answer actually needed.</strong> Aggressive extraction can discard a qualifier or surrounding fact, so always extract verbatim and fall back to the full chunk if the excerpt is empty or too short. It also adds an LLM call per chunk.</div>
+      </div>
+
+      <div class="quiz-card" role="button" tabindex="0" aria-expanded="false" aria-label="Quiz question 7">
+        <div class="question">In parent-child chunking, which chunk is indexed for matching and which reaches the model?</div>
+        <div class="reveal-hint">Tap to reveal &darr;</div>
+        <div class="answer"><strong>The small child is indexed and matched; the large parent is returned.</strong> Children give precise retrieval; the parent (found via the child's stored parent_id) gives the model enough surrounding context to answer coherently.</div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- CARD 39: DESKTOP LINK -->
+  <section class="mobile-card center" id="card-39" aria-label="Continue to desktop">
+    <div class="card-inner">
+      <div class="section-label">Ready to build?</div>
+      <h2>Open the full module on desktop</h2>
+      <p>The desktop version has you implement all four chunking strategies, a hybrid BM25 + dense pipeline with RRF, cross-encoder and LLM re-ranking, multi-query expansion, compression, and parent-child retrieval &mdash; then assemble them into a benchmarked production pipeline. 100% local, in Python and Node.</p>
+      <a class="desktop-link-btn" href="../M10-advanced-rag-patterns.html" aria-label="Open the full M10 module on desktop">
+        Open M10 on Desktop &rarr;
+        <span class="sub">Chunking &middot; hybrid search &middot; re-ranking &middot; expansion &middot; compression &middot; parent-child &middot; ~90 min</span>
+      </a>
+
+      <div class="module-nav-row">
+        <a class="module-nav-btn" href="M09-rag-retrieval-augmented-generation-mobile.html" aria-label="Previous mobile module: M09 RAG">
+          <div>
+            <span class="lbl">&larr; Previous</span>
+            <span>M09: RAG</span>
+          </div>
+        </a>
+        <a class="module-nav-btn" href="M11-multi-layer-memory-mobile.html" aria-label="Next mobile module: M11 Multi-Layer Memory">
+          <div>
+            <span class="lbl">Next &rarr;</span>
+            <span>M11: Memory</span>
+          </div>
+        </a>
+      </div>
+
+      <div class="module-nav-row">
+        <a class="module-nav-btn" href="index.html" aria-label="Open the Open Source mobile index">
+          <div>
+            <span class="lbl">All Mobile &rarr;</span>
+            <span>OS Mobile Index</span>
+          </div>
+        </a>
+      </div>
+
+      <p style="text-align:center; font-size: 13px; color: var(--text-muted); margin-top: 1.25rem;">Module 9 of 20 &middot; Open Source Track &middot; Memory &amp; Retrieval</p>
+    </div>
+  </section>
+
+</main>
+
+<div class="progress-bar" role="progressbar" aria-label="Card 1 of 39" aria-valuemin="1" aria-valuemax="39" aria-valuenow="1">
+  <span class="count" id="progressCount">1 / 39</span>
+  <div class="track"><div class="fill" id="progressFill"></div></div>
+  <span class="count" style="color: var(--track-color);">M10</span>
+</div>
+
+<script>
+(function(){
+  const quizCards = document.querySelectorAll('.quiz-card');
+  quizCards.forEach(card => {
+    const toggle = () => {
+      const open = card.classList.toggle('revealed');
+      card.setAttribute('aria-expanded', open ? 'true' : 'false');
+    };
+    card.addEventListener('click', toggle);
+    card.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
+    });
+  });
+
+  const fab = document.getElementById('menuFab');
+  const overlay = document.getElementById('menuOverlay');
+  const closeBtn = document.getElementById('menuClose');
+  const openMenu = () => { overlay.classList.add('open'); overlay.setAttribute('aria-hidden', 'false'); fab.setAttribute('aria-expanded', 'true'); };
+  const closeMenu = () => { overlay.classList.remove('open'); overlay.setAttribute('aria-hidden', 'true'); fab.setAttribute('aria-expanded', 'false'); };
+  fab.addEventListener('click', openMenu);
+  closeBtn.addEventListener('click', closeMenu);
+  overlay.querySelectorAll('a').forEach(a => a.addEventListener('click', closeMenu));
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && overlay.classList.contains('open')) closeMenu(); });
+
+  const cards = document.querySelectorAll('.mobile-card');
+  const total = cards.length;
+  const fill = document.getElementById('progressFill');
+  const count = document.getElementById('progressCount');
+  const progressEl = document.querySelector('.progress-bar');
+  const update = (idx) => {
+    const n = idx + 1;
+    fill.style.width = ((n / total) * 100) + '%';
+    count.textContent = n + ' / ' + total;
+    progressEl.setAttribute('aria-valuenow', String(n));
+    progressEl.setAttribute('aria-label', 'Card ' + n + ' of ' + total);
+  };
+  if ('IntersectionObserver' in window) {
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting && entry.intersectionRatio > 0.55) {
+          const idx = Array.prototype.indexOf.call(cards, entry.target);
+          if (idx >= 0) update(idx);
+        }
+      });
+    }, { threshold: [0.55, 0.75], root: document.getElementById('deck') });
+    cards.forEach(c => io.observe(c));
+  }
+})();
+</script>
+
+</body>
+</html>

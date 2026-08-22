@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0A1628">
+  <title>M19 Mobile: Tracing &amp; Logging | Open Source Agent Course</title>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;700;800&family=Source+Sans+3:wght@400;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg-primary: #0A1628; --bg-secondary: #111D33; --bg-card: #162033; --bg-surface: #1A2740;
+      --text-primary: #E8ECF1; --text-secondary: #B8C2D1; --text-muted: #7A8699;
+      --accent-primary: #D4A843; --accent-hover: #E5BC5A;
+      --success: #10B981; --warning: #F59E0B; --error: #F43F5E; --info: #F97316;
+      --track-color: #F97316; --code-bg: #0D1117; --code-border: #21262D;
+      --mobile-padding: 1rem; --mobile-font-body: 16px; --mobile-font-heading: 22px;
+    }
+    ::selection { background: rgba(249, 115, 22, 0.35); color: var(--text-primary); }
+    html { scroll-behavior: smooth; }
+    body { background: var(--bg-primary); color: var(--text-primary); font-family: 'Source Sans 3', sans-serif; font-size: var(--mobile-font-body); line-height: 1.6; min-height: 100vh; -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+    .deck { height: 100vh; overflow-y: auto; scroll-snap-type: y mandatory; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+    .deck::-webkit-scrollbar { display: none; }
+    .mobile-card { min-height: 100vh; width: 100%; padding: 4rem var(--mobile-padding) 5rem; scroll-snap-align: start; scroll-snap-stop: always; display: flex; flex-direction: column; justify-content: flex-start; position: relative; }
+    .mobile-card.center { justify-content: center; }
+    .mobile-card .card-inner { background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 16px; padding: 1.25rem; width: 100%; position: relative; }
+    h1, h2, h3 { font-family: 'Bricolage Grotesque', sans-serif; line-height: 1.25; color: var(--text-primary); }
+    h1 { font-size: 2rem; font-weight: 800; margin-bottom: 0.5rem; }
+    h2 { font-size: var(--mobile-font-heading); font-weight: 700; margin-bottom: 1rem; }
+    h3 { font-size: 18px; font-weight: 600; margin: 1rem 0 0.5rem; }
+    p { margin-bottom: 0.85rem; color: var(--text-secondary); }
+    p strong { color: var(--text-primary); font-weight: 600; }
+    code { font-family: 'JetBrains Mono', monospace; font-size: 0.92em; color: #FBC99A; background: rgba(249, 115, 22, 0.10); padding: 0.05rem 0.3rem; border-radius: 4px; }
+    .title-meta { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.85rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--track-color); margin-bottom: 0.75rem; }
+    .title-card .module-name { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 2.4rem; line-height: 1.1; color: var(--text-primary); margin-bottom: 1rem; }
+    .title-card .track-row { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1.5rem; }
+    .pill { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.35rem 0.75rem; border-radius: 999px; font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.78rem; font-weight: 600; }
+    .pill-track { background: rgba(249, 115, 22, 0.15); border: 1px solid var(--track-color); color: var(--track-color); }
+    .pill-time { background: rgba(212, 168, 67, 0.12); border: 1px solid var(--accent-primary); color: var(--accent-primary); }
+    .pill-pos { background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); color: var(--text-secondary); }
+    .swipe-hint { margin-top: 2rem; font-size: 0.85rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.4rem; }
+    .swipe-hint .arrow { animation: bounce 1.6s ease-in-out infinite; display: inline-block; }
+    @keyframes bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(4px); } }
+    .section-label { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--track-color); margin-bottom: 0.5rem; }
+    .concept-chip { position: absolute; top: 0.85rem; right: 0.85rem; font-family: 'JetBrains Mono', monospace; font-size: 0.66rem; letter-spacing: 0.05em; color: var(--text-muted); background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.08); padding: 0.25rem 0.5rem; border-radius: 999px; text-transform: uppercase; }
+    .step-list { list-style: none; counter-reset: step; margin: 0.5rem 0; }
+    .step-list li { counter-increment: step; position: relative; padding: 0.75rem 0.75rem 0.75rem 3rem; margin-bottom: 0.6rem; background: rgba(249, 115, 22, 0.06); border-radius: 10px; border-left: 3px solid var(--track-color); color: var(--text-secondary); font-size: 15px; line-height: 1.5; }
+    .step-list li::before { content: counter(step); position: absolute; left: 0.75rem; top: 50%; transform: translateY(-50%); width: 28px; height: 28px; border-radius: 50%; background: var(--track-color); color: #0A1628; display: flex; align-items: center; justify-content: center; font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.85rem; font-weight: 700; }
+    .step-list li strong { color: var(--text-primary); display: block; margin-bottom: 0.15rem; font-family: 'Bricolage Grotesque', sans-serif; }
+    .pseudocode { background: rgba(249, 115, 22, 0.08); border-left: 3px solid var(--track-color); border-radius: 0 8px 8px 0; padding: 1rem; font-family: 'JetBrains Mono', monospace; font-size: 13.5px; line-height: 1.65; overflow-x: auto; -webkit-overflow-scrolling: touch; color: var(--text-primary); white-space: pre; margin: 0.75rem 0; }
+    .pseudocode .kw { color: #C792EA; font-weight: 600; }
+    .pseudocode .str { color: #A5D6A7; }
+    .pseudocode .cmt { color: var(--text-muted); font-style: italic; }
+    .pseudocode .var { color: #82AAFF; }
+    .misconception { display: grid; grid-template-columns: auto 1fr; gap: 0.5rem 0.75rem; align-items: start; padding: 0.75rem 0; border-bottom: 1px solid rgba(255, 255, 255, 0.06); }
+    .misconception:last-child { border-bottom: none; }
+    .misconception .icon { font-size: 1.1rem; line-height: 1.4; }
+    .misconception .wrong { color: #F87189; font-weight: 600; }
+    .misconception .right { color: var(--text-primary); margin-top: 0.2rem; font-size: 15px; }
+    .takeaway { background: rgba(212, 168, 67, 0.08); border: 1px solid rgba(212, 168, 67, 0.3); border-radius: 12px; padding: 1rem 1.1rem; margin: 0.75rem 0 0; }
+    .takeaway::before { content: "Key Takeaway"; display: block; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 0.85rem; letter-spacing: 0.05em; text-transform: uppercase; color: var(--accent-primary); margin-bottom: 0.5rem; }
+    .takeaway p { color: var(--text-primary); margin-bottom: 0.5rem; }
+    .takeaway p:last-child { margin-bottom: 0; }
+    .quiz-card { background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 1rem 1.1rem; margin-bottom: 0.75rem; cursor: pointer; min-height: 44px; transition: background 0.2s ease, border-color 0.2s ease; -webkit-tap-highlight-color: transparent; }
+    .quiz-card:hover, .quiz-card:focus { background: rgba(255, 255, 255, 0.06); border-color: var(--track-color); outline: none; }
+    .quiz-card .question { display: flex; gap: 0.5rem; align-items: flex-start; font-weight: 600; color: var(--text-primary); }
+    .quiz-card .question::before { content: "Q"; color: var(--track-color); font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; flex-shrink: 0; width: 22px; }
+    .quiz-card .answer { max-height: 0; overflow: hidden; opacity: 0; transition: max-height 0.3s ease, opacity 0.3s ease, margin-top 0.3s ease, padding-top 0.3s ease; color: var(--text-secondary); font-size: 15px; line-height: 1.55; border-top: 1px solid transparent; }
+    .quiz-card.revealed .answer { max-height: 600px; opacity: 1; margin-top: 0.75rem; padding-top: 0.75rem; border-top-color: rgba(255, 255, 255, 0.08); }
+    .quiz-card .reveal-hint { font-size: 0.78rem; color: var(--text-muted); margin-top: 0.4rem; font-style: italic; }
+    .quiz-card.revealed .reveal-hint { display: none; }
+    .desktop-link-btn { display: block; width: 100%; padding: 1rem 1.25rem; background: linear-gradient(135deg, rgba(249, 115, 22, 0.18), rgba(212, 168, 67, 0.12)); border: 1px solid var(--track-color); border-radius: 14px; color: var(--text-primary); text-decoration: none; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; text-align: center; transition: transform 0.15s ease, box-shadow 0.15s ease; min-height: 56px; }
+    .desktop-link-btn:active { transform: scale(0.98); }
+    .desktop-link-btn .sub { display: block; font-family: 'Source Sans 3', sans-serif; font-weight: 400; font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.2rem; }
+    .module-nav-row { display: flex; justify-content: space-between; gap: 0.5rem; margin-top: 1rem; }
+    .module-nav-btn { flex: 1; padding: 0.85rem 0.75rem; background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 12px; color: var(--text-primary); text-decoration: none; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 600; font-size: 0.85rem; text-align: center; min-height: 44px; display: flex; align-items: center; justify-content: center; gap: 0.3rem; }
+    .module-nav-btn:active { background: rgba(255, 255, 255, 0.08); }
+    .module-nav-btn .lbl { font-size: 0.7rem; color: var(--text-muted); display: block; font-weight: 400; letter-spacing: 0.05em; text-transform: uppercase; }
+    .progress-bar { position: fixed; bottom: 0; left: 0; right: 0; height: 36px; background: rgba(10, 22, 40, 0.92); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border-top: 1px solid rgba(255, 255, 255, 0.08); display: flex; align-items: center; padding: 0 1rem; gap: 0.5rem; font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.72rem; color: var(--text-muted); z-index: 50; }
+    .progress-bar .track { flex: 1; height: 4px; background: rgba(255, 255, 255, 0.08); border-radius: 2px; overflow: hidden; }
+    .progress-bar .track .fill { height: 100%; width: 3.44%; background: linear-gradient(90deg, var(--track-color), var(--accent-primary)); border-radius: 2px; transition: width 0.25s ease; }
+    .progress-bar .count { letter-spacing: 0.05em; color: var(--text-secondary); white-space: nowrap; }
+    .menu-fab { position: fixed; top: 0.85rem; right: 0.85rem; width: 44px; height: 44px; border-radius: 50%; background: rgba(22, 32, 51, 0.92); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border: 1px solid rgba(255, 255, 255, 0.12); color: var(--text-primary); font-size: 1.25rem; cursor: pointer; z-index: 60; display: flex; align-items: center; justify-content: center; -webkit-tap-highlight-color: transparent; }
+    .menu-fab:active { transform: scale(0.95); }
+    .menu-overlay { position: fixed; inset: 0; background: rgba(10, 22, 40, 0.94); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); z-index: 70; display: none; flex-direction: column; padding: 4rem 1.25rem 2rem; overflow-y: auto; }
+    .menu-overlay.open { display: flex; }
+    .menu-overlay a { display: block; padding: 0.75rem 1rem; margin-bottom: 0.4rem; background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 10px; color: var(--text-primary); text-decoration: none; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 600; min-height: 44px; font-size: 14px; }
+    .menu-overlay a:active { background: rgba(249, 115, 22, 0.15); border-color: var(--track-color); }
+    .menu-overlay a.cluster-child { margin-left: 1rem; padding: 0.6rem 0.85rem; min-height: 40px; background: rgba(255, 255, 255, 0.02); font-size: 13px; }
+    .menu-overlay .cluster-header { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 0.78rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--track-color); margin: 1rem 0 0.4rem; padding: 0 0.25rem; }
+    .menu-overlay .menu-num { display: inline-block; font-family: 'JetBrains Mono', monospace; font-size: 0.74rem; color: var(--track-color); margin-right: 0.5rem; width: 1.6rem; }
+    .menu-close { position: absolute; top: 0.85rem; right: 0.85rem; width: 44px; height: 44px; border-radius: 50%; background: rgba(244, 63, 94, 0.15); border: 1px solid var(--error); color: var(--text-primary); font-size: 1.5rem; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+    .index-list { list-style: none; padding: 0; margin: 0.5rem 0 0; }
+    .index-list li { display: block; }
+    .index-list a { display: flex; align-items: baseline; gap: 0.6rem; padding: 0.85rem 1rem; margin-bottom: 0.5rem; background: rgba(249, 115, 22, 0.05); border: 1px solid rgba(249, 115, 22, 0.18); border-radius: 10px; color: var(--text-primary); text-decoration: none; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 600; font-size: 15px; min-height: 44px; -webkit-tap-highlight-color: transparent; }
+    .index-list a:active { background: rgba(249, 115, 22, 0.12); }
+    .index-list .idx-num { font-family: 'JetBrains Mono', monospace; color: var(--track-color); font-weight: 700; flex-shrink: 0; width: 1.5rem; }
+    .index-list .idx-sub { display: block; font-family: 'Source Sans 3', sans-serif; font-weight: 400; font-size: 13px; color: var(--text-muted); margin-top: 0.1rem; }
+    .flow-diagram { display: flex; flex-direction: column; gap: 0.4rem; margin: 0.75rem 0; }
+    .flow-node { background: rgba(249, 115, 22, 0.08); border: 1px solid rgba(249, 115, 22, 0.3); border-radius: 8px; padding: 0.55rem 0.75rem; font-family: 'JetBrains Mono', monospace; font-size: 12.5px; color: var(--text-primary); display: flex; align-items: center; gap: 0.5rem; }
+    .flow-node .fn-icon { font-size: 1rem; }
+    .flow-arrow { text-align: center; color: var(--track-color); font-size: 1rem; line-height: 1; }
+    .span-bar-row { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem; }
+    .span-bar-label { font-family: 'JetBrains Mono', monospace; font-size: 11px; color: var(--text-secondary); width: 92px; flex-shrink: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .span-bar-track { flex: 1; height: 16px; background: rgba(255, 255, 255, 0.05); border-radius: 4px; overflow: hidden; }
+    .span-bar-fill { height: 100%; border-radius: 4px; display: flex; align-items: center; justify-content: flex-end; padding-right: 5px; font-family: 'JetBrains Mono', monospace; font-size: 9.5px; color: rgba(255,255,255,0.85); white-space: nowrap; }
+    .span-bar-fill.root { background: linear-gradient(90deg, var(--track-color), var(--accent-primary)); }
+    .span-bar-fill.slow { background: var(--error); }
+    .span-bar-fill.medium { background: var(--warning); }
+    .span-bar-fill.fast { background: var(--success); }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; } .swipe-hint .arrow { animation: none; } }
+    :focus-visible { outline: 2px solid var(--accent-primary); outline-offset: 2px; border-radius: 6px; }
+    @media (min-width: 600px) { .mobile-card { padding-left: 2rem; padding-right: 2rem; } .mobile-card .card-inner { max-width: 560px; margin: 0 auto; } h1 { font-size: 2.5rem; } }
+  </style>
+</head>
+<body>
+
+<button class="menu-fab" id="menuFab" aria-label="Open section menu" aria-expanded="false" aria-controls="menuOverlay">&#9776;</button>
+
+<nav class="menu-overlay" id="menuOverlay" aria-label="Section menu" aria-hidden="true">
+  <button class="menu-close" id="menuClose" aria-label="Close menu">&times;</button>
+  <h2 style="margin-bottom: 0.75rem; color: var(--text-primary);">Jump to Card</h2>
+  <a href="#card-1"><span class="menu-num">01</span>Title</a>
+  <a href="#card-2"><span class="menu-num">02</span>Concept Index</a>
+
+  <div class="cluster-header">Concept 1 &middot; Why Tracing Matters</div>
+  <a class="cluster-child" href="#card-3"><span class="menu-num">03</span>Big Idea</a>
+  <a class="cluster-child" href="#card-4"><span class="menu-num">04</span>Analogy</a>
+  <a class="cluster-child" href="#card-5"><span class="menu-num">05</span>How It Works</a>
+  <a class="cluster-child" href="#card-6"><span class="menu-num">06</span>Decision Framework</a>
+  <a class="cluster-child" href="#card-7"><span class="menu-num">07</span>Misconceptions + Takeaway</a>
+
+  <div class="cluster-header">Concept 2 &middot; The Four Categories</div>
+  <a class="cluster-child" href="#card-8"><span class="menu-num">08</span>Big Idea</a>
+  <a class="cluster-child" href="#card-9"><span class="menu-num">09</span>Analogy</a>
+  <a class="cluster-child" href="#card-10"><span class="menu-num">10</span>How It Works</a>
+  <a class="cluster-child" href="#card-11"><span class="menu-num">11</span>Pseudocode</a>
+  <a class="cluster-child" href="#card-12"><span class="menu-num">12</span>Misconceptions + Takeaway</a>
+
+  <div class="cluster-header">Concept 3 &middot; Structured Logging</div>
+  <a class="cluster-child" href="#card-13"><span class="menu-num">13</span>Big Idea</a>
+  <a class="cluster-child" href="#card-14"><span class="menu-num">14</span>Analogy</a>
+  <a class="cluster-child" href="#card-15"><span class="menu-num">15</span>How It Works</a>
+  <a class="cluster-child" href="#card-16"><span class="menu-num">16</span>Pseudocode</a>
+  <a class="cluster-child" href="#card-17"><span class="menu-num">17</span>Misconceptions + Takeaway</a>
+
+  <div class="cluster-header">Concept 4 &middot; Distributed Tracing</div>
+  <a class="cluster-child" href="#card-18"><span class="menu-num">18</span>Big Idea</a>
+  <a class="cluster-child" href="#card-19"><span class="menu-num">19</span>Analogy</a>
+  <a class="cluster-child" href="#card-20"><span class="menu-num">20</span>How It Works</a>
+  <a class="cluster-child" href="#card-21"><span class="menu-num">21</span>Decision Framework</a>
+  <a class="cluster-child" href="#card-22"><span class="menu-num">22</span>Misconceptions + Takeaway</a>
+
+  <div class="cluster-header">Concept 5 &middot; Custom Tracer</div>
+  <a class="cluster-child" href="#card-23"><span class="menu-num">23</span>Big Idea</a>
+  <a class="cluster-child" href="#card-24"><span class="menu-num">24</span>Analogy</a>
+  <a class="cluster-child" href="#card-25"><span class="menu-num">25</span>How It Works</a>
+  <a class="cluster-child" href="#card-26"><span class="menu-num">26</span>Pseudocode</a>
+  <a class="cluster-child" href="#card-27"><span class="menu-num">27</span>Misconceptions + Takeaway</a>
+
+  <div class="cluster-header">Wrap-Up</div>
+  <a href="#card-28"><span class="menu-num">28</span>Quick Quiz</a>
+  <a href="#card-29"><span class="menu-num">29</span>Continue on Desktop</a>
+</nav>
+
+<main class="deck" id="deck" role="main">
+
+  <!-- CARD 1: TITLE -->
+  <section class="mobile-card center title-card" id="card-1" aria-label="Title card">
+    <div>
+      <div class="title-meta">Module 17 of 20 &middot; Open Source Track</div>
+      <div class="module-name">Tracing &amp; Logging</div>
+      <p style="color: var(--text-secondary); font-size: 1.05rem; margin-bottom: 1.25rem;">Your agent works &mdash; until it breaks at 2&nbsp;AM. Structured tracing is the black box that turns a 4-hour archaeology session into a 20-minute fix. Five concepts: why it matters, what to capture, structured logs, distributed tracing, and a zero-dependency tracer.</p>
+      <div class="track-row">
+        <span class="pill pill-track"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--track-color);"></span>Track 6: Quality &amp; Observability</span>
+        <span class="pill pill-time">&#9201; ~16 min read</span>
+        <span class="pill pill-pos">17 / 20</span>
+      </div>
+      <div class="swipe-hint" aria-hidden="true"><span class="arrow">&darr;</span> Scroll to begin &middot; 29 cards &middot; 5 concepts</div>
+    </div>
+  </section>
+
+  <!-- CARD 2: CONCEPT INDEX -->
+  <section class="mobile-card" id="card-2" aria-label="Concept Index">
+    <div class="card-inner">
+      <div class="section-label">What You'll Learn</div>
+      <h2>The 5 concepts of tracing</h2>
+      <p style="font-size: 14px; color: var(--text-muted);">Tap any concept to jump to its 5-card cluster.</p>
+      <ul class="index-list">
+        <li><a href="#card-3"><span class="idx-num">1</span><span><span style="display:block;">Why Tracing Matters</span><span class="idx-sub">The flight data recorder</span></span></a></li>
+        <li><a href="#card-8"><span class="idx-num">2</span><span><span style="display:block;">The Four Categories</span><span class="idx-sub">Tools, LLM turns, loops, errors</span></span></a></li>
+        <li><a href="#card-13"><span class="idx-num">3</span><span><span style="display:block;">Structured Logging</span><span class="idx-sub">Every line is queryable JSON</span></span></a></li>
+        <li><a href="#card-18"><span class="idx-num">4</span><span><span style="display:block;">Distributed Tracing</span><span class="idx-sub">OpenTelemetry + Jaeger spans</span></span></a></li>
+        <li><a href="#card-23"><span class="idx-num">5</span><span><span style="display:block;">Custom Tracer</span><span class="idx-sub">Zero-dependency @trace_agent</span></span></a></li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ============ CLUSTER 1: WHY TRACING MATTERS (3-7) ============ -->
+
+  <section class="mobile-card" id="card-3" aria-label="Why Tracing Matters - Big Idea">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 1 of 5</span>
+      <div class="section-label">The Big Idea</div>
+      <h2>You can't fix what you can't replay</h2>
+      <p>A <strong>trace</strong> is the complete record of one agent run: every LLM call, every tool invocation, every loop iteration, every error &mdash; timestamped and linked into a causal chain. It's the difference between "something felt off" and "the <code>search_filings</code> tool timed out on turn 3".</p>
+      <p>Teams with structured traces report fixing bugs <strong>10x faster</strong> than teams debugging with <code>print()</code>. The trace eliminates the two most expensive activities: reproducing the failure (you have the exact inputs) and finding which component broke (you have per-step latency, not one wall-clock total).</p>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-4" aria-label="Why Tracing Matters - Analogy">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 1 of 5</span>
+      <div class="section-label">The Analogy</div>
+      <h2>The flight data recorder</h2>
+      <p><strong>BEFORE:</strong> Commercial aircraft carry two black boxes that record every sensor reading &mdash; altitude, thrust, control angles, cockpit audio &mdash; 25 times per second, always running, whether or not anything goes wrong.</p>
+      <p><strong>PAIN:</strong> Imagine instead that pilots just described the crash from memory: "something felt off around 30,000 feet and then everything went sideways." Investigators couldn't tell instrument failure from pilot error. Every investigation starts from zero. That's debugging an untraced agent.</p>
+      <p><strong>MAPPING:</strong> Your structured trace IS the black box. Every LLM call, tool call, token count, and latency is a sensor reading written to durable storage the moment it happens. When something fails, you replay the recording frame-by-frame and find the exact wrong decision.</p>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-5" aria-label="Why Tracing Matters - How It Works">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 1 of 5</span>
+      <div class="section-label">How It Works</div>
+      <h2>From symptom to root cause</h2>
+      <ol class="step-list">
+        <li><strong>Capture as it happens</strong>Every event is written to storage the moment it occurs &mdash; not reconstructed later from memory.</li>
+        <li><strong>Link by run_id</strong>All events from one run share an ID, so you can pull the full causal chain for a single failure.</li>
+        <li><strong>Filter to the failure</strong>Query <code>exit_reason: "tool_error"</code> and jump straight to the failing call with its exact arguments.</li>
+        <li><strong>Replay &amp; fix</strong>You have the inputs and per-step timings, so a 4-hour hunt becomes a 20-minute fix.</li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-6" aria-label="Why Tracing Matters - Decision Framework">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 1 of 5</span>
+      <div class="section-label">Decision Framework</div>
+      <h2>Trace or print()?</h2>
+      <pre class="pseudocode" aria-label="Decision framework: when structured tracing pays off"><span class="kw">IF</span> the agent runs unattended
+   (batch jobs, production, 2AM):
+  &rarr; structured tracing is mandatory
+
+<span class="kw">IF</span> failures are hard to reproduce
+   (nondeterministic LLM output):
+  &rarr; you need captured inputs &mdash; trace
+
+<span class="kw">IF</span> it's a one-off script you watch
+   run once in a terminal:
+  &rarr; print() is fine
+
+<span class="cmt"># rule: if you'd cry finding the bug</span>
+<span class="cmt"># by hand, trace it up front.</span>
+</pre>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-7" aria-label="Why Tracing Matters - Misconceptions and Takeaway">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 1 of 5</span>
+      <div class="section-label">Wrong Mental Models</div>
+      <h2>Misconceptions</h2>
+      <div class="misconception">
+        <div class="icon" aria-hidden="true">&#10060;</div>
+        <div>
+          <div class="wrong">"I'll add logging once I hit a bug."</div>
+          <div class="right">Too late. The bug already happened and you have no recording. Tracing must be built in <em>before</em> the failure, exactly like a black box &mdash; it can't record a flight that already crashed.</div>
+        </div>
+      </div>
+      <div class="misconception">
+        <div class="icon" aria-hidden="true">&#10060;</div>
+        <div>
+          <div class="wrong">"print() statements are basically tracing."</div>
+          <div class="right">Plain text isn't queryable. You can't filter millions of <code>print</code> lines by latency or exit reason. Structure is what turns logs into a searchable timeline.</div>
+        </div>
+      </div>
+      <div class="takeaway">
+        <p><strong>A trace is a black box for your agent &mdash; a complete, timestamped, causal record of one run.</strong> Build it in before you need it.</p>
+        <p>Structured traces cut debug time roughly 10x by giving you the exact inputs and per-step latency of any failure.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ CLUSTER 2: THE FOUR CATEGORIES (8-12) ============ -->
+
+  <section class="mobile-card" id="card-8" aria-label="The Four Categories - Big Idea">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 2 of 5</span>
+      <div class="section-label">The Big Idea</div>
+      <h2>Every agent event is one of four kinds</h2>
+      <p>There are exactly four <strong>trace categories</strong> in any agent run, and each has its own relevant fields: <strong>tool calls</strong> (name, args, output, latency), <strong>LLM turns</strong> (token counts, model, finish reason), <strong>loop iterations</strong> (iteration number, tools used, exit reason), and <strong>errors</strong> (exception type, stack tail, retry info).</p>
+      <p>Capture all four and you have a complete causal picture of any run. Miss one and you get a blind spot exactly where you need visibility most &mdash; usually the error path.</p>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-9" aria-label="The Four Categories - Analogy">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 2 of 5</span>
+      <div class="section-label">The Analogy</div>
+      <h2>A hospital chart with four vitals</h2>
+      <p><strong>BEFORE:</strong> A nurse who records only "patient seems fine" gives the next doctor nothing to act on. Useful charts track specific vitals: heart rate, blood pressure, temperature, oxygen.</p>
+      <p><strong>PAIN:</strong> If you record vitals in a different format every shift &mdash; sometimes prose, sometimes numbers, sometimes nothing &mdash; no one can compare readings or spot a trend. The chart becomes noise.</p>
+      <p><strong>MAPPING:</strong> The four trace categories are your four vitals. Every event slots into tool call, LLM turn, loop iteration, or error, each with known fields. Now any run reads like a clean chart: consistent, comparable, and complete.</p>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-10" aria-label="The Four Categories - How It Works">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 2 of 5</span>
+      <div class="section-label">How It Works</div>
+      <h2>The four categories in detail</h2>
+      <ol class="step-list">
+        <li><strong>Tool calls</strong>name, args, output (truncated ~2&nbsp;KB), latency, success flag, error message if any.</li>
+        <li><strong>LLM turns</strong>prompt &amp; completion tokens, model name, finish reason (stop / tool_calls / length / error), latency.</li>
+        <li><strong>Loop iterations</strong>iteration number, tools invoked this turn, exit reason (max_iterations / goal_achieved / tool_error), wall time.</li>
+        <li><strong>Errors</strong>exception type, message, last 3 stack frames, whether a retry was attempted and how many.</li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-11" aria-label="The Four Categories - Pseudocode">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 2 of 5</span>
+      <div class="section-label">The Pattern</div>
+      <h2>Pseudocode</h2>
+      <pre class="pseudocode" aria-label="Pseudocode for a unified trace event schema"><span class="cmt"># ONE event shape covers all four kinds</span>
+<span class="kw">DEFINE</span> <span class="var">TraceEvent</span>:
+  category   <span class="cmt"># tool_call|llm_turn|loop_iter|error</span>
+  run_id     <span class="cmt"># links all events in one run</span>
+  ts         <span class="cmt"># when it happened</span>
+  latency_ms <span class="cmt"># shared by most events</span>
+  <span class="cmt"># + fields specific to each category</span>
+
+<span class="kw">FUNCTION</span> emit(event):
+  <span class="kw">IF</span> event.category <span class="kw">NOT IN</span> valid_four:
+    raise error
+  append event <span class="kw">AS</span> json_line <span class="kw">TO</span> file
+</pre>
+      <p style="font-size: 14px; color: var(--text-muted);">One schema means one destination, one filter syntax, one replay format &mdash; not four scattered logging patterns.</p>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-12" aria-label="The Four Categories - Misconceptions and Takeaway">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 2 of 5</span>
+      <div class="section-label">Wrong Mental Models</div>
+      <h2>Misconceptions</h2>
+      <div class="misconception">
+        <div class="icon" aria-hidden="true">&#10060;</div>
+        <div>
+          <div class="wrong">"Logging errors is enough."</div>
+          <div class="right">Errors alone tell you <em>what</em> broke, not <em>why</em>. Without the LLM turns and tool calls that led up to it, you can't see the decision path. All four categories together give causality.</div>
+        </div>
+      </div>
+      <div class="misconception">
+        <div class="icon" aria-hidden="true">&#10060;</div>
+        <div>
+          <div class="wrong">"I need a different schema per event type."</div>
+          <div class="right">One unified event with optional fields is far better. Four schemas means four log destinations and four filter syntaxes. A single shape keeps queries and replay simple.</div>
+        </div>
+      </div>
+      <div class="takeaway">
+        <p><strong>Capture four categories: tool calls, LLM turns, loop iterations, and errors.</strong> Together they form the complete causal picture.</p>
+        <p>Use one unified event schema with a <code>category</code> field &mdash; one file, one query syntax, one replay format.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ CLUSTER 3: STRUCTURED LOGGING (13-17) ============ -->
+
+  <section class="mobile-card" id="card-13" aria-label="Structured Logging - Big Idea">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 3 of 5</span>
+      <div class="section-label">The Big Idea</div>
+      <h2>Every log line is machine-readable JSON</h2>
+      <p><strong>Structured logging</strong> means each log event is a valid JSON object with consistent key-value fields &mdash; timestamp, level, message, plus your custom fields &mdash; not a free-text string like <code>"Tool called: fuzzy_match with args ['Acme','ACME']"</code>.</p>
+      <p>The payoff: you can query logs with standard tools. <code>cat agent.log | jq 'select(.latency_ms &gt; 2000)'</code> finds every slow step across millions of lines with zero parsing code. Libraries like <strong>structlog</strong> (Python) and <strong>pino</strong> (Node) add the timestamps and levels for you.</p>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-14" aria-label="Structured Logging - Analogy">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 3 of 5</span>
+      <div class="section-label">The Analogy</div>
+      <h2>Spreadsheet vs. sticky notes</h2>
+      <p><strong>BEFORE:</strong> Picture tracking your expenses on a wall of sticky notes &mdash; each in your own words: "coffee-ish, maybe $4?", "lunch downtown Tuesday".</p>
+      <p><strong>PAIN:</strong> To answer "how much on food last month?" you'd re-read and reinterpret every note by hand. There's no way to sort, filter, or sum &mdash; the data is trapped in prose.</p>
+      <p><strong>MAPPING:</strong> Structured logging is the spreadsheet: every entry has the same columns (date, category, amount). Now "sum food in March" is one formula. JSON fields are those columns &mdash; <code>jq</code> and Pandas are your formulas.</p>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-15" aria-label="Structured Logging - How It Works">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 3 of 5</span>
+      <div class="section-label">How It Works</div>
+      <h2>Wiring up structlog / pino</h2>
+      <ol class="step-list">
+        <li><strong>Configure once at startup</strong>Set up JSON output with timestamp + level processors. Call it exactly once &mdash; twice duplicates processors.</li>
+        <li><strong>Bind the run_id</strong>Attach the run ID to the logger so every event in the run carries it automatically.</li>
+        <li><strong>Emit one event per action</strong>Wrap each LLM call and tool call; log fields on success AND before re-raising on error.</li>
+        <li><strong>Ship the JSON lines</strong>Write to a file and/or a backend. Each line is independent, so appends are cheap and atomic.</li>
+      </ol>
+      <div class="flow-diagram" aria-label="Trace data flow diagram">
+        <div class="flow-node"><span class="fn-icon">&#129302;</span> Agent loop &mdash; ReAct iterations</div>
+        <div class="flow-arrow">&darr;</div>
+        <div class="flow-node"><span class="fn-icon">&#128221;</span> structlog / pino &mdash; JSON lines</div>
+        <div class="flow-arrow">&darr;</div>
+        <div class="flow-node"><span class="fn-icon">&#128202;</span> Backend / file &mdash; filter &bull; alert &bull; replay</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-16" aria-label="Structured Logging - Pseudocode">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 3 of 5</span>
+      <div class="section-label">The Pattern</div>
+      <h2>Pseudocode</h2>
+      <pre class="pseudocode" aria-label="Pseudocode for a structured logging wrapper"><span class="kw">CONFIGURE</span> logger <span class="kw">ONCE</span>:
+  output = JSON
+  add timestamp, level automatically
+
+<span class="var">log</span> = logger.bind(run_id)
+
+<span class="kw">FUNCTION</span> llm_call(messages):
+  t0 = now()
+  <span class="kw">TRY</span>:
+    reply = model.chat(messages)
+    log.info(event=<span class="str">"llm_turn"</span>,
+      tokens=reply.usage,
+      latency=now() - t0)
+    <span class="kw">RETURN</span> reply
+  <span class="kw">CATCH</span> err:
+    log.error(event=<span class="str">"error"</span>, msg=err)
+    <span class="kw">RAISE</span>   <span class="cmt"># log BEFORE re-raising</span>
+</pre>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-17" aria-label="Structured Logging - Misconceptions and Takeaway">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 3 of 5</span>
+      <div class="section-label">Wrong Mental Models</div>
+      <h2>Misconceptions</h2>
+      <div class="misconception">
+        <div class="icon" aria-hidden="true">&#10060;</div>
+        <div>
+          <div class="wrong">"Structured logging just means adding more text."</div>
+          <div class="right">It's about format, not volume. A prose line with lots of detail is still unqueryable. The win is consistent JSON <em>fields</em> you can filter and aggregate on.</div>
+        </div>
+      </div>
+      <div class="misconception">
+        <div class="icon" aria-hidden="true">&#10060;</div>
+        <div>
+          <div class="wrong">"I'll configure the logger wherever I need it."</div>
+          <div class="right">Configure exactly once, at startup, before any logging. Calling <code>configure()</code> repeatedly stacks duplicate processors and corrupts output.</div>
+        </div>
+      </div>
+      <div class="takeaway">
+        <p><strong>Structured logging makes every line queryable JSON with consistent fields.</strong> structlog and pino add timestamps and levels for you.</p>
+        <p>Configure once at startup, bind the <code>run_id</code>, and always log before re-raising so error events never get lost.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ CLUSTER 4: DISTRIBUTED TRACING (18-22) ============ -->
+
+  <section class="mobile-card" id="card-18" aria-label="Distributed Tracing - Big Idea">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 4 of 5</span>
+      <div class="section-label">The Big Idea</div>
+      <h2>Spans nest into a visual call tree</h2>
+      <p><strong>OpenTelemetry</strong> (OTEL) is the industry-standard, vendor-neutral framework for distributed tracing. Your agent creates a root <strong>span</strong> &mdash; one named, timed operation &mdash; for each run, then child spans for each LLM call and tool call. Parent-child nesting encodes causality.</p>
+      <p>An exporter ships those spans over the wire (OTLP/gRPC) to a backend like <strong>Jaeger</strong>, which renders them as a nested waterfall you can filter by service, operation, or latency. It runs fully locally &mdash; no data leaves your machine. (Cloud alternative: LangSmith's <code>@traceable</code>, which works with your Ollama client unchanged.)</p>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-19" aria-label="Distributed Tracing - Analogy">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 4 of 5</span>
+      <div class="section-label">The Analogy</div>
+      <h2>A project Gantt chart</h2>
+      <p><strong>BEFORE:</strong> A manager who only knows "the project took 6 weeks" can't tell which phase dragged. They need to see each task's start, end, and how tasks nest under phases.</p>
+      <p><strong>PAIN:</strong> Without that breakdown, every delay looks the same. You can't tell if design ran long or if one vendor blocked everything downstream. You just have a total.</p>
+      <p><strong>MAPPING:</strong> Spans are tasks on a Gantt chart. The root span is the whole project; child spans are phases and sub-tasks, drawn as nested bars on a timeline. One glance shows the 823&nbsp;ms tool call that's the real bottleneck &mdash; not the 3,241&nbsp;ms total.</p>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-20" aria-label="Distributed Tracing - How It Works">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 4 of 5</span>
+      <div class="section-label">How It Works</div>
+      <h2>From agent loop to Jaeger UI</h2>
+      <ol class="step-list">
+        <li><strong>Bootstrap once</strong>Wire a TracerProvider to an OTLP exporter pointed at Jaeger (localhost:4317). A batch processor flushes with &lt;1&nbsp;ms overhead.</li>
+        <li><strong>Open a root span</strong>Start a span for the whole run; set attributes like query and exit reason.</li>
+        <li><strong>Nest child spans</strong>Each LLM call and tool call opens its own span with model, tokens, and latency attributes.</li>
+        <li><strong>End in finally</strong>Always close spans in a finally block &mdash; an escaped exception orphans the span and it never exports.</li>
+      </ol>
+      <div class="flow-diagram" aria-label="OTEL span hierarchy as latency bars">
+        <div class="span-bar-row"><span class="span-bar-label">agent-run</span><span class="span-bar-track"><span class="span-bar-fill root" style="width:100%">3241ms</span></span></div>
+        <div class="span-bar-row"><span class="span-bar-label">&#8627; llm-turn-1</span><span class="span-bar-track"><span class="span-bar-fill medium" style="width:38%">1244</span></span></div>
+        <div class="span-bar-row"><span class="span-bar-label">&#8627; search</span><span class="span-bar-track"><span class="span-bar-fill slow" style="width:26%">823</span></span></div>
+        <div class="span-bar-row"><span class="span-bar-label">&#8627; llm-turn-2</span><span class="span-bar-track"><span class="span-bar-fill medium" style="width:30%">987</span></span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-21" aria-label="Distributed Tracing - Decision Framework">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 4 of 5</span>
+      <div class="section-label">Decision Framework</div>
+      <h2>LangSmith or OpenTelemetry?</h2>
+      <pre class="pseudocode" aria-label="Decision framework: choosing a trace backend"><span class="kw">IF</span> you want the fastest setup
+   and don't mind cloud hosting:
+  &rarr; LangSmith @traceable
+     (5k free traces/month)
+
+<span class="kw">IF</span> data must stay on-machine
+   or you span multiple services:
+  &rarr; OpenTelemetry + local Jaeger
+
+<span class="kw">IF</span> you need vendor-neutral,
+   production-grade standard:
+  &rarr; OpenTelemetry (OTLP export)
+
+<span class="cmt"># both work with Ollama unchanged</span>
+</pre>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-22" aria-label="Distributed Tracing - Misconceptions and Takeaway">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 4 of 5</span>
+      <div class="section-label">Wrong Mental Models</div>
+      <h2>Misconceptions</h2>
+      <div class="misconception">
+        <div class="icon" aria-hidden="true">&#10060;</div>
+        <div>
+          <div class="wrong">"OpenTelemetry only works with cloud LLMs."</div>
+          <div class="right">It's model-agnostic. It traces <em>your code</em>, not the model. A local Ollama <code>mistral</code> run produces the same spans as any cloud model &mdash; and LangSmith wraps the OpenAI-compatible client transparently too.</div>
+        </div>
+      </div>
+      <div class="misconception">
+        <div class="icon" aria-hidden="true">&#10060;</div>
+        <div>
+          <div class="wrong">"If I forget span.end() it's no big deal."</div>
+          <div class="right">An unclosed span is orphaned and never exported &mdash; so the very run you were debugging vanishes. Always end spans in a finally block.</div>
+        </div>
+      </div>
+      <div class="takeaway">
+        <p><strong>OTEL turns your agent into a tree of nested spans, exported to Jaeger as a filterable waterfall.</strong> Fully local; no data leaves the box.</p>
+        <p>Pick LangSmith for the fastest setup, OTEL + Jaeger for local/production. Both instrument your Ollama calls without changes.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ CLUSTER 5: CUSTOM TRACER (23-27) ============ -->
+
+  <section class="mobile-card" id="card-23" aria-label="Custom Tracer - Big Idea">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 5 of 5</span>
+      <div class="section-label">The Big Idea</div>
+      <h2>Tracing with zero dependencies</h2>
+      <p>You don't always need a platform. A <code>@trace_agent</code> decorator wraps any agent function and writes <strong>run_start</strong>, sub-events, and <strong>run_end</strong> to a <strong>JSON Lines</strong> file &mdash; using only the standard library. Drop it into any project in 30 seconds, no <code>pip install</code>.</p>
+      <p><strong>JSON Lines</strong> (JSONL) is one complete JSON object per line, no commas between them. Because each line is independent, you append without reading the file back &mdash; ideal for streaming logs. To read a run, open the file and parse each line, then <code>replay()</code> it into a summary.</p>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-24" aria-label="Custom Tracer - Analogy">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 5 of 5</span>
+      <div class="section-label">The Analogy</div>
+      <h2>A pocket notebook vs. a CRM</h2>
+      <p><strong>BEFORE:</strong> You could log every customer interaction in an enterprise CRM &mdash; powerful, but it takes setup, licenses, and onboarding before you write a single note.</p>
+      <p><strong>PAIN:</strong> For a solo shop or a quick experiment, that's overkill. By the time the CRM is configured, you've lost the notes you wanted to take today.</p>
+      <p><strong>MAPPING:</strong> The custom tracer is a pocket notebook: no setup, always in your pocket, one line per entry. It won't replace a CRM at scale, but it captures everything <em>right now</em> &mdash; and JSONL means you can import those notes into the "CRM" (Pandas, jq) later.</p>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-25" aria-label="Custom Tracer - How It Works">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 5 of 5</span>
+      <div class="section-label">How It Works</div>
+      <h2>What the decorator does</h2>
+      <ol class="step-list">
+        <li><strong>Mint a run_id &amp; file</strong>On each call, generate a short ID and open a per-run <code>trace_&lt;id&gt;.jsonl</code> file.</li>
+        <li><strong>Emit run_start</strong>Record the function name and (truncated) arguments before the work begins.</li>
+        <li><strong>Inject an emit hook</strong>If the function accepts an <code>_emit</code> param, pass it in so it can log sub-events like LLM turns.</li>
+        <li><strong>Emit run_end</strong>On success OR exception, write the outcome, total latency, and error info &mdash; then re-raise.</li>
+      </ol>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-26" aria-label="Custom Tracer - Pseudocode">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 5 of 5</span>
+      <div class="section-label">The Pattern</div>
+      <h2>Pseudocode</h2>
+      <pre class="pseudocode" aria-label="Pseudocode for a zero-dependency trace decorator"><span class="kw">DECORATOR</span> trace_agent(fn):
+  <span class="kw">RETURN FUNCTION</span> wrapper(args):
+    run_id = short_uuid()
+    file   = <span class="str">"trace_"</span> + run_id + <span class="str">".jsonl"</span>
+
+    <span class="kw">FUNCTION</span> emit(event):
+      event.run_id = run_id
+      event.ts = now()
+      append json(event) <span class="kw">TO</span> file
+
+    emit({start, fn.name, args})
+    <span class="kw">IF</span> fn accepts _emit: pass emit in
+    <span class="kw">TRY</span>:
+      result = fn(args)
+      emit({end, <span class="str">"success"</span>, latency})
+      <span class="kw">RETURN</span> result
+    <span class="kw">CATCH</span> err:
+      emit({end, <span class="str">"error"</span>, err})
+      <span class="kw">RAISE</span>
+</pre>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-27" aria-label="Custom Tracer - Misconceptions and Takeaway">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 5 of 5</span>
+      <div class="section-label">Wrong Mental Models</div>
+      <h2>Misconceptions</h2>
+      <div class="misconception">
+        <div class="icon" aria-hidden="true">&#10060;</div>
+        <div>
+          <div class="wrong">"A homemade tracer isn't real observability."</div>
+          <div class="right">For a single-service agent it's genuinely enough. JSONL is readable by jq and Pandas, so you get filtering and analysis without a platform. Reach for OTEL when you outgrow one file.</div>
+        </div>
+      </div>
+      <div class="misconception">
+        <div class="icon" aria-hidden="true">&#10060;</div>
+        <div>
+          <div class="wrong">"The decorator auto-captures everything inside the function."</div>
+          <div class="right">It only wraps start/end. To log inner LLM or tool events, your function must accept the injected <code>_emit</code> hook and call it &mdash; the decorator can't see inside otherwise.</div>
+        </div>
+      </div>
+      <div class="takeaway">
+        <p><strong>A zero-dependency <code>@trace_agent</code> decorator writes run_start, sub-events, and run_end to a JSON Lines file.</strong> No install, works anywhere.</p>
+        <p>JSONL's one-object-per-line format makes appends cheap and lets you replay or analyze runs with jq and Pandas later.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- CARD 28: QUICK QUIZ -->
+  <section class="mobile-card" id="card-28" aria-label="Quick Quiz">
+    <div class="card-inner">
+      <div class="section-label">Quick Quiz</div>
+      <h2>Test the core insight</h2>
+      <p style="font-size: 14px; color: var(--text-muted);">One question per concept. Tap to reveal the answer.</p>
+
+      <div class="quiz-card" role="button" tabindex="0" aria-expanded="false" aria-label="Quiz question 1">
+        <div class="question">Why must tracing be built in before you hit a bug?</div>
+        <div class="reveal-hint">Tap to reveal &darr;</div>
+        <div class="answer"><strong>A trace is a recording &mdash; like a black box, it can't capture a run that already happened.</strong> Adding logging after a failure gives you nothing about that failure. Built-in structured traces give the exact inputs and per-step latency, cutting debug time roughly 10x.</div>
+      </div>
+
+      <div class="quiz-card" role="button" tabindex="0" aria-expanded="false" aria-label="Quiz question 2">
+        <div class="question">What are the four trace categories, and why capture all four?</div>
+        <div class="reveal-hint">Tap to reveal &darr;</div>
+        <div class="answer"><strong>Tool calls, LLM turns, loop iterations, and errors.</strong> Errors alone tell you what broke but not why; the other three show the decision path that led there. Together they form the complete causal picture &mdash; miss one and you get a blind spot on the error path.</div>
+      </div>
+
+      <div class="quiz-card" role="button" tabindex="0" aria-expanded="false" aria-label="Quiz question 3">
+        <div class="question">What makes structured logging better than detailed print() lines?</div>
+        <div class="reveal-hint">Tap to reveal &darr;</div>
+        <div class="answer"><strong>Consistent JSON fields, not more text.</strong> Because each line is machine-readable, you can filter and aggregate &mdash; e.g. <code>jq 'select(.latency_ms &gt; 2000)'</code> finds every slow step with no parsing code. Prose lines, however detailed, stay unqueryable.</div>
+      </div>
+
+      <div class="quiz-card" role="button" tabindex="0" aria-expanded="false" aria-label="Quiz question 4">
+        <div class="question">Does OpenTelemetry work with a local Ollama model?</div>
+        <div class="reveal-hint">Tap to reveal &darr;</div>
+        <div class="answer"><strong>Yes &mdash; it traces your code, not the model.</strong> A local <code>mistral</code> run produces the same nested spans as any cloud model, exported to a local Jaeger with no data leaving your machine. (LangSmith's <code>@traceable</code> also wraps the OpenAI-compatible Ollama client unchanged.)</div>
+      </div>
+
+      <div class="quiz-card" role="button" tabindex="0" aria-expanded="false" aria-label="Quiz question 5">
+        <div class="question">How does the custom @trace_agent decorator capture inner LLM turns?</div>
+        <div class="reveal-hint">Tap to reveal &darr;</div>
+        <div class="answer"><strong>Only if the function accepts and calls the injected <code>_emit</code> hook.</strong> The decorator itself only wraps run_start and run_end. It can't see inside the function, so sub-events like LLM turns must be emitted explicitly via <code>_emit</code>. Everything lands in a JSON Lines file.</div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- CARD 29: DESKTOP LINK -->
+  <section class="mobile-card center" id="card-29" aria-label="Continue to desktop">
+    <div class="card-inner">
+      <div class="section-label">Ready to build?</div>
+      <h2>Open the full module on desktop</h2>
+      <p>The desktop version has you implement the unified TraceEvent dataclass, configure structlog and pino for JSON output, wire an Ollama agent to LangSmith and to OpenTelemetry + Jaeger, and build the zero-dependency tracer plus a CLI viewer &mdash; in Python and Node.</p>
+      <a class="desktop-link-btn" href="../M19-tracing-logging.html" aria-label="Open the full M19 module on desktop">
+        Open M19 on Desktop &rarr;
+        <span class="sub">Why trace &middot; four categories &middot; structured logs &middot; OTEL/Jaeger &middot; custom tracer &middot; ~80 min</span>
+      </a>
+
+      <div class="module-nav-row">
+        <a class="module-nav-btn" href="M18-evaluation-testing-mobile.html" aria-label="Previous mobile module: M18 Evaluation and Testing">
+          <div>
+            <span class="lbl">&larr; Previous</span>
+            <span>M18: Evaluation</span>
+          </div>
+        </a>
+        <a class="module-nav-btn" href="M20-monitoring-mobile.html" aria-label="Next mobile module: M20 Monitoring">
+          <div>
+            <span class="lbl">Next &rarr;</span>
+            <span>M20: Monitoring</span>
+          </div>
+        </a>
+      </div>
+
+      <div class="module-nav-row">
+        <a class="module-nav-btn" href="index.html" aria-label="Open the Open Source mobile index">
+          <div>
+            <span class="lbl">All Mobile &rarr;</span>
+            <span>OS Mobile Index</span>
+          </div>
+        </a>
+      </div>
+
+      <p style="text-align:center; font-size: 13px; color: var(--text-muted); margin-top: 1.25rem;">Module 17 of 20 &middot; Open Source Track &middot; Quality &amp; Observability</p>
+    </div>
+  </section>
+
+</main>
+
+<div class="progress-bar" role="progressbar" aria-label="Card 1 of 29" aria-valuemin="1" aria-valuemax="29" aria-valuenow="1">
+  <span class="count" id="progressCount">1 / 29</span>
+  <div class="track"><div class="fill" id="progressFill"></div></div>
+  <span class="count" style="color: var(--track-color);">M19</span>
+</div>
+
+<script>
+(function(){
+  const quizCards = document.querySelectorAll('.quiz-card');
+  quizCards.forEach(card => {
+    const toggle = () => {
+      const open = card.classList.toggle('revealed');
+      card.setAttribute('aria-expanded', open ? 'true' : 'false');
+    };
+    card.addEventListener('click', toggle);
+    card.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
+    });
+  });
+
+  const fab = document.getElementById('menuFab');
+  const overlay = document.getElementById('menuOverlay');
+  const closeBtn = document.getElementById('menuClose');
+  const openMenu = () => { overlay.classList.add('open'); overlay.setAttribute('aria-hidden', 'false'); fab.setAttribute('aria-expanded', 'true'); };
+  const closeMenu = () => { overlay.classList.remove('open'); overlay.setAttribute('aria-hidden', 'true'); fab.setAttribute('aria-expanded', 'false'); };
+  fab.addEventListener('click', openMenu);
+  closeBtn.addEventListener('click', closeMenu);
+  overlay.querySelectorAll('a').forEach(a => a.addEventListener('click', closeMenu));
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && overlay.classList.contains('open')) closeMenu(); });
+
+  const cards = document.querySelectorAll('.mobile-card');
+  const total = cards.length;
+  const fill = document.getElementById('progressFill');
+  const count = document.getElementById('progressCount');
+  const progressEl = document.querySelector('.progress-bar');
+  const update = (idx) => {
+    const n = idx + 1;
+    fill.style.width = ((n / total) * 100) + '%';
+    count.textContent = n + ' / ' + total;
+    progressEl.setAttribute('aria-valuenow', String(n));
+    progressEl.setAttribute('aria-label', 'Card ' + n + ' of ' + total);
+  };
+  if ('IntersectionObserver' in window) {
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting && entry.intersectionRatio > 0.55) {
+          const idx = Array.prototype.indexOf.call(cards, entry.target);
+          if (idx >= 0) update(idx);
+        }
+      });
+    }, { threshold: [0.55, 0.75], root: document.getElementById('deck') });
+    cards.forEach(c => io.observe(c));
+  }
+})();
+</script>
+
+</body>
+</html>

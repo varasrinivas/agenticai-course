@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0A1628">
+  <title>M21 Mobile: API Design &amp; Deployment | Open Source Agent Course</title>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;700;800&family=Source+Sans+3:wght@400;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg-primary: #0A1628; --bg-secondary: #111D33; --bg-card: #162033; --bg-surface: #1A2740;
+      --text-primary: #E8ECF1; --text-secondary: #B8C2D1; --text-muted: #7A8699;
+      --accent-primary: #D4A843; --accent-hover: #E5BC5A;
+      --success: #10B981; --warning: #F59E0B; --error: #F43F5E; --info: #F97316;
+      --track-color: #F97316; --code-bg: #0D1117; --code-border: #21262D;
+      --mobile-padding: 1rem; --mobile-font-body: 16px; --mobile-font-heading: 22px;
+    }
+    ::selection { background: rgba(249, 115, 22, 0.35); color: var(--text-primary); }
+    html { scroll-behavior: smooth; }
+    body { background: var(--bg-primary); color: var(--text-primary); font-family: 'Source Sans 3', sans-serif; font-size: var(--mobile-font-body); line-height: 1.6; min-height: 100vh; -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+    .deck { height: 100vh; overflow-y: auto; scroll-snap-type: y mandatory; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+    .deck::-webkit-scrollbar { display: none; }
+    .mobile-card { min-height: 100vh; width: 100%; padding: 4rem var(--mobile-padding) 5rem; scroll-snap-align: start; scroll-snap-stop: always; display: flex; flex-direction: column; justify-content: flex-start; position: relative; }
+    .mobile-card.center { justify-content: center; }
+    .mobile-card .card-inner { background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 16px; padding: 1.25rem; width: 100%; position: relative; }
+    h1, h2, h3 { font-family: 'Bricolage Grotesque', sans-serif; line-height: 1.25; color: var(--text-primary); }
+    h1 { font-size: 2rem; font-weight: 800; margin-bottom: 0.5rem; }
+    h2 { font-size: var(--mobile-font-heading); font-weight: 700; margin-bottom: 1rem; }
+    h3 { font-size: 18px; font-weight: 600; margin: 1rem 0 0.5rem; }
+    p { margin-bottom: 0.85rem; color: var(--text-secondary); }
+    p strong { color: var(--text-primary); font-weight: 600; }
+    code { font-family: 'JetBrains Mono', monospace; font-size: 0.92em; color: #FBC99A; background: rgba(249, 115, 22, 0.10); padding: 0.05rem 0.3rem; border-radius: 4px; }
+    .title-meta { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.85rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--track-color); margin-bottom: 0.75rem; }
+    .title-card .module-name { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 2.4rem; line-height: 1.1; color: var(--text-primary); margin-bottom: 1rem; }
+    .title-card .track-row { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1.5rem; }
+    .pill { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.35rem 0.75rem; border-radius: 999px; font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.78rem; font-weight: 600; }
+    .pill-track { background: rgba(249, 115, 22, 0.15); border: 1px solid var(--track-color); color: var(--track-color); }
+    .pill-time { background: rgba(212, 168, 67, 0.12); border: 1px solid var(--accent-primary); color: var(--accent-primary); }
+    .pill-pos { background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); color: var(--text-secondary); }
+    .swipe-hint { margin-top: 2rem; font-size: 0.85rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.4rem; }
+    .swipe-hint .arrow { animation: bounce 1.6s ease-in-out infinite; display: inline-block; }
+    @keyframes bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(4px); } }
+    .section-label { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--track-color); margin-bottom: 0.5rem; }
+    .concept-chip { position: absolute; top: 0.85rem; right: 0.85rem; font-family: 'JetBrains Mono', monospace; font-size: 0.66rem; letter-spacing: 0.05em; color: var(--text-muted); background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.08); padding: 0.25rem 0.5rem; border-radius: 999px; text-transform: uppercase; }
+    .step-list { list-style: none; counter-reset: step; margin: 0.5rem 0; }
+    .step-list li { counter-increment: step; position: relative; padding: 0.75rem 0.75rem 0.75rem 3rem; margin-bottom: 0.6rem; background: rgba(249, 115, 22, 0.06); border-radius: 10px; border-left: 3px solid var(--track-color); color: var(--text-secondary); font-size: 15px; line-height: 1.5; }
+    .step-list li::before { content: counter(step); position: absolute; left: 0.75rem; top: 50%; transform: translateY(-50%); width: 28px; height: 28px; border-radius: 50%; background: var(--track-color); color: #0A1628; display: flex; align-items: center; justify-content: center; font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.85rem; font-weight: 700; }
+    .step-list li strong { color: var(--text-primary); display: block; margin-bottom: 0.15rem; font-family: 'Bricolage Grotesque', sans-serif; }
+    .pseudocode { background: rgba(249, 115, 22, 0.08); border-left: 3px solid var(--track-color); border-radius: 0 8px 8px 0; padding: 1rem; font-family: 'JetBrains Mono', monospace; font-size: 13.5px; line-height: 1.65; overflow-x: auto; -webkit-overflow-scrolling: touch; color: var(--text-primary); white-space: pre; margin: 0.75rem 0; }
+    .pseudocode .kw { color: #C792EA; font-weight: 600; }
+    .pseudocode .str { color: #A5D6A7; }
+    .pseudocode .cmt { color: var(--text-muted); font-style: italic; }
+    .pseudocode .var { color: #82AAFF; }
+    .misconception { display: grid; grid-template-columns: auto 1fr; gap: 0.5rem 0.75rem; align-items: start; padding: 0.75rem 0; border-bottom: 1px solid rgba(255, 255, 255, 0.06); }
+    .misconception:last-child { border-bottom: none; }
+    .misconception .icon { font-size: 1.1rem; line-height: 1.4; }
+    .misconception .wrong { color: #F87189; font-weight: 600; }
+    .misconception .right { color: var(--text-primary); margin-top: 0.2rem; font-size: 15px; }
+    .takeaway { background: rgba(212, 168, 67, 0.08); border: 1px solid rgba(212, 168, 67, 0.3); border-radius: 12px; padding: 1rem 1.1rem; margin: 0.75rem 0 0; }
+    .takeaway::before { content: "Key Takeaway"; display: block; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 0.85rem; letter-spacing: 0.05em; text-transform: uppercase; color: var(--accent-primary); margin-bottom: 0.5rem; }
+    .takeaway p { color: var(--text-primary); margin-bottom: 0.5rem; }
+    .takeaway p:last-child { margin-bottom: 0; }
+    .quiz-card { background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 1rem 1.1rem; margin-bottom: 0.75rem; cursor: pointer; min-height: 44px; transition: background 0.2s ease, border-color 0.2s ease; -webkit-tap-highlight-color: transparent; }
+    .quiz-card:hover, .quiz-card:focus { background: rgba(255, 255, 255, 0.06); border-color: var(--track-color); outline: none; }
+    .quiz-card .question { display: flex; gap: 0.5rem; align-items: flex-start; font-weight: 600; color: var(--text-primary); }
+    .quiz-card .question::before { content: "Q"; color: var(--track-color); font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; flex-shrink: 0; width: 22px; }
+    .quiz-card .answer { max-height: 0; overflow: hidden; opacity: 0; transition: max-height 0.3s ease, opacity 0.3s ease, margin-top 0.3s ease, padding-top 0.3s ease; color: var(--text-secondary); font-size: 15px; line-height: 1.55; border-top: 1px solid transparent; }
+    .quiz-card.revealed .answer { max-height: 600px; opacity: 1; margin-top: 0.75rem; padding-top: 0.75rem; border-top-color: rgba(255, 255, 255, 0.08); }
+    .quiz-card .reveal-hint { font-size: 0.78rem; color: var(--text-muted); margin-top: 0.4rem; font-style: italic; }
+    .quiz-card.revealed .reveal-hint { display: none; }
+    .desktop-link-btn { display: block; width: 100%; padding: 1rem 1.25rem; background: linear-gradient(135deg, rgba(249, 115, 22, 0.18), rgba(212, 168, 67, 0.12)); border: 1px solid var(--track-color); border-radius: 14px; color: var(--text-primary); text-decoration: none; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; text-align: center; transition: transform 0.15s ease, box-shadow 0.15s ease; min-height: 56px; }
+    .desktop-link-btn:active { transform: scale(0.98); }
+    .desktop-link-btn .sub { display: block; font-family: 'Source Sans 3', sans-serif; font-weight: 400; font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.2rem; }
+    .module-nav-row { display: flex; justify-content: space-between; gap: 0.5rem; margin-top: 1rem; }
+    .module-nav-btn { flex: 1; padding: 0.85rem 0.75rem; background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 12px; color: var(--text-primary); text-decoration: none; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 600; font-size: 0.85rem; text-align: center; min-height: 44px; display: flex; align-items: center; justify-content: center; gap: 0.3rem; }
+    .module-nav-btn:active { background: rgba(255, 255, 255, 0.08); }
+    .module-nav-btn .lbl { font-size: 0.7rem; color: var(--text-muted); display: block; font-weight: 400; letter-spacing: 0.05em; text-transform: uppercase; }
+    .progress-bar { position: fixed; bottom: 0; left: 0; right: 0; height: 36px; background: rgba(10, 22, 40, 0.92); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border-top: 1px solid rgba(255, 255, 255, 0.08); display: flex; align-items: center; padding: 0 1rem; gap: 0.5rem; font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.72rem; color: var(--text-muted); z-index: 50; }
+    .progress-bar .track { flex: 1; height: 4px; background: rgba(255, 255, 255, 0.08); border-radius: 2px; overflow: hidden; }
+    .progress-bar .track .fill { height: 100%; width: 3.44%; background: linear-gradient(90deg, var(--track-color), var(--accent-primary)); border-radius: 2px; transition: width 0.25s ease; }
+    .progress-bar .count { letter-spacing: 0.05em; color: var(--text-secondary); white-space: nowrap; }
+    .menu-fab { position: fixed; top: 0.85rem; right: 0.85rem; width: 44px; height: 44px; border-radius: 50%; background: rgba(22, 32, 51, 0.92); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border: 1px solid rgba(255, 255, 255, 0.12); color: var(--text-primary); font-size: 1.25rem; cursor: pointer; z-index: 60; display: flex; align-items: center; justify-content: center; -webkit-tap-highlight-color: transparent; }
+    .menu-fab:active { transform: scale(0.95); }
+    .menu-overlay { position: fixed; inset: 0; background: rgba(10, 22, 40, 0.94); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); z-index: 70; display: none; flex-direction: column; padding: 4rem 1.25rem 2rem; overflow-y: auto; }
+    .menu-overlay.open { display: flex; }
+    .menu-overlay a { display: block; padding: 0.75rem 1rem; margin-bottom: 0.4rem; background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 10px; color: var(--text-primary); text-decoration: none; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 600; min-height: 44px; font-size: 14px; }
+    .menu-overlay a:active { background: rgba(249, 115, 22, 0.15); border-color: var(--track-color); }
+    .menu-overlay a.cluster-child { margin-left: 1rem; padding: 0.6rem 0.85rem; min-height: 40px; background: rgba(255, 255, 255, 0.02); font-size: 13px; }
+    .menu-overlay .cluster-header { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 0.78rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--track-color); margin: 1rem 0 0.4rem; padding: 0 0.25rem; }
+    .menu-overlay .menu-num { display: inline-block; font-family: 'JetBrains Mono', monospace; font-size: 0.74rem; color: var(--track-color); margin-right: 0.5rem; width: 1.6rem; }
+    .menu-close { position: absolute; top: 0.85rem; right: 0.85rem; width: 44px; height: 44px; border-radius: 50%; background: rgba(244, 63, 94, 0.15); border: 1px solid var(--error); color: var(--text-primary); font-size: 1.5rem; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+    .index-list { list-style: none; padding: 0; margin: 0.5rem 0 0; }
+    .index-list li { display: block; }
+    .index-list a { display: flex; align-items: baseline; gap: 0.6rem; padding: 0.85rem 1rem; margin-bottom: 0.5rem; background: rgba(249, 115, 22, 0.05); border: 1px solid rgba(249, 115, 22, 0.18); border-radius: 10px; color: var(--text-primary); text-decoration: none; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 600; font-size: 15px; min-height: 44px; -webkit-tap-highlight-color: transparent; }
+    .index-list a:active { background: rgba(249, 115, 22, 0.12); }
+    .index-list .idx-num { font-family: 'JetBrains Mono', monospace; color: var(--track-color); font-weight: 700; flex-shrink: 0; width: 1.5rem; }
+    .index-list .idx-sub { display: block; font-family: 'Source Sans 3', sans-serif; font-weight: 400; font-size: 13px; color: var(--text-muted); margin-top: 0.1rem; }
+    /* diagram helper — reuses os-orange palette, stays under 300px tall */
+    .flow-diagram { display: flex; flex-direction: column; gap: 0.5rem; margin: 0.75rem 0; }
+    .flow-node { display: flex; align-items: center; gap: 0.6rem; padding: 0.6rem 0.85rem; background: rgba(249, 115, 22, 0.06); border: 1px solid rgba(249, 115, 22, 0.25); border-radius: 10px; font-family: 'JetBrains Mono', monospace; font-size: 12.5px; color: var(--text-primary); }
+    .flow-node .fn-badge { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 0.7rem; color: var(--track-color); background: rgba(249, 115, 22, 0.14); border-radius: 6px; padding: 0.15rem 0.45rem; flex-shrink: 0; }
+    .flow-arrow { text-align: center; color: var(--text-muted); font-size: 1rem; line-height: 1; }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; } .swipe-hint .arrow { animation: none; } }
+    :focus-visible { outline: 2px solid var(--accent-primary); outline-offset: 2px; border-radius: 6px; }
+    @media (min-width: 600px) { .mobile-card { padding-left: 2rem; padding-right: 2rem; } .mobile-card .card-inner { max-width: 560px; margin: 0 auto; } h1 { font-size: 2.5rem; } }
+  </style>
+</head>
+<body>
+
+<button class="menu-fab" id="menuFab" aria-label="Open section menu" aria-expanded="false" aria-controls="menuOverlay">&#9776;</button>
+
+<nav class="menu-overlay" id="menuOverlay" aria-label="Section menu" aria-hidden="true">
+  <button class="menu-close" id="menuClose" aria-label="Close menu">&times;</button>
+  <h2 style="margin-bottom: 0.75rem; color: var(--text-primary);">Jump to Card</h2>
+  <a href="#card-1"><span class="menu-num">01</span>Title</a>
+  <a href="#card-2"><span class="menu-num">02</span>Concept Index</a>
+
+  <div class="cluster-header">Cluster 1 &middot; Agent as HTTP Service</div>
+  <a class="cluster-child" href="#card-3"><span class="menu-num">03</span>Big Idea</a>
+  <a class="cluster-child" href="#card-4"><span class="menu-num">04</span>Analogy</a>
+  <a class="cluster-child" href="#card-5"><span class="menu-num">05</span>How It Works</a>
+  <a class="cluster-child" href="#card-6"><span class="menu-num">06</span>Pseudocode</a>
+  <a class="cluster-child" href="#card-7"><span class="menu-num">07</span>Misconceptions + Takeaway</a>
+
+  <div class="cluster-header">Cluster 2 &middot; Streaming with SSE</div>
+  <a class="cluster-child" href="#card-8"><span class="menu-num">08</span>Big Idea</a>
+  <a class="cluster-child" href="#card-9"><span class="menu-num">09</span>Analogy</a>
+  <a class="cluster-child" href="#card-10"><span class="menu-num">10</span>How It Works</a>
+  <a class="cluster-child" href="#card-11"><span class="menu-num">11</span>Pseudocode</a>
+  <a class="cluster-child" href="#card-12"><span class="menu-num">12</span>Misconceptions + Takeaway</a>
+
+  <div class="cluster-header">Cluster 3 &middot; Async Job Queue</div>
+  <a class="cluster-child" href="#card-13"><span class="menu-num">13</span>Big Idea</a>
+  <a class="cluster-child" href="#card-14"><span class="menu-num">14</span>Analogy</a>
+  <a class="cluster-child" href="#card-15"><span class="menu-num">15</span>How It Works</a>
+  <a class="cluster-child" href="#card-16"><span class="menu-num">16</span>Pseudocode</a>
+  <a class="cluster-child" href="#card-17"><span class="menu-num">17</span>Misconceptions + Takeaway</a>
+
+  <div class="cluster-header">Cluster 4 &middot; Validation &amp; Rate Limiting</div>
+  <a class="cluster-child" href="#card-18"><span class="menu-num">18</span>Big Idea</a>
+  <a class="cluster-child" href="#card-19"><span class="menu-num">19</span>Analogy</a>
+  <a class="cluster-child" href="#card-20"><span class="menu-num">20</span>How It Works</a>
+  <a class="cluster-child" href="#card-21"><span class="menu-num">21</span>Pseudocode</a>
+  <a class="cluster-child" href="#card-22"><span class="menu-num">22</span>Misconceptions + Takeaway</a>
+
+  <div class="cluster-header">Cluster 5 &middot; Docker Deployment</div>
+  <a class="cluster-child" href="#card-23"><span class="menu-num">23</span>Big Idea</a>
+  <a class="cluster-child" href="#card-24"><span class="menu-num">24</span>Analogy</a>
+  <a class="cluster-child" href="#card-25"><span class="menu-num">25</span>How It Works</a>
+  <a class="cluster-child" href="#card-26"><span class="menu-num">26</span>Decision Framework</a>
+  <a class="cluster-child" href="#card-27"><span class="menu-num">27</span>Misconceptions + Takeaway</a>
+
+  <div class="cluster-header">Wrap-Up</div>
+  <a href="#card-28"><span class="menu-num">28</span>Quick Quiz</a>
+  <a href="#card-29"><span class="menu-num">29</span>Continue on Desktop</a>
+</nav>
+
+<main class="deck" id="deck" role="main">
+
+  <!-- CARD 1: TITLE -->
+  <section class="mobile-card center title-card" id="card-1" aria-label="Title card">
+    <div>
+      <div class="title-meta">Module 19 of 20 &middot; Open Source Track</div>
+      <div class="module-name">API Design &amp; Deployment</div>
+      <p style="color: var(--text-secondary); font-size: 1.05rem; margin-bottom: 1.25rem;">Your agent works in a notebook &mdash; now make it work everywhere. Five concepts: wrap it as an HTTP service, stream steps with SSE, queue long jobs, validate and rate-limit inputs, and ship it in a reproducible Docker container.</p>
+      <div class="track-row">
+        <span class="pill pill-track"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--track-color);"></span>Track 7: Production &amp; Deployment</span>
+        <span class="pill pill-time">&#9201; ~16 min read</span>
+        <span class="pill pill-pos">5 concepts</span>
+      </div>
+      <div class="swipe-hint" aria-hidden="true"><span class="arrow">&darr;</span> Scroll to begin &middot; 29 cards &middot; 5 concepts</div>
+    </div>
+  </section>
+
+  <!-- CARD 2: CONCEPT INDEX -->
+  <section class="mobile-card" id="card-2" aria-label="Concept Index">
+    <div class="card-inner">
+      <div class="section-label">What You'll Learn</div>
+      <h2>The 5 concepts of shipping an agent</h2>
+      <p style="font-size: 14px; color: var(--text-muted);">Tap any concept to jump to its 5-card cluster.</p>
+      <ul class="index-list">
+        <li><a href="#card-3"><span class="idx-num">1</span><span><span style="display:block;">Agent as HTTP Service</span><span class="idx-sub">Stateless endpoint any caller can reach</span></span></a></li>
+        <li><a href="#card-8"><span class="idx-num">2</span><span><span style="display:block;">Streaming with SSE</span><span class="idx-sub">Push steps as they happen</span></span></a></li>
+        <li><a href="#card-13"><span class="idx-num">3</span><span><span style="display:block;">Async Job Queue</span><span class="idx-sub">Fire-and-poll for long work</span></span></a></li>
+        <li><a href="#card-18"><span class="idx-num">4</span><span><span style="display:block;">Validation &amp; Rate Limiting</span><span class="idx-sub">Reject bad input &amp; noisy callers</span></span></a></li>
+        <li><a href="#card-23"><span class="idx-num">5</span><span><span style="display:block;">Docker Deployment</span><span class="idx-sub">Runs identically everywhere</span></span></a></li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ============ CLUSTER 1: AGENT AS HTTP SERVICE (3-7) ============ -->
+
+  <section class="mobile-card" id="card-3" aria-label="Agent as HTTP Service - Big Idea">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 1 of 5</span>
+      <div class="section-label">The Big Idea</div>
+      <h2>Wrap the agent behind an HTTP endpoint</h2>
+      <p>An agent that only runs in your notebook can be called by exactly one person: you. Wrapping it as an <strong>HTTP service</strong> turns it into something any caller &mdash; a UI, another service, a cron job &mdash; can invoke over the network.</p>
+      <p>The key design choice is to make each endpoint <strong>stateless</strong>: the server holds no memory between requests. Every call carries everything the agent needs (the query plus a session ID to look up history). That makes scaling trivial &mdash; any replica can serve any request &mdash; and lets many callers reach the agent at once.</p>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-4" aria-label="Agent as HTTP Service - Analogy">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 1 of 5</span>
+      <div class="section-label">The Analogy</div>
+      <h2>The analyst in the locked room</h2>
+      <p><strong>BEFORE:</strong> Imagine a brilliant analyst who lives in a locked room. The only way to work with her is to walk in, hand her a sheet of paper, and wait for the answer to slide back under the door.</p>
+      <p><strong>PAIN:</strong> A second team can't get in while you're inside. Automated pipelines are blocked on a human gatekeeper. And she remembers nothing, so every visit is a fresh handshake. The analyst is great; the access model is broken.</p>
+      <p><strong>MAPPING:</strong> The HTTP API is an intercom bolted to the door. Any caller speaks through it without entering. Each call is independent, so two callers reach her at once, and the session ID on each message is the label on the envelope &mdash; the caller owns the memory, not the analyst.</p>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-5" aria-label="Agent as HTTP Service - How It Works">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 1 of 5</span>
+      <div class="section-label">How It Works</div>
+      <h2>One request, end to end</h2>
+      <ol class="step-list">
+        <li><strong>Caller sends a request</strong>A POST with the query, an optional session ID, and config &mdash; plus an auth token in the header.</li>
+        <li><strong>Server authenticates</strong>Check the API key. No key, or wrong key, gets a clean 401 before the agent ever runs.</li>
+        <li><strong>Agent runs statelessly</strong>The server loads any prior history by session ID, runs the loop, holds no state itself.</li>
+        <li><strong>Return a typed response</strong>Result plus metadata (session ID, iterations, latency) as a documented JSON contract.</li>
+      </ol>
+      <div class="flow-diagram" aria-label="Request flow: caller to auth to agent to response">
+        <div class="flow-node"><span class="fn-badge">1</span>Caller &rarr; POST /agent/run</div>
+        <div class="flow-arrow">&darr;</div>
+        <div class="flow-node"><span class="fn-badge">2</span>Auth check (API key)</div>
+        <div class="flow-arrow">&darr;</div>
+        <div class="flow-node"><span class="fn-badge">3</span>Stateless agent run</div>
+        <div class="flow-arrow">&darr;</div>
+        <div class="flow-node"><span class="fn-badge">4</span>200 OK + JSON result</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-6" aria-label="Agent as HTTP Service - Pseudocode">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 1 of 5</span>
+      <div class="section-label">The Pattern</div>
+      <h2>Pseudocode</h2>
+      <pre class="pseudocode" aria-label="Pseudocode for a stateless agent HTTP endpoint"><span class="kw">DEFINE</span> endpoint POST <span class="str">"/agent/run"</span>:
+  <span class="cmt"># reject unauthenticated callers first</span>
+  <span class="kw">IF</span> not valid_api_key(request.header):
+    <span class="kw">RETURN</span> 401 <span class="str">"unauthorized"</span>
+
+  <span class="var">body</span> = parse(request.body)
+  <span class="var">history</span> = load_session(body.session_id)
+
+  <span class="var">result</span> = run_agent(body.query, history)
+
+  <span class="cmt"># server keeps NO state between calls</span>
+  <span class="kw">RETURN</span> 200, {
+    result:     result.text,
+    session_id: body.session_id,
+    latency_ms: elapsed(),
+  }
+</pre>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-7" aria-label="Agent as HTTP Service - Misconceptions and Takeaway">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 1 of 5</span>
+      <div class="section-label">Wrong Mental Models</div>
+      <h2>Misconceptions</h2>
+      <div class="misconception">
+        <div class="icon" aria-hidden="true">&#10060;</div>
+        <div>
+          <div class="wrong">"The API wrapper is just overhead."</div>
+          <div class="right">It's what makes concurrency possible. A shared library call serializes everyone through one process; the HTTP service lets many callers hit the agent at once, each isolated.</div>
+        </div>
+      </div>
+      <div class="misconception">
+        <div class="icon" aria-hidden="true">&#10060;</div>
+        <div>
+          <div class="wrong">"The server should remember the conversation."</div>
+          <div class="right">Keep endpoints stateless. The caller threads context via a session ID; the server stays memoryless so any replica can handle any request and scaling stays trivial.</div>
+        </div>
+      </div>
+      <div class="takeaway">
+        <p><strong>Wrapping the agent as a stateless HTTP service changes who can reach it, not what it does.</strong></p>
+        <p>Put the query and a session ID in every request; keep the server memoryless so it scales horizontally.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ CLUSTER 2: STREAMING WITH SSE (8-12) ============ -->
+
+  <section class="mobile-card" id="card-8" aria-label="Streaming with SSE - Big Idea">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 2 of 5</span>
+      <div class="section-label">The Big Idea</div>
+      <h2>Push each step as it happens</h2>
+      <p>A synchronous call makes the client wait for the whole agent run &mdash; 45 seconds of a blank spinner. <strong>Streaming</strong> flips that: the server pushes one event per step of the loop &mdash; a <code>thought</code>, a <code>tool_call</code>, then a final <code>result</code> &mdash; and the client renders each the moment it arrives.</p>
+      <p>The mechanism is <strong>SSE</strong> (Server-Sent Events): a one-way stream of text chunks over a single long-lived HTTP connection. It needs no WebSocket upgrade, passes through every proxy, and is ideal for showing agent progress in real time.</p>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-9" aria-label="Streaming with SSE - Analogy">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 2 of 5</span>
+      <div class="section-label">The Analogy</div>
+      <h2>Kitchen updates vs. a silent wait</h2>
+      <p><strong>BEFORE:</strong> You order at a restaurant and the kitchen goes silent. No word for 45 minutes &mdash; you can't tell if they're cooking, lost your order, or closed.</p>
+      <p><strong>PAIN:</strong> The silence is agonizing and risky. You might give up and leave, or the waiter's one-shot "here's your meal" arrives so late the connection (your patience, or an HTTP proxy) has already timed out.</p>
+      <p><strong>MAPPING:</strong> SSE is a waiter who keeps you posted: "starters are on," "mains searing now," "plating." Each update is one event down a single open line. You see steady progress, so the wait feels short and nothing times out from silence.</p>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-10" aria-label="Streaming with SSE - How It Works">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 2 of 5</span>
+      <div class="section-label">How It Works</div>
+      <h2>An event per loop step</h2>
+      <ol class="step-list">
+        <li><strong>Open the stream</strong>Server responds with <code>text/event-stream</code> and keeps the connection alive instead of closing it.</li>
+        <li><strong>Emit typed events</strong>Each step writes <code>event: thought</code> then <code>data: {json}</code>, ended by a blank line (double newline).</li>
+        <li><strong>Client reads progressively</strong>It splits on the blank line, parses each event, and renders it the instant it arrives.</li>
+        <li><strong>Close on the result</strong>A final <code>result</code> (or <code>error</code>) event ends the stream cleanly.</li>
+      </ol>
+      <div class="flow-diagram" aria-label="SSE event sequence over one connection">
+        <div class="flow-node"><span class="fn-badge">SSE</span>event: thought &rarr; data</div>
+        <div class="flow-arrow">&darr;</div>
+        <div class="flow-node"><span class="fn-badge">SSE</span>event: tool_call &rarr; data</div>
+        <div class="flow-arrow">&darr;</div>
+        <div class="flow-node"><span class="fn-badge">SSE</span>event: result &rarr; close</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-11" aria-label="Streaming with SSE - Pseudocode">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 2 of 5</span>
+      <div class="section-label">The Pattern</div>
+      <h2>Pseudocode</h2>
+      <pre class="pseudocode" aria-label="Pseudocode for an SSE streaming endpoint"><span class="kw">DEFINE</span> stream endpoint POST <span class="str">"/agent/stream"</span>:
+  set header <span class="str">"Content-Type: text/event-stream"</span>
+  set header <span class="str">"Cache-Control: no-cache"</span>  <span class="cmt"># or proxy buffers</span>
+
+  <span class="kw">FOR EACH</span> step <span class="kw">IN</span> run_agent_steps(query):
+    <span class="var">type</span> = step.type        <span class="cmt"># thought | tool_call | result</span>
+    emit(<span class="str">"event: "</span> + type)
+    emit(<span class="str">"data: "</span> + to_json(step))
+    emit(<span class="str">""</span>)               <span class="cmt"># blank line ENDS the event</span>
+
+  <span class="cmt"># on error, emit one final event: error</span>
+  <span class="kw">CLOSE</span> stream
+</pre>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-12" aria-label="Streaming with SSE - Misconceptions and Takeaway">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 2 of 5</span>
+      <div class="section-label">Wrong Mental Models</div>
+      <h2>Misconceptions</h2>
+      <div class="misconception">
+        <div class="icon" aria-hidden="true">&#10060;</div>
+        <div>
+          <div class="wrong">"You need WebSockets to stream."</div>
+          <div class="right">Not for one-way server&rarr;client progress. SSE is simpler, needs no upgrade handshake, passes through plain HTTP proxies, and reconnects automatically.</div>
+        </div>
+      </div>
+      <div class="misconception">
+        <div class="icon" aria-hidden="true">&#10060;</div>
+        <div>
+          <div class="wrong">"Streaming makes the agent finish faster."</div>
+          <div class="right">Total runtime is the same. What changes is <em>perceived</em> speed and resilience: first byte in under a second, and no timeout from a silent connection.</div>
+        </div>
+      </div>
+      <div class="takeaway">
+        <p><strong>SSE streams one typed event per loop step over a single open connection.</strong></p>
+        <p>End every event with a blank line, and disable proxy buffering (<code>Cache-Control: no-cache</code>) or the stream stalls.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ CLUSTER 3: ASYNC JOB QUEUE (13-17) ============ -->
+
+  <section class="mobile-card" id="card-13" aria-label="Async Job Queue - Big Idea">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 3 of 5</span>
+      <div class="section-label">The Big Idea</div>
+      <h2>Fire the job, poll for the result</h2>
+      <p>Streaming handles agents under a minute. But a bulk task processing 10,000 records can run for many minutes &mdash; longer than any HTTP connection or proxy will hold open. The fix is an <strong>async job queue</strong>.</p>
+      <p>The server accepts the request, returns <strong>202 Accepted</strong> with a job ID <em>instantly</em>, and runs the work in the background. The client then polls <code>GET /jobs/{id}</code> until it sees <code>status: complete</code>. This breaks the request-response link entirely, so work can run for minutes or hours with zero timeout risk.</p>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-14" aria-label="Async Job Queue - Analogy">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 3 of 5</span>
+      <div class="section-label">The Analogy</div>
+      <h2>The dry-cleaner ticket</h2>
+      <p><strong>BEFORE:</strong> You drop off a huge pile of laundry and the clerk says "wait here at the counter until it's all clean." You'd stand there for hours, blocking the line behind you.</p>
+      <p><strong>PAIN:</strong> Nobody waits at a counter for hours. The shop can't serve other customers past you, and if you step away for a second you lose your place entirely &mdash; exactly what a proxy timeout does to a long request.</p>
+      <p><strong>MAPPING:</strong> Instead the clerk hands you a numbered ticket and you leave. The 202 response is that ticket. You come back (poll) and show the number; if it's ready you collect it, if not you check again later. The shop keeps serving everyone while your order runs in back.</p>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-15" aria-label="Async Job Queue - How It Works">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 3 of 5</span>
+      <div class="section-label">How It Works</div>
+      <h2>Submit, run, poll</h2>
+      <ol class="step-list">
+        <li><strong>Submit &rarr; 202 + job ID</strong>POST enqueues the job, stores it as <code>pending</code>, and returns a job ID immediately.</li>
+        <li><strong>Background worker runs it</strong>A worker picks up the job, flips it to <code>running</code>, then <code>complete</code> or <code>failed</code>.</li>
+        <li><strong>Client polls the job</strong>GET /jobs/{id} every couple of seconds; unknown IDs return 404 so clients stop polling.</li>
+        <li><strong>Collect the result</strong>Once status is <code>complete</code>, the stored result is returned in the poll response.</li>
+      </ol>
+      <div class="flow-diagram" aria-label="Async job lifecycle from submit to complete">
+        <div class="flow-node"><span class="fn-badge">202</span>submit &rarr; job_id (pending)</div>
+        <div class="flow-arrow">&darr;</div>
+        <div class="flow-node"><span class="fn-badge">BG</span>worker: running &rarr; complete</div>
+        <div class="flow-arrow">&darr;</div>
+        <div class="flow-node"><span class="fn-badge">GET</span>poll /jobs/id &rarr; result</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-16" aria-label="Async Job Queue - Pseudocode">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 3 of 5</span>
+      <div class="section-label">The Pattern</div>
+      <h2>Pseudocode</h2>
+      <pre class="pseudocode" aria-label="Pseudocode for an async job queue"><span class="kw">DEFINE</span> POST <span class="str">"/agent/jobs"</span>:
+  <span class="var">job_id</span> = new_id()
+  store[job_id] = { status: <span class="str">"pending"</span> }
+  enqueue_background(run_job, job_id, body)
+  <span class="kw">RETURN</span> 202, { job_id, poll_url }
+
+<span class="kw">DEFINE</span> run_job(job_id, body):      <span class="cmt"># background</span>
+  store[job_id].status = <span class="str">"running"</span>
+  <span class="kw">TRY</span>:
+    store[job_id].result = run_agent(body)
+    store[job_id].status = <span class="str">"complete"</span>
+  <span class="kw">CATCH</span> e: store[job_id] = { status:<span class="str">"failed"</span>, error:e }
+
+<span class="kw">DEFINE</span> GET <span class="str">"/jobs/{id}"</span>:
+  <span class="kw">IF</span> id not in store: <span class="kw">RETURN</span> 404
+  <span class="kw">RETURN</span> store[id]
+</pre>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-17" aria-label="Async Job Queue - Misconceptions and Takeaway">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 3 of 5</span>
+      <div class="section-label">Wrong Mental Models</div>
+      <h2>Misconceptions</h2>
+      <div class="misconception">
+        <div class="icon" aria-hidden="true">&#10060;</div>
+        <div>
+          <div class="wrong">"An in-memory job store is fine for production."</div>
+          <div class="right">It vanishes on restart &mdash; every pending job lost. For durability, back the queue with Redis (rq, Celery, BullMQ) so jobs survive crashes and workers scale out.</div>
+        </div>
+      </div>
+      <div class="misconception">
+        <div class="icon" aria-hidden="true">&#10060;</div>
+        <div>
+          <div class="wrong">"Unknown job IDs can just return empty."</div>
+          <div class="right">Return 404 for missing IDs. A silent empty body makes a client poll forever; a 404 tells it the ID is bad so it can stop.</div>
+        </div>
+      </div>
+      <div class="takeaway">
+        <p><strong>Return 202 + a job ID instantly, run the agent in the background, and let the client poll for the result.</strong></p>
+        <p>Use this for anything over ~60s; back the store with Redis so jobs survive restarts.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ CLUSTER 4: VALIDATION & RATE LIMITING (18-22) ============ -->
+
+  <section class="mobile-card" id="card-18" aria-label="Validation and Rate Limiting - Big Idea">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 4 of 5</span>
+      <div class="section-label">The Big Idea</div>
+      <h2>Reject bad input and greedy callers</h2>
+      <p>An open endpoint is an open door. Two guards protect it. <strong>Validation</strong> checks every request against a typed schema before the agent runs &mdash; empty query, oversized payload, wrong type all get a clean <code>422</code> instead of a crash deep in the loop.</p>
+      <p><strong>Rate limiting</strong> stops one noisy caller from eating all your inference capacity. A <strong>token bucket</strong> gives each API key a bucket of tokens that refills at a steady rate; each request spends one, and when the bucket is empty the caller gets <code>429 Too Many Requests</code> with a <code>Retry-After</code> header.</p>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-19" aria-label="Validation and Rate Limiting - Analogy">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 4 of 5</span>
+      <div class="section-label">The Analogy</div>
+      <h2>The nightclub door</h2>
+      <p><strong>BEFORE:</strong> Picture a club with no door staff. Anyone walks in &mdash; people without ID, people in banned outfits, and a handful who barge back in every ten seconds.</p>
+      <p><strong>PAIN:</strong> The wrong crowd floods the floor. Guests who don't meet dress code cause chaos inside, and the repeat-entry crowd hogs the bar so real patrons can't get served. The club (your agent) is overwhelmed by who got through the door.</p>
+      <p><strong>MAPPING:</strong> Validation is the dress-code check &mdash; malformed requests are turned away at the door (422), never reaching the floor. The token bucket is the bouncer's tally: each guest gets a set number of entries that replenish slowly; over that, you wait outside (429, Retry-After).</p>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-20" aria-label="Validation and Rate Limiting - How It Works">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 4 of 5</span>
+      <div class="section-label">How It Works</div>
+      <h2>Two gates before the agent</h2>
+      <ol class="step-list">
+        <li><strong>Validate the schema</strong>Check types and bounds &mdash; query length, iteration caps. Fail fast with 422 and a clear message.</li>
+        <li><strong>Identify the caller</strong>Derive a key from the API token (or IP). This is who the rate limit applies to.</li>
+        <li><strong>Refill &amp; spend a token</strong>Add tokens earned since last call (capped), then try to spend one for this request.</li>
+        <li><strong>Allow or reject</strong>Token available &rarr; run the agent. Bucket empty &rarr; 429 with Retry-After telling them when to come back.</li>
+      </ol>
+      <div class="flow-diagram" aria-label="Two-gate flow: validate then rate limit">
+        <div class="flow-node"><span class="fn-badge">GATE 1</span>schema valid? no &rarr; 422</div>
+        <div class="flow-arrow">&darr;</div>
+        <div class="flow-node"><span class="fn-badge">GATE 2</span>token left? no &rarr; 429</div>
+        <div class="flow-arrow">&darr;</div>
+        <div class="flow-node"><span class="fn-badge">RUN</span>both pass &rarr; run agent</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-21" aria-label="Validation and Rate Limiting - Pseudocode">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 4 of 5</span>
+      <div class="section-label">The Pattern</div>
+      <h2>Pseudocode</h2>
+      <pre class="pseudocode" aria-label="Pseudocode for validation and a token bucket rate limiter"><span class="cmt"># GATE 1 — validate against the schema</span>
+<span class="kw">IF</span> not schema.valid(body):
+  <span class="kw">RETURN</span> 422, schema.errors
+
+<span class="cmt"># GATE 2 — token bucket per caller</span>
+<span class="var">key</span>    = caller_id(request)
+<span class="var">bucket</span> = buckets[key]  <span class="cmt"># {tokens, last_seen}</span>
+
+elapsed = now() - bucket.last_seen
+bucket.tokens = min(CAP, bucket.tokens + elapsed * REFILL)
+bucket.last_seen = now()
+
+<span class="kw">IF</span> bucket.tokens &lt; 1:
+  <span class="kw">RETURN</span> 429, header <span class="str">"Retry-After"</span>
+bucket.tokens = bucket.tokens - 1
+<span class="kw">PROCEED</span> to run agent
+</pre>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-22" aria-label="Validation and Rate Limiting - Misconceptions and Takeaway">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 4 of 5</span>
+      <div class="section-label">Wrong Mental Models</div>
+      <h2>Misconceptions</h2>
+      <div class="misconception">
+        <div class="icon" aria-hidden="true">&#10060;</div>
+        <div>
+          <div class="wrong">"A hard per-minute counter is the same as a token bucket."</div>
+          <div class="right">A counter punishes clients that legitimately front-load calls. A bucket allows a short burst up to capacity while still enforcing the long-term average rate &mdash; friendlier and just as safe.</div>
+        </div>
+      </div>
+      <div class="misconception">
+        <div class="icon" aria-hidden="true">&#10060;</div>
+        <div>
+          <div class="wrong">"One in-process bucket covers my whole fleet."</div>
+          <div class="right">An in-memory bucket is per-replica. Behind several instances, callers get N&times; the limit. For shared state across replicas, store buckets in Redis.</div>
+        </div>
+      </div>
+      <div class="takeaway">
+        <p><strong>Validate every request (422 on bad input) and rate-limit each caller with a token bucket (429 + Retry-After).</strong></p>
+        <p>Both gates run before the agent, so bad or excessive traffic never touches your inference capacity.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ CLUSTER 5: DOCKER DEPLOYMENT (23-27) ============ -->
+
+  <section class="mobile-card" id="card-23" aria-label="Docker Deployment - Big Idea">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 5 of 5</span>
+      <div class="section-label">The Big Idea</div>
+      <h2>Package once, run identically everywhere</h2>
+      <p>"Works on my machine" fails the moment someone else clones the repo. <strong>Docker</strong> packages your service &mdash; code, dependencies, runtime, exact versions &mdash; into an image that runs the same on your laptop, a CI runner, and a cloud server.</p>
+      <p>For a local model you run the inference engine as a <strong>sidecar</strong> container next to your API container. A compose file wires them on a private network so the model is never exposed to the internet, and the API only starts once the model container reports <strong>healthy</strong>. The whole stack becomes one <code>compose up</code> command.</p>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-24" aria-label="Docker Deployment - Analogy">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 5 of 5</span>
+      <div class="section-label">The Analogy</div>
+      <h2>The shipping container</h2>
+      <p><strong>BEFORE:</strong> Before standardized containers, dockworkers loaded ships piece by piece &mdash; barrels, crates, sacks &mdash; each needing custom handling. Move cargo to a different port or truck and everything had to be repacked.</p>
+      <p><strong>PAIN:</strong> Every transfer was slow, error-prone, and unrepeatable. What loaded fine in one port jammed in the next, because nothing about the packing was standard.</p>
+      <p><strong>MAPPING:</strong> The shipping container fixed this: seal your goods once, and every crane, ship, and truck handles the identical box. A Docker image is that box &mdash; sealed with your app and its exact dependencies, it lands and runs the same on any machine that speaks Docker.</p>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-25" aria-label="Docker Deployment - How It Works">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 5 of 5</span>
+      <div class="section-label">How It Works</div>
+      <h2>From image to running stack</h2>
+      <ol class="step-list">
+        <li><strong>Build a lean image</strong>A multi-stage build compiles deps in a fat builder, then copies only the artifacts into a slim runtime &mdash; smaller, safer.</li>
+        <li><strong>Add a health check</strong>The image declares how to test readiness, so the orchestrator knows when it's truly up.</li>
+        <li><strong>Compose the services</strong>One file defines the API + model sidecar, a private network, secrets, and a persistent model volume.</li>
+        <li><strong>Order the startup</strong>The API waits on the model's health check, so it never accepts traffic before the model can answer.</li>
+      </ol>
+      <div class="flow-diagram" aria-label="Docker compose stack: api depends on healthy model sidecar">
+        <div class="flow-node"><span class="fn-badge">svc</span>api :8000 (depends_on)</div>
+        <div class="flow-arrow">&darr; private network</div>
+        <div class="flow-node"><span class="fn-badge">svc</span>model sidecar (healthcheck)</div>
+        <div class="flow-arrow">&darr;</div>
+        <div class="flow-node"><span class="fn-badge">vol</span>model volume (persists)</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-26" aria-label="Docker Deployment - Decision Framework">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 5 of 5</span>
+      <div class="section-label">Decision Framework</div>
+      <h2>What goes where in the stack?</h2>
+      <pre class="pseudocode" aria-label="Decision framework: how to structure a Docker deployment"><span class="kw">IF</span> deps need build tools (compilers):
+  &rarr; use a multi-stage build
+     (fat builder, slim runtime)
+
+<span class="kw">IF</span> a service must be ready before
+   another starts:
+  &rarr; add a healthcheck +
+     depends_on: service_healthy
+
+<span class="kw">IF</span> the model must not be public:
+  &rarr; put it on a private network,
+     don't publish its port
+
+<span class="kw">IF</span> data must survive a restart
+   (models, job state):
+  &rarr; store it in a named volume
+
+<span class="cmt"># secrets = env vars, never baked in</span>
+</pre>
+      <p style="font-size: 14px; color: var(--text-muted);">The same compose file that runs locally deploys to any host with Docker &mdash; only TLS, secrets, and the model's listen address change.</p>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-27" aria-label="Docker Deployment - Misconceptions and Takeaway">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 5 of 5</span>
+      <div class="section-label">Wrong Mental Models</div>
+      <h2>Misconceptions</h2>
+      <div class="misconception">
+        <div class="icon" aria-hidden="true">&#10060;</div>
+        <div>
+          <div class="wrong">"depends_on waits until the other service is ready."</div>
+          <div class="right">By default it only waits for the container to <em>start</em>, not to be usable. You need <code>condition: service_healthy</code> plus a real health check for the API to wait until the model can actually answer.</div>
+        </div>
+      </div>
+      <div class="misconception">
+        <div class="icon" aria-hidden="true">&#10060;</div>
+        <div>
+          <div class="wrong">"Bake the API key into the image."</div>
+          <div class="right">Anything in the image is shippable and leakable. Inject secrets as environment variables at run time, and keep the model on a private network so it's never internet-facing.</div>
+        </div>
+      </div>
+      <div class="takeaway">
+        <p><strong>Docker seals your app + deps into one image; compose wires the API to a model sidecar on a private network with ordered, health-gated startup.</strong></p>
+        <p>Multi-stage builds keep it lean; named volumes persist data; secrets stay in env vars.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- CARD 28: QUICK QUIZ -->
+  <section class="mobile-card" id="card-28" aria-label="Quick Quiz">
+    <div class="card-inner">
+      <div class="section-label">Quick Quiz</div>
+      <h2>Test the core insight</h2>
+      <p style="font-size: 14px; color: var(--text-muted);">One question per concept. Tap to reveal the answer.</p>
+
+      <div class="quiz-card" role="button" tabindex="0" aria-expanded="false" aria-label="Quiz question 1">
+        <div class="question">Why make the agent's HTTP endpoints stateless?</div>
+        <div class="reveal-hint">Tap to reveal &darr;</div>
+        <div class="answer"><strong>So any replica can serve any request.</strong> The server holds no session memory; the caller threads context with a session ID. That makes horizontal scaling trivial and lets many callers reach the agent at once without sticky-session bugs.</div>
+      </div>
+
+      <div class="quiz-card" role="button" tabindex="0" aria-expanded="false" aria-label="Quiz question 2">
+        <div class="question">Your 45-second agent shows a blank spinner. Which pattern fixes the wait &mdash; and why not WebSockets?</div>
+        <div class="reveal-hint">Tap to reveal &darr;</div>
+        <div class="answer"><strong>SSE streaming.</strong> The server pushes one event per loop step over a single open connection, so the first token appears in under a second. WebSockets are overkill for one-way server&rarr;client progress: SSE needs no upgrade handshake and passes through plain HTTP proxies.</div>
+      </div>
+
+      <div class="quiz-card" role="button" tabindex="0" aria-expanded="false" aria-label="Quiz question 3">
+        <div class="question">A task runs for 10 minutes &mdash; longer than any connection holds. What's the pattern?</div>
+        <div class="reveal-hint">Tap to reveal &darr;</div>
+        <div class="answer"><strong>An async job queue.</strong> Return 202 Accepted with a job ID instantly, run the work in a background worker, and let the client poll <code>GET /jobs/{id}</code> until <code>complete</code>. This removes the proxy-timeout ceiling entirely.</div>
+      </div>
+
+      <div class="quiz-card" role="button" tabindex="0" aria-expanded="false" aria-label="Quiz question 4">
+        <div class="question">Why prefer a token bucket over a hard per-minute counter for rate limiting?</div>
+        <div class="reveal-hint">Tap to reveal &darr;</div>
+        <div class="answer"><strong>It allows short bursts while still capping the average rate.</strong> Each key gets a bucket that refills steadily; a caller can spend several tokens at once (a burst up to capacity) then is throttled to the refill rate. Over-limit requests get 429 with a Retry-After header.</div>
+      </div>
+
+      <div class="quiz-card" role="button" tabindex="0" aria-expanded="false" aria-label="Quiz question 5">
+        <div class="question">In compose, how do you make the API wait until the model can actually answer?</div>
+        <div class="reveal-hint">Tap to reveal &darr;</div>
+        <div class="answer"><strong>Give the model a health check and use <code>depends_on: condition: service_healthy</code>.</strong> Plain <code>depends_on</code> only waits for the container to start, not to be usable. The health check plus that condition holds the API back until the model reports ready.</div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- CARD 29: DESKTOP LINK -->
+  <section class="mobile-card center" id="card-29" aria-label="Continue to desktop">
+    <div class="card-inner">
+      <div class="section-label">Ready to build?</div>
+      <h2>Open the full module on desktop</h2>
+      <p>The desktop version has you build the real FastAPI (and Express) service &mdash; SSE streaming with a live client, an async job queue, a token-bucket limiter, and a multi-stage Dockerfile with an Ollama sidecar &mdash; then deploy the same image to a VPS, in Python and Node.</p>
+      <a class="desktop-link-btn" href="../M21-api-design-deployment.html" aria-label="Open the full M21 module on desktop">
+        Open M21 on Desktop &rarr;
+        <span class="sub">HTTP service &middot; SSE &middot; job queue &middot; rate limiting &middot; Docker &middot; ~80 min</span>
+      </a>
+
+      <div class="module-nav-row">
+        <a class="module-nav-btn" href="M20-monitoring-mobile.html" aria-label="Previous mobile module: M20 Monitoring">
+          <div>
+            <span class="lbl">&larr; Previous</span>
+            <span>M20: Monitoring</span>
+          </div>
+        </a>
+        <a class="module-nav-btn" href="M21B-cloud-deployment-mobile.html" aria-label="Next mobile module: M21B Cloud Deployment">
+          <div>
+            <span class="lbl">Next &rarr;</span>
+            <span>M21B: Cloud Deploy</span>
+          </div>
+        </a>
+      </div>
+
+      <div class="module-nav-row">
+        <a class="module-nav-btn" href="index.html" aria-label="Open the Open Source mobile index" style="flex:1;">
+          <div>
+            <span class="lbl">All Mobile &rarr;</span>
+            <span>OS Mobile Index</span>
+          </div>
+        </a>
+      </div>
+
+      <p style="text-align:center; font-size: 13px; color: var(--text-muted); margin-top: 1.25rem;">Module 19 of 20 &middot; Open Source Track &middot; Production &amp; Deployment</p>
+    </div>
+  </section>
+
+</main>
+
+<div class="progress-bar" role="progressbar" aria-label="Card 1 of 29" aria-valuemin="1" aria-valuemax="29" aria-valuenow="1">
+  <span class="count" id="progressCount">1 / 29</span>
+  <div class="track"><div class="fill" id="progressFill"></div></div>
+  <span class="count" style="color: var(--track-color);">M21</span>
+</div>
+
+<script>
+(function(){
+  const quizCards = document.querySelectorAll('.quiz-card');
+  quizCards.forEach(card => {
+    const toggle = () => {
+      const open = card.classList.toggle('revealed');
+      card.setAttribute('aria-expanded', open ? 'true' : 'false');
+    };
+    card.addEventListener('click', toggle);
+    card.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
+    });
+  });
+
+  const fab = document.getElementById('menuFab');
+  const overlay = document.getElementById('menuOverlay');
+  const closeBtn = document.getElementById('menuClose');
+  const openMenu = () => { overlay.classList.add('open'); overlay.setAttribute('aria-hidden', 'false'); fab.setAttribute('aria-expanded', 'true'); };
+  const closeMenu = () => { overlay.classList.remove('open'); overlay.setAttribute('aria-hidden', 'true'); fab.setAttribute('aria-expanded', 'false'); };
+  fab.addEventListener('click', openMenu);
+  closeBtn.addEventListener('click', closeMenu);
+  overlay.querySelectorAll('a').forEach(a => a.addEventListener('click', closeMenu));
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && overlay.classList.contains('open')) closeMenu(); });
+
+  const cards = document.querySelectorAll('.mobile-card');
+  const total = cards.length;
+  const fill = document.getElementById('progressFill');
+  const count = document.getElementById('progressCount');
+  const progressEl = document.querySelector('.progress-bar');
+  const update = (idx) => {
+    const n = idx + 1;
+    fill.style.width = ((n / total) * 100) + '%';
+    count.textContent = n + ' / ' + total;
+    progressEl.setAttribute('aria-valuenow', String(n));
+    progressEl.setAttribute('aria-label', 'Card ' + n + ' of ' + total);
+  };
+  if ('IntersectionObserver' in window) {
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting && entry.intersectionRatio > 0.55) {
+          const idx = Array.prototype.indexOf.call(cards, entry.target);
+          if (idx >= 0) update(idx);
+        }
+      });
+    }, { threshold: [0.55, 0.75], root: document.getElementById('deck') });
+    cards.forEach(c => io.observe(c));
+  }
+})();
+</script>
+
+</body>
+</html>

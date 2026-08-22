@@ -1,0 +1,812 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0A1628">
+  <title>M13 Mobile: Planning &amp; Task Decomposition | Open Source Agent Course</title>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;700;800&family=Source+Sans+3:wght@400;600&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg-primary: #0A1628; --bg-secondary: #111D33; --bg-card: #162033; --bg-surface: #1A2740;
+      --text-primary: #E8ECF1; --text-secondary: #B8C2D1; --text-muted: #7A8699;
+      --accent-primary: #D4A843; --accent-hover: #E5BC5A;
+      --success: #10B981; --warning: #F59E0B; --error: #F43F5E; --info: #F97316;
+      --track-color: #F97316; --code-bg: #0D1117; --code-border: #21262D;
+      --mobile-padding: 1rem; --mobile-font-body: 16px; --mobile-font-heading: 22px;
+    }
+    ::selection { background: rgba(249, 115, 22, 0.35); color: var(--text-primary); }
+    html { scroll-behavior: smooth; }
+    body { background: var(--bg-primary); color: var(--text-primary); font-family: 'Source Sans 3', sans-serif; font-size: var(--mobile-font-body); line-height: 1.6; min-height: 100vh; -webkit-font-smoothing: antialiased; overflow-x: hidden; }
+    .deck { height: 100vh; overflow-y: auto; scroll-snap-type: y mandatory; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+    .deck::-webkit-scrollbar { display: none; }
+    .mobile-card { min-height: 100vh; width: 100%; padding: 4rem var(--mobile-padding) 5rem; scroll-snap-align: start; scroll-snap-stop: always; display: flex; flex-direction: column; justify-content: flex-start; position: relative; }
+    .mobile-card.center { justify-content: center; }
+    .mobile-card .card-inner { background: rgba(255, 255, 255, 0.03); border: 1px solid rgba(255, 255, 255, 0.06); border-radius: 16px; padding: 1.25rem; width: 100%; position: relative; }
+    h1, h2, h3 { font-family: 'Bricolage Grotesque', sans-serif; line-height: 1.25; color: var(--text-primary); }
+    h1 { font-size: 2rem; font-weight: 800; margin-bottom: 0.5rem; }
+    h2 { font-size: var(--mobile-font-heading); font-weight: 700; margin-bottom: 1rem; }
+    h3 { font-size: 18px; font-weight: 600; margin: 1rem 0 0.5rem; }
+    p { margin-bottom: 0.85rem; color: var(--text-secondary); }
+    p strong { color: var(--text-primary); font-weight: 600; }
+    code { font-family: 'JetBrains Mono', monospace; font-size: 0.92em; color: #FBC99A; background: rgba(249, 115, 22, 0.10); padding: 0.05rem 0.3rem; border-radius: 4px; }
+    .title-meta { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.85rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; color: var(--track-color); margin-bottom: 0.75rem; }
+    .title-card .module-name { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 2.4rem; line-height: 1.1; color: var(--text-primary); margin-bottom: 1rem; }
+    .title-card .track-row { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 1.5rem; }
+    .pill { display: inline-flex; align-items: center; gap: 0.4rem; padding: 0.35rem 0.75rem; border-radius: 999px; font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.78rem; font-weight: 600; }
+    .pill-track { background: rgba(249, 115, 22, 0.15); border: 1px solid var(--track-color); color: var(--track-color); }
+    .pill-time { background: rgba(212, 168, 67, 0.12); border: 1px solid var(--accent-primary); color: var(--accent-primary); }
+    .pill-pos { background: rgba(255, 255, 255, 0.05); border: 1px solid rgba(255, 255, 255, 0.1); color: var(--text-secondary); }
+    .swipe-hint { margin-top: 2rem; font-size: 0.85rem; color: var(--text-muted); display: flex; align-items: center; gap: 0.4rem; }
+    .swipe-hint .arrow { animation: bounce 1.6s ease-in-out infinite; display: inline-block; }
+    @keyframes bounce { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(4px); } }
+    .section-label { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.72rem; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase; color: var(--track-color); margin-bottom: 0.5rem; }
+    .concept-chip { position: absolute; top: 0.85rem; right: 0.85rem; font-family: 'JetBrains Mono', monospace; font-size: 0.66rem; letter-spacing: 0.05em; color: var(--text-muted); background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.08); padding: 0.25rem 0.5rem; border-radius: 999px; text-transform: uppercase; }
+    .step-list { list-style: none; counter-reset: step; margin: 0.5rem 0; }
+    .step-list li { counter-increment: step; position: relative; padding: 0.75rem 0.75rem 0.75rem 3rem; margin-bottom: 0.6rem; background: rgba(249, 115, 22, 0.06); border-radius: 10px; border-left: 3px solid var(--track-color); color: var(--text-secondary); font-size: 15px; line-height: 1.5; }
+    .step-list li::before { content: counter(step); position: absolute; left: 0.75rem; top: 50%; transform: translateY(-50%); width: 28px; height: 28px; border-radius: 50%; background: var(--track-color); color: #0A1628; display: flex; align-items: center; justify-content: center; font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.85rem; font-weight: 700; }
+    .step-list li strong { color: var(--text-primary); display: block; margin-bottom: 0.15rem; font-family: 'Bricolage Grotesque', sans-serif; }
+    .pseudocode { background: rgba(249, 115, 22, 0.08); border-left: 3px solid var(--track-color); border-radius: 0 8px 8px 0; padding: 1rem; font-family: 'JetBrains Mono', monospace; font-size: 13.5px; line-height: 1.65; overflow-x: auto; -webkit-overflow-scrolling: touch; color: var(--text-primary); white-space: pre; margin: 0.75rem 0; }
+    .pseudocode .kw { color: #C792EA; font-weight: 600; }
+    .pseudocode .str { color: #A5D6A7; }
+    .pseudocode .cmt { color: var(--text-muted); font-style: italic; }
+    .pseudocode .var { color: #82AAFF; }
+    .misconception { display: grid; grid-template-columns: auto 1fr; gap: 0.5rem 0.75rem; align-items: start; padding: 0.75rem 0; border-bottom: 1px solid rgba(255, 255, 255, 0.06); }
+    .misconception:last-child { border-bottom: none; }
+    .misconception .icon { font-size: 1.1rem; line-height: 1.4; }
+    .misconception .wrong { color: #F87189; font-weight: 600; }
+    .misconception .right { color: var(--text-primary); margin-top: 0.2rem; font-size: 15px; }
+    .takeaway { background: rgba(212, 168, 67, 0.08); border: 1px solid rgba(212, 168, 67, 0.3); border-radius: 12px; padding: 1rem 1.1rem; margin: 0.75rem 0 0; }
+    .takeaway::before { content: "Key Takeaway"; display: block; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 0.85rem; letter-spacing: 0.05em; text-transform: uppercase; color: var(--accent-primary); margin-bottom: 0.5rem; }
+    .takeaway p { color: var(--text-primary); margin-bottom: 0.5rem; }
+    .takeaway p:last-child { margin-bottom: 0; }
+    .quiz-card { background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 12px; padding: 1rem 1.1rem; margin-bottom: 0.75rem; cursor: pointer; min-height: 44px; transition: background 0.2s ease, border-color 0.2s ease; -webkit-tap-highlight-color: transparent; }
+    .quiz-card:hover, .quiz-card:focus { background: rgba(255, 255, 255, 0.06); border-color: var(--track-color); outline: none; }
+    .quiz-card .question { display: flex; gap: 0.5rem; align-items: flex-start; font-weight: 600; color: var(--text-primary); }
+    .quiz-card .question::before { content: "Q"; color: var(--track-color); font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; flex-shrink: 0; width: 22px; }
+    .quiz-card .answer { max-height: 0; overflow: hidden; opacity: 0; transition: max-height 0.3s ease, opacity 0.3s ease, margin-top 0.3s ease, padding-top 0.3s ease; color: var(--text-secondary); font-size: 15px; line-height: 1.55; border-top: 1px solid transparent; }
+    .quiz-card.revealed .answer { max-height: 600px; opacity: 1; margin-top: 0.75rem; padding-top: 0.75rem; border-top-color: rgba(255, 255, 255, 0.08); }
+    .quiz-card .reveal-hint { font-size: 0.78rem; color: var(--text-muted); margin-top: 0.4rem; font-style: italic; }
+    .quiz-card.revealed .reveal-hint { display: none; }
+    .desktop-link-btn { display: block; width: 100%; padding: 1rem 1.25rem; background: linear-gradient(135deg, rgba(249, 115, 22, 0.18), rgba(212, 168, 67, 0.12)); border: 1px solid var(--track-color); border-radius: 14px; color: var(--text-primary); text-decoration: none; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; text-align: center; transition: transform 0.15s ease, box-shadow 0.15s ease; min-height: 56px; }
+    .desktop-link-btn:active { transform: scale(0.98); }
+    .desktop-link-btn .sub { display: block; font-family: 'Source Sans 3', sans-serif; font-weight: 400; font-size: 0.85rem; color: var(--text-secondary); margin-top: 0.2rem; }
+    .module-nav-row { display: flex; justify-content: space-between; gap: 0.5rem; margin-top: 1rem; }
+    .module-nav-btn { flex: 1; padding: 0.85rem 0.75rem; background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 12px; color: var(--text-primary); text-decoration: none; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 600; font-size: 0.85rem; text-align: center; min-height: 44px; display: flex; align-items: center; justify-content: center; gap: 0.3rem; }
+    .module-nav-btn:active { background: rgba(255, 255, 255, 0.08); }
+    .module-nav-btn .lbl { font-size: 0.7rem; color: var(--text-muted); display: block; font-weight: 400; letter-spacing: 0.05em; text-transform: uppercase; }
+    .progress-bar { position: fixed; bottom: 0; left: 0; right: 0; height: 36px; background: rgba(10, 22, 40, 0.92); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border-top: 1px solid rgba(255, 255, 255, 0.08); display: flex; align-items: center; padding: 0 1rem; gap: 0.5rem; font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.72rem; color: var(--text-muted); z-index: 50; }
+    .progress-bar .track { flex: 1; height: 4px; background: rgba(255, 255, 255, 0.08); border-radius: 2px; overflow: hidden; }
+    .progress-bar .track .fill { height: 100%; width: 3.44%; background: linear-gradient(90deg, var(--track-color), var(--accent-primary)); border-radius: 2px; transition: width 0.25s ease; }
+    .progress-bar .count { letter-spacing: 0.05em; color: var(--text-secondary); white-space: nowrap; }
+    .menu-fab { position: fixed; top: 0.85rem; right: 0.85rem; width: 44px; height: 44px; border-radius: 50%; background: rgba(22, 32, 51, 0.92); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); border: 1px solid rgba(255, 255, 255, 0.12); color: var(--text-primary); font-size: 1.25rem; cursor: pointer; z-index: 60; display: flex; align-items: center; justify-content: center; -webkit-tap-highlight-color: transparent; }
+    .menu-fab:active { transform: scale(0.95); }
+    .menu-overlay { position: fixed; inset: 0; background: rgba(10, 22, 40, 0.94); backdrop-filter: blur(12px); -webkit-backdrop-filter: blur(12px); z-index: 70; display: none; flex-direction: column; padding: 4rem 1.25rem 2rem; overflow-y: auto; }
+    .menu-overlay.open { display: flex; }
+    .menu-overlay a { display: block; padding: 0.75rem 1rem; margin-bottom: 0.4rem; background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 10px; color: var(--text-primary); text-decoration: none; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 600; min-height: 44px; font-size: 14px; }
+    .menu-overlay a:active { background: rgba(249, 115, 22, 0.15); border-color: var(--track-color); }
+    .menu-overlay a.cluster-child { margin-left: 1rem; padding: 0.6rem 0.85rem; min-height: 40px; background: rgba(255, 255, 255, 0.02); font-size: 13px; }
+    .menu-overlay .cluster-header { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 0.78rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--track-color); margin: 1rem 0 0.4rem; padding: 0 0.25rem; }
+    .menu-overlay .menu-num { display: inline-block; font-family: 'JetBrains Mono', monospace; font-size: 0.74rem; color: var(--track-color); margin-right: 0.5rem; width: 1.6rem; }
+    .menu-close { position: absolute; top: 0.85rem; right: 0.85rem; width: 44px; height: 44px; border-radius: 50%; background: rgba(244, 63, 94, 0.15); border: 1px solid var(--error); color: var(--text-primary); font-size: 1.5rem; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+    .index-list { list-style: none; padding: 0; margin: 0.5rem 0 0; }
+    .index-list li { display: block; }
+    .index-list a { display: flex; align-items: baseline; gap: 0.6rem; padding: 0.85rem 1rem; margin-bottom: 0.5rem; background: rgba(249, 115, 22, 0.05); border: 1px solid rgba(249, 115, 22, 0.18); border-radius: 10px; color: var(--text-primary); text-decoration: none; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 600; font-size: 15px; min-height: 44px; -webkit-tap-highlight-color: transparent; }
+    .index-list a:active { background: rgba(249, 115, 22, 0.12); }
+    .index-list .idx-num { font-family: 'JetBrains Mono', monospace; color: var(--track-color); font-weight: 700; flex-shrink: 0; width: 1.5rem; }
+    .index-list .idx-sub { display: block; font-family: 'Source Sans 3', sans-serif; font-weight: 400; font-size: 13px; color: var(--text-muted); margin-top: 0.1rem; }
+    .mini-diagram { background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 10px; padding: 0.85rem; margin: 0.85rem 0 0; max-height: 300px; overflow: hidden; }
+    .mini-diagram .dg-title { font-family: 'JetBrains Mono', monospace; font-size: 0.62rem; letter-spacing: 0.05em; text-transform: uppercase; color: var(--text-muted); margin-bottom: 0.5rem; }
+    .dg-node { font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; padding: 0.35rem 0.55rem; border-radius: 6px; border: 1px solid var(--code-border); background: var(--bg-card); color: var(--text-secondary); text-align: center; margin: 0 auto; }
+    .dg-node.root { border-color: var(--accent-primary); color: var(--accent-primary); background: rgba(212,168,67,0.1); }
+    .dg-node.t1 { border-color: var(--track-color); color: var(--track-color); background: rgba(249,115,22,0.08); }
+    .dg-node.par { border-color: var(--info); color: #FBC99A; }
+    .dg-node.sync { border-color: var(--warning); color: var(--warning); background: rgba(245,158,11,0.1); }
+    .dg-node.final { border-color: var(--success); color: var(--success); background: rgba(16,185,129,0.1); }
+    .dg-row { display: flex; gap: 0.4rem; justify-content: center; margin: 0.3rem 0; flex-wrap: wrap; }
+    .dg-conn { text-align: center; color: var(--text-muted); font-size: 0.8rem; line-height: 1; margin: 0.15rem 0; }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; } .swipe-hint .arrow { animation: none; } }
+    :focus-visible { outline: 2px solid var(--accent-primary); outline-offset: 2px; border-radius: 6px; }
+    @media (min-width: 600px) { .mobile-card { padding-left: 2rem; padding-right: 2rem; } .mobile-card .card-inner { max-width: 560px; margin: 0 auto; } h1 { font-size: 2.5rem; } }
+  </style>
+</head>
+<body>
+
+<button class="menu-fab" id="menuFab" aria-label="Open section menu" aria-expanded="false" aria-controls="menuOverlay">&#9776;</button>
+
+<nav class="menu-overlay" id="menuOverlay" aria-label="Section menu" aria-hidden="true">
+  <button class="menu-close" id="menuClose" aria-label="Close menu">&times;</button>
+  <h2 style="margin-bottom: 0.75rem; color: var(--text-primary);">Jump to Card</h2>
+  <a href="#card-1"><span class="menu-num">01</span>Title</a>
+  <a href="#card-2"><span class="menu-num">02</span>Concept Index</a>
+
+  <div class="cluster-header">Cluster 1 &middot; Why Planning</div>
+  <a class="cluster-child" href="#card-3"><span class="menu-num">03</span>Big Idea</a>
+  <a class="cluster-child" href="#card-4"><span class="menu-num">04</span>Analogy</a>
+  <a class="cluster-child" href="#card-5"><span class="menu-num">05</span>How It Works</a>
+  <a class="cluster-child" href="#card-6"><span class="menu-num">06</span>Pseudocode</a>
+  <a class="cluster-child" href="#card-7"><span class="menu-num">07</span>Misconceptions + Takeaway</a>
+
+  <div class="cluster-header">Cluster 2 &middot; Intent Classification</div>
+  <a class="cluster-child" href="#card-8"><span class="menu-num">08</span>Big Idea</a>
+  <a class="cluster-child" href="#card-9"><span class="menu-num">09</span>Analogy</a>
+  <a class="cluster-child" href="#card-10"><span class="menu-num">10</span>How It Works</a>
+  <a class="cluster-child" href="#card-11"><span class="menu-num">11</span>Decision Framework</a>
+  <a class="cluster-child" href="#card-12"><span class="menu-num">12</span>Misconceptions + Takeaway</a>
+
+  <div class="cluster-header">Cluster 3 &middot; Task Decomposition</div>
+  <a class="cluster-child" href="#card-13"><span class="menu-num">13</span>Big Idea</a>
+  <a class="cluster-child" href="#card-14"><span class="menu-num">14</span>Analogy</a>
+  <a class="cluster-child" href="#card-15"><span class="menu-num">15</span>How It Works</a>
+  <a class="cluster-child" href="#card-16"><span class="menu-num">16</span>Pseudocode</a>
+  <a class="cluster-child" href="#card-17"><span class="menu-num">17</span>Misconceptions + Takeaway</a>
+
+  <div class="cluster-header">Cluster 4 &middot; DAG Execution</div>
+  <a class="cluster-child" href="#card-18"><span class="menu-num">18</span>Big Idea</a>
+  <a class="cluster-child" href="#card-19"><span class="menu-num">19</span>Analogy</a>
+  <a class="cluster-child" href="#card-20"><span class="menu-num">20</span>How It Works</a>
+  <a class="cluster-child" href="#card-21"><span class="menu-num">21</span>Pseudocode</a>
+  <a class="cluster-child" href="#card-22"><span class="menu-num">22</span>Misconceptions + Takeaway</a>
+
+  <div class="cluster-header">Cluster 5 &middot; Dynamic Tool Discovery</div>
+  <a class="cluster-child" href="#card-23"><span class="menu-num">23</span>Big Idea</a>
+  <a class="cluster-child" href="#card-24"><span class="menu-num">24</span>Analogy</a>
+  <a class="cluster-child" href="#card-25"><span class="menu-num">25</span>How It Works</a>
+  <a class="cluster-child" href="#card-26"><span class="menu-num">26</span>Decision Framework</a>
+  <a class="cluster-child" href="#card-27"><span class="menu-num">27</span>Misconceptions + Takeaway</a>
+
+  <div class="cluster-header">Wrap-Up</div>
+  <a href="#card-28"><span class="menu-num">28</span>Quick Quiz</a>
+  <a href="#card-29"><span class="menu-num">29</span>Continue on Desktop</a>
+</nav>
+
+<main class="deck" id="deck" role="main">
+
+  <!-- CARD 1: TITLE -->
+  <section class="mobile-card center title-card" id="card-1" aria-label="Title card">
+    <div>
+      <div class="title-meta">Module 9 of 12 &middot; Open Source Track</div>
+      <div class="module-name">Planning &amp; Task Decomposition</div>
+      <p style="color: var(--text-secondary); font-size: 1.05rem; margin-bottom: 1.25rem;">Teach your agent to think before it acts. Five concepts &mdash; why complex tasks need a plan, routing requests before you plan, breaking goals into sub-tasks, running them as a dependency graph, and picking the right tools per step.</p>
+      <div class="track-row">
+        <span class="pill pill-track"><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--track-color);"></span>Track 4: Agent Architectures</span>
+        <span class="pill pill-time">&#9201; ~16 min read</span>
+        <span class="pill pill-pos">9 / 12</span>
+      </div>
+      <div class="swipe-hint" aria-hidden="true"><span class="arrow">&darr;</span> Scroll to begin &middot; 29 cards &middot; 5 concepts</div>
+    </div>
+  </section>
+
+  <!-- CARD 2: CONCEPT INDEX -->
+  <section class="mobile-card" id="card-2" aria-label="Concept Index">
+    <div class="card-inner">
+      <div class="section-label">What You'll Learn</div>
+      <h2>The 5 concepts of planning</h2>
+      <p style="font-size: 14px; color: var(--text-muted);">Tap any concept to jump to its 5-card cluster.</p>
+      <ul class="index-list">
+        <li><a href="#card-3"><span class="idx-num">1</span><span><span style="display:block;">Why Complex Tasks Need Planning</span><span class="idx-sub">Plan before you act</span></span></a></li>
+        <li><a href="#card-8"><span class="idx-num">2</span><span><span style="display:block;">Intent Classification</span><span class="idx-sub">Route before you plan</span></span></a></li>
+        <li><a href="#card-13"><span class="idx-num">3</span><span><span style="display:block;">Task Decomposition</span><span class="idx-sub">Break goals into sub-tasks</span></span></a></li>
+        <li><a href="#card-18"><span class="idx-num">4</span><span><span style="display:block;">DAG Execution</span><span class="idx-sub">Parallel &amp; sequential paths</span></span></a></li>
+        <li><a href="#card-23"><span class="idx-num">5</span><span><span style="display:block;">Dynamic Tool Discovery</span><span class="idx-sub">Right tools per sub-task</span></span></a></li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ============ CLUSTER 1: WHY PLANNING (3-7) ============ -->
+
+  <section class="mobile-card" id="card-3" aria-label="Why Planning - Big Idea">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 1 of 5</span>
+      <div class="section-label">The Big Idea</div>
+      <h2>Plan the whole goal before acting</h2>
+      <p>A raw ReAct loop is great for 2&ndash;3 tool calls, but on a big goal &mdash; "research 3 competitors, compare pricing, draft a report" &mdash; it makes locally sensible but globally messy choices, backtracks, and loses the thread.</p>
+      <p><strong>Planning</strong> is a layer on top of ReAct: the agent first analyzes the entire goal and produces a structured plan of sub-tasks with dependencies, <em>then</em> executes it. On benchmarks, ReAct-only completes complex tasks ~40% of the time; adding a planning step pushes that to ~80%.</p>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-4" aria-label="Why Planning - Analogy">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 1 of 5</span>
+      <div class="section-label">The Analogy</div>
+      <h2>Build IKEA without the instructions</h2>
+      <p><strong>BEFORE:</strong> Imagine assembling IKEA furniture without reading the manual &mdash; you open the box, see 47 pieces, and just start connecting things that look like they fit.</p>
+      <p><strong>PAIN:</strong> You attach a panel upside down, realize at step 15 you skipped a bracket at step 3, and end up with leftover screws. That's a ReAct-only agent: each move is locally reasonable, the whole build is a mess, because it never made a picture of the finished thing.</p>
+      <p><strong>MAPPING:</strong> Planning is reading the instructions first. The agent breaks the goal into ordered phases, marks what depends on what, then follows the plan tracking progress &mdash; turning "try things and hope" into "understand, plan, execute."</p>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-5" aria-label="Why Planning - How It Works">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 1 of 5</span>
+      <div class="section-label">How It Works</div>
+      <h2>Planning sits on top of ReAct</h2>
+      <ol class="step-list">
+        <li><strong>Analyze the goal</strong>Read the full request and decide it's complex enough to need a structured plan.</li>
+        <li><strong>Generate the plan</strong>One model call produces a list of sub-tasks, each with its dependencies &mdash; the "what to do".</li>
+        <li><strong>Execute per sub-task</strong>ReAct handles the "how" of each leaf task, one at a time or in parallel.</li>
+        <li><strong>Adapt if needed</strong>A plan is a hypothesis: if a sub-task fails or surprises you, re-plan rather than force the old plan.</li>
+      </ol>
+      <div class="mini-diagram" aria-hidden="true">
+        <div class="dg-title">Planning as a layer</div>
+        <div class="dg-row"><span class="dg-node root">Goal</span></div>
+        <div class="dg-conn">&darr;</div>
+        <div class="dg-row"><span class="dg-node t1">Plan: sub-tasks + deps</span></div>
+        <div class="dg-conn">&darr;</div>
+        <div class="dg-row"><span class="dg-node par">ReAct executes each</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-6" aria-label="Why Planning - Pseudocode">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 1 of 5</span>
+      <div class="section-label">The Pattern</div>
+      <h2>Pseudocode</h2>
+      <pre class="pseudocode" aria-label="Pseudocode for the plan-then-execute loop"><span class="kw">FUNCTION</span> run(goal):
+  <span class="kw">IF</span> is_simple(goal):
+    <span class="kw">RETURN</span> answer_directly(goal)
+
+  plan = model.make_plan(goal)   <span class="cmt"># sub-tasks + deps</span>
+
+  <span class="kw">FOR</span> task <span class="kw">IN</span> plan.ready_tasks():
+    result = react_execute(task)
+    plan.mark_done(task, result)
+    <span class="kw">IF</span> result.failed:
+      plan = re_plan(goal, plan)  <span class="cmt"># adapt</span>
+
+  <span class="kw">RETURN</span> synthesize(plan.results)
+</pre>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-7" aria-label="Why Planning - Misconceptions and Takeaway">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 1 of 5</span>
+      <div class="section-label">Wrong Mental Models</div>
+      <h2>Misconceptions</h2>
+      <div class="misconception">
+        <div class="icon" aria-hidden="true">&#10060;</div>
+        <div>
+          <div class="wrong">"Every request needs a plan."</div>
+          <div class="right">No. "What's the weather?" or a single tool call gets slower with planning overhead. Route simple requests straight through &mdash; that's the next concept.</div>
+        </div>
+      </div>
+      <div class="misconception">
+        <div class="icon" aria-hidden="true">&#10060;</div>
+        <div>
+          <div class="wrong">"The plan must be perfect before execution."</div>
+          <div class="right">Plans are hypotheses, not contracts. Rigid plan-following is as bad as no plan &mdash; plan upfront, then re-plan when a sub-task surprises you.</div>
+        </div>
+      </div>
+      <div class="takeaway">
+        <p><strong>Planning is a layer on top of ReAct: analyze the goal, build a sub-task plan, then execute it.</strong> It roughly doubles completion rates on complex tasks.</p>
+        <p>The plan says "what"; ReAct handles "how". Adapt the plan instead of clinging to it.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ CLUSTER 2: INTENT CLASSIFICATION (8-12) ============ -->
+
+  <section class="mobile-card" id="card-8" aria-label="Intent Classification - Big Idea">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 2 of 5</span>
+      <div class="section-label">The Big Idea</div>
+      <h2>Route before you plan</h2>
+      <p><strong>Intent classification</strong> is a lightweight first pass that decides <em>what kind</em> of request this is and <em>whether it even needs planning</em>. One model call returns an intent label, a complexity score, and the key entities.</p>
+      <p>Based on that, your code routes: a simple question goes straight to a direct answer, a single-step task goes to a ReAct loop, and a complex multi-step task triggers the full planning pipeline. It's a router, not a filter &mdash; nothing is blocked, everything just takes the cheapest correct path.</p>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-9" aria-label="Intent Classification - Analogy">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 2 of 5</span>
+      <div class="section-label">The Analogy</div>
+      <h2>The ER triage nurse</h2>
+      <p><strong>BEFORE:</strong> Imagine a hospital where every patient &mdash; paper cut or chest pain &mdash; gets the same full workup: blood tests, MRI, specialist consult.</p>
+      <p><strong>PAIN:</strong> The paper-cut patient wastes hours and thousands of dollars, while the chest-pain patient waits behind them. Without routing, "What's 2+2?" runs through decomposition, DAG creation, and tool discovery &mdash; burning tokens and adding seconds for a 200ms task.</p>
+      <p><strong>MAPPING:</strong> The classifier is the triage nurse: paper cut &rarr; band-aid station (direct answer), sprained ankle &rarr; minor procedure (single tool call), chest pain &rarr; full workup (planning pipeline). Each request gets the right level of care.</p>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-10" aria-label="Intent Classification - How It Works">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 2 of 5</span>
+      <div class="section-label">How It Works</div>
+      <h2>One call, three fields, one route</h2>
+      <ol class="step-list">
+        <li><strong>Classify intent</strong>Label the request: simple_question, single_tool, multi_step_task, or creative_generation.</li>
+        <li><strong>Score complexity</strong>Rate it low / medium / high, and extract the key entities from the text.</li>
+        <li><strong>Decide needs_planning</strong>Combine intent + complexity into a yes/no on whether to plan.</li>
+        <li><strong>Route the request</strong>Send it down the matching path &mdash; direct answer, ReAct, or full planning.</li>
+      </ol>
+      <div class="mini-diagram" aria-hidden="true">
+        <div class="dg-title">Classify &rarr; route</div>
+        <div class="dg-row"><span class="dg-node t1">user request</span></div>
+        <div class="dg-conn">&darr; classifier</div>
+        <div class="dg-row">
+          <span class="dg-node">direct</span>
+          <span class="dg-node">ReAct</span>
+          <span class="dg-node par">plan</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-11" aria-label="Intent Classification - Decision Framework">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 2 of 5</span>
+      <div class="section-label">Decision Framework</div>
+      <h2>Which path does this take?</h2>
+      <pre class="pseudocode" aria-label="Decision framework: routing by intent"><span class="kw">IF</span> intent = simple_question:
+  &rarr; answer directly (one call)
+
+<span class="kw">IF</span> intent = single_tool:
+  &rarr; run a short ReAct loop
+
+<span class="kw">IF</span> intent = multi_step_task
+   <span class="kw">OR</span> complexity = high:
+  &rarr; full planning pipeline
+
+<span class="kw">IF</span> parsing / intent is unclear:
+  &rarr; default needs_planning = TRUE
+</pre>
+      <p style="font-size: 14px; color: var(--text-muted);">Over-planning a simple task wastes a few hundred tokens; under-planning a complex one fails the whole task. So when in doubt, plan.</p>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-12" aria-label="Intent Classification - Misconceptions and Takeaway">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 2 of 5</span>
+      <div class="section-label">Wrong Mental Models</div>
+      <h2>Misconceptions</h2>
+      <div class="misconception">
+        <div class="icon" aria-hidden="true">&#10060;</div>
+        <div>
+          <div class="wrong">"Classification must be 100% accurate."</div>
+          <div class="right">It doesn't. A false positive (unnecessary planning) costs a few hundred tokens; a false negative (skipped planning) fails the task. Bias the fallback toward planning.</div>
+        </div>
+      </div>
+      <div class="misconception">
+        <div class="icon" aria-hidden="true">&#10060;</div>
+        <div>
+          <div class="wrong">"More intent categories = better routing."</div>
+          <div class="right">More categories raise misclassification risk. Start with 3&ndash;4 broad intents and split them later once you see which requests actually fail.</div>
+        </div>
+      </div>
+      <div class="takeaway">
+        <p><strong>Intent classification is a cheap router that decides whether to plan at all.</strong> It saves the planning tax on the 60&ndash;70% of requests that are simple.</p>
+        <p>Keep categories few, and default to planning when unsure &mdash; false negatives are the expensive ones.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ CLUSTER 3: TASK DECOMPOSITION (13-17) ============ -->
+
+  <section class="mobile-card" id="card-13" aria-label="Task Decomposition - Big Idea">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 3 of 5</span>
+      <div class="section-label">The Big Idea</div>
+      <h2>Break the goal into sub-tasks</h2>
+      <p><strong>Task decomposition</strong> uses the model to turn a vague goal into a hierarchy of concrete sub-tasks, each with explicit dependencies. Each leaf task should be small enough to finish in 1&ndash;2 tool calls.</p>
+      <p>Three strategies: <em>top-down</em> (split the goal into phases, then phases into actions), <em>bottom-up</em> (start from atomic actions and group them), and <em>iterative</em> (plan only the next step, useful when later steps depend on earlier results). Top-down is the common default.</p>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-14" aria-label="Task Decomposition - Analogy">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 3 of 5</span>
+      <div class="section-label">The Analogy</div>
+      <h2>The project manager who breaks it down</h2>
+      <p><strong>BEFORE:</strong> A manager gets "Launch the new website" and just starts &mdash; no breakdown, no timeline. They bounce between copy, DNS, and the homepage, never finishing anything.</p>
+      <p><strong>PAIN:</strong> An agent handed a raw complex goal has the same problem: it can't tell where to start, how to track progress, or when it's done. It makes headway on one aspect, then loses that context switching to another.</p>
+      <p><strong>MAPPING:</strong> A good manager splits "launch" into concrete tasks &mdash; finalize mockups, migrate content, configure DNS, load-test, go-live &mdash; each specific with clear inputs and outputs. Decomposition does the same: the model generates a tree where each leaf is a 1&ndash;2 tool-call action.</p>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-15" aria-label="Task Decomposition - How It Works">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 3 of 5</span>
+      <div class="section-label">How It Works</div>
+      <h2>Goal to task tree</h2>
+      <ol class="step-list">
+        <li><strong>Split into phases</strong>The model breaks the goal into 3&ndash;5 high-level phases.</li>
+        <li><strong>Expand each phase</strong>Decompose phases into specific leaf actions (one per competitor, etc.).</li>
+        <li><strong>Add dependencies</strong>Mark which tasks must finish before others can start.</li>
+        <li><strong>Assign tools</strong>Tag each leaf with the tools it will need (search, extract, compare).</li>
+      </ol>
+      <div class="mini-diagram" aria-hidden="true">
+        <div class="dg-title">Decomposed tree</div>
+        <div class="dg-row"><span class="dg-node t1">t1: find competitors</span></div>
+        <div class="dg-conn">&darr; deps: t1</div>
+        <div class="dg-row">
+          <span class="dg-node par">t2 Asana</span>
+          <span class="dg-node par">t3 Monday</span>
+          <span class="dg-node par">t4 ClickUp</span>
+        </div>
+        <div class="dg-conn">&darr; deps: t2,t3,t4</div>
+        <div class="dg-row"><span class="dg-node final">t5 compare &rarr; t6 report</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-16" aria-label="Task Decomposition - Pseudocode">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 3 of 5</span>
+      <div class="section-label">The Pattern</div>
+      <h2>Pseudocode</h2>
+      <pre class="pseudocode" aria-label="Pseudocode for producing a task tree"><span class="var">plan</span> = model.decompose(goal)
+
+<span class="cmt"># plan is a list of tasks, each:</span>
+<span class="cmt">#   id, description,</span>
+<span class="cmt">#   dependencies: [other ids],</span>
+<span class="cmt">#   tools: [tool names]</span>
+
+<span class="kw">FOR</span> task <span class="kw">IN</span> plan:
+  assert task.is_atomic()   <span class="cmt"># 1-2 tool calls</span>
+  assert task.deps_exist()  <span class="cmt"># no dangling ids</span>
+
+<span class="cmt"># aim for 5-10 leaf tasks total —</span>
+<span class="cmt"># too many = coordination overhead.</span>
+</pre>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-17" aria-label="Task Decomposition - Misconceptions and Takeaway">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 3 of 5</span>
+      <div class="section-label">Wrong Mental Models</div>
+      <h2>Misconceptions</h2>
+      <div class="misconception">
+        <div class="icon" aria-hidden="true">&#10060;</div>
+        <div>
+          <div class="wrong">"Finer decomposition is always better."</div>
+          <div class="right">No. 5&ndash;10 sub-tasks succeed ~85% of the time; 15+ ultra-fine ones drop to ~60% as coordination overhead dominates. Aim for 1&ndash;2 tool-call leaves.</div>
+        </div>
+      </div>
+      <div class="misconception">
+        <div class="icon" aria-hidden="true">&#10060;</div>
+        <div>
+          <div class="wrong">"Any breakdown covers the goal."</div>
+          <div class="right">Too-narrow tasks leave coverage gaps; too-broad ones overwhelm a single step. The leaves together must cover the entire original goal.</div>
+        </div>
+      </div>
+      <div class="takeaway">
+        <p><strong>Decomposition turns a goal into a hierarchy of atomic, dependency-linked sub-tasks.</strong> Right granularity is a 1&ndash;2 tool-call leaf.</p>
+        <p>Target 5&ndash;10 leaves that collectively cover the whole goal &mdash; not 15+ fragments.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ CLUSTER 4: DAG EXECUTION (18-22) ============ -->
+
+  <section class="mobile-card" id="card-18" aria-label="DAG Execution - Big Idea">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 4 of 5</span>
+      <div class="section-label">The Big Idea</div>
+      <h2>Run sub-tasks as a dependency graph</h2>
+      <p>Sub-tasks aren't all sequential &mdash; researching three competitors can happen at once, but the report can't start until all research is done. A <strong>DAG</strong> (Directed Acyclic Graph) captures exactly that: nodes are tasks, edges are dependencies (A&rarr;B means A must finish first).</p>
+      <p>The executor works in <em>waves</em>: start every task with no unmet dependencies in parallel; as each finishes, release the tasks it unblocked. "Acyclic" means no loops &mdash; a cycle (A needs B, B needs A) would deadlock, so you validate the graph before running it.</p>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-19" aria-label="DAG Execution - Analogy">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 4 of 5</span>
+      <div class="section-label">The Analogy</div>
+      <h2>Cooking a multi-dish dinner</h2>
+      <p><strong>BEFORE:</strong> Imagine cooking roast chicken, mashed potatoes, salad, and dessert strictly one step at a time &mdash; peel potatoes, then wait; chop salad, then wait; preheat oven, then wait. Total: 3 hours.</p>
+      <p><strong>PAIN:</strong> Sequential execution wastes time on independent work. If Asana and Monday.com each take 5 seconds, running them one after another costs 10s; running them together costs 5s. Across 8 sub-tasks, parallelism can cut wall-clock time 40&ndash;60%.</p>
+      <p><strong>MAPPING:</strong> A DAG is your cooking schedule: it says what can happen at once (chop while the oven preheats) and what must wait (can't frost a cake before it bakes). The executor starts everything unblocked and releases waiting tasks as dependencies clear.</p>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-20" aria-label="DAG Execution - How It Works">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 4 of 5</span>
+      <div class="section-label">How It Works</div>
+      <h2>Execution in waves</h2>
+      <ol class="step-list">
+        <li><strong>Find the roots</strong>Tasks with no dependencies start immediately, in parallel.</li>
+        <li><strong>Run a wave</strong>Dispatch all currently-ready tasks together.</li>
+        <li><strong>Release the unblocked</strong>As each task finishes, mark any task whose deps are now all satisfied as ready.</li>
+        <li><strong>Validate acyclic</strong>Before running, a topological check catches cycles; if found, ask the model to regenerate the plan.</li>
+      </ol>
+      <div class="mini-diagram" aria-hidden="true">
+        <div class="dg-title">Waves (t1 &rarr; t2,t3,t4 &rarr; t5 &rarr; t6)</div>
+        <div class="dg-row"><span class="dg-node t1">Wave 1: t1</span></div>
+        <div class="dg-conn">&darr;</div>
+        <div class="dg-row"><span class="dg-node par">Wave 2: t2 t3 t4 (parallel)</span></div>
+        <div class="dg-conn">&darr; wait for all</div>
+        <div class="dg-row"><span class="dg-node sync">Wave 3: t5</span></div>
+        <div class="dg-conn">&darr;</div>
+        <div class="dg-row"><span class="dg-node final">Wave 4: t6</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-21" aria-label="DAG Execution - Pseudocode">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 4 of 5</span>
+      <div class="section-label">The Pattern</div>
+      <h2>Pseudocode</h2>
+      <pre class="pseudocode" aria-label="Pseudocode for a wave-based DAG executor"><span class="kw">WHILE</span> not all_done(dag):
+  ready = [ t <span class="kw">FOR</span> t <span class="kw">IN</span> dag
+            <span class="kw">IF</span> deps_done(t)
+            <span class="kw">AND</span> not t.done ]
+
+  <span class="kw">IF</span> ready is empty:
+    raise <span class="str">"cycle or stuck"</span>
+
+  run_in_parallel(ready)   <span class="cmt"># one wave</span>
+  <span class="kw">FOR</span> t <span class="kw">IN</span> ready:
+    mark_done(t)
+
+<span class="cmt"># cap parallelism (~3-5) to respect</span>
+<span class="cmt"># API rate limits.</span>
+</pre>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-22" aria-label="DAG Execution - Misconceptions and Takeaway">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 4 of 5</span>
+      <div class="section-label">Wrong Mental Models</div>
+      <h2>Misconceptions</h2>
+      <div class="misconception">
+        <div class="icon" aria-hidden="true">&#10060;</div>
+        <div>
+          <div class="wrong">"More parallelism is always better."</div>
+          <div class="right">Each parallel task eats rate-limit capacity. 10 tasks against a 5/min limit isn't 10x &mdash; it bottlenecks. 3&ndash;5 parallel is the sweet spot for most tiers.</div>
+        </div>
+      </div>
+      <div class="misconception">
+        <div class="icon" aria-hidden="true">&#10060;</div>
+        <div>
+          <div class="wrong">"If one sub-task fails, the whole DAG fails."</div>
+          <div class="right">Not if you handle it. A good executor supports partial completion: if ClickUp research fails, still compare Asana and Monday and note the gap.</div>
+        </div>
+      </div>
+      <div class="takeaway">
+        <p><strong>A DAG runs independent sub-tasks in parallel waves while respecting dependencies.</strong> It saves ~35% wall-clock time and prevents out-of-order execution.</p>
+        <p>Validate the graph is acyclic, cap parallelism to your rate limit, and allow partial completion.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ CLUSTER 5: DYNAMIC TOOL DISCOVERY (23-27) ============ -->
+
+  <section class="mobile-card" id="card-23" aria-label="Dynamic Tool Discovery - Big Idea">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 5 of 5</span>
+      <div class="section-label">The Big Idea</div>
+      <h2>Give each sub-task only its tools</h2>
+      <p>When you hand the model 20+ tool definitions on every call, two things break: tool-selection accuracy drops (noticeable above 5&ndash;7 tools), and you waste context on descriptions the model won't use.</p>
+      <p><strong>Dynamic tool discovery</strong> picks a relevant subset at runtime &mdash; usually the 3&ndash;5 tools that match the current sub-task &mdash; and injects only those. Fewer, more relevant tools means faster, cheaper, and more accurate decisions.</p>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-24" aria-label="Dynamic Tool Discovery - Analogy">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 5 of 5</span>
+      <div class="section-label">The Analogy</div>
+      <h2>The contractor's tool truck</h2>
+      <p><strong>BEFORE:</strong> Imagine a contractor who hauls their entire tool truck &mdash; plumbing, electrical, carpentry, landscaping &mdash; into every job.</p>
+      <p><strong>PAIN:</strong> To find a wrench they sort through 200 tools; the clutter slows them and they sometimes grab the wrong one because too many look alike. Giving the model 20 tool defs (100&ndash;200 tokens each) is the same: 2,000&ndash;4,000 tokens of noise per call, and worse picks.</p>
+      <p><strong>MAPPING:</strong> Discovery is the contractor sizing up the job first &mdash; "this is plumbing, I need pipe wrench, cutter, Teflon tape" &mdash; and grabbing just those. The agent matches the sub-task to its inventory and injects only the 3&ndash;4 relevant tools.</p>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-25" aria-label="Dynamic Tool Discovery - How It Works">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 5 of 5</span>
+      <div class="section-label">How It Works</div>
+      <h2>Match sub-task to tools</h2>
+      <ol class="step-list">
+        <li><strong>Describe the sub-task</strong>Take the current leaf task's description as the query.</li>
+        <li><strong>Search the inventory</strong>Rank tools by relevance &mdash; embedding similarity, or a category map.</li>
+        <li><strong>Select the top few</strong>Keep the 3&ndash;5 best matches; drop the rest.</li>
+        <li><strong>Inject only those</strong>Put just the selected tool definitions into this sub-task's prompt.</li>
+      </ol>
+      <div class="mini-diagram" aria-hidden="true">
+        <div class="dg-title">12 tools &rarr; 3 injected</div>
+        <div class="dg-row"><span class="dg-node t1">"compare pricing"</span></div>
+        <div class="dg-conn">&darr; match</div>
+        <div class="dg-row">
+          <span class="dg-node final">search</span>
+          <span class="dg-node final">pricing</span>
+          <span class="dg-node final">compare</span>
+        </div>
+        <div class="dg-conn" style="color:var(--text-muted);">9 others dimmed / not sent</div>
+      </div>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-26" aria-label="Dynamic Tool Discovery - Decision Framework">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 5 of 5</span>
+      <div class="section-label">Decision Framework</div>
+      <h2>Embeddings or a category map?</h2>
+      <pre class="pseudocode" aria-label="Decision framework: tool discovery approach"><span class="kw">IF</span> tools &lt; 5-7 total:
+  &rarr; just send them all
+
+<span class="kw">IF</span> 5-15 tools, stable set:
+  &rarr; category map
+     (task type &rarr; tool subset)
+
+<span class="kw">IF</span> 15+ tools, evolving fast:
+  &rarr; embedding similarity search
+
+<span class="cmt"># selection accuracy beats</span>
+<span class="cmt"># availability: 4 right &gt; 20 noisy</span>
+</pre>
+      <p style="font-size: 14px; color: var(--text-muted);">Embedding search adds 50&ndash;100ms and a vector store; a category map is faster and easier to debug for smaller sets.</p>
+    </div>
+  </section>
+
+  <section class="mobile-card" id="card-27" aria-label="Dynamic Tool Discovery - Misconceptions and Takeaway">
+    <div class="card-inner">
+      <span class="concept-chip">Concept 5 of 5</span>
+      <div class="section-label">Wrong Mental Models</div>
+      <h2>Misconceptions</h2>
+      <div class="misconception">
+        <div class="icon" aria-hidden="true">&#10060;</div>
+        <div>
+          <div class="wrong">"Embeddings always beat a category map."</div>
+          <div class="right">Not below ~15 tools. A simple category map is faster, easier to debug, and just as accurate for small stable sets. Use embeddings when the inventory is large and changing.</div>
+        </div>
+      </div>
+      <div class="misconception">
+        <div class="icon" aria-hidden="true">&#10060;</div>
+        <div>
+          <div class="wrong">"Tool descriptions don't matter with discovery."</div>
+          <div class="right">They matter more. Matching relies on them &mdash; "does stuff with data" won't match anything. Describe inputs, outputs, and purpose clearly.</div>
+        </div>
+      </div>
+      <div class="takeaway">
+        <p><strong>Dynamic tool discovery injects only the few tools relevant to each sub-task.</strong> It cuts token cost ~80% and lifts selection accuracy from ~85% to ~95%.</p>
+        <p>Send all tools under ~7; category-map mid-size sets; embed only large, evolving inventories.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- CARD 28: QUICK QUIZ -->
+  <section class="mobile-card" id="card-28" aria-label="Quick Quiz">
+    <div class="card-inner">
+      <div class="section-label">Quick Quiz</div>
+      <h2>Test the core insight</h2>
+      <p style="font-size: 14px; color: var(--text-muted);">One question per concept. Tap to reveal the answer.</p>
+
+      <div class="quiz-card" role="button" tabindex="0" aria-expanded="false" aria-label="Quiz question 1">
+        <div class="question">Why add a planning layer instead of just running a ReAct loop?</div>
+        <div class="reveal-hint">Tap to reveal &darr;</div>
+        <div class="answer"><strong>It roughly doubles completion on complex tasks.</strong> ReAct alone makes locally-good but globally-messy choices on 5+ step goals (~40% success). Planning analyzes the whole goal into sub-tasks with dependencies first, pushing success to ~80% while cutting backtracking.</div>
+      </div>
+
+      <div class="quiz-card" role="button" tabindex="0" aria-expanded="false" aria-label="Quiz question 2">
+        <div class="question">Intent classification is unsure &mdash; which way should the fallback lean?</div>
+        <div class="reveal-hint">Tap to reveal &darr;</div>
+        <div class="answer"><strong>Default to <code>needs_planning: true</code>.</strong> Over-planning a simple task wastes a few hundred tokens (cheap), but under-planning a complex task fails the whole task (expensive). False positives are cheap, false negatives are not.</div>
+      </div>
+
+      <div class="quiz-card" role="button" tabindex="0" aria-expanded="false" aria-label="Quiz question 3">
+        <div class="question">How fine-grained should task decomposition be?</div>
+        <div class="reveal-hint">Tap to reveal &darr;</div>
+        <div class="answer"><strong>Leaf tasks of 1&ndash;2 tool calls, ~5&ndash;10 total.</strong> That range succeeds ~85% of the time; 15+ ultra-fine tasks drop to ~60% as coordination overhead dominates. The leaves must still cover the entire goal.</div>
+      </div>
+
+      <div class="quiz-card" role="button" tabindex="0" aria-expanded="false" aria-label="Quiz question 4">
+        <div class="question">Why must the task graph be acyclic, and how does the executor use it?</div>
+        <div class="reveal-hint">Tap to reveal &darr;</div>
+        <div class="answer"><strong>A cycle deadlocks &mdash; no task can ever start.</strong> The executor runs in waves: start all tasks with no unmet dependencies in parallel, then release the ones they unblock. Validate acyclicity (topological sort) before running, and cap parallelism to your rate limit.</div>
+      </div>
+
+      <div class="quiz-card" role="button" tabindex="0" aria-expanded="false" aria-label="Quiz question 5">
+        <div class="question">You have 25 tools. Why not just give the model all of them every call?</div>
+        <div class="reveal-hint">Tap to reveal &darr;</div>
+        <div class="answer"><strong>Accuracy drops and tokens are wasted.</strong> Above 5&ndash;7 tools, selection accuracy falls (plausible-but-wrong picks); 25 defs add ~4,000 tokens of noise per call. Dynamic discovery injects the 3&ndash;5 relevant tools instead &mdash; ~80% cheaper and more accurate.</div>
+      </div>
+
+    </div>
+  </section>
+
+  <!-- CARD 29: DESKTOP LINK -->
+  <section class="mobile-card center" id="card-29" aria-label="Continue to desktop">
+    <div class="card-inner">
+      <div class="section-label">Ready to build?</div>
+      <h2>Open the full module on desktop</h2>
+      <p>The desktop version has you build an intent classifier, a task decomposer that emits a dependency graph, and a wave-based DAG executor with dynamic tool discovery &mdash; wired together into a working planning agent against local Mistral/Ollama, in Python and Node.</p>
+      <a class="desktop-link-btn" href="../M13-planning-task-decomposition.html" aria-label="Open the full M13 module on desktop">
+        Open M13 on Desktop &rarr;
+        <span class="sub">Planning &middot; intent routing &middot; decomposition &middot; DAG &middot; tool discovery &middot; ~70 min</span>
+      </a>
+
+      <div class="module-nav-row">
+        <a class="module-nav-btn" href="M12-react-agent-loop-mobile.html" aria-label="Previous mobile module: M12 ReAct Agent Loop">
+          <div>
+            <span class="lbl">&larr; Previous</span>
+            <span>M12: ReAct Loop</span>
+          </div>
+        </a>
+        <a class="module-nav-btn" href="M14-multi-agent-systems-mobile.html" aria-label="Next mobile module: M14 Multi-Agent Systems">
+          <div>
+            <span class="lbl">Next &rarr;</span>
+            <span>M14: Multi-Agent</span>
+          </div>
+        </a>
+      </div>
+
+      <div class="module-nav-row">
+        <a class="module-nav-btn" href="index.html" aria-label="Open the Open Source mobile index" style="flex:1;">
+          <div>
+            <span class="lbl">All Mobile &rarr;</span>
+            <span>OS Mobile Index</span>
+          </div>
+        </a>
+      </div>
+
+      <p style="text-align:center; font-size: 13px; color: var(--text-muted); margin-top: 1.25rem;">Module 9 of 12 &middot; Open Source Track &middot; Agent Architectures</p>
+    </div>
+  </section>
+
+</main>
+
+<div class="progress-bar" role="progressbar" aria-label="Card 1 of 29" aria-valuemin="1" aria-valuemax="29" aria-valuenow="1">
+  <span class="count" id="progressCount">1 / 29</span>
+  <div class="track"><div class="fill" id="progressFill"></div></div>
+  <span class="count" style="color: var(--track-color);">M13</span>
+</div>
+
+<script>
+(function(){
+  const quizCards = document.querySelectorAll('.quiz-card');
+  quizCards.forEach(card => {
+    const toggle = () => {
+      const open = card.classList.toggle('revealed');
+      card.setAttribute('aria-expanded', open ? 'true' : 'false');
+    };
+    card.addEventListener('click', toggle);
+    card.addEventListener('keydown', e => {
+      if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); }
+    });
+  });
+
+  const fab = document.getElementById('menuFab');
+  const overlay = document.getElementById('menuOverlay');
+  const closeBtn = document.getElementById('menuClose');
+  const openMenu = () => { overlay.classList.add('open'); overlay.setAttribute('aria-hidden', 'false'); fab.setAttribute('aria-expanded', 'true'); };
+  const closeMenu = () => { overlay.classList.remove('open'); overlay.setAttribute('aria-hidden', 'true'); fab.setAttribute('aria-expanded', 'false'); };
+  fab.addEventListener('click', openMenu);
+  closeBtn.addEventListener('click', closeMenu);
+  overlay.querySelectorAll('a').forEach(a => a.addEventListener('click', closeMenu));
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && overlay.classList.contains('open')) closeMenu(); });
+
+  const cards = document.querySelectorAll('.mobile-card');
+  const total = cards.length;
+  const fill = document.getElementById('progressFill');
+  const count = document.getElementById('progressCount');
+  const progressEl = document.querySelector('.progress-bar');
+  const update = (idx) => {
+    const n = idx + 1;
+    fill.style.width = ((n / total) * 100) + '%';
+    count.textContent = n + ' / ' + total;
+    progressEl.setAttribute('aria-valuenow', String(n));
+    progressEl.setAttribute('aria-label', 'Card ' + n + ' of ' + total);
+  };
+  if ('IntersectionObserver' in window) {
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting && entry.intersectionRatio > 0.55) {
+          const idx = Array.prototype.indexOf.call(cards, entry.target);
+          if (idx >= 0) update(idx);
+        }
+      });
+    }, { threshold: [0.55, 0.75], root: document.getElementById('deck') });
+    cards.forEach(c => io.observe(c));
+  }
+})();
+</script>
+
+</body>
+</html>
