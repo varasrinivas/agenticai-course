@@ -1,0 +1,847 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>M03: Multi-Tool Orchestration | One Agent, Three SDKs</title>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;700;800&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg-primary: #0A1628; --bg-secondary: #111D33; --bg-card: #162033; --bg-surface: #1A2740;
+      --text-primary: #E8ECF1; --text-secondary: #94A3B8; --text-muted: #64748B;
+      --accent-primary: #D4A843; --accent-hover: #E5BC5A; --accent-muted: rgba(212, 168, 67, 0.15);
+      --success: #10B981; --success-bg: rgba(16, 185, 129, 0.1);
+      --warning: #F59E0B; --warning-bg: rgba(245, 158, 11, 0.1);
+      --error: #F43F5E; --error-bg: rgba(244, 63, 94, 0.1);
+      --info: #3B82F6; --info-bg: rgba(59, 130, 246, 0.1);
+      --track-color: #8B5CF6;
+      --anth: #D97757; --goog: #4285F4; --oai: #10A37F;
+      --code-bg: #0D1117; --code-border: #21262D; --code-text: #C9D1D9;
+      --transition-fast: 150ms; --transition-normal: 300ms;
+    }
+    body { background: var(--bg-primary); color: var(--text-primary); font-family: 'Source Sans 3', sans-serif; font-size: 1.05rem; line-height: 1.7; min-height: 100vh; }
+    .top-progress { position: fixed; top: 0; left: 0; right: 0; height: 4px; background: var(--bg-surface); z-index: 200; }
+    .top-progress .fill { height: 100%; background: linear-gradient(90deg, var(--anth), var(--goog), var(--oai)); width: 50%; border-radius: 0 2px 2px 0; }
+    .course-header { background: var(--bg-secondary); border-bottom: 1px solid var(--code-border); padding: 1.25rem 2rem; }
+    .course-header-inner { max-width: 1200px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; }
+    .course-title { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.95rem; font-weight: 600; color: var(--text-secondary); }
+    .track-badge { display: inline-flex; align-items: center; gap: 0.5rem; background: rgba(139, 92, 246, 0.15); border: 1px solid var(--track-color); border-radius: 20px; padding: 0.25rem 0.75rem; font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.8rem; font-weight: 600; color: var(--track-color); }
+    .track-badge .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--track-color); }
+    .header-meta { display: flex; gap: 1.5rem; font-size: 0.85rem; color: var(--text-muted); }
+    .page-container { max-width: 1200px; margin: 0 auto; padding: 2rem; display: grid; grid-template-columns: 240px 1fr; gap: 3rem; }
+    .sidebar-nav { position: sticky; top: 2rem; height: calc(100vh - 4rem); overflow-y: auto; padding-right: 1rem; }
+    .sidebar-nav::-webkit-scrollbar { width: 3px; }
+    .sidebar-nav::-webkit-scrollbar-thumb { background: var(--bg-surface); border-radius: 3px; }
+    .sidebar-title { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); margin-bottom: 1rem; }
+    .sidebar-nav a { display: block; padding: 0.4rem 0.75rem; margin-bottom: 0.15rem; font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.82rem; font-weight: 600; color: var(--text-muted); text-decoration: none; border-left: 2px solid transparent; border-radius: 0 4px 4px 0; transition: all var(--transition-fast); }
+    .sidebar-nav a:hover { color: var(--text-primary); background: var(--bg-surface); }
+    .sidebar-nav a.active { color: var(--accent-primary); border-left-color: var(--accent-primary); background: var(--accent-muted); }
+    .sidebar-nav a.sub { padding-left: 1.5rem; font-size: 0.78rem; font-weight: 400; }
+    .content { max-width: 820px; }
+    .section { margin-bottom: 4rem; }
+    h1 { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 2.25rem; line-height: 1.2; margin-bottom: 0.75rem; }
+    h2 { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 1.5rem; color: var(--text-primary); margin: 2.5rem 0 1rem; padding-top: 1rem; border-top: 1px solid var(--code-border); }
+    h2:first-of-type { border-top: none; }
+    h3 { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 600; font-size: 1.25rem; color: var(--text-primary); margin: 2rem 0 0.75rem; }
+    p { margin-bottom: 1rem; }
+    ul, ol { margin: 0.5rem 0 1rem 1.5rem; }
+    li { margin-bottom: 0.4rem; }
+    strong { font-weight: 600; }
+    code { font-family: 'JetBrains Mono', monospace; font-size: 0.88em; background: var(--bg-surface); padding: 0.1rem 0.35rem; border-radius: 4px; color: var(--code-text); }
+    .analogy-box, .tech-def-box, .callout-why, .callout-warning { border-left: 4px solid; border-radius: 0 8px 8px 0; padding: 1.25rem 1.5rem; margin: 1.5rem 0; }
+    .analogy-box { background: var(--accent-muted); border-left-color: var(--accent-primary); }
+    .tech-def-box { background: var(--info-bg); border-left-color: var(--info); }
+    .callout-why { background: var(--success-bg); border-left-color: var(--success); }
+    .callout-warning { background: var(--warning-bg); border-left-color: var(--warning); }
+    .box-label { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 0.9rem; display: block; margin-bottom: 0.4rem; }
+    .analogy-box .box-label { color: var(--accent-primary); }
+    .tech-def-box .box-label { color: var(--info); }
+    .callout-why .box-label { color: var(--success); }
+    .callout-warning .box-label { color: var(--warning); }
+    .term-tooltip { position: relative; color: var(--accent-primary); cursor: help; border-bottom: 1px dashed var(--accent-primary); }
+    .term-tooltip .tooltip-content { position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); background: var(--bg-card); border: 1px solid var(--accent-primary); border-radius: 8px; padding: 0.75rem 1rem; font-size: 0.85rem; color: var(--text-primary); width: 280px; opacity: 0; pointer-events: none; transition: opacity var(--transition-fast); z-index: 10; line-height: 1.5; box-shadow: 0 4px 20px rgba(0,0,0,0.4); }
+    .term-tooltip:hover .tooltip-content, .term-tooltip:focus .tooltip-content { opacity: 1; pointer-events: auto; }
+    .code-block-wrapper { background: var(--code-bg); border: 1px solid var(--code-border); border-radius: 12px; margin: 1.5rem 0; overflow: hidden; }
+    .code-tabs { display: flex; gap: 0; flex-wrap: wrap; border-bottom: 1px solid var(--code-border); background: var(--bg-surface); }
+    .code-tab { padding: 0.5rem 1rem; background: none; border: none; font-family: 'JetBrains Mono', monospace; font-size: 0.78rem; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; opacity: 0.5; color: var(--text-muted); transition: all var(--transition-fast); }
+    .code-tab.tp-anth { color: var(--anth); } .code-tab.tp-goog { color: var(--goog); } .code-tab.tp-oai { color: var(--oai); } .code-tab.tp-lang { color: var(--text-secondary); }
+    .code-tab:hover { opacity: 0.85; }
+    .code-tab.active { opacity: 1; border-bottom-color: currentColor; font-weight: 600; }
+    .code-panel { display: none; position: relative; }
+    .code-panel.active { display: block; }
+    .code-panel pre { margin: 0; padding: 1.25rem; overflow-x: auto; font-family: 'JetBrains Mono', monospace; font-size: 0.82rem; line-height: 1.6; }
+    .code-panel pre code { background: none; color: var(--code-text); padding: 0; }
+    .copy-btn { position: absolute; top: 0.75rem; right: 0.75rem; background: var(--bg-surface); border: 1px solid var(--code-border); color: var(--text-muted); padding: 0.3rem 0.6rem; border-radius: 6px; font-size: 0.75rem; cursor: pointer; font-family: 'JetBrains Mono', monospace; transition: all var(--transition-fast); }
+    .copy-btn:hover { color: var(--accent-primary); border-color: var(--accent-primary); }
+    .code-single { background: var(--code-bg); border: 1px solid var(--code-border); border-radius: 12px; margin: 1.5rem 0; overflow: hidden; position: relative; }
+    .code-single pre { margin: 0; padding: 1.25rem; overflow-x: auto; font-family: 'JetBrains Mono', monospace; font-size: 0.82rem; line-height: 1.6; }
+    .code-single pre code { background: none; padding: 0; }
+    .code-single .copy-btn { top: 0.5rem; right: 0.5rem; }
+    .code-label { display: inline-block; padding: 0.25rem 0.75rem; background: var(--bg-surface); border-bottom: 1px solid var(--code-border); border-right: 1px solid var(--code-border); font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; color: var(--text-muted); border-radius: 0 0 8px 0; }
+    .output-block { background: var(--code-bg); border: 1px solid var(--code-border); border-radius: 8px; padding: 1rem 1.25rem; margin: 0.75rem 0 1.5rem; font-family: 'JetBrains Mono', monospace; font-size: 0.82rem; color: var(--success); line-height: 1.5; white-space: pre-wrap; }
+    .output-label { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.25rem; }
+    .compare-table { width: 100%; border-collapse: collapse; margin: 1.5rem 0; background: var(--bg-card); border-radius: 12px; overflow: hidden; font-size: 0.9rem; }
+    .compare-table th, .compare-table td { padding: 0.8rem 1rem; text-align: left; border-bottom: 1px solid var(--code-border); vertical-align: top; }
+    .compare-table th { background: var(--bg-surface); font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.04em; }
+    .compare-table th.c-anth { color: var(--anth); } .compare-table th.c-goog { color: var(--goog); } .compare-table th.c-oai { color: var(--oai); }
+    .compare-table tr:last-child td { border-bottom: none; }
+    .compare-table td:first-child { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 600; color: var(--text-secondary); }
+    .compare-table code { font-size: 0.78rem; }
+    .animation-container { background: var(--bg-secondary); border: 1px solid var(--code-border); border-radius: 12px; padding: 2rem; margin: 2rem 0; position: relative; overflow: hidden; }
+    .animation-title { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.85rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 1.25rem; }
+    .orch { display: flex; flex-direction: column; align-items: center; gap: 0.5rem; }
+    .orch-node { background: var(--bg-card); border: 1px solid var(--code-border); border-radius: 8px; padding: 0.6rem 1rem; font-size: 0.85rem; text-align: center; opacity: 0.3; transition: all 0.4s ease; max-width: 420px; }
+    .orch-node .m { font-family: 'JetBrains Mono', monospace; font-size: 0.7rem; color: var(--text-muted); display: block; }
+    .orch-node.lit { opacity: 1; border-color: var(--track-color); box-shadow: 0 0 0 1px var(--track-color); }
+    .orch-parallel { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
+    .orch-node.tool { min-width: 190px; }
+    .orch-node.tool.lit { border-color: var(--success); box-shadow: 0 0 0 1px var(--success); }
+    .orch-node.tool .m { color: var(--success); }
+    .orch-arrow { color: var(--track-color); font-size: 1.1rem; opacity: 0.4; transition: opacity 0.4s ease; }
+    .orch-arrow.lit { opacity: 1; }
+    .orch-split { display: flex; gap: 3rem; color: var(--track-color); font-size: 0.75rem; opacity: 0.4; transition: opacity 0.4s ease; }
+    .orch-split.lit { opacity: 1; }
+    .animation-controls { display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 1rem; }
+    .anim-btn { background: var(--bg-card); border: 1px solid var(--code-border); color: var(--text-primary); width: 36px; height: 36px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 1rem; transition: all var(--transition-fast); }
+    .anim-btn:hover { border-color: var(--accent-primary); color: var(--accent-primary); }
+    .quiz-question { background: var(--bg-card); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; }
+    .quiz-question h4 { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 600; margin-bottom: 1rem; font-size: 1rem; }
+    .quiz-option { padding: 0.75rem 1rem; margin: 0.5rem 0; border: 1px solid var(--code-border); border-radius: 8px; cursor: pointer; transition: all var(--transition-fast); display: flex; align-items: center; gap: 0.75rem; }
+    .quiz-option:hover { border-color: var(--accent-primary); }
+    .quiz-option.correct { border-color: var(--success); background: var(--success-bg); }
+    .quiz-option.incorrect { border-color: var(--error); background: var(--error-bg); }
+    .quiz-option.disabled { pointer-events: none; }
+    .quiz-marker { width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--code-border); flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 700; }
+    .quiz-option.correct .quiz-marker { border-color: var(--success); color: var(--success); }
+    .quiz-option.incorrect .quiz-marker { border-color: var(--error); color: var(--error); }
+    .quiz-feedback { margin-top: 0.75rem; padding: 0.75rem; border-radius: 8px; font-size: 0.9rem; display: none; }
+    .quiz-feedback.show { display: block; }
+    .quiz-feedback.correct-fb { background: var(--success-bg); color: var(--success); }
+    .quiz-feedback.incorrect-fb { background: var(--error-bg); color: var(--error); }
+    .quiz-score { background: var(--bg-card); border-radius: 12px; padding: 1.5rem; text-align: center; margin-top: 2rem; }
+    .quiz-score .score-num { font-family: 'Bricolage Grotesque', sans-serif; font-size: 2.5rem; font-weight: 800; color: var(--accent-primary); }
+    .module-nav { display: flex; justify-content: space-between; align-items: center; padding: 1.5rem 0; margin: 2rem 0; border-top: 1px solid var(--code-border); }
+    .module-nav a { display: flex; align-items: center; gap: 0.5rem; color: var(--accent-primary); text-decoration: none; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 600; font-size: 0.9rem; padding: 0.5rem 1rem; border: 1px solid var(--code-border); border-radius: 8px; transition: all var(--transition-fast); }
+    .module-nav a:hover { border-color: var(--accent-primary); background: var(--accent-muted); }
+    .module-nav .disabled { color: var(--text-muted); pointer-events: none; opacity: 0.5; }
+    .objectives-list { list-style: none; margin-left: 0; }
+    .objectives-list li { padding: 0.5rem 0 0.5rem 2rem; position: relative; }
+    .objectives-list li::before { content: ''; position: absolute; left: 0; top: 0.85rem; width: 16px; height: 16px; border-radius: 4px; border: 2px solid var(--track-color); background: rgba(139, 92, 246, 0.1); }
+    .checkpoint { background: rgba(16,185,129,0.06); border-left: 3px solid var(--success); padding: 1rem 1.25rem; margin: 1.25rem 0; border-radius: 0 6px 6px 0; }
+    @media (max-width: 900px) {
+      .page-container { grid-template-columns: 1fr; padding: 1rem; }
+      .sidebar-nav { position: fixed; bottom: 0; left: 0; right: 0; height: auto; max-height: 40vh; background: var(--bg-secondary); border-top: 1px solid var(--code-border); z-index: 100; padding: 1rem; display: none; }
+      .sidebar-nav.open { display: block; }
+      .sidebar-toggle { display: flex; position: fixed; bottom: 1rem; right: 1rem; z-index: 101; background: var(--accent-primary); color: var(--bg-primary); border: none; width: 48px; height: 48px; border-radius: 50%; align-items: center; justify-content: center; cursor: pointer; font-size: 1.25rem; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
+      h1 { font-size: 1.75rem; } .orch-split { gap: 1rem; }
+    }
+    @media (min-width: 901px) { .sidebar-toggle { display: none; } }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; } .orch-node, .orch-arrow, .orch-split { opacity: 1; } }
+    :focus-visible { outline: 2px solid var(--accent-primary); outline-offset: 2px; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <div class="top-progress" role="progressbar" aria-label="Course progress: Module 4 of 8" aria-valuenow="4" aria-valuemin="1" aria-valuemax="8"><div class="fill"></div></div>
+
+  <header class="course-header">
+    <div class="course-header-inner">
+      <div class="course-title">One Agent, Three SDKs &mdash; Anthropic &middot; Google Gemini &middot; OpenAI</div>
+      <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;">
+        <span class="track-badge"><span class="dot"></span>Foundations</span>
+        <div class="header-meta"><span>Module 4 of 8</span><span>50&ndash;65 min</span><span>Intermediate</span></div>
+      </div>
+    </div>
+  </header>
+
+  <div class="page-container">
+    <nav class="sidebar-nav" id="sidebar" aria-label="Module sections">
+      <div class="sidebar-title">On this page</div>
+      <a href="#objectives">Learning Objectives</a>
+      <a href="#toolbox">From One Tool to a Toolbox</a>
+      <a href="#how-choose">How the Model Chooses</a>
+      <a href="#parallel">Parallel Tool Calls</a>
+      <a href="#orch-anim" class="sub">See It Fan Out</a>
+      <a href="#the-tools">Step 1 &mdash; The Toolbox</a>
+      <a href="#orchestrate">Step 2 &mdash; The Orchestration Loop</a>
+      <a href="#run">Run It</a>
+      <a href="#control">Controlling Tool Choice</a>
+      <a href="#compare">Three Ways, One Idea</a>
+      <a href="#quiz">Knowledge Check</a>
+      <a href="#summary">Summary</a>
+    </nav>
+
+    <main class="content" role="main">
+      <section class="section" style="margin-bottom:2rem;">
+        <div class="module-nav" style="border-top:none;margin-top:0;">
+          <a href="M02-structured-output.html" aria-label="Previous module: Structured Output">&larr; M02: Structured Output</a>
+          <a href="index.html" aria-label="Course Home" title="Course Home" style="font-size:1.2rem;">&#x1F3E0; Home</a>
+          <a href="M04-memory-conversation.html" aria-label="Next module: Memory and Conversation">M04: Memory &rarr;</a>
+        </div>
+        <h1>M03 &mdash; Multi-Tool Orchestration</h1>
+        <p style="color:var(--text-secondary);font-size:1.1rem;">
+          One tool made Acme an agent. A <em>toolbox</em> makes it useful. In this module you give Acme three tools &mdash; check an order, search products, process a refund &mdash; and let the model pick the right one, or several at once. The surprise: the loop you wrote in M01 already handles all of it. You'll barely change it.
+        </p>
+      </section>
+
+      <section class="section" id="objectives">
+        <h2 id="objectives-heading">Learning Objectives</h2>
+        <ul class="objectives-list" aria-label="Learning objectives">
+          <li>Register <strong>multiple tools</strong> and let the model route each request to the right one</li>
+          <li>Understand that <span class="term-tooltip">tool descriptions<span class="tooltip-content">The natural-language "description" field on each tool is what the model reads to decide when to use it. Vague descriptions cause wrong-tool bugs; precise ones are your routing logic.</span></span> ARE the routing logic &mdash; write them like they matter, because they do</li>
+          <li>Handle <strong>parallel tool calls</strong>: one model turn can request several tools at once</li>
+          <li>Replace M01's <code>if/else</code> with a <strong>dispatch table</strong> that scales to any number of tools</li>
+          <li>Steer behavior with <code>tool_choice</code> (auto / required / a specific tool / none) and know when to disable parallel calls</li>
+          <li>Recognize which tools are dangerous (a refund <em>writes</em> money) and flag them for the guardrails you'll add later</li>
+        </ul>
+      </section>
+
+      <section class="section" id="toolbox">
+        <h2 id="toolbox-heading">From One Tool to a Toolbox</h2>
+
+        <div class="analogy-box">
+          <span class="box-label">Everyday Analogy</span>
+          <p><strong>BEFORE:</strong> A front-desk receptionist at a big company doesn't personally handle billing, tech support, <em>and</em> shipping. They hold a directory. You say "I need a refund and I'm also wondering if you have blue running shoes," and they route you: refund goes to Billing, product question goes to Sales &mdash; often both calls placed at the same time.</p>
+          <p><strong>PAIN:</strong> If the receptionist only had one phone line to one department, every off-topic question would dead-end. And if their directory descriptions were vague ("Dave &mdash; stuff"), they'd transfer you to the wrong desk constantly.</p>
+          <p style="margin-bottom:0;"><strong>MAPPING:</strong> Your agent is the receptionist; your tools are the departments; the <em>tool descriptions</em> are the directory entries. Give the model several well-described tools and it routes each request correctly &mdash; and, like a good receptionist, it can place two calls at once when a message needs two departments. The loop doesn't change; the toolbox and the descriptions do.</p>
+        </div>
+
+        <div class="callout-why">
+          <span class="box-label">Why It Matters</span>
+          <p style="margin-bottom:0;">Real agents are defined by their tool surface. A support agent with only <code>get_order_status</code> is a lookup bot; add <code>search_products</code> and <code>process_refund</code> and it can actually resolve tickets end to end. But more tools means more ways to route wrong &mdash; and the fix is almost never "better model," it's "better descriptions." This module is where you learn to think in tool surfaces, the skill every framework in M06&ndash;M07 assumes you already have.</p>
+        </div>
+      </section>
+
+      <section class="section" id="how-choose">
+        <h2 id="how-choose-heading">How the Model Chooses</h2>
+        <div class="tech-def-box">
+          <span class="box-label">Technical Definition &mdash; Descriptions Are Routing</span>
+          <p style="margin-bottom:0;">When you pass several tools, the model reads each tool's <strong>name and description</strong> and decides &mdash; per request &mdash; which one(s) fit. There's no separate router you configure; the descriptions <em>are</em> the router. "Look up an order's status by ID" and "Search the product catalog by keyword" are different enough that the model routes cleanly. Two tools described as "get info" and "fetch data" would collide constantly. The rule: write each description to answer "when should I use this, and when should I NOT?" Include the trigger ("Use only when the customer explicitly asks for a refund") for anything risky.</p>
+        </div>
+      </section>
+
+      <section class="section" id="parallel">
+        <h2 id="parallel-heading">Parallel Tool Calls</h2>
+        <p>Here's the capability that trips up newcomers: a single model turn can request <strong>more than one tool at once</strong>. Ask Acme "Where's my order AC-1042, and do you have blue running shoes?" and the model returns <em>two</em> tool requests in one response &mdash; <code>get_order_status</code> and <code>search_products</code>. All three SDKs do this by default. Your job: run them all, return <em>all</em> the results together, and loop.</p>
+
+        <p id="orch-anim">Watch one two-part question fan out into two parallel tool calls, then merge back into a single answer:</p>
+
+        <div class="animation-container" aria-label="Animated parallel tool orchestration">
+          <div class="animation-title">Parallel Orchestration &mdash; One Turn, Two Tools</div>
+          <div class="orch">
+            <div class="orch-node" data-i="0">"Where's order AC-1042, and do you have blue running shoes?"<span class="m">one user message</span></div>
+            <div class="orch-arrow" data-i="1">&#8595;</div>
+            <div class="orch-node" data-i="2">Model returns <strong>two</strong> tool requests at once<span class="m">parallel tool_use / function_calls</span></div>
+            <div class="orch-split" data-i="3"><span>&#8601;</span><span>&#8600;</span></div>
+            <div class="orch-parallel">
+              <div class="orch-node tool" data-i="4">get_order_status("AC-1042")<span class="m">&rarr; shipped, UPS, Tue</span></div>
+              <div class="orch-node tool" data-i="4">search_products("blue running shoes")<span class="m">&rarr; 1 match, $89</span></div>
+            </div>
+            <div class="orch-split" data-i="5"><span>&#8600;</span><span>&#8601;</span></div>
+            <div class="orch-node" data-i="6">Both results returned in one turn &rarr; final answer<span class="m">"Your order ships Tuesday, and yes — the blue Trailblazer is $89."</span></div>
+          </div>
+          <div class="animation-controls">
+            <button class="anim-btn" onclick="orchPlay()" aria-label="Play" title="Play">&#9654;</button>
+            <button class="anim-btn" onclick="orchPause()" aria-label="Pause" title="Pause">&#10074;&#10074;</button>
+            <button class="anim-btn" onclick="orchReset()" aria-label="Reset" title="Reset">&#10227;</button>
+          </div>
+        </div>
+
+        <div class="callout-warning">
+          <span class="box-label">The #1 Parallel-Tool Bug</span>
+          <p style="margin-bottom:0;">When the model requests two tools, you must return <strong>both</strong> results before the next model call &mdash; in a <em>single</em> turn (Anthropic: one <code>user</code> message with two <code>tool_result</code> blocks; Gemini: one <code>tool</code> Content with two <code>functionResponse</code> parts; OpenAI: two <code>function_call_output</code> items appended together). Return only one, or split them across turns, and the SDK errors or the model silently stops making parallel calls. Loop over <em>all</em> the requests; answer <em>all</em> of them.</p>
+        </div>
+      </section>
+
+      <section class="section" id="the-tools">
+        <h2 id="the-tools-heading">Step 1 &mdash; The Toolbox</h2>
+        <p>Three plain functions &mdash; still no AI. We extend M01's <code>get_order_status</code> with <code>search_products</code> and <code>process_refund</code>. Notice <code>process_refund</code> is a <strong>write</strong> action: it (pretends to) move money. We'll let the model call it now, but flag it &mdash; in M06&ndash;M07 you'll gate write-tools behind confirmation.</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs" role="tablist" aria-label="Language tabs">
+            <button class="code-tab tp-lang active" role="tab" aria-selected="true" data-lang="py" onclick="switchTab(this,'tools')">Python &mdash; acme_tools.py</button>
+            <button class="code-tab tp-lang" role="tab" aria-selected="false" data-lang="js" onclick="switchTab(this,'tools')">Node &mdash; acmeTools.mjs</button>
+          </div>
+          <div class="code-panel active" id="tools-py" role="tabpanel">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code class="language-python"># acme_tools.py — three real functions, shared by all three SDKs.
+FAKE_ORDERS = {
+    "AC-1042": {"status": "shipped", "carrier": "UPS", "eta": "Tuesday"},
+    "AC-2088": {"status": "processing", "carrier": None, "eta": "unknown"},
+}
+PRODUCTS = [
+    {"sku": "SH-01", "name": "Trailblazer Running Shoe", "color": "blue",  "price": 89.0},
+    {"sku": "SH-02", "name": "Trailblazer Running Shoe", "color": "black", "price": 89.0},
+    {"sku": "BP-07", "name": "Summit Daypack",           "color": "green", "price": 54.0},
+]
+
+def get_order_status(order_id: str) -> dict:
+    o = FAKE_ORDERS.get(order_id.upper())
+    return {"error": f"No order {order_id}."} if o is None else {"order_id": order_id.upper(), **o}
+
+def search_products(query: str) -> dict:
+    q = query.lower()
+    hits = [p for p in PRODUCTS if q in p["name"].lower() or q in p["color"].lower()]
+    return {"query": query, "results": hits}
+
+def process_refund(order_id: str, reason: str) -> dict:
+    # WRITE action — moves money. Gated behind confirmation in M06–M07.
+    return {"refund_id": f"RF-{order_id[-4:]}", "order_id": order_id.upper(),
+            "status": "approved", "reason": reason}</code></pre>
+          </div>
+          <div class="code-panel" id="tools-js" role="tabpanel">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code class="language-javascript">// acmeTools.mjs — three real functions, shared by all three SDKs.
+const FAKE_ORDERS = {
+  "AC-1042": { status: "shipped", carrier: "UPS", eta: "Tuesday" },
+  "AC-2088": { status: "processing", carrier: null, eta: "unknown" },
+};
+const PRODUCTS = [
+  { sku: "SH-01", name: "Trailblazer Running Shoe", color: "blue",  price: 89.0 },
+  { sku: "SH-02", name: "Trailblazer Running Shoe", color: "black", price: 89.0 },
+  { sku: "BP-07", name: "Summit Daypack",           color: "green", price: 54.0 },
+];
+
+export function getOrderStatus(orderId) {
+  const o = FAKE_ORDERS[orderId.toUpperCase()];
+  return o ? { order_id: orderId.toUpperCase(), ...o } : { error: `No order ${orderId}.` };
+}
+export function searchProducts(query) {
+  const q = query.toLowerCase();
+  const results = PRODUCTS.filter(p => p.name.toLowerCase().includes(q) || p.color.includes(q));
+  return { query, results };
+}
+export function processRefund(orderId, reason) {
+  // WRITE action — moves money. Gated behind confirmation in M06–M07.
+  return { refund_id: `RF-${orderId.slice(-4)}`, order_id: orderId.toUpperCase(),
+           status: "approved", reason };
+}</code></pre>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="orchestrate">
+        <h2 id="orchestrate-heading">Step 2 &mdash; The Orchestration Loop</h2>
+        <p>Now the loop. Compare it to M01's: the structure is <em>identical</em>. Two changes only &mdash; the tool list has three entries, and we dispatch through a <strong>lookup table</strong> (<code>DISPATCH[name]</code>) instead of an <code>if/else</code>. The loop already iterates over <em>all</em> requested tools, so parallel calls just work. Each tab is a complete, runnable file.</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs" role="tablist" aria-label="Provider and language tabs">
+            <button class="code-tab tp-anth active" role="tab" aria-selected="true" data-lang="anth-py" onclick="switchTab(this,'orch')">Anthropic &middot; Py</button>
+            <button class="code-tab tp-anth" role="tab" aria-selected="false" data-lang="anth-js" onclick="switchTab(this,'orch')">Anthropic &middot; JS</button>
+            <button class="code-tab tp-goog" role="tab" aria-selected="false" data-lang="goog-py" onclick="switchTab(this,'orch')">Google &middot; Py</button>
+            <button class="code-tab tp-goog" role="tab" aria-selected="false" data-lang="goog-js" onclick="switchTab(this,'orch')">Google &middot; JS</button>
+            <button class="code-tab tp-oai" role="tab" aria-selected="false" data-lang="oai-py" onclick="switchTab(this,'orch')">OpenAI &middot; Py</button>
+            <button class="code-tab tp-oai" role="tab" aria-selected="false" data-lang="oai-js" onclick="switchTab(this,'orch')">OpenAI &middot; JS</button>
+          </div>
+
+          <div class="code-panel active" id="orch-anth-py" role="tabpanel">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code class="language-python"># orchestrate_anthropic.py
+import json
+from anthropic import Anthropic
+from acme_tools import get_order_status, search_products, process_refund
+
+client = Anthropic()
+SYSTEM = "You are Acme Support. Use the tools for orders, product search, and refunds."
+
+TOOLS = [
+    {"name": "get_order_status", "description": "Look up an order's status by its ID (e.g. AC-1042).",
+     "input_schema": {"type": "object", "properties": {"order_id": {"type": "string"}}, "required": ["order_id"]}},
+    {"name": "search_products", "description": "Search the product catalog by keyword or color.",
+     "input_schema": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}},
+    {"name": "process_refund", "description": "Issue a refund for an order. Use ONLY when the customer explicitly asks for a refund.",
+     "input_schema": {"type": "object", "properties": {"order_id": {"type": "string"}, "reason": {"type": "string"}}, "required": ["order_id", "reason"]}},
+]
+DISPATCH = {"get_order_status": get_order_status, "search_products": search_products, "process_refund": process_refund}
+
+def run_agent(user_message: str) -> str:
+    messages = [{"role": "user", "content": user_message}]
+    for _ in range(8):                          # loop cap (see M01)
+        resp = client.messages.create(model="claude-sonnet-5", max_tokens=1024,
+                                      system=SYSTEM, tools=TOOLS, messages=messages)
+        if resp.stop_reason != "tool_use":
+            return "".join(b.text for b in resp.content if b.type == "text")
+        messages.append({"role": "assistant", "content": resp.content})
+        results = []
+        for block in resp.content:              # may be SEVERAL tool_use blocks (parallel)
+            if block.type == "tool_use":
+                out = DISPATCH[block.name](**block.input)     # dispatch table, not if/else
+                results.append({"type": "tool_result", "tool_use_id": block.id, "content": json.dumps(out)})
+        messages.append({"role": "user", "content": results})  # ALL results in ONE turn
+    return "Sorry, I couldn't finish that — let me get a human."
+
+if __name__ == "__main__":
+    print(run_agent("Where's order AC-1042, and do you have blue running shoes?"))</code></pre>
+          </div>
+
+          <div class="code-panel" id="orch-anth-js" role="tabpanel">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code class="language-javascript">// orchestrate_anthropic.mjs
+import Anthropic from "@anthropic-ai/sdk";
+import { getOrderStatus, searchProducts, processRefund } from "./acmeTools.mjs";
+
+const client = new Anthropic();
+const SYSTEM = "You are Acme Support. Use the tools for orders, product search, and refunds.";
+
+const TOOLS = [
+  { name: "get_order_status", description: "Look up an order's status by its ID (e.g. AC-1042).",
+    input_schema: { type: "object", properties: { order_id: { type: "string" } }, required: ["order_id"] } },
+  { name: "search_products", description: "Search the product catalog by keyword or color.",
+    input_schema: { type: "object", properties: { query: { type: "string" } }, required: ["query"] } },
+  { name: "process_refund", description: "Issue a refund for an order. Use ONLY when the customer explicitly asks.",
+    input_schema: { type: "object", properties: { order_id: { type: "string" }, reason: { type: "string" } }, required: ["order_id", "reason"] } },
+];
+const DISPATCH = { get_order_status: (a) => getOrderStatus(a.order_id),
+                   search_products: (a) => searchProducts(a.query),
+                   process_refund: (a) => processRefund(a.order_id, a.reason) };
+
+async function runAgent(userMessage) {
+  const messages = [{ role: "user", content: userMessage }];
+  for (let i = 0; i < 8; i++) {
+    const resp = await client.messages.create({ model: "claude-sonnet-5", max_tokens: 1024,
+      system: SYSTEM, tools: TOOLS, messages });
+    if (resp.stop_reason !== "tool_use")
+      return resp.content.filter(b => b.type === "text").map(b => b.text).join("");
+    messages.push({ role: "assistant", content: resp.content });
+    const results = [];
+    for (const block of resp.content) {          // may be several (parallel)
+      if (block.type === "tool_use") {
+        const out = DISPATCH[block.name](block.input);
+        results.push({ type: "tool_result", tool_use_id: block.id, content: JSON.stringify(out) });
+      }
+    }
+    messages.push({ role: "user", content: results });   // ALL results in ONE turn
+  }
+  return "Sorry, I couldn't finish that — let me get a human.";
+}
+
+console.log(await runAgent("Where's order AC-1042, and do you have blue running shoes?"));</code></pre>
+          </div>
+
+          <div class="code-panel" id="orch-goog-py" role="tabpanel">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code class="language-python"># orchestrate_gemini.py
+from google import genai
+from google.genai import types
+from acme_tools import get_order_status, search_products, process_refund
+
+client = genai.Client()
+SYSTEM = "You are Acme Support. Use the tools for orders, product search, and refunds."
+
+toolbox = types.Tool(function_declarations=[
+    types.FunctionDeclaration(name="get_order_status", description="Look up an order's status by its ID (e.g. AC-1042).",
+        parameters_json_schema={"type": "object", "properties": {"order_id": {"type": "string"}}, "required": ["order_id"]}),
+    types.FunctionDeclaration(name="search_products", description="Search the product catalog by keyword or color.",
+        parameters_json_schema={"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"]}),
+    types.FunctionDeclaration(name="process_refund", description="Issue a refund. Use ONLY when the customer explicitly asks.",
+        parameters_json_schema={"type": "object", "properties": {"order_id": {"type": "string"}, "reason": {"type": "string"}}, "required": ["order_id", "reason"]}),
+])
+config = types.GenerateContentConfig(system_instruction=SYSTEM, tools=[toolbox])
+DISPATCH = {"get_order_status": get_order_status, "search_products": search_products, "process_refund": process_refund}
+
+def run_agent(user_message: str) -> str:
+    contents = [types.Content(role="user", parts=[types.Part(text=user_message)])]
+    for _ in range(8):
+        resp = client.models.generate_content(model="gemini-2.5-flash", contents=contents, config=config)
+        if not resp.function_calls:
+            return resp.text
+        contents.append(resp.candidates[0].content)
+        parts = []
+        for fc in resp.function_calls:          # may be SEVERAL (parallel)
+            out = DISPATCH[fc.name](**dict(fc.args))
+            parts.append(types.Part.from_function_response(name=fc.name, response={"result": out}))
+        contents.append(types.Content(role="tool", parts=parts))   # ALL results in ONE turn
+    return "Sorry, I couldn't finish that — let me get a human."
+
+if __name__ == "__main__":
+    print(run_agent("Where's order AC-1042, and do you have blue running shoes?"))</code></pre>
+          </div>
+
+          <div class="code-panel" id="orch-goog-js" role="tabpanel">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code class="language-javascript">// orchestrate_gemini.mjs
+import { GoogleGenAI, Type } from "@google/genai";
+import { getOrderStatus, searchProducts, processRefund } from "./acmeTools.mjs";
+
+const ai = new GoogleGenAI({});
+const SYSTEM = "You are Acme Support. Use the tools for orders, product search, and refunds.";
+
+const toolbox = { functionDeclarations: [
+  { name: "get_order_status", description: "Look up an order's status by its ID (e.g. AC-1042).",
+    parameters: { type: Type.OBJECT, properties: { order_id: { type: Type.STRING } }, required: ["order_id"] } },
+  { name: "search_products", description: "Search the product catalog by keyword or color.",
+    parameters: { type: Type.OBJECT, properties: { query: { type: Type.STRING } }, required: ["query"] } },
+  { name: "process_refund", description: "Issue a refund. Use ONLY when the customer explicitly asks.",
+    parameters: { type: Type.OBJECT, properties: { order_id: { type: Type.STRING }, reason: { type: Type.STRING } }, required: ["order_id", "reason"] } },
+]};
+const config = { systemInstruction: SYSTEM, tools: [toolbox] };
+const DISPATCH = { get_order_status: (a) => getOrderStatus(a.order_id),
+                   search_products: (a) => searchProducts(a.query),
+                   process_refund: (a) => processRefund(a.order_id, a.reason) };
+
+async function runAgent(userMessage) {
+  const contents = [{ role: "user", parts: [{ text: userMessage }] }];
+  for (let i = 0; i < 8; i++) {
+    const resp = await ai.models.generateContent({ model: "gemini-2.5-flash", contents, config });
+    if (!resp.functionCalls || resp.functionCalls.length === 0) return resp.text;
+    contents.push(resp.candidates[0].content);
+    const parts = [];
+    for (const fc of resp.functionCalls) {       // may be several (parallel)
+      const out = DISPATCH[fc.name](fc.args);
+      parts.push({ functionResponse: { name: fc.name, response: { result: out } } });
+    }
+    contents.push({ role: "tool", parts });      // ALL results in ONE turn
+  }
+  return "Sorry, I couldn't finish that — let me get a human.";
+}
+
+console.log(await runAgent("Where's order AC-1042, and do you have blue running shoes?"));</code></pre>
+          </div>
+
+          <div class="code-panel" id="orch-oai-py" role="tabpanel">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code class="language-python"># orchestrate_openai.py  (Responses API)
+import json
+from openai import OpenAI
+from acme_tools import get_order_status, search_products, process_refund
+
+client = OpenAI()
+SYSTEM = "You are Acme Support. Use the tools for orders, product search, and refunds."
+
+TOOLS = [
+    {"type": "function", "name": "get_order_status", "description": "Look up an order's status by its ID (e.g. AC-1042).",
+     "parameters": {"type": "object", "properties": {"order_id": {"type": "string"}}, "required": ["order_id"], "additionalProperties": False}},
+    {"type": "function", "name": "search_products", "description": "Search the product catalog by keyword or color.",
+     "parameters": {"type": "object", "properties": {"query": {"type": "string"}}, "required": ["query"], "additionalProperties": False}},
+    {"type": "function", "name": "process_refund", "description": "Issue a refund. Use ONLY when the customer explicitly asks.",
+     "parameters": {"type": "object", "properties": {"order_id": {"type": "string"}, "reason": {"type": "string"}}, "required": ["order_id", "reason"], "additionalProperties": False}},
+]
+DISPATCH = {"get_order_status": get_order_status, "search_products": search_products, "process_refund": process_refund}
+
+def run_agent(user_message: str) -> str:
+    input_list = [{"role": "user", "content": user_message}]
+    for _ in range(8):
+        resp = client.responses.create(model="gpt-5.5", instructions=SYSTEM, tools=TOOLS, input=input_list)
+        calls = [item for item in resp.output if item.type == "function_call"]
+        if not calls:
+            return resp.output_text
+        input_list += resp.output
+        for call in calls:                      # may be SEVERAL (parallel)
+            out = DISPATCH[call.name](**json.loads(call.arguments))
+            input_list.append({"type": "function_call_output", "call_id": call.call_id, "output": json.dumps(out)})
+    return "Sorry, I couldn't finish that — let me get a human."
+
+if __name__ == "__main__":
+    print(run_agent("Where's order AC-1042, and do you have blue running shoes?"))</code></pre>
+          </div>
+
+          <div class="code-panel" id="orch-oai-js" role="tabpanel">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code class="language-javascript">// orchestrate_openai.mjs  (Responses API)
+import OpenAI from "openai";
+import { getOrderStatus, searchProducts, processRefund } from "./acmeTools.mjs";
+
+const client = new OpenAI();
+const SYSTEM = "You are Acme Support. Use the tools for orders, product search, and refunds.";
+
+const TOOLS = [
+  { type: "function", name: "get_order_status", description: "Look up an order's status by its ID (e.g. AC-1042).",
+    parameters: { type: "object", properties: { order_id: { type: "string" } }, required: ["order_id"], additionalProperties: false } },
+  { type: "function", name: "search_products", description: "Search the product catalog by keyword or color.",
+    parameters: { type: "object", properties: { query: { type: "string" } }, required: ["query"], additionalProperties: false } },
+  { type: "function", name: "process_refund", description: "Issue a refund. Use ONLY when the customer explicitly asks.",
+    parameters: { type: "object", properties: { order_id: { type: "string" }, reason: { type: "string" } }, required: ["order_id", "reason"], additionalProperties: false } },
+];
+const DISPATCH = { get_order_status: (a) => getOrderStatus(a.order_id),
+                   search_products: (a) => searchProducts(a.query),
+                   process_refund: (a) => processRefund(a.order_id, a.reason) };
+
+async function runAgent(userMessage) {
+  let input = [{ role: "user", content: userMessage }];
+  for (let i = 0; i < 8; i++) {
+    const resp = await client.responses.create({ model: "gpt-5.5", instructions: SYSTEM, tools: TOOLS, input });
+    const calls = resp.output.filter(o => o.type === "function_call");
+    if (calls.length === 0) return resp.output_text;
+    input = input.concat(resp.output);
+    for (const call of calls) {                  // may be several (parallel)
+      const out = DISPATCH[call.name](JSON.parse(call.arguments));
+      input.push({ type: "function_call_output", call_id: call.call_id, output: JSON.stringify(out) });
+    }
+  }
+  return "Sorry, I couldn't finish that — let me get a human.";
+}
+
+console.log(await runAgent("Where's order AC-1042, and do you have blue running shoes?"));</code></pre>
+          </div>
+        </div>
+
+        <div class="callout-why">
+          <span class="box-label">What Just Happened? &mdash; Three Changes From M01</span>
+          <p style="margin-bottom:0;">(1) The tool list grew from one to three. (2) The <code>if block.name == "..."</code> became <code>DISPATCH[block.name]</code> &mdash; a table that scales to 3 tools or 30 without touching the loop. (3) We swapped <code>while True</code> for a capped <code>for _ in range(8)</code>. That's it. The parallel-call handling was <em>already there</em> in M01, because we always looped over every tool request. Multi-tool orchestration isn't a new mechanism &mdash; it's the same loop, fed a bigger toolbox.</p>
+        </div>
+      </section>
+
+      <section class="section" id="run">
+        <h2 id="run-heading">Run It</h2>
+        <div class="output-label">Expected output (the two-part question triggers two parallel tools)</div>
+        <pre class="output-block">Your order AC-1042 has shipped via UPS and should arrive Tuesday. And yes —
+we carry the blue Trailblazer Running Shoe for $89. Anything else?</pre>
+
+        <div class="checkpoint">
+          <strong>&#9989; Checkpoint:</strong> Add logging inside the loop (<code>print(block.name)</code> / <code>console.log(fc.name)</code>). On the two-part question you should see <em>both</em> <code>get_order_status</code> and <code>search_products</code> fire in the <strong>same</strong> iteration &mdash; proof the model requested them in parallel. Ask a refund question and watch <code>process_refund</code> fire instead.
+        </div>
+      </section>
+
+      <section class="section" id="control">
+        <h2 id="control-heading">Controlling Tool Choice</h2>
+        <p>By default the model decides freely (<code>auto</code>). Sometimes you want to steer it. All three SDKs expose the same four modes; here's what each means and when to use it.</p>
+
+        <table class="compare-table">
+          <thead><tr><th>Mode</th><th>Behavior</th><th>Use when</th></tr></thead>
+          <tbody>
+            <tr><td>auto</td><td>Model chooses whether and which tools to call (default)</td><td>Almost always &mdash; normal agent behavior</td></tr>
+            <tr><td>required / any</td><td>Model must call at least one tool</td><td>You know a tool is needed (e.g. a lookup flow)</td></tr>
+            <tr><td>specific tool</td><td>Force one named tool</td><td>Deterministic extraction / a fixed step</td></tr>
+            <tr><td>none</td><td>Model may not call any tool</td><td>You want a plain text turn only</td></tr>
+          </tbody>
+        </table>
+
+        <div class="tech-def-box">
+          <span class="box-label">The Spelling, Per SDK</span>
+          <ul style="margin-bottom:0;">
+            <li><strong>Anthropic:</strong> <code>tool_choice={"type": "auto" | "any" | "tool" | "none", "name": ...}</code>. Add <code>"disable_parallel_tool_use": true</code> to force at most one tool per turn.</li>
+            <li><strong>Gemini:</strong> a <code>tool_config</code> with <code>function_calling_config.mode = "AUTO" | "ANY" | "NONE"</code> (and optional <code>allowed_function_names</code>).</li>
+            <li><strong>OpenAI:</strong> <code>tool_choice="auto" | "required" | "none"</code> or <code>{"type": "function", "name": "..."}</code>; set <code>parallel_tool_calls=False</code> to disable parallelism.</li>
+          </ul>
+        </div>
+
+        <div class="callout-warning">
+          <span class="box-label">Write-Tools Need a Leash</span>
+          <p style="margin-bottom:0;">Read tools (<code>get_order_status</code>, <code>search_products</code>) are safe to run automatically. <code>process_refund</code> is a <strong>write</strong> &mdash; it moves money. Right now the model can trigger it from a persuasive message alone. In production you'd (1) require human confirmation before executing a write tool, and (2) validate inputs server-side. That's exactly the human-in-the-loop and guardrail work coming in M06&ndash;M07. For now, just notice which of your tools are dangerous &mdash; that instinct is half the battle.</p>
+        </div>
+      </section>
+
+      <section class="section" id="compare">
+        <h2 id="compare-heading">Three Ways, One Idea</h2>
+        <table class="compare-table">
+          <thead><tr><th>Concept</th><th class="c-anth">Anthropic</th><th class="c-goog">Google Gemini</th><th class="c-oai">OpenAI (Responses)</th></tr></thead>
+          <tbody>
+            <tr><td>Many tools</td><td>list of tool dicts in <code>tools=</code></td><td>many <code>FunctionDeclaration</code>s in one <code>Tool</code></td><td>list of flat function tools in <code>tools=</code></td></tr>
+            <tr><td>Parallel calls</td><td>several <code>tool_use</code> blocks in one response</td><td>several entries in <code>resp.function_calls</code></td><td>several <code>function_call</code> items in <code>output</code></td></tr>
+            <tr><td>Return all results</td><td>one <code>user</code> msg, many <code>tool_result</code></td><td>one <code>tool</code> Content, many <code>functionResponse</code></td><td>many <code>function_call_output</code> items appended</td></tr>
+            <tr><td>Steer choice</td><td><code>tool_choice</code> (auto/any/tool/none)</td><td><code>tool_config.function_calling_config.mode</code></td><td><code>tool_choice</code> (auto/required/none/tool)</td></tr>
+            <tr><td>Disable parallel</td><td><code>disable_parallel_tool_use: true</code></td><td>(model / prompt controlled)</td><td><code>parallel_tool_calls=False</code></td></tr>
+          </tbody>
+        </table>
+
+        <div class="callout-why">
+          <span class="box-label">Why the Differences?</span>
+          <p style="margin-bottom:0;">There barely are any &mdash; this is the module where the three SDKs converge most. All represent "many tools" as a list, all can return "many calls" in one turn, and all want "many results" back together. The dispatch-table pattern you wrote is portable across all three with only the field names swapped. If M01 taught you the loop, M03 taught you it doesn't grow when the toolbox does. That property is exactly why the M06&ndash;M07 frameworks can automate it.</p>
+        </div>
+      </section>
+
+      <section class="section" id="quiz">
+        <h2 id="quiz-heading">Knowledge Check</h2>
+
+        <div class="quiz-question" data-correct="b">
+          <h4>Q1: With three tools registered, what decides which one the model calls?</h4>
+          <div class="quiz-option" data-value="a" onclick="selectQuiz(this)" tabindex="0" role="button"><span class="quiz-marker">A</span><span>A separate router you configure in the SDK</span></div>
+          <div class="quiz-option" data-value="b" onclick="selectQuiz(this)" tabindex="0" role="button"><span class="quiz-marker">B</span><span>The model, by reading each tool's name and description</span></div>
+          <div class="quiz-option" data-value="c" onclick="selectQuiz(this)" tabindex="0" role="button"><span class="quiz-marker">C</span><span>The order the tools appear in the list</span></div>
+          <div class="quiz-option" data-value="d" onclick="selectQuiz(this)" tabindex="0" role="button"><span class="quiz-marker">D</span><span>Random selection</span></div>
+          <div class="quiz-feedback correct-fb">Correct! Descriptions ARE the routing logic. Vague, overlapping descriptions cause wrong-tool bugs; precise ones with clear "use when" triggers route cleanly.</div>
+          <div class="quiz-feedback incorrect-fb"></div>
+        </div>
+
+        <div class="quiz-question" data-correct="c">
+          <h4>Q2: The model requests two tools in one turn. What must you do?</h4>
+          <div class="quiz-option" data-value="a" onclick="selectQuiz(this)" tabindex="0" role="button"><span class="quiz-marker">A</span><span>Run only the first one; ignore the second</span></div>
+          <div class="quiz-option" data-value="b" onclick="selectQuiz(this)" tabindex="0" role="button"><span class="quiz-marker">B</span><span>Return each result in its own separate turn</span></div>
+          <div class="quiz-option" data-value="c" onclick="selectQuiz(this)" tabindex="0" role="button"><span class="quiz-marker">C</span><span>Run both and return both results together in a single turn, then loop</span></div>
+          <div class="quiz-option" data-value="d" onclick="selectQuiz(this)" tabindex="0" role="button"><span class="quiz-marker">D</span><span>Restart the conversation</span></div>
+          <div class="quiz-feedback correct-fb">Correct! Run all requested tools and return all results in one turn. Splitting them across turns (or dropping one) makes the SDK error or the model stop calling in parallel.</div>
+          <div class="quiz-feedback incorrect-fb"></div>
+        </div>
+
+        <div class="quiz-question" data-correct="d">
+          <h4>Q3: How much did the M01 loop change to support three tools and parallel calls?</h4>
+          <div class="quiz-option" data-value="a" onclick="selectQuiz(this)" tabindex="0" role="button"><span class="quiz-marker">A</span><span>Completely rewritten with a new async framework</span></div>
+          <div class="quiz-option" data-value="b" onclick="selectQuiz(this)" tabindex="0" role="button"><span class="quiz-marker">B</span><span>It needed a special parallel-execution library</span></div>
+          <div class="quiz-option" data-value="c" onclick="selectQuiz(this)" tabindex="0" role="button"><span class="quiz-marker">C</span><span>Parallel calls required a different loop entirely</span></div>
+          <div class="quiz-option" data-value="d" onclick="selectQuiz(this)" tabindex="0" role="button"><span class="quiz-marker">D</span><span>Barely &mdash; a bigger tool list and a dispatch table; the loop already looped over all requests</span></div>
+          <div class="quiz-feedback correct-fb">Correct! Because M01's loop always iterated over every tool request, parallel calls "just worked." Orchestration is the same engine with a fuller toolbox.</div>
+          <div class="quiz-feedback incorrect-fb"></div>
+        </div>
+
+        <div class="quiz-question" data-correct="a">
+          <h4>Q4: Why does <code>process_refund</code> deserve extra caution that <code>search_products</code> doesn't?</h4>
+          <div class="quiz-option" data-value="a" onclick="selectQuiz(this)" tabindex="0" role="button"><span class="quiz-marker">A</span><span>It's a write action &mdash; it changes state (moves money) &mdash; so it should be gated behind confirmation</span></div>
+          <div class="quiz-option" data-value="b" onclick="selectQuiz(this)" tabindex="0" role="button"><span class="quiz-marker">B</span><span>It's slower to run</span></div>
+          <div class="quiz-option" data-value="c" onclick="selectQuiz(this)" tabindex="0" role="button"><span class="quiz-marker">C</span><span>It uses more tokens</span></div>
+          <div class="quiz-option" data-value="d" onclick="selectQuiz(this)" tabindex="0" role="button"><span class="quiz-marker">D</span><span>It's not really different</span></div>
+          <div class="quiz-feedback correct-fb">Correct! Read tools are safe to auto-run; write tools change the world. Reversibility is the tell &mdash; hard-to-undo actions belong behind human confirmation (M06–M07).</div>
+          <div class="quiz-feedback incorrect-fb"></div>
+        </div>
+
+        <div class="quiz-question" data-correct="b">
+          <h4>Q5: You want to force the model to always call a tool this turn. Which <code>tool_choice</code>-style mode?</h4>
+          <div class="quiz-option" data-value="a" onclick="selectQuiz(this)" tabindex="0" role="button"><span class="quiz-marker">A</span><span><code>none</code></span></div>
+          <div class="quiz-option" data-value="b" onclick="selectQuiz(this)" tabindex="0" role="button"><span class="quiz-marker">B</span><span><code>required</code> / <code>any</code> (or <code>ANY</code> mode in Gemini)</span></div>
+          <div class="quiz-option" data-value="c" onclick="selectQuiz(this)" tabindex="0" role="button"><span class="quiz-marker">C</span><span><code>auto</code></span></div>
+          <div class="quiz-option" data-value="d" onclick="selectQuiz(this)" tabindex="0" role="button"><span class="quiz-marker">D</span><span>There's no way to require a tool</span></div>
+          <div class="quiz-feedback correct-fb">Correct! <code>required</code> (OpenAI) / <code>any</code> (Anthropic) / <code>ANY</code> (Gemini) forces at least one tool call. <code>auto</code> lets the model decide; <code>none</code> forbids tools.</div>
+          <div class="quiz-feedback incorrect-fb"></div>
+        </div>
+
+        <div class="quiz-score" id="quiz-score" style="display:none;">
+          <div class="score-num" id="score-display"></div>
+          <p id="score-message" style="color:var(--text-secondary);margin-top:0.5rem;"></p>
+        </div>
+      </section>
+
+      <section class="section" id="summary">
+        <h2 id="summary-heading">Module Summary</h2>
+        <div style="background:var(--bg-card);border-radius:12px;padding:1.5rem;margin-bottom:1.5rem;">
+          <h3 id="key-takeaways" style="margin-top:0;color:var(--accent-primary);">Key Takeaways</h3>
+          <ul>
+            <li><strong>An agent is its tool surface.</strong> Add well-described tools and the model routes requests to them &mdash; descriptions are your router.</li>
+            <li><strong>Parallel tool calls are built in:</strong> one turn can request several tools; run them all and return all results together.</li>
+            <li><strong>The M01 loop didn't change</strong> &mdash; a dispatch table replaces <code>if/else</code>, and it scales to any number of tools.</li>
+            <li><strong>Steer with tool_choice</strong> (auto / required / specific / none) and disable parallelism when you need serialized, gate-able calls.</li>
+            <li><strong>Flag write-tools.</strong> A refund moves money &mdash; it belongs behind confirmation, which you'll build in the guardrails modules.</li>
+          </ul>
+        </div>
+        <div style="background:var(--bg-card);border-radius:12px;padding:1.5rem;">
+          <h3 id="next-preview" style="margin-top:0;color:var(--track-color);">Next: M04 &mdash; Memory &amp; Conversation</h3>
+          <p style="margin-bottom:0;">Every run so far started from a blank slate. Real support is a <em>conversation</em> &mdash; "where's my order?" then "actually, cancel it." In M04 you'll give Acme memory across turns, and meet the three SDKs' very different answers: resend-the-history (stateless), chat sessions, and server-stored state with <code>previous_response_id</code>.</p>
+        </div>
+      </section>
+
+      <div class="module-nav">
+        <a href="M02-structured-output.html" aria-label="Previous module: Structured Output">&larr; M02: Structured Output</a>
+        <a href="index.html" aria-label="Course Home" title="Course Home" style="font-size:1.2rem;">&#x1F3E0; Home</a>
+        <a href="M04-memory-conversation.html" aria-label="Next module: Memory and Conversation">M04: Memory &rarr;</a>
+      </div>
+    </main>
+  </div>
+
+  <button class="sidebar-toggle" onclick="document.getElementById('sidebar').classList.toggle('open')" aria-label="Toggle navigation menu">&#9776;</button>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+
+  <script>
+    function switchTab(btn, group) {
+      const lang = btn.dataset.lang;
+      const wrapper = btn.closest('.code-block-wrapper');
+      wrapper.querySelectorAll('.code-tab').forEach(t => { t.classList.remove('active'); t.setAttribute('aria-selected','false'); });
+      wrapper.querySelectorAll('.code-panel').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active'); btn.setAttribute('aria-selected','true');
+      const panel = wrapper.querySelector('#' + group + '-' + lang);
+      if (panel) panel.classList.add('active');
+    }
+    function copyCode(btn) {
+      const codeBlock = btn.parentElement.querySelector('code') || btn.closest('.code-single, .code-panel').querySelector('code');
+      navigator.clipboard.writeText(codeBlock.textContent).then(() => { btn.textContent = 'Copied!'; setTimeout(() => btn.textContent = 'Copy', 2000); });
+    }
+    // ORCHESTRATION ANIMATION
+    const orchEls = [...document.querySelectorAll('.orch [data-i]')];
+    const maxStep = Math.max(...orchEls.map(e => +e.dataset.i));
+    let orchTimer = null, orchStep = 0;
+    function orchPlay() {
+      if (orchTimer) return;
+      orchTimer = setInterval(() => {
+        if (orchStep > maxStep) { orchPause(); return; }
+        orchEls.filter(e => +e.dataset.i === orchStep).forEach(e => e.classList.add('lit'));
+        orchStep++;
+      }, 850);
+    }
+    function orchPause() { clearInterval(orchTimer); orchTimer = null; }
+    function orchReset() { orchPause(); orchStep = 0; orchEls.forEach(e => e.classList.remove('lit')); }
+    // QUIZ
+    let answeredCount = 0, correctCount = 0;
+    const totalQuestions = document.querySelectorAll('.quiz-question').length;
+    function selectQuiz(optionEl) {
+      const question = optionEl.closest('.quiz-question');
+      if (question.classList.contains('answered')) return;
+      question.classList.add('answered');
+      const correct = question.dataset.correct;
+      const isCorrect = optionEl.dataset.value === correct;
+      question.querySelectorAll('.quiz-option').forEach(o => o.classList.add('disabled'));
+      if (isCorrect) { optionEl.classList.add('correct'); optionEl.querySelector('.quiz-marker').textContent = '✓'; correctCount++; }
+      else {
+        optionEl.classList.add('incorrect'); optionEl.querySelector('.quiz-marker').textContent = '✗';
+        question.querySelectorAll('.quiz-option').forEach(o => { if (o.dataset.value === correct) { o.classList.add('correct'); o.querySelector('.quiz-marker').textContent = '✓'; } });
+      }
+      const correctFb = question.querySelector('.quiz-feedback.correct-fb');
+      const incorrectFb = question.querySelector('.quiz-feedback.incorrect-fb');
+      if (isCorrect) correctFb.classList.add('show');
+      else { incorrectFb.textContent = 'Not quite. ' + correctFb.textContent.replace('Correct! ', ''); incorrectFb.classList.add('show'); }
+      answeredCount++;
+      if (answeredCount === totalQuestions) {
+        const scoreDiv = document.getElementById('quiz-score'); scoreDiv.style.display = 'block';
+        document.getElementById('score-display').textContent = correctCount + ' / ' + totalQuestions;
+        const pct = Math.round((correctCount / totalQuestions) * 100);
+        document.getElementById('score-message').textContent =
+          pct === 100 ? 'Perfect! You can orchestrate a toolbox — on to memory.' :
+          pct >= 60  ? 'Solid. Re-skim "Parallel Tool Calls" and the tool_choice table before M04.' :
+                       'Re-read "The Orchestration Loop" and the parallel-tool bug callout before M04.';
+      }
+    }
+    document.querySelectorAll('.quiz-option').forEach(opt => { opt.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectQuiz(opt); } }); });
+    // SCROLL-SPY
+    const secs = document.querySelectorAll('section[id], h2[id], h3[id]');
+    const navLinks = document.querySelectorAll('.sidebar-nav a');
+    function updateActiveLink() {
+      let current = '';
+      secs.forEach(s => { if (s.getBoundingClientRect().top <= 120) current = s.id; });
+      navLinks.forEach(l => { l.classList.remove('active'); if (l.getAttribute('href') === '#' + current) l.classList.add('active'); });
+    }
+    window.addEventListener('scroll', updateActiveLink, { passive: true });
+    navLinks.forEach(link => { link.addEventListener('click', e => { e.preventDefault(); const t = document.querySelector(link.getAttribute('href')); if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' }); document.getElementById('sidebar').classList.remove('open'); }); });
+    setTimeout(orchPlay, 800);
+  </script>
+
+<!-- course-assistant-widget:start -->
+<style>
+#caw-fab{position:fixed;bottom:1.5rem;right:1.5rem;z-index:99990;background:#D4A843;color:#0A1628;border:none;border-radius:28px;padding:0.7rem 1.2rem;font-weight:700;font-size:0.95rem;cursor:pointer;box-shadow:0 4px 18px rgba(0,0,0,0.45);font-family:inherit}
+#caw-fab:hover{filter:brightness(1.08)}
+#caw-overlay{position:fixed;inset:0;z-index:99991;background:rgba(4,10,20,0.72);display:flex;align-items:center;justify-content:center;padding:2rem}
+#caw-overlay[hidden]{display:none}
+#caw-panel{width:min(1100px,100%);height:min(760px,100%);background:#0A1628;border:1px solid #D4A843;border-radius:14px;display:flex;flex-direction:column;overflow:hidden}
+#caw-bar{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:0.5rem 1rem;background:#111D33;border-bottom:1px solid #21262D;color:#E8ECF1;font-size:0.85rem;font-family:sans-serif}
+#caw-bar a{color:#D4A843;text-decoration:none}
+#caw-close{background:none;border:none;color:#94A3B8;font-size:1.3rem;cursor:pointer;line-height:1}
+#caw-close:hover{color:#E8ECF1}
+#caw-frame{flex:1;border:none;width:100%;background:#0A1628}
+@media (max-width:768px){#caw-overlay{padding:0}#caw-panel{border-radius:0}}
+@media print{#caw-fab,#caw-overlay{display:none!important}}
+</style>
+<button id="caw-fab" aria-haspopup="dialog" aria-label="Open course search and ask assistant">💬 Ask the Course</button>
+<div id="caw-overlay" hidden role="dialog" aria-modal="true" aria-label="Course search assistant">
+  <div id="caw-panel">
+    <div id="caw-bar">
+      <span>Course Assistant — search or ask, fully offline</span>
+      <span><a href="search-assistant.html" target="_blank" rel="noopener">Open full page ↗</a> &nbsp; <button id="caw-close" aria-label="Close assistant">✕</button></span>
+    </div>
+    <iframe id="caw-frame" title="Course search assistant"></iframe>
+  </div>
+</div>
+<script>
+(function(){
+  var fab=document.getElementById('caw-fab'),ov=document.getElementById('caw-overlay'),
+      fr=document.getElementById('caw-frame'),cl=document.getElementById('caw-close');
+  function open(){ if(!fr.src) fr.src='search-assistant.html'; ov.hidden=false; fab.hidden=true; }
+  function close(){ ov.hidden=true; fab.hidden=false; fab.focus(); }
+  fab.addEventListener('click',open);
+  cl.addEventListener('click',close);
+  ov.addEventListener('click',function(e){ if(e.target===ov) close(); });
+  document.addEventListener('keydown',function(e){ if(e.key==='Escape'&&!ov.hidden) close(); });
+})();
+</script>
+<!-- course-assistant-widget:end -->
+</body>
+</html>

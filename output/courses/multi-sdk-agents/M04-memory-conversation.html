@@ -1,0 +1,805 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>M04: Memory &amp; Conversation | One Agent, Three SDKs</title>
+  <link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;700;800&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;600&display=swap" rel="stylesheet">
+  <link href="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/themes/prism-tomorrow.min.css" rel="stylesheet">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg-primary: #0A1628; --bg-secondary: #111D33; --bg-card: #162033; --bg-surface: #1A2740;
+      --text-primary: #E8ECF1; --text-secondary: #94A3B8; --text-muted: #64748B;
+      --accent-primary: #D4A843; --accent-hover: #E5BC5A; --accent-muted: rgba(212, 168, 67, 0.15);
+      --success: #10B981; --success-bg: rgba(16, 185, 129, 0.1);
+      --warning: #F59E0B; --warning-bg: rgba(245, 158, 11, 0.1);
+      --error: #F43F5E; --error-bg: rgba(244, 63, 94, 0.1);
+      --info: #3B82F6; --info-bg: rgba(59, 130, 246, 0.1);
+      --track-color: #8B5CF6;
+      --anth: #D97757; --goog: #4285F4; --oai: #10A37F;
+      --code-bg: #0D1117; --code-border: #21262D; --code-text: #C9D1D9;
+      --transition-fast: 150ms; --transition-normal: 300ms;
+    }
+    body { background: var(--bg-primary); color: var(--text-primary); font-family: 'Source Sans 3', sans-serif; font-size: 1.05rem; line-height: 1.7; min-height: 100vh; }
+    .top-progress { position: fixed; top: 0; left: 0; right: 0; height: 4px; background: var(--bg-surface); z-index: 200; }
+    .top-progress .fill { height: 100%; background: linear-gradient(90deg, var(--anth), var(--goog), var(--oai)); width: 62.5%; border-radius: 0 2px 2px 0; }
+    .course-header { background: var(--bg-secondary); border-bottom: 1px solid var(--code-border); padding: 1.25rem 2rem; }
+    .course-header-inner { max-width: 1200px; margin: 0 auto; display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 1rem; }
+    .course-title { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.95rem; font-weight: 600; color: var(--text-secondary); }
+    .track-badge { display: inline-flex; align-items: center; gap: 0.5rem; background: rgba(139, 92, 246, 0.15); border: 1px solid var(--track-color); border-radius: 20px; padding: 0.25rem 0.75rem; font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.8rem; font-weight: 600; color: var(--track-color); }
+    .track-badge .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--track-color); }
+    .header-meta { display: flex; gap: 1.5rem; font-size: 0.85rem; color: var(--text-muted); }
+    .page-container { max-width: 1200px; margin: 0 auto; padding: 2rem; display: grid; grid-template-columns: 240px 1fr; gap: 3rem; }
+    .sidebar-nav { position: sticky; top: 2rem; height: calc(100vh - 4rem); overflow-y: auto; padding-right: 1rem; }
+    .sidebar-nav::-webkit-scrollbar { width: 3px; }
+    .sidebar-nav::-webkit-scrollbar-thumb { background: var(--bg-surface); border-radius: 3px; }
+    .sidebar-title { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em; color: var(--text-muted); margin-bottom: 1rem; }
+    .sidebar-nav a { display: block; padding: 0.4rem 0.75rem; margin-bottom: 0.15rem; font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.82rem; font-weight: 600; color: var(--text-muted); text-decoration: none; border-left: 2px solid transparent; border-radius: 0 4px 4px 0; transition: all var(--transition-fast); }
+    .sidebar-nav a:hover { color: var(--text-primary); background: var(--bg-surface); }
+    .sidebar-nav a.active { color: var(--accent-primary); border-left-color: var(--accent-primary); background: var(--accent-muted); }
+    .sidebar-nav a.sub { padding-left: 1.5rem; font-size: 0.78rem; font-weight: 400; }
+    .content { max-width: 820px; }
+    .section { margin-bottom: 4rem; }
+    h1 { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 800; font-size: 2.25rem; line-height: 1.2; margin-bottom: 0.75rem; }
+    h2 { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 1.5rem; color: var(--text-primary); margin: 2.5rem 0 1rem; padding-top: 1rem; border-top: 1px solid var(--code-border); }
+    h2:first-of-type { border-top: none; }
+    h3 { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 600; font-size: 1.25rem; color: var(--text-primary); margin: 2rem 0 0.75rem; }
+    p { margin-bottom: 1rem; }
+    ul, ol { margin: 0.5rem 0 1rem 1.5rem; }
+    li { margin-bottom: 0.4rem; }
+    strong { font-weight: 600; }
+    code { font-family: 'JetBrains Mono', monospace; font-size: 0.88em; background: var(--bg-surface); padding: 0.1rem 0.35rem; border-radius: 4px; color: var(--code-text); }
+    .analogy-box, .tech-def-box, .callout-why, .callout-warning { border-left: 4px solid; border-radius: 0 8px 8px 0; padding: 1.25rem 1.5rem; margin: 1.5rem 0; }
+    .analogy-box { background: var(--accent-muted); border-left-color: var(--accent-primary); }
+    .tech-def-box { background: var(--info-bg); border-left-color: var(--info); }
+    .callout-why { background: var(--success-bg); border-left-color: var(--success); }
+    .callout-warning { background: var(--warning-bg); border-left-color: var(--warning); }
+    .box-label { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 0.9rem; display: block; margin-bottom: 0.4rem; }
+    .analogy-box .box-label { color: var(--accent-primary); }
+    .tech-def-box .box-label { color: var(--info); }
+    .callout-why .box-label { color: var(--success); }
+    .callout-warning .box-label { color: var(--warning); }
+    .term-tooltip { position: relative; color: var(--accent-primary); cursor: help; border-bottom: 1px dashed var(--accent-primary); }
+    .term-tooltip .tooltip-content { position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%); background: var(--bg-card); border: 1px solid var(--accent-primary); border-radius: 8px; padding: 0.75rem 1rem; font-size: 0.85rem; color: var(--text-primary); width: 280px; opacity: 0; pointer-events: none; transition: opacity var(--transition-fast); z-index: 10; line-height: 1.5; box-shadow: 0 4px 20px rgba(0,0,0,0.4); }
+    .term-tooltip:hover .tooltip-content, .term-tooltip:focus .tooltip-content { opacity: 1; pointer-events: auto; }
+    .code-block-wrapper { background: var(--code-bg); border: 1px solid var(--code-border); border-radius: 12px; margin: 1.5rem 0; overflow: hidden; }
+    .code-tabs { display: flex; gap: 0; flex-wrap: wrap; border-bottom: 1px solid var(--code-border); background: var(--bg-surface); }
+    .code-tab { padding: 0.5rem 1rem; background: none; border: none; font-family: 'JetBrains Mono', monospace; font-size: 0.78rem; cursor: pointer; border-bottom: 2px solid transparent; margin-bottom: -1px; opacity: 0.5; color: var(--text-muted); transition: all var(--transition-fast); }
+    .code-tab.tp-anth { color: var(--anth); } .code-tab.tp-goog { color: var(--goog); } .code-tab.tp-oai { color: var(--oai); } .code-tab.tp-lang { color: var(--text-secondary); }
+    .code-tab:hover { opacity: 0.85; }
+    .code-tab.active { opacity: 1; border-bottom-color: currentColor; font-weight: 600; }
+    .code-panel { display: none; position: relative; }
+    .code-panel.active { display: block; }
+    .code-panel pre { margin: 0; padding: 1.25rem; overflow-x: auto; font-family: 'JetBrains Mono', monospace; font-size: 0.82rem; line-height: 1.6; }
+    .code-panel pre code { background: none; color: var(--code-text); padding: 0; }
+    .copy-btn { position: absolute; top: 0.75rem; right: 0.75rem; background: var(--bg-surface); border: 1px solid var(--code-border); color: var(--text-muted); padding: 0.3rem 0.6rem; border-radius: 6px; font-size: 0.75rem; cursor: pointer; font-family: 'JetBrains Mono', monospace; transition: all var(--transition-fast); }
+    .copy-btn:hover { color: var(--accent-primary); border-color: var(--accent-primary); }
+    .code-single { background: var(--code-bg); border: 1px solid var(--code-border); border-radius: 12px; margin: 1.5rem 0; overflow: hidden; position: relative; }
+    .code-single pre { margin: 0; padding: 1.25rem; overflow-x: auto; font-family: 'JetBrains Mono', monospace; font-size: 0.82rem; line-height: 1.6; }
+    .code-single pre code { background: none; padding: 0; }
+    .code-single .copy-btn { top: 0.5rem; right: 0.5rem; }
+    .code-label { display: inline-block; padding: 0.25rem 0.75rem; background: var(--bg-surface); border-bottom: 1px solid var(--code-border); border-right: 1px solid var(--code-border); font-family: 'JetBrains Mono', monospace; font-size: 0.75rem; color: var(--text-muted); border-radius: 0 0 8px 0; }
+    .output-block { background: var(--code-bg); border: 1px solid var(--code-border); border-radius: 8px; padding: 1rem 1.25rem; margin: 0.75rem 0 1.5rem; font-family: 'JetBrains Mono', monospace; font-size: 0.82rem; color: var(--success); line-height: 1.5; white-space: pre-wrap; }
+    .output-label { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.8rem; font-weight: 600; color: var(--text-muted); margin-bottom: 0.25rem; }
+    .compare-table { width: 100%; border-collapse: collapse; margin: 1.5rem 0; background: var(--bg-card); border-radius: 12px; overflow: hidden; font-size: 0.9rem; }
+    .compare-table th, .compare-table td { padding: 0.8rem 1rem; text-align: left; border-bottom: 1px solid var(--code-border); vertical-align: top; }
+    .compare-table th { background: var(--bg-surface); font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.04em; }
+    .compare-table th.c-anth { color: var(--anth); } .compare-table th.c-goog { color: var(--goog); } .compare-table th.c-oai { color: var(--oai); }
+    .compare-table tr:last-child td { border-bottom: none; }
+    .compare-table td:first-child { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 600; color: var(--text-secondary); }
+    .compare-table code { font-size: 0.78rem; }
+    .animation-container { background: var(--bg-secondary); border: 1px solid var(--code-border); border-radius: 12px; padding: 2rem; margin: 2rem 0; position: relative; overflow: hidden; }
+    .animation-title { font-family: 'Bricolage Grotesque', sans-serif; font-size: 0.85rem; font-weight: 700; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 1.25rem; }
+    .mem-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+    .mem-col h5 { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 700; font-size: 0.85rem; margin-bottom: 0.75rem; text-align: center; }
+    .mem-col.bad h5 { color: var(--error); } .mem-col.good h5 { color: var(--success); }
+    .bubble { border-radius: 10px; padding: 0.5rem 0.75rem; margin: 0.4rem 0; font-size: 0.8rem; max-width: 88%; opacity: 0; transform: translateY(6px); transition: all 0.4s ease; }
+    .bubble.lit { opacity: 1; transform: none; }
+    .bubble.user { background: var(--bg-surface); margin-left: auto; text-align: right; }
+    .bubble.bot { background: var(--bg-card); border: 1px solid var(--code-border); }
+    .mem-col.bad .bubble.bot.fail { border-color: var(--error); color: var(--error); }
+    .mem-col.good .bubble.bot.win { border-color: var(--success); color: var(--success); }
+    .animation-controls { display: flex; gap: 0.5rem; justify-content: flex-end; margin-top: 1rem; }
+    .anim-btn { background: var(--bg-card); border: 1px solid var(--code-border); color: var(--text-primary); width: 36px; height: 36px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 1rem; transition: all var(--transition-fast); }
+    .anim-btn:hover { border-color: var(--accent-primary); color: var(--accent-primary); }
+    .quiz-question { background: var(--bg-card); border-radius: 12px; padding: 1.5rem; margin-bottom: 1.5rem; }
+    .quiz-question h4 { font-family: 'Bricolage Grotesque', sans-serif; font-weight: 600; margin-bottom: 1rem; font-size: 1rem; }
+    .quiz-option { padding: 0.75rem 1rem; margin: 0.5rem 0; border: 1px solid var(--code-border); border-radius: 8px; cursor: pointer; transition: all var(--transition-fast); display: flex; align-items: center; gap: 0.75rem; }
+    .quiz-option:hover { border-color: var(--accent-primary); }
+    .quiz-option.correct { border-color: var(--success); background: var(--success-bg); }
+    .quiz-option.incorrect { border-color: var(--error); background: var(--error-bg); }
+    .quiz-option.disabled { pointer-events: none; }
+    .quiz-marker { width: 24px; height: 24px; border-radius: 50%; border: 2px solid var(--code-border); flex-shrink: 0; display: flex; align-items: center; justify-content: center; font-size: 0.75rem; font-weight: 700; }
+    .quiz-option.correct .quiz-marker { border-color: var(--success); color: var(--success); }
+    .quiz-option.incorrect .quiz-marker { border-color: var(--error); color: var(--error); }
+    .quiz-feedback { margin-top: 0.75rem; padding: 0.75rem; border-radius: 8px; font-size: 0.9rem; display: none; }
+    .quiz-feedback.show { display: block; }
+    .quiz-feedback.correct-fb { background: var(--success-bg); color: var(--success); }
+    .quiz-feedback.incorrect-fb { background: var(--error-bg); color: var(--error); }
+    .quiz-score { background: var(--bg-card); border-radius: 12px; padding: 1.5rem; text-align: center; margin-top: 2rem; }
+    .quiz-score .score-num { font-family: 'Bricolage Grotesque', sans-serif; font-size: 2.5rem; font-weight: 800; color: var(--accent-primary); }
+    .module-nav { display: flex; justify-content: space-between; align-items: center; padding: 1.5rem 0; margin: 2rem 0; border-top: 1px solid var(--code-border); }
+    .module-nav a { display: flex; align-items: center; gap: 0.5rem; color: var(--accent-primary); text-decoration: none; font-family: 'Bricolage Grotesque', sans-serif; font-weight: 600; font-size: 0.9rem; padding: 0.5rem 1rem; border: 1px solid var(--code-border); border-radius: 8px; transition: all var(--transition-fast); }
+    .module-nav a:hover { border-color: var(--accent-primary); background: var(--accent-muted); }
+    .module-nav .disabled { color: var(--text-muted); pointer-events: none; opacity: 0.5; }
+    .objectives-list { list-style: none; margin-left: 0; }
+    .objectives-list li { padding: 0.5rem 0 0.5rem 2rem; position: relative; }
+    .objectives-list li::before { content: ''; position: absolute; left: 0; top: 0.85rem; width: 16px; height: 16px; border-radius: 4px; border: 2px solid var(--track-color); background: rgba(139, 92, 246, 0.1); }
+    .checkpoint { background: rgba(16,185,129,0.06); border-left: 3px solid var(--success); padding: 1rem 1.25rem; margin: 1.25rem 0; border-radius: 0 6px 6px 0; }
+    @media (max-width: 900px) {
+      .page-container { grid-template-columns: 1fr; padding: 1rem; }
+      .sidebar-nav { position: fixed; bottom: 0; left: 0; right: 0; height: auto; max-height: 40vh; background: var(--bg-secondary); border-top: 1px solid var(--code-border); z-index: 100; padding: 1rem; display: none; }
+      .sidebar-nav.open { display: block; }
+      .sidebar-toggle { display: flex; position: fixed; bottom: 1rem; right: 1rem; z-index: 101; background: var(--accent-primary); color: var(--bg-primary); border: none; width: 48px; height: 48px; border-radius: 50%; align-items: center; justify-content: center; cursor: pointer; font-size: 1.25rem; box-shadow: 0 4px 15px rgba(0,0,0,0.3); }
+      h1 { font-size: 1.75rem; } .mem-grid { grid-template-columns: 1fr; }
+    }
+    @media (min-width: 901px) { .sidebar-toggle { display: none; } }
+    @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; } .bubble { opacity: 1; transform: none; } }
+    :focus-visible { outline: 2px solid var(--accent-primary); outline-offset: 2px; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <div class="top-progress" role="progressbar" aria-label="Course progress: Module 5 of 8" aria-valuenow="5" aria-valuemin="1" aria-valuemax="8"><div class="fill"></div></div>
+
+  <header class="course-header">
+    <div class="course-header-inner">
+      <div class="course-title">One Agent, Three SDKs &mdash; Anthropic &middot; Google Gemini &middot; OpenAI</div>
+      <div style="display:flex;align-items:center;gap:1rem;flex-wrap:wrap;">
+        <span class="track-badge"><span class="dot"></span>Foundations</span>
+        <div class="header-meta"><span>Module 5 of 8</span><span>45&ndash;60 min</span><span>Intermediate</span></div>
+      </div>
+    </div>
+  </header>
+
+  <div class="page-container">
+    <nav class="sidebar-nav" id="sidebar" aria-label="Module sections">
+      <div class="sidebar-title">On this page</div>
+      <a href="#objectives">Learning Objectives</a>
+      <a href="#why">Why Memory?</a>
+      <a href="#stateless">The Core Truth: Stateless</a>
+      <a href="#mem-anim" class="sub">Memory vs No Memory</a>
+      <a href="#manual">Approach A &mdash; Manual History</a>
+      <a href="#run-a">Run It</a>
+      <a href="#shortcuts">Approach B &mdash; The Shortcuts</a>
+      <a href="#tradeoff">Which Should I Use?</a>
+      <a href="#compare">Three Ways, One Idea</a>
+      <a href="#quiz">Knowledge Check</a>
+      <a href="#summary">Summary</a>
+    </nav>
+
+    <main class="content" role="main">
+      <section class="section" style="margin-bottom:2rem;">
+        <div class="module-nav" style="border-top:none;margin-top:0;">
+          <a href="M03-multi-tool-orchestration.html" aria-label="Previous module: Multi-Tool Orchestration">&larr; M03: Multi-Tool</a>
+          <a href="index.html" aria-label="Course Home" title="Course Home" style="font-size:1.2rem;">&#x1F3E0; Home</a>
+          <a href="M05-rag-retrieval.html" aria-label="Next module: RAG and Retrieval">M05: RAG &rarr;</a>
+        </div>
+        <h1>M04 &mdash; Memory &amp; Conversation</h1>
+        <p style="color:var(--text-secondary);font-size:1.1rem;">
+          Every run so far started from a blank slate. Real support is a <em>conversation</em>: "Hi, I'm Sam, where's my order?" then "Actually &mdash; cancel it." For the second message to make sense, Acme must remember the first. This is the module where the three SDKs disagree the most &mdash; and where you learn the one truth underneath all of them: <strong>the model remembers nothing. You do.</strong>
+        </p>
+      </section>
+
+      <section class="section" id="objectives">
+        <h2 id="objectives-heading">Learning Objectives</h2>
+        <ul class="objectives-list" aria-label="Learning objectives">
+          <li>State the core truth: LLM APIs are <span class="term-tooltip">stateless<span class="tooltip-content">Each API call is independent. The model has no memory of previous calls — any "memory" comes from you resending the earlier turns as part of the new request.</span></span> &mdash; memory is context <em>you</em> resend</li>
+          <li>Build multi-turn memory the universal way: keep a history list and resend it every turn, in all three SDKs</li>
+          <li>Use each SDK's convenience layer: a manager class (Anthropic), a <strong>chat session</strong> (Gemini), and <strong>server-stored state</strong> via <code>previous_response_id</code> (OpenAI)</li>
+          <li>Weigh the tradeoff: you-own-the-history (portable, but you resend tokens) vs provider-stored state (less to send, but tied to that provider)</li>
+          <li>Anticipate the context-window problem that memory creates &mdash; and why "compaction" exists</li>
+        </ul>
+      </section>
+
+      <section class="section" id="why">
+        <h2 id="why-heading">Why Memory?</h2>
+        <div class="analogy-box">
+          <span class="box-label">Everyday Analogy</span>
+          <p><strong>BEFORE:</strong> Imagine a support rep with perfect knowledge but a five-second memory. You say "Hi, I'm Sam, where's order AC-1042?" They answer beautifully. You say "Great &mdash; cancel it." They blink: "Cancel <em>what</em>? Who are you?"</p>
+          <p><strong>PAIN:</strong> Every follow-up collapses. The customer has to repeat their name, their order number, and the whole context in <em>every single message</em>. No relationship, no flow &mdash; just a series of disconnected first-contacts. Unusable for anything real.</p>
+          <p style="margin-bottom:0;"><strong>MAPPING:</strong> That five-second-memory rep is a raw model call. It genuinely remembers nothing between requests. The fix isn't a smarter model &mdash; it's handing the rep a <em>transcript of the conversation so far</em> before each new message. That transcript is memory. This module is about who keeps the transcript, and how.</p>
+        </div>
+      </section>
+
+      <section class="section" id="stateless">
+        <h2 id="stateless-heading">The Core Truth: The Model Is Stateless</h2>
+        <div class="tech-def-box">
+          <span class="box-label">Technical Definition</span>
+          <p style="margin-bottom:0;">A chat model API is <strong>stateless</strong>: each call is independent and the model retains nothing from previous calls. When ChatGPT or Claude.ai "remembers" your conversation, it's because the <em>application</em> resends the entire prior transcript with every new message. There is no hidden server-side brain holding your chat &mdash; unless you explicitly opt into a stored-state feature (which OpenAI's Responses API offers). So "giving an agent memory" means one of two things: <strong>(A)</strong> you keep the transcript and resend it, or <strong>(B)</strong> you ask the provider to keep it and reference it by id. That's the entire subject of this module.</p>
+        </div>
+
+        <p id="mem-anim">Here's the same two-message conversation, once <em>without</em> memory (each call blank) and once <em>with</em> (the history resent). Watch the second turn succeed only on the right:</p>
+
+        <div class="animation-container" aria-label="Animated comparison: conversation with and without memory">
+          <div class="animation-title">Same Two Turns &mdash; Memory Off vs Memory On</div>
+          <div class="mem-grid">
+            <div class="mem-col bad">
+              <h5>&#10007; No memory (each call blank)</h5>
+              <div class="bubble user" data-i="0">Hi, I'm Sam. Where's order AC-1042?</div>
+              <div class="bubble bot" data-i="1">It's shipped via UPS, arriving Tuesday!</div>
+              <div class="bubble user" data-i="2">Great &mdash; cancel it.</div>
+              <div class="bubble bot fail" data-i="3">Cancel what? Could you share your order number?</div>
+            </div>
+            <div class="mem-col good">
+              <h5>&#10003; With memory (history resent)</h5>
+              <div class="bubble user" data-i="0">Hi, I'm Sam. Where's order AC-1042?</div>
+              <div class="bubble bot" data-i="1">It's shipped via UPS, arriving Tuesday!</div>
+              <div class="bubble user" data-i="2">Great &mdash; cancel it.</div>
+              <div class="bubble bot win" data-i="3">No problem, Sam &mdash; cancelling AC-1042 now.</div>
+            </div>
+          </div>
+          <div class="animation-controls">
+            <button class="anim-btn" onclick="memPlay()" aria-label="Play" title="Play">&#9654;</button>
+            <button class="anim-btn" onclick="memPause()" aria-label="Pause" title="Pause">&#10074;&#10074;</button>
+            <button class="anim-btn" onclick="memReset()" aria-label="Reset" title="Reset">&#10227;</button>
+          </div>
+        </div>
+
+        <div class="callout-why">
+          <span class="box-label">What Just Happened?</span>
+          <p style="margin-bottom:0;">Same model, same two messages &mdash; the only difference is that the right side resent turns 1&ndash;2 along with turn 3, so the model could see "Sam" and "AC-1042." The model didn't get smarter; it got <em>context</em>. Memory is not a model capability. It's a bookkeeping decision you make in your code.</p>
+        </div>
+      </section>
+
+      <section class="section" id="manual">
+        <h2 id="manual-heading">Approach A &mdash; Manual History (the universal baseline)</h2>
+        <p>The approach that works in <em>all three</em> SDKs: keep a running list of turns, append each user message and each model reply, and pass the whole list every time. You own the transcript. Each tab is a complete file with a tiny <code>chat()</code> helper &mdash; call it twice and the second turn remembers the first.</p>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs" role="tablist" aria-label="Provider and language tabs">
+            <button class="code-tab tp-anth active" role="tab" aria-selected="true" data-lang="anth-py" onclick="switchTab(this,'manual')">Anthropic &middot; Py</button>
+            <button class="code-tab tp-anth" role="tab" aria-selected="false" data-lang="anth-js" onclick="switchTab(this,'manual')">Anthropic &middot; JS</button>
+            <button class="code-tab tp-goog" role="tab" aria-selected="false" data-lang="goog-py" onclick="switchTab(this,'manual')">Google &middot; Py</button>
+            <button class="code-tab tp-goog" role="tab" aria-selected="false" data-lang="goog-js" onclick="switchTab(this,'manual')">Google &middot; JS</button>
+            <button class="code-tab tp-oai" role="tab" aria-selected="false" data-lang="oai-py" onclick="switchTab(this,'manual')">OpenAI &middot; Py</button>
+            <button class="code-tab tp-oai" role="tab" aria-selected="false" data-lang="oai-js" onclick="switchTab(this,'manual')">OpenAI &middot; JS</button>
+          </div>
+
+          <div class="code-panel active" id="manual-anth-py" role="tabpanel">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code class="language-python"># memory_anthropic.py
+from anthropic import Anthropic
+
+client = Anthropic()
+SYSTEM = "You are Acme Support."
+history = []                              # <-- the memory. You own it.
+
+def chat(user_msg: str) -> str:
+    history.append({"role": "user", "content": user_msg})
+    resp = client.messages.create(
+        model="claude-sonnet-5", max_tokens=512, system=SYSTEM, messages=history,
+    )
+    reply = "".join(b.text for b in resp.content if b.type == "text")
+    history.append({"role": "assistant", "content": reply})   # remember the reply too
+    return reply
+
+print(chat("Hi, I'm Sam. Where's order AC-1042?"))
+print(chat("Great — actually, can you cancel it?"))   # knows "Sam" + "AC-1042"</code></pre>
+          </div>
+
+          <div class="code-panel" id="manual-anth-js" role="tabpanel">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code class="language-javascript">// memory_anthropic.mjs
+import Anthropic from "@anthropic-ai/sdk";
+
+const client = new Anthropic();
+const SYSTEM = "You are Acme Support.";
+const history = [];                       // the memory — you own it
+
+async function chat(userMsg) {
+  history.push({ role: "user", content: userMsg });
+  const resp = await client.messages.create({
+    model: "claude-sonnet-5", max_tokens: 512, system: SYSTEM, messages: history,
+  });
+  const reply = resp.content.filter(b => b.type === "text").map(b => b.text).join("");
+  history.push({ role: "assistant", content: reply });
+  return reply;
+}
+
+console.log(await chat("Hi, I'm Sam. Where's order AC-1042?"));
+console.log(await chat("Great — actually, can you cancel it?"));</code></pre>
+          </div>
+
+          <div class="code-panel" id="manual-goog-py" role="tabpanel">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code class="language-python"># memory_gemini.py  (manual history)
+from google import genai
+from google.genai import types
+
+client = genai.Client()
+config = types.GenerateContentConfig(system_instruction="You are Acme Support.")
+history = []                              # list of types.Content — you own it
+
+def chat(user_msg: str) -> str:
+    history.append(types.Content(role="user", parts=[types.Part(text=user_msg)]))
+    resp = client.models.generate_content(
+        model="gemini-2.5-flash", contents=history, config=config,
+    )
+    history.append(resp.candidates[0].content)   # remember the model's turn
+    return resp.text
+
+print(chat("Hi, I'm Sam. Where's order AC-1042?"))
+print(chat("Great — actually, can you cancel it?"))</code></pre>
+          </div>
+
+          <div class="code-panel" id="manual-goog-js" role="tabpanel">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code class="language-javascript">// memory_gemini.mjs  (manual history)
+import { GoogleGenAI } from "@google/genai";
+
+const ai = new GoogleGenAI({});
+const config = { systemInstruction: "You are Acme Support." };
+const history = [];                       // list of Content — you own it
+
+async function chat(userMsg) {
+  history.push({ role: "user", parts: [{ text: userMsg }] });
+  const resp = await ai.models.generateContent({
+    model: "gemini-2.5-flash", contents: history, config,
+  });
+  history.push(resp.candidates[0].content);
+  return resp.text;
+}
+
+console.log(await chat("Hi, I'm Sam. Where's order AC-1042?"));
+console.log(await chat("Great — actually, can you cancel it?"));</code></pre>
+          </div>
+
+          <div class="code-panel" id="manual-oai-py" role="tabpanel">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code class="language-python"># memory_openai.py  (Responses API, manual input list)
+from openai import OpenAI
+
+client = OpenAI()
+SYSTEM = "You are Acme Support."
+history = []                              # the memory — you own it
+
+def chat(user_msg: str) -> str:
+    history.append({"role": "user", "content": user_msg})
+    resp = client.responses.create(model="gpt-5.5", instructions=SYSTEM, input=history)
+    history.extend(resp.output)           # append the model's output items
+    return resp.output_text
+
+print(chat("Hi, I'm Sam. Where's order AC-1042?"))
+print(chat("Great — actually, can you cancel it?"))</code></pre>
+          </div>
+
+          <div class="code-panel" id="manual-oai-js" role="tabpanel">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code class="language-javascript">// memory_openai.mjs  (Responses API, manual input list)
+import OpenAI from "openai";
+
+const client = new OpenAI();
+const SYSTEM = "You are Acme Support.";
+let history = [];                         // the memory — you own it
+
+async function chat(userMsg) {
+  history.push({ role: "user", content: userMsg });
+  const resp = await client.responses.create({ model: "gpt-5.5", instructions: SYSTEM, input: history });
+  history = history.concat(resp.output);  // append the model's output items
+  return resp.output_text;
+}
+
+console.log(await chat("Hi, I'm Sam. Where's order AC-1042?"));
+console.log(await chat("Great — actually, can you cancel it?"));</code></pre>
+          </div>
+        </div>
+
+        <div class="callout-why">
+          <span class="box-label">What Just Happened?</span>
+          <p style="margin-bottom:0;">Every version is the same three moves: <strong>append the user turn</strong>, <strong>send the whole history</strong>, <strong>append the reply</strong>. The list <em>is</em> the memory. This is exactly what the M01 and M03 tool loops did between iterations &mdash; a multi-turn conversation is just that loop stretched across separate user messages. If you understand this, you understand memory. Everything else in this module is a convenience wrapper around it.</p>
+        </div>
+      </section>
+
+      <section class="section" id="run-a">
+        <h2 id="run-a-heading">Run It</h2>
+        <div class="output-label">Expected output (turn 2 proves memory)</div>
+        <pre class="output-block">Turn 1: Hi Sam! Order AC-1042 shipped via UPS and arrives Tuesday.
+Turn 2: Of course, Sam — I'll cancel order AC-1042 for you right away.</pre>
+        <div class="checkpoint">
+          <strong>&#9989; Checkpoint:</strong> The second reply names both "Sam" and "AC-1042" &mdash; neither of which appeared in the second message. That's memory. Now delete the two <code>history.append</code>/<code>push</code> lines that store the reply and re-run: turn 2 falls apart, exactly like the left side of the animation.
+        </div>
+      </section>
+
+      <section class="section" id="shortcuts">
+        <h2 id="shortcuts-heading">Approach B &mdash; Each SDK's Shortcut</h2>
+        <p>Manual history is universal but repetitive. Each SDK offers a nicer path &mdash; and here they genuinely diverge. This is the heart of the module: <strong>same goal, three different philosophies.</strong></p>
+
+        <div class="code-block-wrapper">
+          <div class="code-tabs" role="tablist" aria-label="Provider and language tabs">
+            <button class="code-tab tp-anth active" role="tab" aria-selected="true" data-lang="anth-py" onclick="switchTab(this,'short')">Anthropic &middot; Py</button>
+            <button class="code-tab tp-anth" role="tab" aria-selected="false" data-lang="anth-js" onclick="switchTab(this,'short')">Anthropic &middot; JS</button>
+            <button class="code-tab tp-goog" role="tab" aria-selected="false" data-lang="goog-py" onclick="switchTab(this,'short')">Google &middot; Py</button>
+            <button class="code-tab tp-goog" role="tab" aria-selected="false" data-lang="goog-js" onclick="switchTab(this,'short')">Google &middot; JS</button>
+            <button class="code-tab tp-oai" role="tab" aria-selected="false" data-lang="oai-py" onclick="switchTab(this,'short')">OpenAI &middot; Py</button>
+            <button class="code-tab tp-oai" role="tab" aria-selected="false" data-lang="oai-js" onclick="switchTab(this,'short')">OpenAI &middot; JS</button>
+          </div>
+
+          <div class="code-panel active" id="short-anth-py" role="tabpanel">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code class="language-python"># Anthropic: no built-in session — you wrap the manual pattern in a class.
+# (This is deliberate: Claude's base API keeps you in control of the transcript.)
+from anthropic import Anthropic
+
+class Conversation:
+    def __init__(self, system: str):
+        self.client = Anthropic()
+        self.system = system
+        self.history = []
+    def send(self, msg: str) -> str:
+        self.history.append({"role": "user", "content": msg})
+        r = self.client.messages.create(
+            model="claude-sonnet-5", max_tokens=512,
+            system=self.system, messages=self.history,
+        )
+        reply = "".join(b.text for b in r.content if b.type == "text")
+        self.history.append({"role": "assistant", "content": reply})
+        return reply
+
+convo = Conversation("You are Acme Support.")
+print(convo.send("Hi, I'm Sam. Where's order AC-1042?"))
+print(convo.send("Great — cancel it."))
+# Want server-side sessions? That's the Claude Agent SDK / Managed Agents (M07).</code></pre>
+          </div>
+
+          <div class="code-panel" id="short-anth-js" role="tabpanel">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code class="language-javascript">// Anthropic: no built-in session — wrap the manual pattern in a class.
+import Anthropic from "@anthropic-ai/sdk";
+
+class Conversation {
+  constructor(system) {
+    this.client = new Anthropic();
+    this.system = system;
+    this.history = [];
+  }
+  async send(msg) {
+    this.history.push({ role: "user", content: msg });
+    const r = await this.client.messages.create({
+      model: "claude-sonnet-5", max_tokens: 512,
+      system: this.system, messages: this.history,
+    });
+    const reply = r.content.filter(b => b.type === "text").map(b => b.text).join("");
+    this.history.push({ role: "assistant", content: reply });
+    return reply;
+  }
+}
+
+const convo = new Conversation("You are Acme Support.");
+console.log(await convo.send("Hi, I'm Sam. Where's order AC-1042?"));
+console.log(await convo.send("Great — cancel it."));</code></pre>
+          </div>
+
+          <div class="code-panel" id="short-goog-py" role="tabpanel">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code class="language-python"># Google: a built-in chat SESSION keeps the history for you.
+from google import genai
+from google.genai import types
+
+client = genai.Client()
+chat = client.chats.create(
+    model="gemini-2.5-flash",
+    config=types.GenerateContentConfig(system_instruction="You are Acme Support."),
+)
+
+print(chat.send_message("Hi, I'm Sam. Where's order AC-1042?").text)
+print(chat.send_message("Great — cancel it.").text)   # history handled automatically
+# Inspect it anytime:
+for turn in chat.get_history():
+    print(turn.role, turn.parts[0].text[:40])</code></pre>
+          </div>
+
+          <div class="code-panel" id="short-goog-js" role="tabpanel">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code class="language-javascript">// Google: a built-in chat SESSION keeps the history for you.
+import { GoogleGenAI } from "@google/genai";
+
+const ai = new GoogleGenAI({});
+const chat = ai.chats.create({
+  model: "gemini-2.5-flash",
+  config: { systemInstruction: "You are Acme Support." },
+});
+
+console.log((await chat.sendMessage({ message: "Hi, I'm Sam. Where's order AC-1042?" })).text);
+console.log((await chat.sendMessage({ message: "Great — cancel it." })).text);
+// chat.getHistory() returns the stored turns.</code></pre>
+          </div>
+
+          <div class="code-panel" id="short-oai-py" role="tabpanel">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code class="language-python"># OpenAI: the SERVER stores the state — reference it by id, don't resend history.
+from openai import OpenAI
+
+client = OpenAI()
+
+r1 = client.responses.create(
+    model="gpt-5.5",
+    instructions="You are Acme Support.",
+    input="Hi, I'm Sam. Where's order AC-1042?",
+)
+print(r1.output_text)
+
+r2 = client.responses.create(
+    model="gpt-5.5",
+    input="Great — cancel it.",
+    previous_response_id=r1.id,   # <-- server recalls the prior turn; no resend
+)
+print(r2.output_text)
+# Responses are stored by default. Pass store=False to opt out (then thread manually).</code></pre>
+          </div>
+
+          <div class="code-panel" id="short-oai-js" role="tabpanel">
+            <button class="copy-btn" onclick="copyCode(this)" aria-label="Copy code">Copy</button>
+            <pre><code class="language-javascript">// OpenAI: the SERVER stores the state — reference it by id.
+import OpenAI from "openai";
+
+const client = new OpenAI();
+
+const r1 = await client.responses.create({
+  model: "gpt-5.5",
+  instructions: "You are Acme Support.",
+  input: "Hi, I'm Sam. Where's order AC-1042?",
+});
+console.log(r1.output_text);
+
+const r2 = await client.responses.create({
+  model: "gpt-5.5",
+  input: "Great — cancel it.",
+  previous_response_id: r1.id,   // server recalls the prior turn; no resend
+});
+console.log(r2.output_text);</code></pre>
+          </div>
+        </div>
+
+        <div class="tech-def-box">
+          <span class="box-label">Three Philosophies of "Session"</span>
+          <ul style="margin-bottom:0;">
+            <li><strong>Anthropic &mdash; you own it, explicitly.</strong> The base Messages API has no session object; you keep the history (often in a small class). For a server-managed session you step up to the Claude Agent SDK / Managed Agents (M07).</li>
+            <li><strong>Gemini &mdash; a client-side session helper.</strong> <code>client.chats.create()</code> returns a <code>chat</code> object that stores the turns for you and resends them under the hood. Convenient, but the history still lives in your process.</li>
+            <li><strong>OpenAI &mdash; server-side state.</strong> With the Responses API, each response is stored on OpenAI's servers; <code>previous_response_id</code> chains a new turn onto it without resending the transcript. Genuinely different: the state lives on <em>their</em> side.</li>
+          </ul>
+        </div>
+      </section>
+
+      <section class="section" id="tradeoff">
+        <h2 id="tradeoff-heading">Which Should I Use?</h2>
+        <table class="compare-table">
+          <thead><tr><th>&nbsp;</th><th>You keep the history</th><th>Provider keeps the state</th></tr></thead>
+          <tbody>
+            <tr><td>Examples</td><td>Manual list, Anthropic class, Gemini <code>chats</code></td><td>OpenAI <code>previous_response_id</code></td></tr>
+            <tr><td>Portability</td><td>High &mdash; move to any provider, log, replay</td><td>Lower &mdash; state tied to that provider</td></tr>
+            <tr><td>What you resend</td><td>The whole transcript every turn (grows)</td><td>Just the new message + an id</td></tr>
+            <tr><td>Control &amp; audit</td><td>Full &mdash; you can inspect/edit every turn</td><td>Partial &mdash; the transcript lives server-side</td></tr>
+            <tr><td>Best when</td><td>You want portability, logging, or custom memory</td><td>You want the least plumbing on one provider</td></tr>
+          </tbody>
+        </table>
+
+        <div class="callout-warning">
+          <span class="box-label">Memory Grows &mdash; and So Does the Bill</span>
+          <p style="margin-bottom:0;">Every approach that resends the transcript pays for it: turn 20 sends turns 1&ndash;19 <em>again</em>, as input tokens, every time. Long conversations get slow and expensive, and eventually overflow the model's <span class="term-tooltip">context window<span class="tooltip-content">The maximum number of tokens a model can consider at once. When a conversation exceeds it, older turns must be dropped or summarized.</span></span>. The fixes &mdash; trimming old turns, or summarizing them (<strong>compaction</strong>) &mdash; are their own topic; each provider offers help (Anthropic compaction, Gemini/OpenAI context tools). For now, just know: memory isn't free, and unbounded history is a real production cost. We revisit this in M07.</p>
+        </div>
+      </section>
+
+      <section class="section" id="compare">
+        <h2 id="compare-heading">Three Ways, One Idea</h2>
+        <table class="compare-table">
+          <thead><tr><th>Concept</th><th class="c-anth">Anthropic</th><th class="c-goog">Google Gemini</th><th class="c-oai">OpenAI</th></tr></thead>
+          <tbody>
+            <tr><td>Manual history field</td><td><code>messages=[…]</code></td><td><code>contents=[…]</code></td><td><code>input=[…]</code></td></tr>
+            <tr><td>Append the reply</td><td><code>{"role":"assistant",…}</code></td><td><code>resp.candidates[0].content</code></td><td><code>resp.output</code> items</td></tr>
+            <tr><td>Built-in session?</td><td>No (roll your own / Agent SDK)</td><td>Yes &mdash; <code>client.chats.create()</code></td><td>Yes &mdash; server-side, via id</td></tr>
+            <tr><td>Session send</td><td><code>convo.send(msg)</code> (your class)</td><td><code>chat.send_message(msg)</code></td><td><code>responses.create(previous_response_id=…)</code></td></tr>
+            <tr><td>Where state lives</td><td>Your process</td><td>Your process (the chat object)</td><td>OpenAI's servers</td></tr>
+          </tbody>
+        </table>
+
+        <div class="callout-why">
+          <span class="box-label">Why the Differences?</span>
+          <p style="margin-bottom:0;">This reflects each company's stance on where an agent's state should live. Anthropic keeps the base API deliberately stateless &mdash; explicit, portable, auditable &mdash; and offers server sessions only at the Agent-SDK tier. Gemini adds a friendly client-side <code>chats</code> helper but still holds the transcript in your process. OpenAI leaned into server-stored state with the Responses API, trading portability for less plumbing. Same underlying truth (the model is stateless); three different answers to "who keeps the transcript." Knowing all three means you can pick per project instead of per habit.</p>
+        </div>
+      </section>
+
+      <section class="section" id="quiz">
+        <h2 id="quiz-heading">Knowledge Check</h2>
+
+        <div class="quiz-question" data-correct="b">
+          <h4>Q1: How does a chat model "remember" earlier turns of a conversation?</h4>
+          <div class="quiz-option" data-value="a" onclick="selectQuiz(this)" tabindex="0" role="button"><span class="quiz-marker">A</span><span>The model stores your chat in its weights</span></div>
+          <div class="quiz-option" data-value="b" onclick="selectQuiz(this)" tabindex="0" role="button"><span class="quiz-marker">B</span><span>It doesn't &mdash; the app resends the prior transcript (or references stored state) with each new call</span></div>
+          <div class="quiz-option" data-value="c" onclick="selectQuiz(this)" tabindex="0" role="button"><span class="quiz-marker">C</span><span>There's a hidden per-user brain on the server by default</span></div>
+          <div class="quiz-option" data-value="d" onclick="selectQuiz(this)" tabindex="0" role="button"><span class="quiz-marker">D</span><span>Cookies</span></div>
+          <div class="quiz-feedback correct-fb">Correct! The API is stateless. "Memory" is context you (or an opt-in stored-state feature) supply on each call. The model itself remembers nothing between requests.</div>
+          <div class="quiz-feedback incorrect-fb"></div>
+        </div>
+
+        <div class="quiz-question" data-correct="c">
+          <h4>Q2: In the manual approach, what do you append to the history each turn?</h4>
+          <div class="quiz-option" data-value="a" onclick="selectQuiz(this)" tabindex="0" role="button"><span class="quiz-marker">A</span><span>Only the user's message</span></div>
+          <div class="quiz-option" data-value="b" onclick="selectQuiz(this)" tabindex="0" role="button"><span class="quiz-marker">B</span><span>Only the model's reply</span></div>
+          <div class="quiz-option" data-value="c" onclick="selectQuiz(this)" tabindex="0" role="button"><span class="quiz-marker">C</span><span>Both the user's message and the model's reply</span></div>
+          <div class="quiz-option" data-value="d" onclick="selectQuiz(this)" tabindex="0" role="button"><span class="quiz-marker">D</span><span>Nothing &mdash; the SDK does it</span></div>
+          <div class="quiz-feedback correct-fb">Correct! Both. Forget to store the reply and the next turn can't see what the assistant just said &mdash; that's the classic "it forgets its own answer" bug.</div>
+          <div class="quiz-feedback incorrect-fb"></div>
+        </div>
+
+        <div class="quiz-question" data-correct="d">
+          <h4>Q3: Which SDK lets the <em>server</em> hold the conversation state, referenced by id?</h4>
+          <div class="quiz-option" data-value="a" onclick="selectQuiz(this)" tabindex="0" role="button"><span class="quiz-marker">A</span><span>Anthropic base Messages API</span></div>
+          <div class="quiz-option" data-value="b" onclick="selectQuiz(this)" tabindex="0" role="button"><span class="quiz-marker">B</span><span>Gemini <code>chats.create()</code></span></div>
+          <div class="quiz-option" data-value="c" onclick="selectQuiz(this)" tabindex="0" role="button"><span class="quiz-marker">C</span><span>None of them can</span></div>
+          <div class="quiz-option" data-value="d" onclick="selectQuiz(this)" tabindex="0" role="button"><span class="quiz-marker">D</span><span>OpenAI Responses API, via <code>previous_response_id</code></span></div>
+          <div class="quiz-feedback correct-fb">Correct! OpenAI's Responses API stores each response server-side and chains turns by id. Gemini's <code>chats</code> holds state in your process; Anthropic's base API keeps you fully in control.</div>
+          <div class="quiz-feedback incorrect-fb"></div>
+        </div>
+
+        <div class="quiz-question" data-correct="a">
+          <h4>Q4: What's the main downside of "you keep the history and resend it"?</h4>
+          <div class="quiz-option" data-value="a" onclick="selectQuiz(this)" tabindex="0" role="button"><span class="quiz-marker">A</span><span>The transcript grows every turn &mdash; more input tokens, more cost, eventual context-window overflow</span></div>
+          <div class="quiz-option" data-value="b" onclick="selectQuiz(this)" tabindex="0" role="button"><span class="quiz-marker">B</span><span>It doesn't work with tools</span></div>
+          <div class="quiz-option" data-value="c" onclick="selectQuiz(this)" tabindex="0" role="button"><span class="quiz-marker">C</span><span>You can't inspect the history</span></div>
+          <div class="quiz-option" data-value="d" onclick="selectQuiz(this)" tabindex="0" role="button"><span class="quiz-marker">D</span><span>It only works on one provider</span></div>
+          <div class="quiz-feedback correct-fb">Correct! Resending the full transcript costs input tokens that scale with conversation length, and eventually overflows the context window — which is why trimming and compaction exist (M07).</div>
+          <div class="quiz-feedback incorrect-fb"></div>
+        </div>
+
+        <div class="quiz-question" data-correct="b">
+          <h4>Q5: Why might you prefer "you keep the history" over server-stored state?</h4>
+          <div class="quiz-option" data-value="a" onclick="selectQuiz(this)" tabindex="0" role="button"><span class="quiz-marker">A</span><span>It's always cheaper</span></div>
+          <div class="quiz-option" data-value="b" onclick="selectQuiz(this)" tabindex="0" role="button"><span class="quiz-marker">B</span><span>Portability and control &mdash; you can log, edit, replay, and switch providers</span></div>
+          <div class="quiz-option" data-value="c" onclick="selectQuiz(this)" tabindex="0" role="button"><span class="quiz-marker">C</span><span>The model answers faster</span></div>
+          <div class="quiz-option" data-value="d" onclick="selectQuiz(this)" tabindex="0" role="button"><span class="quiz-marker">D</span><span>It's the only way to use tools</span></div>
+          <div class="quiz-feedback correct-fb">Correct! Owning the transcript means it's portable and auditable. Server-stored state trades that away for less plumbing, and ties the conversation to one provider.</div>
+          <div class="quiz-feedback incorrect-fb"></div>
+        </div>
+
+        <div class="quiz-score" id="quiz-score" style="display:none;">
+          <div class="score-num" id="score-display"></div>
+          <p id="score-message" style="color:var(--text-secondary);margin-top:0.5rem;"></p>
+        </div>
+      </section>
+
+      <section class="section" id="summary">
+        <h2 id="summary-heading">Module Summary</h2>
+        <div style="background:var(--bg-card);border-radius:12px;padding:1.5rem;margin-bottom:1.5rem;">
+          <h3 id="key-takeaways" style="margin-top:0;color:var(--accent-primary);">Key Takeaways</h3>
+          <ul>
+            <li><strong>The model is stateless.</strong> It remembers nothing between calls &mdash; memory is context you resend or a stored state you reference.</li>
+            <li><strong>Manual history works everywhere:</strong> append the user turn, send the whole list, append the reply. The list <em>is</em> the memory.</li>
+            <li><strong>Each SDK has a shortcut &mdash; and they differ:</strong> a class you write (Anthropic), a <code>chats</code> session (Gemini), server-stored state via <code>previous_response_id</code> (OpenAI).</li>
+            <li><strong>Pick by tradeoff:</strong> you-own-it is portable and auditable; provider-stored is less plumbing but tied to that provider.</li>
+            <li><strong>Memory isn't free.</strong> Resent transcripts grow input cost and eventually overflow the context window &mdash; the reason compaction exists.</li>
+          </ul>
+        </div>
+        <div style="background:var(--bg-card);border-radius:12px;padding:1.5rem;">
+          <h3 id="next-preview" style="margin-top:0;color:var(--track-color);">Next: M05 &mdash; RAG / Retrieval Grounding</h3>
+          <p style="margin-bottom:0;">Acme now remembers the conversation &mdash; but it still doesn't know your <em>return policy</em>, your <em>shipping FAQ</em>, or any of the help docs it was never trained on. In M05 you'll ground Acme in a knowledge base: embed the docs, retrieve the relevant passages for each question, and feed them in &mdash; so the agent answers from your content, not its guesses. Three SDKs, three embedding APIs, one retrieval pattern.</p>
+        </div>
+      </section>
+
+      <div class="module-nav">
+        <a href="M03-multi-tool-orchestration.html" aria-label="Previous module: Multi-Tool Orchestration">&larr; M03: Multi-Tool</a>
+        <a href="index.html" aria-label="Course Home" title="Course Home" style="font-size:1.2rem;">&#x1F3E0; Home</a>
+        <a href="M05-rag-retrieval.html" aria-label="Next module: RAG and Retrieval">M05: RAG &rarr;</a>
+      </div>
+    </main>
+  </div>
+
+  <button class="sidebar-toggle" onclick="document.getElementById('sidebar').classList.toggle('open')" aria-label="Toggle navigation menu">&#9776;</button>
+
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/prism.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-python.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-javascript.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/prism/1.29.0/components/prism-bash.min.js"></script>
+
+  <script>
+    function switchTab(btn, group) {
+      const lang = btn.dataset.lang;
+      const wrapper = btn.closest('.code-block-wrapper');
+      wrapper.querySelectorAll('.code-tab').forEach(t => { t.classList.remove('active'); t.setAttribute('aria-selected','false'); });
+      wrapper.querySelectorAll('.code-panel').forEach(p => p.classList.remove('active'));
+      btn.classList.add('active'); btn.setAttribute('aria-selected','true');
+      const panel = wrapper.querySelector('#' + group + '-' + lang);
+      if (panel) panel.classList.add('active');
+    }
+    function copyCode(btn) {
+      const codeBlock = btn.parentElement.querySelector('code') || btn.closest('.code-single, .code-panel').querySelector('code');
+      navigator.clipboard.writeText(codeBlock.textContent).then(() => { btn.textContent = 'Copied!'; setTimeout(() => btn.textContent = 'Copy', 2000); });
+    }
+    // MEMORY ANIMATION — reveal bubbles by step across both columns
+    const memEls = [...document.querySelectorAll('.mem-grid [data-i]')];
+    const memMax = Math.max(...memEls.map(e => +e.dataset.i));
+    let memTimer = null, memStep = 0;
+    function memPlay() {
+      if (memTimer) return;
+      memTimer = setInterval(() => {
+        if (memStep > memMax) { memPause(); return; }
+        memEls.filter(e => +e.dataset.i === memStep).forEach(e => e.classList.add('lit'));
+        memStep++;
+      }, 900);
+    }
+    function memPause() { clearInterval(memTimer); memTimer = null; }
+    function memReset() { memPause(); memStep = 0; memEls.forEach(e => e.classList.remove('lit')); }
+    // QUIZ
+    let answeredCount = 0, correctCount = 0;
+    const totalQuestions = document.querySelectorAll('.quiz-question').length;
+    function selectQuiz(optionEl) {
+      const question = optionEl.closest('.quiz-question');
+      if (question.classList.contains('answered')) return;
+      question.classList.add('answered');
+      const correct = question.dataset.correct;
+      const isCorrect = optionEl.dataset.value === correct;
+      question.querySelectorAll('.quiz-option').forEach(o => o.classList.add('disabled'));
+      if (isCorrect) { optionEl.classList.add('correct'); optionEl.querySelector('.quiz-marker').textContent = '✓'; correctCount++; }
+      else {
+        optionEl.classList.add('incorrect'); optionEl.querySelector('.quiz-marker').textContent = '✗';
+        question.querySelectorAll('.quiz-option').forEach(o => { if (o.dataset.value === correct) { o.classList.add('correct'); o.querySelector('.quiz-marker').textContent = '✓'; } });
+      }
+      const correctFb = question.querySelector('.quiz-feedback.correct-fb');
+      const incorrectFb = question.querySelector('.quiz-feedback.incorrect-fb');
+      if (isCorrect) correctFb.classList.add('show');
+      else { incorrectFb.textContent = 'Not quite. ' + correctFb.textContent.replace('Correct! ', ''); incorrectFb.classList.add('show'); }
+      answeredCount++;
+      if (answeredCount === totalQuestions) {
+        const scoreDiv = document.getElementById('quiz-score'); scoreDiv.style.display = 'block';
+        document.getElementById('score-display').textContent = correctCount + ' / ' + totalQuestions;
+        const pct = Math.round((correctCount / totalQuestions) * 100);
+        document.getElementById('score-message').textContent =
+          pct === 100 ? 'Perfect! You get memory across all three SDKs — on to RAG.' :
+          pct >= 60  ? 'Solid. Re-skim "Three Philosophies of Session" before M05.' :
+                       'Re-read "The Core Truth" and Approach A before M05.';
+      }
+    }
+    document.querySelectorAll('.quiz-option').forEach(opt => { opt.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); selectQuiz(opt); } }); });
+    // SCROLL-SPY
+    const secs = document.querySelectorAll('section[id], h2[id], h3[id]');
+    const navLinks = document.querySelectorAll('.sidebar-nav a');
+    function updateActiveLink() {
+      let current = '';
+      secs.forEach(s => { if (s.getBoundingClientRect().top <= 120) current = s.id; });
+      navLinks.forEach(l => { l.classList.remove('active'); if (l.getAttribute('href') === '#' + current) l.classList.add('active'); });
+    }
+    window.addEventListener('scroll', updateActiveLink, { passive: true });
+    navLinks.forEach(link => { link.addEventListener('click', e => { e.preventDefault(); const t = document.querySelector(link.getAttribute('href')); if (t) t.scrollIntoView({ behavior: 'smooth', block: 'start' }); document.getElementById('sidebar').classList.remove('open'); }); });
+    setTimeout(memPlay, 800);
+  </script>
+
+<!-- course-assistant-widget:start -->
+<style>
+#caw-fab{position:fixed;bottom:1.5rem;right:1.5rem;z-index:99990;background:#D4A843;color:#0A1628;border:none;border-radius:28px;padding:0.7rem 1.2rem;font-weight:700;font-size:0.95rem;cursor:pointer;box-shadow:0 4px 18px rgba(0,0,0,0.45);font-family:inherit}
+#caw-fab:hover{filter:brightness(1.08)}
+#caw-overlay{position:fixed;inset:0;z-index:99991;background:rgba(4,10,20,0.72);display:flex;align-items:center;justify-content:center;padding:2rem}
+#caw-overlay[hidden]{display:none}
+#caw-panel{width:min(1100px,100%);height:min(760px,100%);background:#0A1628;border:1px solid #D4A843;border-radius:14px;display:flex;flex-direction:column;overflow:hidden}
+#caw-bar{display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:0.5rem 1rem;background:#111D33;border-bottom:1px solid #21262D;color:#E8ECF1;font-size:0.85rem;font-family:sans-serif}
+#caw-bar a{color:#D4A843;text-decoration:none}
+#caw-close{background:none;border:none;color:#94A3B8;font-size:1.3rem;cursor:pointer;line-height:1}
+#caw-close:hover{color:#E8ECF1}
+#caw-frame{flex:1;border:none;width:100%;background:#0A1628}
+@media (max-width:768px){#caw-overlay{padding:0}#caw-panel{border-radius:0}}
+@media print{#caw-fab,#caw-overlay{display:none!important}}
+</style>
+<button id="caw-fab" aria-haspopup="dialog" aria-label="Open course search and ask assistant">💬 Ask the Course</button>
+<div id="caw-overlay" hidden role="dialog" aria-modal="true" aria-label="Course search assistant">
+  <div id="caw-panel">
+    <div id="caw-bar">
+      <span>Course Assistant — search or ask, fully offline</span>
+      <span><a href="search-assistant.html" target="_blank" rel="noopener">Open full page ↗</a> &nbsp; <button id="caw-close" aria-label="Close assistant">✕</button></span>
+    </div>
+    <iframe id="caw-frame" title="Course search assistant"></iframe>
+  </div>
+</div>
+<script>
+(function(){
+  var fab=document.getElementById('caw-fab'),ov=document.getElementById('caw-overlay'),
+      fr=document.getElementById('caw-frame'),cl=document.getElementById('caw-close');
+  function open(){ if(!fr.src) fr.src='search-assistant.html'; ov.hidden=false; fab.hidden=true; }
+  function close(){ ov.hidden=true; fab.hidden=false; fab.focus(); }
+  fab.addEventListener('click',open);
+  cl.addEventListener('click',close);
+  ov.addEventListener('click',function(e){ if(e.target===ov) close(); });
+  document.addEventListener('keydown',function(e){ if(e.key==='Escape'&&!ov.hidden) close(); });
+})();
+</script>
+<!-- course-assistant-widget:end -->
+</body>
+</html>
