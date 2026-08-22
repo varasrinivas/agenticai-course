@@ -981,7 +981,14 @@ import re
 SSN_RE = re.compile(r"\b\d{3}-\d{2}-\d{4}\b")
 PHONE_RE = re.compile(r"\b\d{3}-\d{3}-\d{4}\b")
 MEMBER_ID_RE = re.compile(r"\b[A-Z]\d{6,9}\b")        # e.g. A123456
-DOB_RE = re.compile(r"\b\d{4}-\d{2}-\d{2}\b")         # ISO date
+
+# Date of birth is redacted by KEY, not by pattern. An ISO date is an
+# ISO date: 1974-03-02 and 2026-05-09 are indistinguishable as text, so
+# a regex that catches a DOB also catches every service date, requested
+# start date and decision date in the payload. An audit log with those
+# scrubbed cannot answer the question auditors actually ask.
+# Only the key says which is which.
+DOB_KEYS = {"dob", "date_of_birth", "birth_date", "birthdate", "member_dob"}
 
 CPT_RE = re.compile(r"^[0-9]{5}$|^[A-Z][0-9]{4}$")
 NPI_RE = re.compile(r"^[0-9]{10}$")
@@ -1002,12 +1009,31 @@ def validate_input(tool_name: str, args: dict):
             raise ValueError(f"Invalid NPI (must be 10 digits): {args.get('provider_npi')}")
 
 def redact_phi(payload: str) -&gt; str:
-    """Scrub PHI from a string before writing to logs/audit."""
+    """Scrub PHI from FREE TEXT before writing to logs/audit.
+
+    Cannot redact a date of birth -- see DOB_KEYS. Use redact_phi_obj for
+    anything that is still structured.
+    """
     payload = SSN_RE.sub("[SSN_REDACTED]", payload)
     payload = PHONE_RE.sub("[PHONE_REDACTED]", payload)
     payload = MEMBER_ID_RE.sub("[MEMBER_ID_REDACTED]", payload)
-    payload = DOB_RE.sub("[DOB_REDACTED]", payload)
     return payload
+
+def redact_phi_obj(value):
+    """Redact a structure BEFORE serialising it.
+
+    Redacting the JSON text cannot tell a DOB from a service date. Walking
+    the structure can, because it still has the keys.
+    """
+    if isinstance(value, dict):
+        return {k: ("[DOB_REDACTED]" if k.lower() in DOB_KEYS
+                    else redact_phi_obj(v))
+                for k, v in value.items()}
+    if isinstance(value, list):
+        return [redact_phi_obj(v) for v in value]
+    if isinstance(value, str):
+        return redact_phi(value)
+    return value
 
 class CircuitBreaker:
     def __init__(self): self.failures = 0
@@ -1123,15 +1149,20 @@ def _run_messages(messages: list) -&gt; tuple[str, list]:
             <button class="copy-btn" onclick="copyCode(this)">Copy</button>
             <pre><code>"""audit.py &mdash; HIPAA-compliant audit log writer."""
 import json, datetime
-from guardrails import redact_phi
+from guardrails import redact_phi, redact_phi_obj
 
 def append_audit(tool_name: str, args: dict, result, tokens: int,
                  case_id: str = "default") -&gt; None:
     rec = {
-        "ts": datetime.datetime.utcnow().isoformat() + "Z",
+        # utcnow() is deprecated and returns a naive datetime. strftime also
+        # matches the documented log format exactly (no microseconds).
+        "ts": datetime.datetime.now(datetime.timezone.utc)
+                      .strftime("%Y-%m-%dT%H:%M:%SZ"),
         "case_id": case_id,
         "tool": tool_name,
-        "input_redacted": redact_phi(json.dumps(args, default=str)),
+        # Redact the dict, THEN serialise. The reverse order loses the keys,
+        # and the keys are what identify a date of birth.
+        "input_redacted": json.dumps(redact_phi_obj(args), default=str),
         "output_summary": redact_phi(str(result))[:200],
         "tokens": tokens,
     }
@@ -1740,24 +1771,36 @@ import sys, json, re, datetime
 MEMBER_RE = re.compile(r"\b[A-Z]\d{6,9}\b")
 SSN_RE    = re.compile(r"\b\d{3}-\d{2}-\d{4}\b")
 PHONE_RE  = re.compile(r"\b\d{3}-\d{3}-\d{4}\b")
-DOB_RE    = re.compile(r"\b\d{4}-\d{2}-\d{2}\b")
+
+# Redacted by key, not by pattern: an ISO date cannot be told apart
+# from a service date as text, and scrubbing every date makes the
+# audit log useless for the review it exists to support.
+DOB_KEYS  = {"dob", "date_of_birth", "birth_date", "birthdate", "member_dob"}
 
 def _redact(s: str) -&gt; str:
     s = MEMBER_RE.sub("[MEMBER_ID_REDACTED]", s)
     s = SSN_RE.sub("[SSN_REDACTED]", s)
     s = PHONE_RE.sub("[PHONE_REDACTED]", s)
-    s = DOB_RE.sub("[DOB_REDACTED]", s)
     return s
+
+def _redact_obj(v):
+    if isinstance(v, dict):
+        return {k: ("[DOB_REDACTED]" if k.lower() in DOB_KEYS
+                    else _redact_obj(val)) for k, val in v.items()}
+    if isinstance(v, list):
+        return [_redact_obj(x) for x in v]
+    return _redact(v) if isinstance(v, str) else v
 
 payload = json.load(sys.stdin)
 tool_name   = payload.get("tool_name", "")
 tool_input  = payload.get("tool_input", {})
 tool_result = payload.get("tool_result")
 
-rec = {"ts": datetime.datetime.utcnow().isoformat() + "Z",
+rec = {"ts": datetime.datetime.now(datetime.timezone.utc)
+                     .strftime("%Y-%m-%dT%H:%M:%SZ"),
        "tool": tool_name,
-       "input_redacted": _redact(json.dumps(tool_input)),
-       "output_summary": _redact(json.dumps(tool_result))[:200]}
+       "input_redacted": json.dumps(_redact_obj(tool_input)),
+       "output_summary": json.dumps(_redact_obj(tool_result))[:200]}
 with open("audit_log.jsonl", "a") as f:
     f.write(json.dumps(rec) + "\n")
 
@@ -1810,13 +1853,27 @@ import sys, json, re, datetime
 
 MEMBER_RE = re.compile(r"\b[A-Z]\d{6,9}\b")
 SSN_RE    = re.compile(r"\b\d{3}-\d{2}-\d{4}\b")
+PHONE_RE  = re.compile(r"\b\d{3}-\d{3}-\d{4}\b")
+DOB_KEYS  = {"dob", "date_of_birth", "birth_date", "birthdate", "member_dob"}
+
+def _scrub(v):
+    """stderr is a log. Redact it as carefully as the audit file."""
+    if isinstance(v, dict):
+        return {k: ("[DOB_REDACTED]" if k.lower() in DOB_KEYS
+                    else _scrub(val)) for k, val in v.items()}
+    if isinstance(v, list):
+        return [_scrub(x) for x in v]
+    if isinstance(v, str):
+        v = MEMBER_RE.sub("[MEMBER_ID_REDACTED]", v)
+        v = SSN_RE.sub("[SSN_REDACTED]", v)
+        v = PHONE_RE.sub("[PHONE_REDACTED]", v)
+    return v
 
 payload = json.load(sys.stdin)
-ts = datetime.datetime.utcnow().isoformat() + "Z"
+ts = (datetime.datetime.now(datetime.timezone.utc)
+              .strftime("%Y-%m-%dT%H:%M:%SZ"))
 name = payload.get("tool_name", "?")
-args_str = json.dumps(payload.get("tool_input", {}))
-args_str = MEMBER_RE.sub("[MEMBER_ID_REDACTED]", args_str)
-args_str = SSN_RE.sub("[SSN_REDACTED]", args_str)
+args_str = json.dumps(_scrub(payload.get("tool_input", {})))
 print(f"[{ts}] PRE  {name}({args_str})", file=sys.stderr)
 json.dump(payload, sys.stdout)   # CRITICAL: pass-through unchanged</code></pre>
           </div>
@@ -2972,8 +3029,6 @@ const specObs = new IntersectionObserver(entries => {
 }, { threshold: 0.3 });
 specObs.observe(document.getElementById('spec-container'));
 </script>
-
-
 
 <!-- course-assistant-widget:start -->
 <style>

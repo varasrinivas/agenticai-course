@@ -12,7 +12,7 @@ Clears at the end of each session/request.
 
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 @dataclass
@@ -50,7 +50,7 @@ class WorkingMemory:
         self._agent_handoffs: List[AgentHandoff] = []
         self._current_query: Optional[str] = None
         self._intermediate_results: List[Dict[str, Any]] = []
-        self._created_at: str = datetime.utcnow().isoformat()
+        self._created_at: str = datetime.now(timezone.utc).isoformat()
 
     # ------------------------------------------------------------------
     # TODO 1: Implement set_query()
@@ -102,7 +102,7 @@ class WorkingMemory:
     ) -> None:
         """Record a tool call made during this request."""
         # TODO: Create a ToolCallRecord with the given parameters
-        # TODO: Use datetime.utcnow().isoformat() for the timestamp
+        # TODO: Use datetime.now(timezone.utc).isoformat() for the timestamp
         # TODO: Append to self._tool_calls
         pass
 

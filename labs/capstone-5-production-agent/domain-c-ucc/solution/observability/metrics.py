@@ -7,7 +7,7 @@ import time
 import statistics
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 @dataclass
@@ -50,7 +50,7 @@ class MetricsCollector:
             model_id=model_id, input_tokens=input_tokens, output_tokens=output_tokens,
             total_tokens=input_tokens + output_tokens, cost_usd=cost_usd,
             latency_ms=latency_ms, status=status,
-            timestamp=datetime.utcnow().isoformat(),
+            timestamp=datetime.now(timezone.utc).isoformat(),
             tool_calls=tool_calls, agent_handoffs=agent_handoffs,
         )
         self._metrics.append(metric)

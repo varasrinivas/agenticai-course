@@ -5,7 +5,7 @@ Episodic Memory — past interaction recall with similarity search.
 
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
-from datetime import datetime
+from datetime import datetime, timezone
 import re
 
 
@@ -52,7 +52,7 @@ class EpisodicMemory:
         episode = Episode(
             query=query, response=response, agent_used=agent_used,
             tool_calls=tool_calls, task_type=task_type, success=success,
-            timestamp=datetime.utcnow().isoformat(),
+            timestamp=datetime.now(timezone.utc).isoformat(),
             metadata=metadata or {},
         )
         self._episodes.append(episode)

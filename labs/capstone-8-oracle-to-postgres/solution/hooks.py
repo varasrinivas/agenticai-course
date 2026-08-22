@@ -202,6 +202,10 @@ def redact(text: str) -> str:
     Deliberately aggressive. An audit log that over-redacts is annoying;
     one that leaks a production DSN into a file someone commits is an
     incident.
+
+    Call this on individual string VALUES, not on serialized JSON -- see
+    `redact_structure`. The patterns end in greedy runs of non-whitespace,
+    which happily eat a closing quote and brace if handed a JSON document.
     """
     for pattern in _SECRET_PATTERNS:
         if pattern.groups >= 3:
@@ -211,12 +215,37 @@ def redact(text: str) -> str:
     return text
 
 
+def redact_structure(value: Any) -> Any:
+    """Redact every string inside a nested structure, in place of the value.
+
+    This exists because redacting the serialized JSON instead corrupts it:
+    a DSN like `password=hunter2` sits at the end of a JSON string, and the
+    `\\S+` that matches the secret also matches the `"` and `}` that close
+    the document. `json.loads` on the result then raises, inside a
+    PostToolUse hook, on precisely the tool calls that carry credentials --
+    so the audit log loses the entries that matter most and the migration
+    dies at the same time.
+
+    Redacting per-value cannot break the structure, because the structure
+    is never turned into text first.
+    """
+    if isinstance(value, dict):
+        return {key: redact_structure(item) for key, item in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [redact_structure(item) for item in value]
+    if isinstance(value, str):
+        return redact(value)
+    if isinstance(value, (int, float, bool)) or value is None:
+        return value
+    return redact(str(value))
+
+
 async def audit_log(tool_name: str, tool_input: dict, tool_response: Any, context: Any):
     """PostToolUse on * -- append one JSON line per tool call."""
     entry = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "tool_name": tool_name,
-        "params": json.loads(redact(json.dumps(tool_input, default=str))),
+        "params": redact_structure(tool_input),
         "duration_ms": getattr(context, "duration_ms", None),
     }
 

@@ -149,10 +149,37 @@ def redact(text: str) -> str:
     raise NotImplementedError("Build redact")
 
 
+def redact_structure(value: Any) -> Any:
+    """Redact every string inside a nested structure, in place of the value.
+
+    TODO(4b-ii): recurse through dicts and lists, redacting only str leaves
+    and returning everything else unchanged.
+
+    This exists because of a trap worth understanding before you hit it. The
+    obvious implementation of TODO(4c) is:
+
+        json.loads(redact(json.dumps(tool_input)))
+
+    Serialize, redact the text, parse it back. It works on every input you
+    are likely to try by hand -- and it corrupts the document on the inputs
+    that matter. A DSN like `password=hunter2` sits at the END of a JSON
+    string value, and the greedy run of non-whitespace that matches the
+    secret also matches the `"` and `}` that close the document. `json.loads`
+    then raises, inside a PostToolUse hook, on exactly the tool calls that
+    carry credentials.
+
+    Two things break at once: the audit log loses the entries you most need,
+    and the migration dies. Redacting per-value cannot corrupt the structure,
+    because the structure is never text.
+    """
+    raise NotImplementedError("Build redact_structure")
+
+
 async def audit_log(tool_name: str, tool_input: dict, tool_response: Any, context: Any):
     """PostToolUse on * -- append one JSON line per tool call."""
     # TODO(4c): Build an entry with timestamp, tool_name, REDACTED params,
-    #           and duration.
+    #           and duration. Use redact_structure, not redact-on-JSON --
+    #           see the note in redact_structure for why.
     # TODO(4d): Pull a row count out of the response if there is one -- it
     #           is the single most useful field when reconciling later.
     #           The response shape is

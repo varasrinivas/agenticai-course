@@ -5,7 +5,7 @@ Working Memory — short-term context for the current session.
 
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 @dataclass
@@ -35,13 +35,13 @@ class WorkingMemory:
         self._agent_handoffs: List[AgentHandoff] = []
         self._current_query: Optional[str] = None
         self._intermediate_results: List[Dict[str, Any]] = []
-        self._created_at: str = datetime.utcnow().isoformat()
+        self._created_at: str = datetime.now(timezone.utc).isoformat()
 
     def set_query(self, query: str) -> None:
         self._current_query = query
         self._intermediate_results = []
         self._tool_calls = []
-        self._created_at = datetime.utcnow().isoformat()
+        self._created_at = datetime.now(timezone.utc).isoformat()
 
     def get_query(self) -> Optional[str]:
         return self._current_query
@@ -60,7 +60,7 @@ class WorkingMemory:
             tool_name=tool_name,
             arguments=arguments,
             result=result,
-            timestamp=datetime.utcnow().isoformat(),
+            timestamp=datetime.now(timezone.utc).isoformat(),
             duration_ms=duration_ms,
         )
         self._tool_calls.append(record)
@@ -74,7 +74,7 @@ class WorkingMemory:
             to_agent=to_agent,
             reason=reason,
             context=context or {},
-            timestamp=datetime.utcnow().isoformat(),
+            timestamp=datetime.now(timezone.utc).isoformat(),
         )
         self._agent_handoffs.append(handoff)
 
@@ -82,7 +82,7 @@ class WorkingMemory:
         self._intermediate_results.append({
             "agent": agent_name,
             "result": result,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         })
 
     def get_summary(self) -> Dict[str, Any]:
@@ -101,7 +101,7 @@ class WorkingMemory:
         self._agent_handoffs = []
         self._current_query = None
         self._intermediate_results = []
-        self._created_at = datetime.utcnow().isoformat()
+        self._created_at = datetime.now(timezone.utc).isoformat()
 
     @property
     def tool_calls(self) -> List[ToolCallRecord]:

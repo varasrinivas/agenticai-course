@@ -81,14 +81,14 @@ def test_redact_leaves_ordinary_text_alone():
 
 
 @pytest.mark.asyncio
-async def test_audit_log_writes_one_line_per_call(audit_log):
+async def test_audit_log_writes_one_line_per_call(audit_log_path):
     response = {"content": [{"type": "text", "text": json.dumps({"row_count": 5000})}]}
     await audit_log("mcp__oracle_src__oracle_row_count",
                     {"table_name": "UCC_FILING"}, response, None)
     await audit_log("mcp__pg_target__pg_row_count",
                     {"table_name": "ucc_filing"}, response, None)
 
-    lines = audit_log.read_text(encoding="utf-8").strip().splitlines()
+    lines = audit_log_path.read_text(encoding="utf-8").strip().splitlines()
     assert len(lines) == 2
     first = json.loads(lines[0])
     assert first["tool_name"] == "mcp__oracle_src__oracle_row_count"
@@ -97,7 +97,7 @@ async def test_audit_log_writes_one_line_per_call(audit_log):
 
 
 @pytest.mark.asyncio
-async def test_audit_log_redacts_params(audit_log):
+async def test_audit_log_redacts_params(audit_log_path):
     response = {"content": [{"type": "text", "text": "{}"}]}
     await audit_log(
         "mcp__pg_target__pg_query",
@@ -105,16 +105,16 @@ async def test_audit_log_redacts_params(audit_log):
         response,
         None,
     )
-    contents = audit_log.read_text(encoding="utf-8")
+    contents = audit_log_path.read_text(encoding="utf-8")
     assert "hunter2" not in contents
     assert "***" in contents
 
 
 @pytest.mark.asyncio
-async def test_audit_log_survives_a_malformed_response(audit_log):
+async def test_audit_log_survives_a_malformed_response(audit_log_path):
     """A tool that returns something unexpected must not take down the
     migration by crashing the audit hook."""
     await audit_log("weird_tool", {"x": 1}, {"not": "the usual shape"}, None)
-    assert audit_log.exists()
-    entry = json.loads(audit_log.read_text(encoding="utf-8").strip())
+    assert audit_log_path.exists()
+    entry = json.loads(audit_log_path.read_text(encoding="utf-8").strip())
     assert entry["tool_name"] == "weird_tool"

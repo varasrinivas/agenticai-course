@@ -10,7 +10,7 @@ Uses simple keyword-based similarity (no vector DB required for this lab).
 
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
-from datetime import datetime
+from datetime import datetime, timezone
 import re
 
 
@@ -56,7 +56,7 @@ class EpisodicMemory:
         metadata: Optional[Dict[str, Any]] = None,
     ) -> None:
         """Store a completed interaction as an episode."""
-        # TODO: Create an Episode with timestamp = datetime.utcnow().isoformat()
+        # TODO: Create an Episode with timestamp = datetime.now(timezone.utc).isoformat()
         # TODO: Append to self._episodes
         # TODO: If len exceeds max_episodes, pop the oldest (index 0)
         pass

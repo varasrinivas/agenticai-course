@@ -12,7 +12,7 @@ Run locally:
 
 import os
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -80,7 +80,7 @@ async def health():
         version=VERSION,
         environment=ENVIRONMENT,
         mock_mode=True,
-        timestamp=datetime.utcnow().isoformat(),
+        timestamp=datetime.now(timezone.utc).isoformat(),
     )
 
 

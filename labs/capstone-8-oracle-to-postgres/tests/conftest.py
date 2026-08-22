@@ -39,9 +39,12 @@ def artifact_dir(tmp_path, monkeypatch):
 
 
 @pytest.fixture
-def audit_log(tmp_path, monkeypatch):
+def audit_log_path(tmp_path, monkeypatch):
     import config
 
+    # Named ..._path, not `audit_log`: `hooks.audit_log` is a function the
+    # tests import and call, and a fixture of the same name shadows it at
+    # collection time -- the test then awaits a PathLib object.
     path = tmp_path / "migration_audit.jsonl"
     monkeypatch.setattr(config, "AUDIT_LOG", str(path))
     return path

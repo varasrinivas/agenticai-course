@@ -11,7 +11,7 @@ and decrease when they lead to errors.
 
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 @dataclass
@@ -113,7 +113,7 @@ class ProceduralMemory:
         self._max_rules = max_rules
         # Load default rules
         for rule in DEFAULT_RULES:
-            rule.created_at = datetime.utcnow().isoformat()
+            rule.created_at = datetime.now(timezone.utc).isoformat()
             self._rules[rule.rule_id] = rule
 
     # ------------------------------------------------------------------

@@ -5,7 +5,7 @@ Procedural Memory — learned rules and patterns from experience.
 
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
-from datetime import datetime
+from datetime import datetime, timezone
 
 
 @dataclass
@@ -65,7 +65,7 @@ class ProceduralMemory:
         self._rules: Dict[str, Rule] = {}
         self._max_rules = max_rules
         for rule in DEFAULT_RULES:
-            rule.created_at = datetime.utcnow().isoformat()
+            rule.created_at = datetime.now(timezone.utc).isoformat()
             self._rules[rule.rule_id] = rule
 
     def add_rule(self, rule: Rule) -> None:
@@ -77,7 +77,7 @@ class ProceduralMemory:
             lowest = min(self._rules.values(), key=lambda r: r.confidence)
             del self._rules[lowest.rule_id]
         if not rule.created_at:
-            rule.created_at = datetime.utcnow().isoformat()
+            rule.created_at = datetime.now(timezone.utc).isoformat()
         self._rules[rule.rule_id] = rule
 
     def get_rules_for_category(self, category: str) -> List[Rule]:
@@ -108,7 +108,7 @@ class ProceduralMemory:
             rule.confidence = min(1.0, rule.confidence + 0.02)
         else:
             rule.confidence = max(0.0, rule.confidence - 0.05)
-        rule.last_applied = datetime.utcnow().isoformat()
+        rule.last_applied = datetime.now(timezone.utc).isoformat()
 
     def get_stats(self) -> Dict[str, Any]:
         if not self._rules:
