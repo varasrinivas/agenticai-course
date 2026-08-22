@@ -1,21 +1,38 @@
-# Deploying the Course Site to S3 + CloudFront
+# Deploying to S3 + CloudFront
 
-The course is a static site served at **https://agenticai.varasrinivas.com**.
+The course site is a static site served at **https://agenticai.varasrinivas.com**.
+
+> **Decoupled deploys.** The site is one bucket fed by **several repos**. This
+> repo deploys only **its own course folders** (`courses/<slug>/`) and the
+> **mobile** guide. The site's root **`index.html` (the master catalog) is owned
+> by the separate `agenticai-landing` repo**, and three courses
+> (`courses/llmops/`, `courses/context-engineering/`,
+> `courses/ai-platform-engineering/`) are owned by their own repos
+> (`llmops-kit`, `context-eng-kit`, `ai-platform-kit`). No repo's deploy may
+> ever `--delete` outside the prefixes it owns.
 
 | Piece | Value |
 |---|---|
 | S3 bucket | `agenticai.varasrinivas.com` (us-east-1, private — no S3 website hosting) |
 | CloudFront distribution | ID in `scripts/deploy-config.ps1` (gitignored) → `*.cloudfront.net` |
 | DNS | `agenticai.varasrinivas.com` is a CNAME to the CloudFront domain |
-| Default root object | `index.html` (set on the distribution) |
-| Source of truth | local `output/` folder (course catalog `index.html` + `courses/<track>/…` + `mobile/…`) |
+| Default root object | `index.html` (set on the distribution; **deployed by `agenticai-landing`, not here**) |
+| This repo deploys | `output/courses/<slug>/` (8 courses) + `output/mobile/` |
+| This repo does NOT deploy | the root `index.html` (owned by `agenticai-landing`) |
 | Deploy script | `scripts/deploy-s3.ps1` |
 
-**Note on the layout change:** the bucket previously held the old *flat* layout
-(module HTML files at the bucket root). The current `output/` folder uses the
-*nested* layout (`courses/<track>/...`). The first deploy after this change
-deletes ~195 root objects and uploads ~224 new ones — that is expected, not an
-error. Old flat-layout URLs (e.g. `/M09-rag-retrieval-augmented-generation.html`,
+The course slugs this repo owns are discovered automatically from
+`output/courses/` — currently `ai-cli-comparison`, `cc`, `claude-agents`,
+`gemini-cli`, `gemini-code-assist`, `mcp`, `multi-sdk-agents`, `opensource`.
+Each is synced to its own `courses/<slug>/` prefix with a **scoped** `--delete`,
+so a deploy from this repo can never remove the catalog or another repo's course.
+
+`output/index.html` is kept as a **local preview only** and is not uploaded —
+the authoritative catalog lives in the `agenticai-landing` repo.
+
+## Legacy redirects & subfolder behavior
+
+Old flat-layout URLs (e.g. `/M09-rag-retrieval-augmented-generation.html`,
 `/cc/CC5-hooks.html`) are 301-redirected to their new `/courses/...` locations by
 the CloudFront Function `agenticai-legacy-redirects` (viewer-request, source in
 `scripts/cloudfront-legacy-redirects.js`).
@@ -46,9 +63,10 @@ Run everything from the repo root.
 .\scripts\deploy-s3.ps1 -DryRun
 ```
 
-Review the `(dryrun) delete:` and `(dryrun) upload:` lines. Deletes are objects
-in the bucket that no longer exist locally; if a delete surprises you, stop and
-investigate before deploying.
+You'll see one scoped sync per course slug (`== sync courses/<slug>/ ==`) plus
+`== sync mobile/ ==`. Review the `(dryrun) delete:` / `(dryrun) upload:` lines.
+Deletes are objects under **that one prefix** with no local counterpart; if a
+delete surprises you, stop and investigate before deploying.
 
 ### 2. Deploy
 
@@ -56,34 +74,35 @@ investigate before deploying.
 .\scripts\deploy-s3.ps1
 ```
 
-This runs one `aws s3 sync output/ s3://… --delete`, which:
-- uploads new and changed files (`Cache-Control: max-age=300`); `.md` files and
-  `archive/` folders are excluded — archives are local version history of
-  regenerated modules and are not linked from any page, so they stay off the
-  public site (note: `--exclude *archive/*` also means `--delete` will ignore
-  any `archive/` objects already in the bucket)
-- deletes bucket objects with no local counterpart
-- then invalidates the CloudFront cache (`/*`) so changes are visible immediately
+This runs `aws s3 sync` once **per course prefix** (and once for `mobile/`), each
+with a `--delete` scoped to that prefix (`Cache-Control: max-age=300`; `.md`
+files and `archive/` folders excluded), then invalidates
+`/courses/*` and `/mobile/*` so changes are visible immediately. It never touches
+the bucket root or the catalog.
 
-Use `.\scripts\deploy-s3.ps1 -WipeFirst` only when you want a guaranteed clean
-slate (deletes **everything** first, then re-uploads all ~260 files / ~89 MB;
-the site is briefly empty between the two steps).
+### 3. Deploy the catalog (separately, only when it changes)
 
-### 3. Verify
+The root `index.html` catalog is deployed from the **`agenticai-landing`** repo:
 
 ```powershell
-# Homepage serves and shows the new title
-Invoke-WebRequest https://agenticai.varasrinivas.com/ -UseBasicParsing |
-    Select-Object StatusCode
-
-# Spot-check a nested course page
-Invoke-WebRequest https://agenticai.varasrinivas.com/courses/cc/index.html -UseBasicParsing |
-    Select-Object StatusCode
+# in the agenticai-landing repo
+.\scripts\deploy-index.ps1
 ```
 
-Then open https://agenticai.varasrinivas.com in a browser and click through one
-module per track. If you still see old content, the invalidation may not have
-finished yet — check with:
+Update the catalog there whenever a course is added/renamed/removed — editing a
+card doesn't touch the course itself.
+
+### 4. Verify
+
+```powershell
+# Homepage serves (deployed by agenticai-landing)
+Invoke-WebRequest https://agenticai.varasrinivas.com/ -UseBasicParsing | Select-Object StatusCode
+
+# A course page owned by this repo
+Invoke-WebRequest https://agenticai.varasrinivas.com/courses/multi-sdk-agents/index.html -UseBasicParsing | Select-Object StatusCode
+```
+
+If you still see old content, the invalidation may not have finished — check with:
 
 ```powershell
 aws cloudfront list-invalidations --distribution-id <DISTRIBUTION_ID>
@@ -92,10 +111,10 @@ aws cloudfront list-invalidations --distribution-id <DISTRIBUTION_ID>
 ## Rollback
 
 There is no versioning safety net unless bucket versioning is enabled. To roll
-back, check out the previous git state of `output/` and re-run the deploy:
+back a course, check out the previous git state of that course folder and re-run
+the deploy:
 
 ```powershell
-git stash            # or commit current work first
-git checkout <good-commit> -- output/
+git checkout <good-commit> -- output/courses/<slug>/
 .\scripts\deploy-s3.ps1
 ```
