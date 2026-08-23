@@ -12,7 +12,9 @@ This project generates the course "Building AI Agents with Claude: From Hello Wo
 - All CSS and JS MUST be inline (no external files in production output)
 - During development, reference `shared/` files for reusable components
 - The `build.js` script inlines shared components into final HTML
-- Target file size: 80-150KB per module (optimize animations, no heavy assets)
+- Target file size: 80-150KB per module, which is where the median sits. Depth wins over the
+  target: the largest module is 265KB and 192KB of that is prose and markup, which is the
+  page doing its job. Optimize animations and ship no heavy assets
 - Import only: Google Fonts, Prism.js (syntax highlighting), and highlight.js from CDN
 
 ## File Conventions
@@ -82,7 +84,14 @@ All slash commands are defined as markdown files in `.claude/commands/` and will
 | `/generate-from-spec <path>` | Read an `agent-spec.md` and generate a complete Tier 3 agent project from it |
 
 ## Quality Checklist (applied automatically by /generate-module and /review-module)
-- [ ] File size < 200KB
+- [ ] No embedded assets. Asset imports only (`<script src>`, `<link rel="stylesheet">`,
+      `<img src>`) resolve to fonts.googleapis.com, fonts.gstatic.com, cdnjs.cloudflare.com
+      or cdn.jsdelivr.net; nothing else. Hyperlinks in prose are not imports and do not count.
+      No `data:...;base64,` URI carrying an actual payload — a zero-length one shown as a
+      syntax example is fine. This is what the old "< 200KB" rule was really guarding
+- [ ] Over 250KB, check *why* before trimming. Weight that is prose and markup is content;
+      weight that is duplicated CSS, a second copy of the shared JS, or an inlined image is
+      a defect. Roughly 10% of pages exceed 200KB legitimately, so size alone is not a fault
 - [ ] All CSS/JS inline (external only: Google Fonts, Prism.js CDN)
 - [ ] Every H2/H3 has an `id` for sidebar navigation
 - [ ] Sticky sidebar navigation present

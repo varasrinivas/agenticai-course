@@ -41,7 +41,10 @@ Follow these steps in order:
     - Final verification section with end-to-end run command + expected output + congratulations
     - A student following ONLY these instructions can complete the lab without guessing
 15. After generating, run the quality checklist:
-    - File size < 200KB (deeper explanations = larger files, that's OK)
+    - No embedded assets (no base64 payloads; imports only from the allowed CDN hosts).
+      There is no hard size cap: deeper explanations mean larger files and that is the point.
+      Median module is ~146KB, the largest is 265KB and almost all of it is prose. Investigate
+      size only to find duplicated CSS/JS or an inlined asset, never to trim explanation
     - All CSS/JS inline
     - Every H2/H3 has an id for sidebar nav
     - Sticky sidebar navigation present
