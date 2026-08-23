@@ -348,6 +348,46 @@ they are in. `labs/capstone-8-oracle-to-postgres/solution/hooks_cli.py` is the c
 settings.json can only invoke *commands*, so that module reads the payload on stdin and
 dispatches to the same functions `can_use_tool` calls.
 
+### Model IDs — read them from the provider, never pattern-match them
+
+A wrong model ID is the cheapest error to make and one of the most expensive to catch: it looks
+plausible in review, passes every offline test, and fails at runtime with a 400 or a
+model-not-found. Two things make it easy to get wrong — the naming convention changed, and
+each cloud provider has its own namespace.
+
+**Direct API.** Same authority as the Skills schema — the CLI binary:
+
+```bash
+CLI=~/AppData/Roaming/npm/node_modules/@anthropic-ai/claude-code/bin/claude.exe
+grep -aoE 'claude-(opus|sonnet|haiku|fable)-[0-9][a-z0-9-]*' "$CLI" | sort -u
+```
+
+Note the convention flip. Current IDs are **tier-first** — `claude-sonnet-4-6`,
+`claude-haiku-4-5-20251001`. Models from the 3.x era are **tier-last** — `claude-3-5-haiku-20241022`.
+Writing an old model in the new shape (`claude-haiku-3-5`) produces a string that reads correctly
+to a human and does not exist.
+
+**Bedrock and Vertex are a different namespace.** The CLI binary is not authoritative for them;
+the provider’s model card is. Look up the literal string per model:
+
+| Provider | Where | Sonnet 4.6 |
+|---|---|---|
+| Direct | CLI binary, grep above | `claude-sonnet-4-6` |
+| Bedrock | `docs.aws.amazon.com/bedrock/latest/userguide/model-card-anthropic-claude-<model>.html` — "Programmatic Access" table | `anthropic.claude-sonnet-4-6`, geo `us.anthropic.claude-sonnet-4-6`, global `global.anthropic.claude-sonnet-4-6` |
+| Vertex | Google Cloud partner-model page for that model | `claude-sonnet-4-6` |
+
+**The suffixes are generational, not universal.** The `-v1:0` and the embedded date belong to the
+older Bedrock IDs — `anthropic.claude-3-5-sonnet-20241022-v2:0` still carries both. Sonnet 4.6
+and Opus 4.7 carry neither. Vertex `@date` pinning is the same story: real for
+`claude-sonnet-4-5@20250929`, absent for 4.6. So the shape of a sibling model’s ID tells you
+nothing about this one.
+
+> **This corpus got it wrong twice.** `claude-haiku-3-5` shipped in a copy-pasteable
+> `claude --model` command. `us.anthropic.claude-sonnet-4-6-20250514-v1:0` shipped as the
+> *correct answer* to a Knowledge Check asking which Bedrock ID is right — a 4.6 name welded
+> to Sonnet 4’s date and a suffix 4.6 does not use. Both were produced by reasoning from a
+> neighbouring ID instead of looking one up. Looking it up takes one fetch.
+
 ## Per-Module Tier Index
 
 | Module | Tier | Notes |
