@@ -7,8 +7,12 @@ decomposition (M13), multi-agent systems (M14), input guardrails (M16), output g
 (M17), evaluation & testing (M18), tracing & logging (M19), deployment (M22B), spec-driven
 development (M15B, M26), **Claude Code Skills** (new to this corpus)
 **Estimated Time**: 14–18 hours across two gated phases (9A backend 10–12h, 9B frontend 4–6h)
-**Prerequisites**: M07, M13, M14, M15B, M16, M17, M18, M22B. Docker Desktop with ~8 GB free disk.
-Java 21 + Node 20 to build the generated output.
+**Prerequisites**: M07, M13, M14, M15B, M16, M17, M18, M22B.
+**Tooling**: Python 3.10+ and an Anthropic API key. Node 18+ for phase 9B only. Docker is
+optional and only for the deployment section — all 242 tests and both eval harnesses run
+on the host. Rancher Desktop, Colima and Podman all work; Docker Desktop is not required. A JDK
+is needed only if you choose to build the *generated* Spring Boot service, which no step in the
+lab requires.
 **SDK Tier**: **Tier 3** per `prompts/19-sdk-tier-policy.md`. The primary solution uses
 `claude-agent-sdk`; subagents are declared as `.claude/agents/<name>.md`; hooks live in
 `.claude/settings.json`; domain knowledge lives in `.claude/skills/<name>/SKILL.md`;
