@@ -140,13 +140,23 @@ Every tool returns `{"content": [{"type": "text", "text": json.dumps(result)}]}`
 
 ## 5. Skills (declared as `.claude/skills/<name>/SKILL.md`)
 
-Frontmatter uses only fields Claude Code actually reads: **`name` and `description` are required**;
-`allowed-tools`, `version`, `tools`, `user-invocable`, `license`, `argument-hint` and
-`disable-model-invocation` are optional. `name` must match the directory.
+Frontmatter follows Claude Code's schema. **`name` and `description` are required.** Optional and
+relevant here: `model`, `allowed-tools`, `disallowed-tools`, `user-invocable`,
+`disable-model-invocation`, `argument-hint`, `effort`, `shell`, plus the skill-only
+`when_to_use`, `paths`, `hooks`, `context`, `agent` and `background`. `name` must match the
+directory.
 
-> **`context: fork` is not a Claude Code skill field.** An unknown key is silently ignored rather
-> than rejected, so a skill relying on one behaves nothing like its author intended.
-> `tests/test_skills_wellformed.py` asserts against the known set.
+> **`context` decides where the skill runs**: `inline` (the default) expands it into the current
+> conversation; `fork` spawns a subagent, giving the skill its own context window with only its
+> result returned. `agent` picks the agent type for a fork; `background` makes the fork report
+> back as a task notification instead of blocking.
+>
+> **Every skill in this lab runs inline, deliberately** -- one shared context is the thing being
+> measured against Capstone 8. `context: fork` is the obvious lever to reach for in §3's
+> validator problem, and reaching for it changes the experiment rather than tuning it.
+>
+> An unrecognised key is ignored silently rather than rejected, so a typo behaves like an
+> absent field. `tests/test_skills_wellformed.py` validates against the real schema.
 
 Bundled resources follow the standard layout: `scripts/` for executables, `references/` for
 material loaded on demand, `assets/` for files used in output.

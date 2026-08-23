@@ -39,9 +39,13 @@ There is no `.claude/agents/`, and no `type_mapping.py`, `validation.py` or
 
 ## Working on skills
 
-- **Do not add `context:` to skill frontmatter.** It is not a field Claude Code reads. Unknown
-  keys are ignored silently, so a skill relying on one behaves nothing like intended.
-  `tests/test_skills_wellformed.py` rejects them.
+- **`context: fork` is real, and this lab deliberately does not use it.** A forked skill spawns
+  a subagent, so it gets its own context window and only its result comes back. Every skill here
+  runs inline on purpose -- a single shared context is the architecture being measured. If you
+  set `context: fork` on `migration-validation`, say so in the comparison: you have changed the
+  experiment, not just the config.
+- **An unrecognised frontmatter key is ignored silently**, so a typo leaves the skill behaving
+  nothing like intended. `tests/test_skills_wellformed.py` validates against the real schema.
 - **A skill that fails to load fails silently.** No error, no warning -- the agent just
   improvises. After changing skill wiring, check `migration_audit.jsonl` for an actual script
   execution before believing a green run.

@@ -122,6 +122,35 @@ print(f"{len(reads)} target reads during the run")
 EOF
 ```
 
+### Trial 4 — fork the validator
+
+`migration-validation` runs inline like every other skill in this lab. Add one line to its
+frontmatter:
+
+```yaml
+context: fork
+```
+
+It now spawns a subagent: its own context window, only its result returned. That is the property
+the inline design gave up, bought back for one line — **without** giving up the single shared
+`nullability-preservation` file, which the loader still reads.
+
+Re-run the three trials above with the validator forked:
+
+| Run | Caught the defect? | Re-queried? | Tokens | Wall clock |
+|---|---|---|---:|---:|
+| 1 | ☐ yes ☐ no | | | |
+| 2 | ☐ yes ☐ no | | | |
+| 3 | ☐ yes ☐ no | | | |
+
+Then answer honestly:
+
+- Did forking recover Capstone 8's reliability, or only part of it?
+- What did the extra turn cost in tokens and wall clock?
+- The fork runs under the agent type named in `agent:`, with **that** agent's system prompt —
+  not one written for adversarial reconciliation. Did the defect get *caught* but reported
+  limply? That gap is the argument for a real subagent, and it belongs here.
+
 ### What to conclude
 
 Answer in prose, not a checkbox. Be specific:
@@ -145,9 +174,11 @@ names the trade rather than picking a side.
 
 Complete these, in your own words:
 
-> Use **skills** when: _______________________________________
+> Use an **inline skill** when: ______________________________
 >
-> Use **subagents** when: ____________________________________
+> Use a **forked skill** (`context: fork`) when: _____________
+>
+> Use a **subagent** when: ___________________________________
 >
 > For this migration specifically, the shape I would ship is: ____________________
 > because ____________________________________________________

@@ -19,9 +19,11 @@ better; it must teach the reader to tell when each shape is right.
 
 **The thesis, stated once so the page can keep returning to it:**
 
-> Skills are knowledge loaded *into* the current context. Subagents are work delegated *to* a
-> separate one. Collapsing five subagents into one context buys shared knowledge and costs
-> independence — and the phase that needs independence most is validation.
+> An **inline** skill is knowledge loaded *into* the current context. A **forked** skill
+> (`context: fork`) and a **subagent** both run in a separate one. Making all five inline buys
+> shared knowledge and costs independence — and the phase that needs independence most is
+> validation. The fix is one frontmatter line, which is exactly why the capstone measures it
+> rather than asserting it.
 
 ---
 
@@ -70,14 +72,21 @@ Plus a single-context `coordinator.py` carrying `PHASE_SKILLS`, and
 
 ## SKILL.md accuracy — non-negotiable
 
-Frontmatter fields Claude Code actually reads: **`name` and `description` required**;
-`version`, `allowed-tools`, `tools`, `user-invocable`, `license`, `argument-hint`,
-`disable-model-invocation` optional. `name` must match the directory.
+Frontmatter comes from Claude Code's own schema. **`name` and `description` required.** Optional:
+`model`, `allowed-tools`, `disallowed-tools`, `argument-hint`, `disable-model-invocation`,
+`user-invocable`, `effort`, `shell`, plus skill-only `when_to_use`, `paths`, `hooks`, `context`,
+`agent`, `background`. `name` must match the directory.
 
-> **`context: fork` is NOT a Claude Code skill field.** Zero of the 58 skills shipped in the
-> official Anthropic plugin marketplace use it, and
-> `plugin-dev/skills/skill-development/SKILL.md` lists only `name` and `description` as
-> required. M25 currently teaches it — that is a separate bug. **This page must not repeat it.**
+> **`context: fork` is real and load-bearing for this capstone.** `inline` (default) expands the
+> skill into the current conversation; `fork` **spawns a subagent**, so the skill gets its own
+> context window and only its result returns. `agent` picks the agent type; `background` makes
+> the fork report as a task notification instead of blocking.
+>
+> Verify against the CLI's schema, not against published examples — `context` appears in none of
+> the marketplace skills and is fully supported. Absence from samples is not evidence.
+>
+> **The page must not claim skills cannot have context isolation.** They can. This lab runs
+> everything inline *deliberately*, to make the cost measurable.
 
 Bundled-resource layout is `scripts/` (executables), `references/` (loaded on demand),
 `assets/` (used in output).

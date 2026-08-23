@@ -35,11 +35,32 @@ import pytest
 from conftest import EXPECTED_SKILLS, SKILLS_DIR, load_skill_script
 
 REQUIRED_KEYS = {"name", "description"}
+
+# The rest of the frontmatter contract, taken from Claude Code's own schema
+# (v2.1.241) rather than from a survey of published skills -- a key being
+# absent from every example is not evidence it is unsupported.
 OPTIONAL_KEYS = {
-    "version", "allowed-tools", "tools", "user-invocable",
-    "license", "argument-hint", "disable-model-invocation",
+    # shared with slash commands
+    "model", "allowed-tools", "disallowed-tools", "argument-hint",
+    "disable-model-invocation", "user-invocable", "effort", "shell",
+    # skill-only
+    "when_to_use",   # extra guidance folded into the Skill tool description
+    "paths",         # globs; the skill loads only when matching files are touched
+    "hooks",         # hooks registered while the skill is active
+    "context",       # "inline" (default) or "fork" -- see CONTEXT_VALUES
+    "agent",         # agent type to spawn when context: fork
+    "background",    # fork reports back as a task notification instead of blocking
+    # internal / bookkeeping, tolerated rather than encouraged
+    "version", "arguments", "disallowedTools", "fallback",
+    "created_by", "improved_by",
 }
 KNOWN_KEYS = REQUIRED_KEYS | OPTIONAL_KEYS
+
+# `context` is an enum, and the two values mean very different things:
+# inline expands the skill into the current conversation; fork spawns a
+# subagent, so the skill gets its own context window and only its result
+# comes back.
+CONTEXT_VALUES = {"inline", "fork"}
 
 # Tools this project actually provides. An allowed-tools entry outside this
 # set is a silent no-op at runtime.
@@ -129,11 +150,11 @@ def test_required_keys_present(skill, parsed):
 
 @pytest.mark.parametrize("skill", SKILL_NAMES)
 def test_no_invented_frontmatter_keys(skill, parsed):
-    """`context: fork` is the one to watch for.
+    """An unrecognised key is ignored silently rather than rejected.
 
-    It appears in some course material but is not a field Claude Code reads,
-    and an unknown key is silently ignored rather than rejected -- so a skill
-    that relies on it behaves nothing like its author intended.
+    That is the whole reason this test exists: a typo'd or invented key does
+    not fail, so the skill just quietly behaves nothing like its author
+    intended. Validate against the real schema at build time instead.
     """
     data, _ = parsed[skill]
     unknown = set(data) - KNOWN_KEYS
@@ -141,8 +162,23 @@ def test_no_invented_frontmatter_keys(skill, parsed):
         f"{skill}: unrecognised frontmatter key(s) {sorted(unknown)}. "
         f"Claude Code ignores unknown keys silently. Known keys: {sorted(KNOWN_KEYS)}"
     )
-    assert "context" not in data, (
-        f"{skill}: `context:` is not a Claude Code skill frontmatter field."
+
+
+@pytest.mark.parametrize("skill", SKILL_NAMES)
+def test_context_value_is_valid_if_present(skill, parsed):
+    """`context` is an enum, and the wrong value is silently ignored.
+
+    `inline` expands the skill into the current conversation; `fork` spawns a
+    subagent so the skill runs in its own context window. Anything else -- a
+    typo, or a value someone assumed existed -- leaves the skill running
+    inline while its author believes it is isolated.
+    """
+    data, _ = parsed[skill]
+    if "context" not in data:
+        pytest.skip(f"{skill} does not set context (defaults to inline)")
+    assert data["context"] in CONTEXT_VALUES, (
+        f"{skill}: context is {data['context']!r}; must be one of "
+        f"{sorted(CONTEXT_VALUES)}"
     )
 
 
