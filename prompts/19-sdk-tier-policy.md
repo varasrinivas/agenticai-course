@@ -176,6 +176,38 @@ Body. Keep the entry point SHORT and make it route:
 | `references/part2-redisclosure.md` | Anything touching consent, disclosure, logging, eventing |
 ```
 
+**The frontmatter schema — read it from the CLI, never infer it from examples.**
+Authority is Claude Code's own schema, not the docs and not a survey of published skills.
+Fixed-string greps against the installed binary, so they survive minifier churn:
+
+```bash
+CLI=~/AppData/Roaming/npm/node_modules/@anthropic-ai/claude-code/bin/claude.exe
+grep -aoF '["inline","fork"]' "$CLI"
+grep -aoF 'Agent type to spawn when `context: fork`' "$CLI"
+# verified against v2.1.241
+```
+
+| Field | Notes |
+|---|---|
+| `name`, `description` | **the only required fields** |
+| `context` | `inline` (default) expands the skill into the current conversation; **`fork` spawns a subagent**, giving the skill its own context window so only its result returns |
+| `agent` | which agent type to spawn — fork only |
+| `background` | fork only; reports as a task notification instead of blocking the turn |
+| `when_to_use` | extra trigger guidance beyond `description` |
+| `paths` | globs — the skill loads only when matching files are touched |
+| `hooks` | hooks scoped to this skill |
+| shared with slash commands | `model`, `allowed-tools`, `disallowed-tools`, `argument-hint`, `disable-model-invocation`, `user-invocable`, `effort`, `shell` |
+| NOT in the schema | `license`, `tools` — they appear in some marketplace skills and are ignored |
+
+**Unrecognised keys and invalid enum values are ignored SILENTLY**, so `context: forked` behaves
+exactly like no `context` at all — no warning, no error. That is the trap worth teaching.
+
+> **A mistake this corpus already made once.** `context: fork` was written off as not a real
+> field because it appears in none of the 58 official marketplace skills and the
+> `skill-development` skill does not document it. Neither is evidence of absence. The wrong
+> conclusion reached a shipped test, a spec, two CLAUDE.md files and a course page before anyone
+> read the schema. Infer a schema from the schema.
+
 A skill directory may bundle files, and bundling is most of the point:
 
 ```
@@ -193,7 +225,7 @@ A skill directory may bundle files, and bundling is most of the point:
 | | Skill | Subagent | Slash command |
 |---|---|---|---|
 | Loaded | on demand, by description | when delegated to | when a person types it |
-| Context | shares the caller's | **its own window** | shares the caller's |
+| Context | the caller's — **or its own, with `context: fork`** | **its own window** | shares the caller's |
 | Bundles files | **yes** | no | no |
 | Restricts tools | advisory | **enforced** | no |
 | Blocks a tool call | no | no — hooks do that | no |
@@ -204,8 +236,11 @@ Skill. An entry point a human invokes? Slash command.
 **Three anti-patterns to reject in review:**
 1. The same domain ontology pasted into N subagent prompts. It drifts the moment one is edited and
    costs tokens on every turn. One Skill, loaded on demand.
-2. A Skill that "orchestrates". It cannot sequence a phase, isolate a context window, or block a
-   call. Writing "then delegate to the validator" in a Skill produces a suggestion, not a control.
+2. A Skill that "orchestrates". It cannot sequence phases or block a tool call — writing
+   "then delegate to the validator" in a Skill produces a suggestion, not a control. But it *can*
+   isolate context, via `context: fork`, so "needs isolation" alone does not make something a
+   subagent. Reach for a real subagent when you also need a system prompt written for that job
+   and its own model routing.
 3. A slash command where a Skill belongs. If the agent should reach for it mid-run on its own, it
    is a Skill.
 
