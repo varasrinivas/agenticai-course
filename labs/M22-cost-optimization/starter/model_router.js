@@ -14,8 +14,8 @@
  */
 
 const MODEL_PRICING = {
-  "claude-haiku-3-5": {
-    name: "claude-haiku-3-5",
+  "claude-3-5-haiku-20241022": {
+    name: "claude-3-5-haiku-20241022",
     displayName: "Haiku 3.5",
     inputPer1m: 0.80,
     outputPer1m: 4.00,
@@ -39,7 +39,7 @@ class ModelRouter {
     this.routingRules = [
       {
         taskType: "filing_lookup",
-        model: "claude-haiku-3-5",
+        model: "claude-3-5-haiku-20241022",
         reason: "Simple data retrieval — Haiku handles lookups at 1/4 the cost of Sonnet",
       },
       {
@@ -128,9 +128,9 @@ function selfTest() {
   const router = new ModelRouter();
 
   const testQueries = [
-    ["Find all UCC filings for Acme Corp", "filing_lookup", "claude-haiku-3-5"],
-    ["Search for filings in Texas", "filing_lookup", "claude-haiku-3-5"],
-    ["List all secured parties in New York", "filing_lookup", "claude-haiku-3-5"],
+    ["Find all UCC filings for Acme Corp", "filing_lookup", "claude-3-5-haiku-20241022"],
+    ["Search for filings in Texas", "filing_lookup", "claude-3-5-haiku-20241022"],
+    ["List all secured parties in New York", "filing_lookup", "claude-3-5-haiku-20241022"],
     ["Resolve entity: is 'Acme Corp' the same as 'ACME Corporation'?", "entity_resolution", "claude-sonnet-4"],
     ["Identify matching debtors across jurisdictions", "entity_resolution", "claude-sonnet-4"],
     ["Assess the risk exposure for Greenfield Logistics", "risk_analysis", "claude-opus-4"],
@@ -161,7 +161,7 @@ function selfTest() {
       `Total: $${cost.totalCost.toFixed(6)}`
   );
 
-  const costHaiku = router.estimateCost("claude-haiku-3-5", 1500, 500);
+  const costHaiku = router.estimateCost("claude-3-5-haiku-20241022", 1500, 500);
   console.log(`\n  Haiku:  1500 input + 500 output tokens`);
   console.log(
     `  Input: $${costHaiku.inputCost.toFixed(6)}, Output: $${costHaiku.outputCost.toFixed(6)}, ` +

@@ -176,7 +176,7 @@ class OptimizedAgent {
       return data.calls - this.tracker.records.filter((r) => r.model === model && r.cached).length;
     };
 
-    const haikuCalls = countNonCached("claude-haiku-3-5");
+    const haikuCalls = countNonCached("claude-3-5-haiku-20241022");
     const sonnetCalls = countNonCached("claude-sonnet-4");
     const opusCalls = countNonCached("claude-opus-4");
     const cacheHitPct = queries.length > 0 ? (cacheInfo.cacheHits / queries.length) * 100 : 0;

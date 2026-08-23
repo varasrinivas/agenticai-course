@@ -12,8 +12,8 @@ import re
 
 
 MODEL_PRICING = {
-    "claude-haiku-3-5": {
-        "name": "claude-haiku-3-5",
+    "claude-3-5-haiku-20241022": {
+        "name": "claude-3-5-haiku-20241022",
         "display_name": "Haiku 3.5",
         "input_per_1m": 0.80,
         "output_per_1m": 4.00,
@@ -37,7 +37,7 @@ class ModelRouter:
     """Routes queries to the appropriate Claude model based on task complexity."""
 
     ROUTING_RULES = [
-        ("filing_lookup", "claude-haiku-3-5",
+        ("filing_lookup", "claude-3-5-haiku-20241022",
          "Simple data retrieval — Haiku handles lookups at 1/4 the cost of Sonnet"),
         ("entity_resolution", "claude-sonnet-4",
          "Moderate reasoning needed — Sonnet balances cost and capability for entity matching"),
@@ -145,9 +145,9 @@ def self_test():
     router = ModelRouter()
 
     test_queries = [
-        ("Find all UCC filings for Acme Corp", "filing_lookup", "claude-haiku-3-5"),
-        ("Search for filings in Texas", "filing_lookup", "claude-haiku-3-5"),
-        ("List all secured parties in New York", "filing_lookup", "claude-haiku-3-5"),
+        ("Find all UCC filings for Acme Corp", "filing_lookup", "claude-3-5-haiku-20241022"),
+        ("Search for filings in Texas", "filing_lookup", "claude-3-5-haiku-20241022"),
+        ("List all secured parties in New York", "filing_lookup", "claude-3-5-haiku-20241022"),
         ("Resolve entity: is 'Acme Corp' the same as 'ACME Corporation'?", "entity_resolution", "claude-sonnet-4"),
         ("Identify matching debtors across jurisdictions", "entity_resolution", "claude-sonnet-4"),
         ("Assess the risk exposure for Greenfield Logistics", "risk_analysis", "claude-opus-4"),
@@ -174,7 +174,7 @@ def self_test():
     print(f"  Input: ${cost['input_cost']:.6f}, Output: ${cost['output_cost']:.6f}, "
           f"Total: ${cost['total_cost']:.6f}")
 
-    cost_haiku = router.estimate_cost("claude-haiku-3-5", input_tokens=1500, output_tokens=500)
+    cost_haiku = router.estimate_cost("claude-3-5-haiku-20241022", input_tokens=1500, output_tokens=500)
     print(f"\n  Haiku:  1500 input + 500 output tokens")
     print(f"  Input: ${cost_haiku['input_cost']:.6f}, Output: ${cost_haiku['output_cost']:.6f}, "
           f"Total: ${cost_haiku['total_cost']:.6f}")

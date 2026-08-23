@@ -12,7 +12,7 @@ from datetime import datetime
 
 
 MODEL_PRICING = {
-    "claude-haiku-3-5": {"input_per_1m": 0.80, "output_per_1m": 4.00},
+    "claude-3-5-haiku-20241022": {"input_per_1m": 0.80, "output_per_1m": 4.00},
     "claude-sonnet-4": {"input_per_1m": 3.00, "output_per_1m": 15.00},
     "claude-opus-4": {"input_per_1m": 15.00, "output_per_1m": 75.00},
 }
@@ -181,8 +181,8 @@ def self_test():
     random.seed(42)
 
     call_scenarios = [
-        ("claude-haiku-3-5", (400, 1000), (200, 500), 0.3, 0.1),
-        ("claude-haiku-3-5", (500, 900), (150, 400), 0.4, 0.2),
+        ("claude-3-5-haiku-20241022", (400, 1000), (200, 500), 0.3, 0.1),
+        ("claude-3-5-haiku-20241022", (500, 900), (150, 400), 0.4, 0.2),
         ("claude-sonnet-4", (800, 1500), (300, 800), 0.2, 0.05),
         ("claude-sonnet-4", (600, 1200), (200, 600), 0.25, 0.0),
         ("claude-opus-4", (1500, 3000), (500, 1500), 0.1, 0.0),
