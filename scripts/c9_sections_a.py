@@ -56,6 +56,35 @@ PART_A = r"""
       <p>The run ships in two gated phases. <strong>9A</strong> is backend and workflow, 10&ndash;12 hours. <strong>9B</strong> is the frontend, 4&ndash;6 hours, and it does not start until 9A is green &mdash; because the screen inventory is its input, and a client cannot supply an enforcement the backend does not have.</p>
     </section>
 
+    <!-- ===== PREREQUISITES ===== -->
+    <section class="section" id="prerequisites">
+      <h2 id="prerequisites-heading">Prerequisites</h2>
+
+      <p>This capstone assumes the whole agent track. It is the only one that uses
+      <code>.claude/skills/</code>, so that part is taught here from scratch &mdash; everything else
+      below is assumed knowledge, not revision.</p>
+
+      <div class="table-scroll">
+      <table class="data-table">
+        <thead><tr><th>Module</th><th>What you need from it</th></tr></thead>
+        <tbody>
+          <tr><td><a href="M07-mcp-model-context-protocol.html">M07 &mdash; MCP</a></td><td>Both source trees and the emitted workspace are reached through MCP tools. You need <code>create_sdk_mcp_server</code> and the <code>@tool</code> decorator to be unremarkable.</td></tr>
+          <tr><td><a href="M13-planning-task-decomposition.html">M13 &mdash; Planning</a></td><td>Six ordered phases with real dependencies, and a gate between 9A and 9B that refuses to open early.</td></tr>
+          <tr><td><a href="M14-multi-agent-systems.html">M14 &mdash; Multi-Agent</a></td><td>A coordinator delegating to eight specialists, each reading a different slice of two codebases in its own context.</td></tr>
+          <tr><td><a href="M15B-build-agent-subagent-system.html">M15B &mdash; Build Lab</a></td><td>The <code>.claude/agents/</code> pattern and <code>.claude/settings.json</code>. This capstone adds <code>.claude/skills/</code> on top, and assumes you already know what a subagent is.</td></tr>
+          <tr><td><a href="M16-input-guardrails.html">M16 &mdash; Input Guardrails</a></td><td><code>PreToolUse</code> denial through <code>can_use_tool</code>. Four of the five hooks here are denials.</td></tr>
+          <tr><td><a href="M17-output-guardrails-hitl.html">M17 &mdash; Output Guardrails &amp; HITL</a></td><td>The finalization gate always denies. If you have not met a human-approval gate before, that will read as a bug.</td></tr>
+          <tr><td><a href="M18-evaluation-testing.html">M18 &mdash; Evaluation</a></td><td>242 offline tests and a 24-scenario eval harness. Several scenarios score a <em>refusal</em> rather than an answer.</td></tr>
+          <tr><td><a href="M22B-deploy-local-cloud.html">M22B &mdash; Deploy</a></td><td>Local Docker first, then GCP and AWS. Only needed if you do the deployment section.</td></tr>
+        </tbody>
+      </table>
+      </div>
+
+      <p><strong>Tooling.</strong> Python 3.10+ and an Anthropic API key. Node 18+ only for phase 9B.
+      Docker is optional and only for the deployment section &mdash; every test and eval in this lab
+      runs offline without it.</p>
+    </section>
+
     <!-- ===== WHY BH != CLINICAL ===== -->
     <section class="section" id="why-bh">
       <h2 id="why-bh-heading">Why Behavioral Health Is Not Clinical With Different Codes</h2>

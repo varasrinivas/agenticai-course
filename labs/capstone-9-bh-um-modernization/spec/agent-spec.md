@@ -270,7 +270,38 @@ Multi-turn via a `ModernizationSession` helper persisting phase state to
 re-reading both trees. `fork()` produces a what-if branch for trying an alternative seam map or an
 alternative hit policy.
 
-## 9. Deployment
+## 9. Observability
+
+`observability/tracer.py` and `observability/metrics.py`. Both write to `ARTIFACT_DIR`.
+
+### Traces — `trace.jsonl`
+
+One span per delegated unit of work, appended as it closes so a killed run keeps what it had.
+A span carries `name`, `phase`, `ms`, `ok`, `error` and free-form attributes; `Tracer` exposes
+`total_ms()`, `total_tokens()`, `failures()` and `by_phase()`. The report reads all four.
+
+### Metrics — `metrics.json`
+
+`artifacts_emitted`, `artifacts_queued`, `gaps_recorded`, `must_build_new`, `must_not_port`,
+`rules_divergences`, `protected_content_hits`, `tool_calls`, `output_tokens`, `wall_ms`,
+`phase_failures`. `automated_pct()` is emitted over emitted-plus-queued, never over emitted
+alone &mdash; a run that queues half the work and reports 100% automated is the failure this
+metric exists to make visible.
+
+### What never enters a span, a metric, or a log line
+
+Clinical narrative, assessment free text, consent text, and credentials. Spans carry
+identifiers, counts and durations. `protected_content_hits` counts redactions **without
+recording what was redacted** &mdash; a count is evidence the gate fired; the content is the
+thing the gate exists to keep out. This is the same rule as "no PHI in prompts", applied to the
+telemetry rather than the model.
+
+> **No API Design section.** The template carries one; this agent has no HTTP surface. It is a
+> CLI pipeline over two read-only trees, and its only external interface is the operator flag
+> behind the HITL gate in section 6. Adding an API here would be inventing a
+> requirement to satisfy a heading.
+
+## 10. Deployment
 
 - **Tier 1 (local, default)**: `docker compose up` — an Oracle-compatible source container seeded from
   the legacy DDL, a Postgres target, and the agent. The compose file gates the agent on both database
@@ -278,7 +309,7 @@ alternative hit policy.
 - **Tier 2 (GCP)**: Cloud Run job; artifacts to Cloud Storage.
 - **Tier 3 (AWS)**: ECS task; artifacts to S3.
 
-## 10. Tests (pytest, in `tests/`)
+## 11. Tests (pytest, in `tests/`)
 
 - `test_rules_hit_policy.py` — a naive port of the stateful first-match logic diverges from the legacy
   engine on the overlapping level-of-care rows; the corrected hit policy does not
@@ -298,7 +329,7 @@ alternative hit policy.
 - `test_hitl_gate.py` — finalization cannot succeed without the human approval flag
 - `test_skill_loading.py` — each subagent resolves the domain Skill rather than carrying an inline copy
 
-## 11. Evaluation Dataset (`evaluation/test_cases.json`, 24 scenarios)
+## 12. Evaluation Dataset (`evaluation/test_cases.json`, 24 scenarios)
 
 1. Architecture manifest lists the migration set and correctly reports zero foreign keys
 2. Manifest flags the intake free-text field as validated-but-not-persisted
@@ -323,7 +354,7 @@ alternative hit policy.
 
 Pass threshold: 18 of 20.
 
-## 12. File Structure
+## 13. File Structure
 
 Two trees, and keeping them apart matters. `solution/` is **the agent**; `bh-um-lite/` is **what
 the agent writes**. The agent's own subagents, skills and hooks are not part of its output, and an
@@ -379,6 +410,9 @@ bh-um-lite/                       (generated -- the ONLY path write_artifact may
 - Every screen in the inventory has a reachable route, and no rule extracted from a view remains in a
   template
 - `modernization_audit.jsonl` has one entry per tool call, with no credentials and no narrative
+- `trace.jsonl` has one span per delegated unit of work, and `metrics.json` reports
+  `automated_pct` over emitted-plus-queued; no span, metric or log line carries clinical
+  narrative, consent text or a credential
 - Attempting any write against either source tree is denied and logged
 - **The donor's own definition of done holds**: for any generated decision path, you can explain how
   it would produce an incorrect utilization decision and who owns the logic

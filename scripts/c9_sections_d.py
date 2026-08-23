@@ -139,6 +139,20 @@ python solution/evaluation/test_suite.py              # >= 22 / 24</code></pre><
       <h2 id="deploy-heading">Deployment</h2>
 
       <p>Three tiers. Tier 1 is the lab and needs only Docker &mdash; there is no database and no broker, because this agent reads a repository and writes a repository.</p>
+      <div class="callout-cost">
+        <span class="box-label">Before you pull anything</span>
+        <p>The image is <code>python:3.12-slim</code> plus this lab and its two dependencies. There is
+        no database driver, no Oracle client and no JDK &mdash; the agent parses SQL and XML with the
+        standard library &mdash; so this stays a small Python image rather than a multi-gigabyte one.
+        Check what you actually got with <code>docker image ls</code> after the build; it is worth
+        knowing the number for your own machine rather than trusting a number in a course page.</p>
+        <p>The official Python images are multi-arch, so Apple Silicon runs this natively &mdash; no
+        emulation, no <code>--platform</code> flag. Rancher Desktop, Colima and Podman all work;
+        Docker Desktop is not required.</p>
+        <p><strong>You can skip this section entirely.</strong> Docker is for the deployment story only.
+        Every test, every eval scenario and both coordinator phases run on the host with nothing but
+        Python and an API key &mdash; that is what the previous nine steps did.</p>
+      </div>
 
       <div class="code-block-wrapper">
         <div class="code-tabs"><button class="code-tab active" onclick="switchTab(this,'deploy-sh')">Shell</button></div>
@@ -241,6 +255,41 @@ docker compose run --rm agent python coordinator.py --phase finalize --approve</
     </section>
 
     <!-- ===== QUIZ ===== -->
+    <!-- ===== WHAT YOU BUILT ===== -->
+    <section class="section" id="what-you-built">
+      <h2 id="what-you-built-heading">What You Built</h2>
+
+      <p>A coordinator and eight subagents that read a 2011 monolith and a modern platform neither
+      of them wrote, and produced a third repository plus an argument about it. Concretely:</p>
+
+      <div class="table-scroll">
+      <table class="data-table">
+        <thead><tr><th>You built</th><th>And the hard part was</th></tr></thead>
+        <tbody>
+          <tr><td>A rules IR with a <em>justified</em> hit policy</td><td>Discovering that the naive <code>FIRST</code> table is correct <strong>by luck</strong> &mdash; zero divergences today, ten after sorting rows by id. You made the table order-independent instead of trusting the golden set.</td></tr>
+          <tr><td>A gap register with named harms</td><td>A <code>must-not-port</code> verdict that cannot be filed without naming who gets hurt. If you cannot name it, the verdict was always <code>extend</code>.</td></tr>
+          <tr><td>A term map</td><td>Four of five status names survive the port spelled identically and meaning something different. Nothing downstream would ever have flagged it.</td></tr>
+          <tr><td>A seam map that refuses seams</td><td>Deciding that the auth/consent pair does not get a saga &mdash; because what is true <em>during</em> the window is unlawful, and no compensation un-holds a disclosure.</td></tr>
+          <tr><td>Five hooks, four of them denials</td><td>Pointing an agent at a regulated codebase without feeding it regulated data.</td></tr>
+          <tr><td>A gate that always says no</td><td>Building the one control your agent cannot talk its way through.</td></tr>
+        </tbody>
+      </table>
+      </div>
+
+      <div class="callout-why">
+        <span class="box-label">The thing worth carrying out of here</span>
+        <p>Every other capstone in this course asks an agent to <em>do</em> something. This one asks it to
+        <strong>report what it could not do</strong> &mdash; and then makes that report the deliverable.
+        A migration agent that comes back saying "100% automated, no issues" has not finished the job;
+        it has finished looking. The register, the queue and the refusals are not the exercise&rsquo;s
+        failure modes. They are its output.</p>
+      </div>
+
+      <p>You also used <code>.claude/skills/</code> for the first time in this course, and drew the line
+      this capstone exists to teach: <strong>Skills carry knowledge and recipes; agents carry control
+      flow and safety.</strong> Six subagents shared one behavioral-health ontology instead of six
+      drifting copies of it.</p>
+    </section>
     <section class="section quiz-section" id="quiz">
       <h2 id="quiz-heading">Knowledge Check</h2>
 

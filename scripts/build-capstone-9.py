@@ -179,6 +179,7 @@ HEADER = """
   <nav class="sidebar-nav" aria-label="Capstone sections">
     <div class="sidebar-title">Capstone 9</div>
     <a href="#brief">Project Brief</a>
+    <a href="#prerequisites">Prerequisites</a>
     <a href="#why-bh">Why BH &ne; Clinical</a>
     <a href="#term-map">Vocabularies Collide</a>
     <a href="#donor">The Donor and Its Holes</a>
@@ -203,6 +204,7 @@ HEADER = """
     <a href="#part2">HIPAA &amp; 42 CFR Part 2</a>
     <a href="#troubleshooting">Troubleshooting</a>
     <a href="#extensions">Going Further</a>
+    <a href="#what-you-built">What You Built</a>
     <a href="#quiz">Knowledge Check</a>
     <a href="#references">References</a>
   </nav>
