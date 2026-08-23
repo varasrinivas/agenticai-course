@@ -117,7 +117,8 @@ M05-function-calling/
 
 ### Capstone Projects (Track 8)
 
-Each capstone has three domain variants (Healthcare, B2B Ecommerce, UCC Data Engineering):
+Capstones 1-5 and 7 ship three domain variants (Healthcare, B2B Ecommerce, UCC Data
+Engineering). Capstones 6, 8, 8B and 9 are **standalone** — one problem, no domain letter:
 
 | Lab | Title | Difficulty | What You Build |
 |-----|-------|-----------|----------------|
@@ -126,7 +127,11 @@ Each capstone has three domain variants (Healthcare, B2B Ecommerce, UCC Data Eng
 | Capstone 3 | Reasoning Agent | ★★★☆☆ | ReAct multi-step problem solver |
 | Capstone 4 | Agent Team | ★★★★☆ | Multi-agent pipeline with HITL |
 | Capstone 5 | Production Agent | ★★★★★ | Autonomous system with full observability |
-| Capstone 6 | Bronze Layer Testing | ★★★☆☆ | Data pipeline quality testing |
+| Capstone 6 | Bronze Layer Testing | ★★★☆☆ | Data pipeline quality testing *(standalone)* |
+| Capstone 7 | Agent Evolution | ★★★★★ | The same agent built three ways, across three sessions — **module pages only, no lab in this repo yet** |
+| Capstone 8 | Oracle → PostgreSQL | ★★★★★ | Migration agent, coordinator + 5 subagents *(standalone)* |
+| Capstone 8B | Skills-First Migration | ★★★★★ | Capstone 8 rebuilt with Agent Skills, then measured *(standalone)* |
+| Capstone 9 | BH UM Modernization | ★★★★★ | Spring MVC/JSP monolith → distributed, plus a gap register *(standalone)* |
 
 ## Domain Anchors
 
