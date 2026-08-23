@@ -120,6 +120,14 @@ THE 3 DEPLOYMENT TIERS:
 
 ## Generation Command
 
+> **Implemented.** `scripts/build-study-guide.py` builds the PDF (A4 + Letter)
+> from `output/mobile/*.html`. Run `--check` first to see extraction coverage.
+> The Quick Reference Cards below are **superseded** by
+> `scripts/study-guide-quickref.md`, which is what the script reads — the cost
+> figures in this file are prior-generation prices and should not be copied
+> forward. The HTML and Markdown variants are still unbuilt.
+
+
 Read all mobile HTML files from output/mobile/. For each module extract: the Big Idea card content, the Pseudocode card content, one misconception from the Misconceptions card. Compile into the study guide format above. Generate three files:
 
 1. output/study-guide.pdf — Use reportlab to create a professional PDF with cover page, table of contents, one module per page, quick reference cards at the end. Use dark background (#0A1628) with light text (#E8ECF1) and gold accents (#D4A843). JetBrains Mono for pseudocode blocks.
