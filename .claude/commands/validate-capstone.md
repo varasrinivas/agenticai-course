@@ -100,19 +100,23 @@ before checking anything else.** The correct API pattern is different for each t
 that is a pass at one tier is a critical failure at another. Do not apply a single "correct SDK
 usage" standard across all capstones.
 
-Current assignment: **CAPSTONE-1 through 5 and 7 are Tier 3** (all domains). **CAPSTONE-6 is
-deliberately Tier 1** — the non-agent baseline. **CAPSTONE-8, CAPSTONE-8B and CAPSTONE-9 are Tier 3.** If a capstone is not in
-the index, default to Tier 1 and raise a warning that the index needs updating.
+Current assignment: **CAPSTONE-1 through 6 are Tier 1.** 1-3 are raw `anthropic` throughout; 4 adds an SDK *test* harness only; 5 has a spec for domain C that no code implements; 6 is the deliberate non-agent baseline. **CAPSTONE-7 has no lab** - module pages only, so there is nothing to score. **CAPSTONE-8, 8B and 9 are Tier 3.**
 
-### If Tier 1 (CAPSTONE-6, and any capstone the index marks Tier 1)
+Do not report Capstones 1-5 as "missing `spec/agent-spec.md`" or "solution does not import `claude_agent_sdk`". Those were findings against an aspirational index, not against the labs. The tier index now records what the labs contain; a Tier 1 capstone is *supposed* to have neither. Upgrading them is tracked as a backlog note under the index, not as a defect per validation run. If a capstone is not in the index at all, default to Tier 1 and raise a warning that the index needs updating.
+
+### If Tier 1 (CAPSTONE-1..6, and any capstone the index marks Tier 1)
 - [ ] Uses `anthropic.Anthropic()` and `client.messages.create()` directly
 - [ ] Tool definitions are plain JSON dicts with `name`, `description`, `input_schema`
 - [ ] The tool-use loop is a hand-written `while` loop checking `stop_reason`
 - [ ] Does **NOT** import `claude_agent_sdk`
-- Flag: a Tier 1 capstone that imports the Agent SDK. It is teaching the layer this tier exists
-  to expose, and the contrast CAPSTONE-6 is built to demonstrate is lost.
+- Flag: a Tier 1 capstone whose **solution** imports the Agent SDK. It is teaching the layer
+  this tier exists to expose, and the contrast CAPSTONE-6 is built to demonstrate is lost.
+- **Not** a finding: SDK imports confined to a test harness or named in a spec document.
+  CAPSTONE-4 ships `domain-a-healthcare/sdk_tests/`, which the tier policy cites as the
+  canonical way to exercise `HookMatcher` / `can_use_tool` offline, and CAPSTONE-5 has a
+  spec describing an SDK build. Neither makes the capstone Tier 3.
 
-### If Tier 3 (CAPSTONE-1..5, 7, 8, 8B, 9)
+### If Tier 3 (CAPSTONE-8, 8B, 9)
 - [ ] The primary `solution/` imports from `claude_agent_sdk` — `query`, `tool`,
       `create_sdk_mcp_server`, `ClaudeAgentOptions`, `AssistantMessage`, `HookMatcher`,
       `PermissionResultAllow`, `PermissionResultDeny`

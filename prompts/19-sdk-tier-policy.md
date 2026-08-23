@@ -415,12 +415,19 @@ nothing about this one.
 | **M26 Hooks/Sessions/SDK** | **3** | MUST use real `claude-agent-sdk` |
 | **M27 Cert Prep** | **3** | Cert-aligned, SDK-only |
 | **M27B Cert Domain 5–6** | **3** | Same |
-| CAPSTONE-1..5 | 3 | All domains. Spec-driven. |
+| CAPSTONE-1 | 1 | All domains. Raw `anthropic` only |
+| CAPSTONE-2 | 1 | All domains. Raw `anthropic` only |
+| CAPSTONE-3 | 1 | All domains. Raw `anthropic` only |
+| CAPSTONE-4 | 1 | Solutions are raw `anthropic`. The only SDK code is the offline test harness in `domain-a-healthcare/sdk_tests/`, which is the canonical `HookMatcher` / `can_use_tool` pattern this document cites elsewhere |
+| CAPSTONE-5 | 1 | Solutions are raw `anthropic`. `domain-c-ucc/spec/agent-spec.md` exists and describes an SDK build, but no code implements it; domains A and B have no spec |
 | CAPSTONE-6 | 1 | Non-agent baseline (intentional) |
-| CAPSTONE-7 | 3 | Already spec-driven by name |
+| CAPSTONE-7 | n/a | "Agent Evolution" → three module pages, **no lab in this repo**. Nothing to score until one exists |
 | CAPSTONE-8 | 3 | Standalone (no domain letter). Spec-driven. Legacy Oracle → PostgreSQL migration; five subagents, three `PreToolUse` guards, HITL cutover gate |
 | CAPSTONE-8B | 3 | Skills-first rebuild of Capstone 8. Spec-driven. |
 | **CAPSTONE-9** | **3** | Standalone (no domain letter); uses DOMAIN A-BH. Spec-driven. Legacy Spring MVC/JSP monolith → distributed platform. Coordinator + 8 subagents, **4 Skills**, 5 hooks, 10 parity checks, HITL finalization gate. Two gated phases: 9A backend, 9B frontend. FIRST module in the corpus to use `.claude/skills/` |
+
+> **These rows describe what the labs contain, not what they should become.** Capstones 1–5 were previously listed as Tier 3 spec-driven; none of them were. That gap made `/validate-capstone` report five critical findings that were really one stale table, which is the fastest way to teach people to ignore a validator. Capstone 6 is Tier 1 **by design** — it is the non-agent baseline and must stay that way. Capstones 1–5 are Tier 1 **by circumstance** and are the real upgrade backlog, in roughly that order: 5 already has a spec to build against, and 4 already has the test harness. Moving one means writing `spec/agent-spec.md` and porting `solution/` to `claude-agent-sdk` — see Capstones 8 and 9 for the shape.
+
 
 ## Generator Rules
 
