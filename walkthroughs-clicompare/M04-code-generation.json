@@ -1,0 +1,189 @@
+{
+  "id": "cmp-codegen",
+  "badge": "WALKTHROUGH",
+  "color": "#F97316",
+  "time": "~4 min",
+  "title": "One prompt, three shapes",
+  "spec": "M04 · the same TypeScript request into all three CLIs",
+  "intro": "The identical sentence goes into Claude Code, Gemini CLI and Copilot CLI. Two of them return a file. The third returns a shell command — and that is the answer it was built to give. Four steps, then the scorecard.",
+  "provenance": {
+    "kind": "illustrative",
+    "source": "the three arms are this module's own captured tool transcripts, replayed step by step; the Copilot menu is reproduced verbatim from the page"
+  },
+  "foot": "Every line here is on this page already — scroll back to <code>#claude-output-1</code>, <code>#gemini-output-1</code> and the panel above to read the full files.",
+  "steps": [
+    {
+      "title": "The prompt, sent verbatim to three tools",
+      "narrative": [
+        "One sentence, copied character-for-character into three terminals. No follow-up, no clarification, no <code>CLAUDE.md</code> or <code>GEMINI.md</code> steering — because the moment you tune the prompt per tool you are comparing your prompts, not the tools.",
+        "Fix the marking scheme before you look at any output. Correctness, TypeScript quality, error handling, test-readiness, conciseness. Write the columns down now so you cannot quietly move the goalposts once you have a favourite.",
+        "One column is going to come back empty, and the interesting question is not <em>which</em> — it is whether an empty column is a failure or a category error."
+      ],
+      "youDo": "Send the identical prompt to all three: <code>claude</code>, then <code>gemini</code>, then <code>gh copilot suggest \"…\"</code> — no per-tool rewording.",
+      "terminal": [
+        { "kind": "prompt", "text": "Create a TypeScript function that fetches user data from an API,\nhandles errors, retries 3 times with exponential backoff, and\nreturns typed results." },
+        { "kind": "out", "text": "sent to: claude · gemini · gh copilot suggest\nno per-tool prompt tuning · no project context loaded" }
+      ],
+      "state": {
+        "label": "the marking scheme, fixed in advance",
+        "before": {
+          "title": "FIVE DIMENSIONS — filled in at step 4, not before",
+          "view": {
+            "type": "rows",
+            "columns": ["dimension", "what counts as a win"],
+            "rows": [
+              { "cells": ["Correctness", "compiles and ships without edits"] },
+              { "cells": ["TypeScript quality", "real generics, no <code>any</code>, typed errors"] },
+              { "cells": ["Error handling", "distinguishes retriable from terminal failure"] },
+              { "cells": ["Test-readiness", "failures are easy to assert on in a test"] },
+              { "cells": ["Conciseness", "no line you would delete in review"] }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "Claude Code — 52 lines that throw",
+      "narrative": [
+        "Claude Code writes a file. <code>FetchError</code> extends <code>Error</code> and carries <code>status</code> and <code>url</code>; <code>fetchWithRetry&lt;T&gt;</code> is generic over the response shape, so callers get typing without a cast. Backoff is <code>baseDelayMs * 2 ** attempt</code> with ±25% jitter.",
+        "The judgement call worth noticing is the 4xx/5xx split. A 404 is not going to become a 200 on the third attempt, so it throws immediately; a 500 is retried. That is a decision about your API's semantics, made without being asked.",
+        "Where it is thin: there is <b>no timeout</b>. A socket that opens and then never answers will sit there past every retry, because <code>fetch</code> without an <code>AbortController</code> has no deadline. And 429 — rate limiting, the single most common retriable status in practice — falls under 4xx and is therefore not retried. Hold both of those against the next arm."
+      ],
+      "claudeSays": "Writes one file, exports the error class, throws on failure. 52 lines, WHAT/WHY/GOTCHA comments per block.",
+      "terminal": [
+        { "kind": "claude", "text": "Writing a generic wrapper. 5xx and network errors retry with\njittered exponential backoff; 4xx throws immediately." },
+        { "kind": "tool", "text": "Write  src/lib/fetchWithRetry.ts" },
+        { "kind": "out-pass", "text": "52 lines · TypeScript · tsc --noEmit clean" }
+      ],
+      "state": {
+        "label": "Claude Code output · the shape of the contract",
+        "before": {
+          "title": "THE SIGNATURE — errors leave through throw",
+          "view": {
+            "type": "diff",
+            "file": "src/lib/fetchWithRetry.ts",
+            "lines": [
+              ["a", "export class FetchError extends Error {"],
+              ["a", "  constructor("],
+              ["a", "    public readonly status: number,"],
+              ["a", "    public readonly url: string,"],
+              ["a", "    message: string,"],
+              ["a", "  ) { super(message); this.name = 'FetchError'; }"],
+              ["a", "}"],
+              ["p", ""],
+              ["a", "export async function fetchWithRetry<T>("],
+              ["a", "  url: string,"],
+              ["a", "  options: FetchOptions = {},"],
+              ["a", "): Promise<T> {"],
+              ["p", "  // 4xx: do not retry — the request itself is malformed"],
+              ["p", "  if (response.status < 500) throw new FetchError(...);"],
+              ["p", "  // 5xx: retriable"],
+              ["p", "  const delay = baseDelayMs * 2 ** attempt * (0.75 + Math.random() * 0.5);"],
+              ["p", "}"]
+            ],
+            "note": "<code>Promise&lt;T&gt;</code> — the happy path returns the data itself, so a caller writes <code>const u = await fetchWithRetry&lt;User&gt;(url)</code> and wraps it in <code>try/catch</code>. That is the TypeScript convention, and <code>expect(...).rejects.toThrow(FetchError)</code> is a one-line test. No timeout anywhere in the file."
+          }
+        }
+      }
+    },
+    {
+      "title": "Gemini CLI — 68 lines that return",
+      "narrative": [
+        "Gemini CLI also writes a file, and it fills exactly the two holes the previous arm left. <code>AbortController</code> gives every attempt a 30-second deadline, and <code>retryOnStatus: [429, 500, 502, 503, 504]</code> puts rate limiting back in the retry set where it belongs. There is a <code>maxDelay</code> cap too, so attempt five does not sleep for a minute.",
+        "It pays for that with a different contract. <code>ApiResponse&lt;T&gt;</code> wraps every outcome — <code>{ data, error, attempts }</code> — so nothing ever throws. Callers must remember to check <code>.error</code>, and a caller who forgets gets <code>null</code> data and no signal at all. In a <code>try/catch</code> codebase that is a foreign body; in a Go-flavoured, errors-as-values codebase it is exactly right.",
+        "16 more lines, and every one of them buys something. \"More verbose\" and \"more configurable\" are the same fact viewed from two directions — which one you call it depends on whether you needed the configuration."
+      ],
+      "claudeSays": "Writes one file, returns a wrapper type, never throws. 68 lines, timeout and status list configurable.",
+      "terminal": [
+        { "kind": "prompt", "text": "Create a TypeScript function that fetches user data from an API,\nhandles errors, retries 3 times with exponential backoff, and\nreturns typed results." },
+        { "kind": "tool", "text": "Write  src/lib/fetchUserData.ts" },
+        { "kind": "out-pass", "text": "68 lines · TypeScript · tsc --noEmit clean" },
+        { "kind": "out", "text": "adds: AbortController timeout (30s) · retryOnStatus [429,500,502,503,504]\n      maxDelay cap (10s) · ApiResponse<T> wrapper · node-fetch polyfill import" }
+      ],
+      "state": {
+        "label": "two working files, two different contracts",
+        "before": {
+          "title": "BEFORE — Claude Code: throws",
+          "view": {
+            "type": "diff",
+            "file": "src/lib/fetchWithRetry.ts",
+            "lines": [
+              ["a", "export async function fetchWithRetry<T>(url, options): Promise<T>"],
+              ["p", ""],
+              ["p", "// caller:"],
+              ["p", "try {"],
+              ["p", "  const user = await fetchWithRetry<User>('/api/users/1');"],
+              ["p", "} catch (e) {"],
+              ["p", "  if (e instanceof FetchError) log(e.status);"],
+              ["p", "}"],
+              ["m", "// no timeout — a hung socket outlives all 4 attempts"],
+              ["m", "// 429 is 4xx, so rate limits are never retried"]
+            ]
+          }
+        },
+        "after": {
+          "title": "AFTER — Gemini CLI: returns",
+          "view": {
+            "type": "diff",
+            "file": "src/lib/fetchUserData.ts",
+            "lines": [
+              ["a", "export async function fetchUserData<T>(url, options, config): Promise<ApiResponse<T>>"],
+              ["p", ""],
+              ["p", "// caller:"],
+              ["p", "const res = await fetchUserData<User>('/api/users/1');"],
+              ["p", "if (res.error) log(res.error, res.attempts);"],
+              ["p", "else use(res.data);"],
+              ["a", "// timeout: AbortController aborts at cfg.timeoutMs"],
+              ["a", "// retryOnStatus includes 429"],
+              ["m", "// nothing throws — a caller who forgets .error gets silent null"]
+            ],
+            "highlight": ["timeout"],
+            "note": "Both compile, both ship. The choice is a house-style choice: does a failed request raise, or does it return? Pick the one your existing codebase already does, because mixing the two is worse than either."
+          }
+        }
+      }
+    },
+    {
+      "title": "Copilot CLI answers a different question — on purpose",
+      "narrative": [
+        "The third arm never produces a <code>.ts</code> file. <code>gh copilot suggest</code> asks what <em>kind of shell command</em> you want, you pick <code>generic shell command</code>, and it hands back an <code>npx ts-node -e</code> invocation wrapping a stub with <code>// stub — implement logic here</code> inside it. Then it offers to copy the command to your clipboard.",
+        "Read that as a category error rather than a defeat. <code>gh copilot suggest</code> is a shell command translator: natural language in, one shell command out. Asking it for a typed retry helper is like asking a spell-checker for a plot. This module's own note is blunt about it — <em>\"This is not a weakness — it is intentional design.\"</em>",
+        "Aim it at the job it was built for and it is the best of the three. <code>gh copilot suggest \"create a new TypeScript project with tsconfig and package.json\"</code> returns the exact incantation nobody remembers, first time, with no file to review. And GitHub Copilot <em>in the editor</em> writes TypeScript functions as well as anything here — that is a different product on a different surface, and this module compares CLIs only."
+      ],
+      "youDo": "Run <code>gh copilot suggest \"create a new TypeScript project with tsconfig and package.json\"</code> and watch the same tool go from useless to the fastest answer on the page.",
+      "terminal": [
+        { "kind": "prompt", "text": "gh copilot suggest \"Create a TypeScript function that fetches user data, retries 3 times with exponential backoff\"" },
+        { "kind": "gate", "text": "? What kind of shell command?\n  1. generic shell command\n  2. git command\n  3. gh command\n> 1" },
+        { "kind": "out", "text": "Suggestion:\n  npx ts-node -e \"\n    async function fetchWithRetry(url, retries=3) {\n      // stub — implement logic here\n    }\n  \"" },
+        { "kind": "gate", "text": "? Select an option\n  1. Copy command to clipboard\n  2. Explain command\n  3. Revise command\n  4. Rate response\n  5. Exit" },
+        { "kind": "prompt", "text": "gh copilot suggest \"create a new TypeScript project with tsconfig and package.json\"" },
+        { "kind": "out-pass", "text": "npx tsc --init && npm init -y && npm i typescript @types/node" }
+      ],
+      "state": {
+        "label": "the scorecard you fixed at step 1",
+        "before": {
+          "title": "TASK 1 — scored on the five dimensions",
+          "view": {
+            "type": "rows",
+            "columns": ["dimension", "Claude Code", "Gemini CLI", "Copilot CLI"],
+            "rows": [
+              { "cells": ["Correctness", "ships as-is", "ships as-is", "no code produced"] },
+              { "cells": ["TypeScript quality", "generics, typed errors, no <code>any</code>", "good generics; wrapper adds a layer", "not applicable"], "tone": "win" },
+              { "cells": ["Error handling", "4xx/5xx split; <b>no timeout</b>, 429 not retried", "timeout + 429 in <code>retryOnStatus</code> + <code>maxDelay</code>", "not applicable"], "tone": "bad" },
+              { "cells": ["Test-readiness", "<code>rejects.toThrow(FetchError)</code>", "assert on <code>.error</code>; no throw to catch", "not applicable"], "tone": "win" },
+              { "cells": ["Conciseness", "52 lines", "68 lines — 16 of them earning their keep", "one shell line"] },
+              { "cells": ["<b>Shell command translation</b>", "not what it is for", "not what it is for", "<b>correct first try</b>"], "tone": "win" }
+            ]
+          }
+        },
+        "after": {
+          "title": "WHAT TO TAKE FROM IT",
+          "view": {
+            "type": "note",
+            "text": "Two of these tools answered the question and one answered a different question well. Claude Code gives you the idiomatic file and leaves the timeout to you; Gemini CLI gives you the timeout and the 429 handling and asks you to adopt a wrapper type; <code>gh copilot suggest</code> gives you the shell line and never pretends to give you more. The scorecard in the next section is only fair if you read the last row too — a tool with an empty column is not losing a race it entered."
+          }
+        }
+      }
+    }
+  ]
+}

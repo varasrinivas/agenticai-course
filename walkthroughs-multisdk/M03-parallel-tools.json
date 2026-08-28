@@ -1,0 +1,238 @@
+{
+  "id": "msdk-parallel",
+  "badge": "WALKTHROUGH",
+  "color": "#BE185D",
+  "time": "~4 min",
+  "title": "Two tools, one turn",
+  "spec": "M03 · parallel calls, and the leash you don't have yet",
+  "intro": "A two-part question fans out into two tool calls inside a single model turn, then rejoins. Watch the iteration counter — the whole point is that it doesn't go up.",
+  "provenance": {
+    "kind": "illustrative",
+    "source": "a narrated run of the six orchestration files shipped in M03 Step 2; the toolbox, the tool descriptions, the question and the expected reply are the module's own, the per-iteration log lines are reconstructed (the module's checkpoint tells you to add them)"
+  },
+  "foot": "Run it for real: any tab from <b>Step 2 — The Orchestration Loop</b>, with <code>print(block.name)</code> added inside the loop.",
+  "steps": [
+    {
+      "title": "One message, two tool requests",
+      "narrative": [
+        "The question is deliberately two questions: <em>\"Where's order AC-1042, and do you have blue running shoes?\"</em> No single tool answers it. A newcomer expects two turns — ask, answer, ask again, answer again.",
+        "That is not what happens. Iteration 1 comes back with <b>two</b> tool requests in the same response — <code>get_order_status</code> and <code>search_products</code>, side by side. Your loop already iterates over every request, so it runs both without knowing anything special happened.",
+        "Watch the argument on the second call. The model sent <code>query=\"blue\"</code>, not the whole phrase. With this toy substring matcher that is the difference between one hit and zero — <code>\"blue running shoes\"</code> is not a substring of any product name. Descriptions route the call; the model still has to pick a sane argument."
+      ],
+      "youDo": "Add <code>print(\" \", block.name, block.input)</code> inside the tool loop, then run <code>python orchestrate_anthropic.py</code>.",
+      "claudeSays": "Issues both calls in one response because neither depends on the other's result — nothing about order AC-1042 changes what to search the catalogue for.",
+      "terminal": [
+        { "kind": "prompt", "text": "python orchestrate_anthropic.py" },
+        { "kind": "out", "text": "iteration 1  ·  stop_reason=\"tool_use\"  ·  2 tool_use blocks" },
+        { "kind": "tool", "text": "get_order_status  {'order_id': 'AC-1042'}" },
+        { "kind": "tool", "text": "search_products   {'query': 'blue'}" },
+        { "kind": "out", "text": "  -> {\"order_id\": \"AC-1042\", \"status\": \"shipped\", \"carrier\": \"UPS\", \"eta\": \"Tuesday\"}" },
+        { "kind": "out", "text": "  -> {\"query\": \"blue\", \"results\": [{\"sku\": \"SH-01\", \"name\": \"Trailblazer Running Shoe\",\n                                   \"color\": \"blue\", \"price\": 89.0}]}" },
+        { "kind": "out", "text": "iteration 2  ·  stop_reason=\"end_turn\"" },
+        { "kind": "out-pass", "text": "Your order AC-1042 has shipped via UPS and should arrive Tuesday. And yes —\nwe carry the blue Trailblazer Running Shoe for $89. Anything else?" }
+      ],
+      "state": {
+        "label": "model calls spent on one question",
+        "before": {
+          "title": "BEFORE — what you assume happens",
+          "view": {
+            "type": "bars",
+            "unit": "model calls",
+            "max": 3,
+            "items": [
+              { "label": "one tool per turn", "value": 3, "tone": "bad", "note": "ask order → ask catalogue → answer. Three paid round-trips, two of them waiting on nothing." }
+            ]
+          }
+        },
+        "after": {
+          "title": "AFTER — what the log actually shows",
+          "view": {
+            "type": "stack",
+            "views": [
+              {
+                "type": "bars",
+                "unit": "model calls",
+                "max": 3,
+                "items": [
+                  { "label": "one tool per turn", "value": 3, "tone": "bad", "note": "ask order → ask catalogue → answer" },
+                  { "label": "both in iteration 1", "value": 2, "tone": "win", "note": "two calls, one turn → answer. One fewer paid round-trip, and the two tools can run concurrently." }
+                ]
+              },
+              {
+                "type": "note",
+                "text": "The saving is one model call here, which is small. It stops being small when a question fans out to five tools — and the latency saving is larger than the token saving, because the two lookups happen at the same time instead of in sequence."
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "Both results, one turn — the #1 bug",
+      "narrative": [
+        "Now the return leg, and the mistake that quietly kills parallelism. The model asked for two things; you must give back <b>both</b> results <b>together</b>, in a single turn, before the next model call.",
+        "Split them across two turns and one of two things happens: the SDK rejects the conversation outright, or — worse, because it looks like it works — the model notices the pattern and stops issuing parallel calls at all. Your agent gets slower and you never see an error.",
+        "Each SDK spells \"both together\" differently: one <code>user</code> message carrying two <code>tool_result</code> blocks; one <code>tool</code> Content carrying two <code>functionResponse</code> parts; two <code>function_call_output</code> items appended back to back. Same rule, three envelopes."
+      ],
+      "youDo": "Deliberately break it: <code>messages.append({\"role\": \"user\", \"content\": [results[0]]})</code> and drop the second. Then put it back.",
+      "terminal": [
+        { "kind": "prompt", "text": "python orchestrate_anthropic.py   # returning only results[0]" },
+        { "kind": "out-fail", "text": "anthropic.BadRequestError: messages.2: Found 1 tool_result block(s),\nbut 2 tool_use block(s) were provided in the previous assistant turn.\nEach tool_use must have a corresponding tool_result." },
+        { "kind": "prompt", "text": "python orchestrate_anthropic.py   # both results, one user turn" },
+        { "kind": "out", "text": "iteration 1  ·  2 tool_use  ->  1 user message  ·  2 tool_result blocks" },
+        { "kind": "out-pass", "text": "Your order AC-1042 has shipped via UPS and should arrive Tuesday. And yes —\nwe carry the blue Trailblazer Running Shoe for $89. Anything else?" },
+        { "kind": "prompt", "text": "python orchestrate_gemini.py && python orchestrate_openai.py" },
+        { "kind": "out-pass", "text": "gemini-2.5-flash  ·  1 tool Content, 2 functionResponse parts  ·  2 iterations\nYour order AC-1042 has shipped via UPS and should arrive Tuesday. And yes —\nwe carry the blue Trailblazer Running Shoe for $89. Anything else?" },
+        { "kind": "out-pass", "text": "gpt-5.5  ·  2 function_call_output items appended  ·  2 iterations\nYour order AC-1042 has shipped via UPS and should arrive Tuesday. And yes —\nwe carry the blue Trailblazer Running Shoe for $89. Anything else?" }
+      ],
+      "state": {
+        "label": "the return envelope",
+        "before": {
+          "title": "WRONG — one result per turn",
+          "view": {
+            "type": "stack",
+            "views": [
+              {
+                "type": "json",
+                "data": {
+                  "assistant turn": "2 tool_use blocks — toolu_01Aq… (get_order_status), toolu_01Bx… (search_products)",
+                  "user turn 1": "1 tool_result — toolu_01Aq…",
+                  "user turn 2": "1 tool_result — toolu_01Bx…",
+                  "result": "BadRequestError, or the model stops calling in parallel"
+                },
+                "highlight": ["user turn 2", "result"]
+              },
+              {
+                "type": "note",
+                "text": "The silent version of this bug is the dangerous one. On the SDKs that tolerate it, nothing errors — the model just quietly reverts to one tool per turn, and your agent gets slower for reasons no log explains."
+              }
+            ]
+          }
+        },
+        "after": {
+          "title": "RIGHT — both results, one turn, three spellings",
+          "view": {
+            "type": "stack",
+            "views": [
+              {
+                "type": "json",
+                "data": {
+                  "assistant turn": "2 tool_use blocks — toolu_01Aq… (get_order_status), toolu_01Bx… (search_products)",
+                  "user turn 1": "2 tool_result blocks — toolu_01Aq… and toolu_01Bx…",
+                  "result": "iteration 2 returns text"
+                },
+                "highlight": ["user turn 1", "result"]
+              },
+              {
+                "type": "rows",
+                "columns": ["", "many tools", "many calls back", "many results in"],
+                "rows": [
+                  { "cells": ["Anthropic", "list of dicts in <code>tools=</code>", "several <code>tool_use</code> blocks", "one <code>user</code> msg, many <code>tool_result</code>"] },
+                  { "cells": ["Gemini", "many <code>FunctionDeclaration</code>s in one <code>Tool</code>", "several entries in <code>resp.function_calls</code>", "one <code>tool</code> Content, many <code>functionResponse</code>"] },
+                  { "cells": ["OpenAI", "list of flat function tools", "several <code>function_call</code> items in <code>output</code>", "many <code>function_call_output</code> items appended"] }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "Taking the wheel — auto, any, one, none",
+      "narrative": [
+        "By default the model decides freely. Sometimes you want to decide for it, and all three SDKs expose the same four modes behind three different parameter names.",
+        "<b>auto</b> is the default and almost always right. <b>required</b> (Anthropic and Gemini call it <code>any</code>) forces at least one tool call — useful when you know the turn is a lookup and a chatty non-answer would be a bug. <b>A specific tool</b> pins one function by name, which turns the model into a deterministic extractor. <b>none</b> forbids tools entirely for a plain-text turn.",
+        "There is a fifth switch worth knowing: you can turn parallelism <em>off</em>. Anthropic takes <code>\"disable_parallel_tool_use\": true</code> inside <code>tool_choice</code>; OpenAI takes <code>parallel_tool_calls=False</code>. Gemini has no equivalent flag — you steer it with the prompt and the mode. Reach for it when your tools share state and running them at once would race."
+      ],
+      "youDo": "Set <code>tool_choice={\"type\": \"any\"}</code> and ask a question no tool can answer — <em>\"what are your opening hours?\"</em> — then watch it call a tool anyway.",
+      "terminal": [
+        { "kind": "prompt", "text": "python orchestrate_anthropic.py   # tool_choice={\"type\": \"any\"}  ·  \"what are your opening hours?\"" },
+        { "kind": "tool", "text": "search_products   {'query': 'opening hours'}" },
+        { "kind": "out", "text": "  -> {\"query\": \"opening hours\", \"results\": []}" },
+        { "kind": "out-fail", "text": "forced a tool call that could never help · 1 wasted round-trip · empty result" },
+        { "kind": "prompt", "text": "python orchestrate_anthropic.py   # tool_choice={\"type\": \"auto\"} (default)" },
+        { "kind": "claude", "text": "We're open 9-5 Monday to Friday. (no tool call — nothing in the toolbox\nknows about opening hours)" },
+        { "kind": "prompt", "text": "python orchestrate_anthropic.py   # tool_choice={\"type\":\"auto\",\"disable_parallel_tool_use\":true}" },
+        { "kind": "out", "text": "iteration 1  ·  1 tool_use block  (get_order_status)\niteration 2  ·  1 tool_use block  (search_products)\niteration 3  ·  end_turn" },
+        { "kind": "out-pass", "text": "same final answer · 3 model calls instead of 2" }
+      ],
+      "state": {
+        "label": "four modes, three spellings",
+        "before": {
+          "title": "THE MODES",
+          "view": {
+            "type": "rows",
+            "columns": ["mode", "behaviour", "use when"],
+            "rows": [
+              { "cells": ["auto", "model chooses whether and which — the default", "almost always"], "tone": "win" },
+              { "cells": ["required / any", "must call at least one tool", "you know the turn is a lookup"] },
+              { "cells": ["specific tool", "force one named function", "deterministic extraction, a fixed step"] },
+              { "cells": ["none", "may not call any tool", "you want a plain text turn only"] }
+            ]
+          }
+        },
+        "after": {
+          "title": "HOW EACH SDK SPELLS IT",
+          "view": {
+            "type": "stack",
+            "views": [
+              {
+                "type": "rows",
+                "columns": ["", "steer the choice", "turn parallelism off"],
+                "rows": [
+                  { "cells": ["Anthropic", "<code>tool_choice={\"type\": \"auto\"|\"any\"|\"tool\"|\"none\", \"name\": …}</code>", "<code>\"disable_parallel_tool_use\": true</code>"] },
+                  { "cells": ["Gemini", "<code>tool_config.function_calling_config.mode = \"AUTO\"|\"ANY\"|\"NONE\"</code> (+ <code>allowed_function_names</code>)", "no flag — model / prompt controlled"], "tone": "bad" },
+                  { "cells": ["OpenAI", "<code>tool_choice=\"auto\"|\"required\"|\"none\"</code> or <code>{\"type\":\"function\",\"name\":…}</code>", "<code>parallel_tool_calls=False</code>"] }
+                ]
+              },
+              {
+                "type": "note",
+                "text": "<code>any</code> is the mode people reach for too early. It does not make the model smarter about which tool to pick — it just removes its ability to say \"none of these apply\", which is often the correct answer. Force a tool only when a text-only reply would genuinely be a bug."
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "The call that should worry you",
+      "narrative": [
+        "One of these three tools is not like the others. <code>get_order_status</code> and <code>search_products</code> read. <code>process_refund</code> <b>writes</b> — it moves money — and right now it sits in the same list, described the same way, dispatched through the same table.",
+        "Say the magic words and it fires. Notice what does <em>not</em> happen: no confirmation, no second pair of eyes, no server-side check that this customer is entitled to a refund on this order. A persuasive sentence is the entire authorisation mechanism.",
+        "That is the honest limit of this module. The dispatch table that made three tools as easy as one made the dangerous tool as easy as the safe ones. The fix is not a better description — it is human-in-the-loop confirmation and server-side validation before execution, which is the M06–M07 work. For now, the habit worth building is noticing which of your tools are writes."
+      ],
+      "youDo": "Run the refund question and read the loop: find the exact line where the money moves.",
+      "terminal": [
+        { "kind": "prompt", "text": "python orchestrate_anthropic.py   # \"I want a refund for AC-1042, it arrived damaged\"" },
+        { "kind": "out", "text": "iteration 1  ·  stop_reason=\"tool_use\"  ·  1 tool_use block" },
+        { "kind": "tool", "text": "process_refund  {'order_id': 'AC-1042', 'reason': 'arrived damaged'}" },
+        { "kind": "gate", "text": "DISPATCH[block.name](**block.input)  —  no confirmation, no validation, no audit" },
+        { "kind": "out", "text": "  -> {\"refund_id\": \"RF-1042\", \"order_id\": \"AC-1042\", \"status\": \"approved\",\n      \"reason\": \"arrived damaged\"}" },
+        { "kind": "out-pass", "text": "I'm sorry it arrived damaged. I've approved a refund for AC-1042 —\nreference RF-1042. It should be back on your card in 3-5 days." },
+        { "kind": "out-fail", "text": "a write action executed on the strength of one sentence" }
+      ],
+      "state": {
+        "label": "read tools vs write tools",
+        "before": {
+          "title": "THE TOOLBOX — sorted by what it can break",
+          "view": {
+            "type": "rows",
+            "columns": ["tool", "kind", "worst case if the model picks it wrongly"],
+            "rows": [
+              { "cells": ["<code>get_order_status</code>", "read", "an irrelevant lookup and a few wasted tokens"], "tone": "win" },
+              { "cells": ["<code>search_products</code>", "read", "an empty result list"], "tone": "win" },
+              { "cells": ["<code>process_refund</code>", "<b>write</b>", "money leaves the business, with no record of who approved it"], "tone": "bad" }
+            ]
+          }
+        },
+        "after": {
+          "title": "WHAT TO TAKE FROM IT",
+          "view": {
+            "type": "note",
+            "text": "The loop did not grow when the toolbox did — three tools, thirty tools, same twelve lines and a dispatch table. That property is exactly why the frameworks in M06–M07 can automate it, and it is the reason the three SDKs converge harder here than anywhere else in the course. But it cuts both ways: the thing that makes tools trivially composable also makes them trivially <em>equal</em>, and a refund is not equal to a lookup. Split your dispatch table by risk before you ship, not after."
+          }
+        }
+      }
+    }
+  ]
+}

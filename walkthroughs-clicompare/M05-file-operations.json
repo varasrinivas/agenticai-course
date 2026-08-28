@@ -1,0 +1,160 @@
+{
+  "id": "cmp-fileops",
+  "badge": "WALKTHROUGH",
+  "color": "#EA580C",
+  "time": "~4 min",
+  "title": "User → Account, three blast radii",
+  "spec": "M05 · one rename across a 50-file project, then one deletion",
+  "intro": "The same rename goes into all three tools on the same 50-file Node.js project. Then the same destructive request. The tool that comes last on the rename comes first on the deletion — which is the whole point.",
+  "provenance": {
+    "kind": "illustrative",
+    "source": "the three arms are this module's own captured transcripts for the rename and the deletion task, replayed side by side"
+  },
+  "foot": "The full commands for all three arms are in the Bash / PowerShell tabs above, and the deletion transcripts are in <code>#deletion-safety</code>.",
+  "steps": [
+    {
+      "title": "Three ways to see fifty files",
+      "narrative": [
+        "The project is a Node.js Express API: 50 TypeScript files, roughly 35,000 tokens. Small enough that context size decides nothing here — what decides everything is <em>how</em> each tool gets the files in front of the model.",
+        "Claude Code has <code>/add src/</code>: you name files, globs or directories, it reads them on demand and tracks what it has seen. Gemini CLI has <code>@src/</code> inline in the prompt: the whole tree is inlined in one shot, 35K against a 1M window — 3.5% full. Copilot CLI has no equivalent at all; it sees your shell session and nothing else.",
+        "The rename is <code>User</code> → <code>Account</code>, and the trap is the near-misses. <code>username</code>, <code>UserAgent</code>, <code>createUser</code> and <code>UserService</code> all contain the string and none of them should move. A partial rename is worse than no rename: <code>tsc</code> then sees <code>Account</code> in one file and <code>User</code> in forty-nine."
+      ],
+      "youDo": "Load the tree three ways: <code>/add src/</code> in <code>claude</code>, <code>@src/</code> inline in <code>gemini</code>, and nothing at all for <code>gh copilot suggest</code>.",
+      "terminal": [
+        { "kind": "prompt", "text": "Rename the User model to Account across all files.\nUpdate imports, type annotations, test references, and API routes.\nDo NOT rename 'username' fields or 'UserAgent' strings." },
+        { "kind": "tool", "text": "claude   →  /add src/            (reads directory, tracks what it opens)" },
+        { "kind": "tool", "text": "gemini   →  @src/ inline          (35K tokens of 1M — 3.5% of the window)" },
+        { "kind": "tool", "text": "gh copilot suggest  →  no file context of any kind" }
+      ],
+      "state": {
+        "label": "what each tool actually ingested",
+        "before": {
+          "title": "CONTEXT LOADED — 50-file project, ~35,000 tokens",
+          "view": {
+            "type": "rows",
+            "columns": ["tool", "mechanism", "files in context", "cost of that choice"],
+            "rows": [
+              { "cells": ["Claude Code", "<code>/add src/</code>", "~12–15, chosen after a directory scan", "cheapest; depends on the scan surfacing the right files"] },
+              { "cells": ["Gemini CLI", "<code>@src/</code>", "all 50, simultaneously", "more tokens; nothing can be missed by a bad guess"] },
+              { "cells": ["Copilot CLI", "none", "0", "cannot reason about the code — only about the command"] }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "Two agentic arms land it, by different routes",
+      "narrative": [
+        "Both agentic tools get the rename right, and both get the trap words right, because both understand that <code>User</code> the interface and <code>createUser</code> the function are different symbols rather than different substrings.",
+        "They differ in method. Claude Code reads the directory, picks the files that matter, rewrites 14 of them and shows you a diff before writing anything. Gemini CLI already has all 50 in context, so it cross-references without a second pass and rewrites the same 14 in one go.",
+        "The honest risk sits on the selective arm. This module says it plainly: Claude Code <em>\"may miss an obscure file that also uses the renamed model if it wasn't surfaced in the initial directory scan.\"</em> The row below marks that file amber — a fixture under <code>test/fixtures/</code> that the scan did not open. Bulk loading cannot have that failure mode, because there was no guess to get wrong."
+      ],
+      "claudeSays": "Claude Code: 14 files rewritten, diff shown, confirm before write. Gemini CLI: 14 files rewritten in one pass, changes reported after.",
+      "terminal": [
+        { "kind": "tool", "text": "claude  ·  Grep \"User\"  →  14 files with the model symbol" },
+        { "kind": "tool", "text": "claude  ·  Edit x14  (diff rendered, awaiting confirm)" },
+        { "kind": "gate", "text": "Apply these 14 file changes? [y/N]" },
+        { "kind": "out-pass", "text": "y  ·  14 files written · username / UserAgent / createUser untouched" },
+        { "kind": "tool", "text": "gemini  ·  @src/ inlined (50 files) → rewrite pass" },
+        { "kind": "out-pass", "text": "14 files rewritten in one pass · trap identifiers preserved" }
+      ],
+      "state": {
+        "label": "blast radius · Claude Code vs Gemini CLI",
+        "before": {
+          "title": "WHICH FILES EACH ARM TOUCHED",
+          "view": {
+            "type": "rows",
+            "columns": ["file", "Claude Code", "Gemini CLI", "should it change?"],
+            "rows": [
+              { "cells": ["<code>src/models/User.ts</code>", "renamed", "renamed", "yes"], "tone": "win" },
+              { "cells": ["<code>src/routes/users.ts</code>", "renamed", "renamed", "yes"], "tone": "win" },
+              { "cells": ["<code>src/services/UserService.ts</code>", "class kept, type refs renamed", "class kept, type refs renamed", "partly — the class name stays"], "tone": "win" },
+              { "cells": ["<code>src/db/schema.ts</code>", "renamed", "renamed", "yes"], "tone": "win" },
+              { "cells": ["<code>test/user.spec.ts</code>", "renamed", "renamed", "yes"], "tone": "win" },
+              { "cells": ["<code>test/fixtures/legacy-user.json</code>", "<b>not opened by the scan</b>", "renamed", "yes"], "tone": "bad" },
+              { "cells": ["<code>src/middleware/auth.ts</code> — <code>req.user</code>", "untouched", "untouched", "no — variable, not the model"], "tone": "win" },
+              { "cells": ["<code>src/http/headers.ts</code> — <code>UserAgent</code>", "untouched", "untouched", "no"], "tone": "win" },
+              { "cells": ["<code>src/api/register.ts</code> — <code>createUser()</code>", "untouched", "untouched", "no"], "tone": "win" }
+            ],
+            "note": "Under 150K tokens these two are near-equivalent on multi-file work. Above it the split becomes decisive: Claude Code has to chunk, Gemini CLI's 1M window still holds everything."
+          }
+        }
+      }
+    },
+    {
+      "title": "The regex arm — correct command, wrong question",
+      "narrative": [
+        "Copilot CLI cannot open a file, so it answers the only way it can: with a shell command. <code>find src/ -name \"*.ts\" | xargs sed -i 's/\\bUser\\b/Account/g'</code> — and as a piece of shell that is a good answer, correctly quoted, with the word boundary you would have forgotten.",
+        "It is also going to hurt you, because <code>\\bUser\\b</code> is a text predicate and the question was a type question. The word boundary saves <code>UserService</code> and <code>createUser</code> — but a bare <code>User</code> inside a comment, inside a string literal, inside a JSON field name and inside an unrelated third-party type all match, and none of them should move.",
+        "Blame the pairing, not the tool. Point the same command at a job that really is textual — a plain-string rename across untyped config, a licence header swap, a log-prefix change — and you want the <code>sed</code> one-liner: it is faster than any agent, it costs nothing, and it does exactly what it says. The next step is where that same property stops being a liability."
+      ],
+      "youDo": "Run the suggested command against a scratch copy first: <code>git stash</code>, apply, then <code>npx tsc --noEmit</code> and count what broke.",
+      "terminal": [
+        { "kind": "prompt", "text": "gh copilot suggest \"rename User model to Account across all TypeScript files\"" },
+        { "kind": "out", "text": "Suggestion:\n  find src/ -name \"*.ts\" | xargs sed -i 's/\\bUser\\b/Account/g'" },
+        { "kind": "gate", "text": "? Select an option  →  1. Copy command to clipboard" },
+        { "kind": "out-fail", "text": "npx tsc --noEmit  ·  9 errors — comments, string literals and one\nthird-party type were rewritten alongside the model" }
+      ],
+      "state": {
+        "label": "blast radius · the sed arm",
+        "before": {
+          "title": "WHAT THE REGEX HIT",
+          "view": {
+            "type": "rows",
+            "columns": ["target", "regex result", "should it change?"],
+            "rows": [
+              { "cells": ["<code>User</code> the interface", "renamed", "yes"], "tone": "win" },
+              { "cells": ["<code>UserService</code>, <code>createUser</code>", "preserved by <code>\\b</code>", "no"], "tone": "win" },
+              { "cells": ["<code>// the User record is…</code> in comments", "renamed", "no"], "tone": "bad" },
+              { "cells": ["<code>\"User\"</code> in a JSON response field", "renamed", "no — breaks the API contract"], "tone": "bad" },
+              { "cells": ["<code>User</code> from a <code>node_modules</code> type import", "renamed", "no — breaks the import"], "tone": "bad" },
+              { "cells": ["<code>test/fixtures/legacy-user.json</code>", "not matched — <code>find</code> filtered to <code>*.ts</code>", "yes"], "tone": "bad" },
+              { "cells": ["a genuine plain-text rename in untyped config", "<b>exactly right, instantly</b>", "this is the job it is for"], "tone": "win" }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "Now ask all three to delete something",
+      "narrative": [
+        "Same project, new request: <em>delete every compiled <code>.js</code> in <code>src/</code> that has a <code>.ts</code> equivalent.</em> Twelve files. The ordering from the last two steps inverts.",
+        "Claude Code scans, lists all twelve by path, and stops at <code>Delete these 12 files? [y/N]</code> — it will not batch-delete in a single unconfirmed step, and <code>.claude/settings.json</code> lets you tighten or loosen that. Gemini CLI's default mode is act-first; run it with <code>--plan</code> and you get the full deletion list to approve before anything executes. That gate is a recommendation, not a default, and this module tells you to always use it for destructive work.",
+        "Copilot CLI's arm is a <code>find</code> that <em>echoes</em> what it would delete. Nothing is removed until you edit the command yourself and run it again. No autonomous execution means no autonomous deletion — the safest model of the three, achieved by architecture rather than by policy. The bill for that safety is the same one you paid at step 3: it is not reasoning about your project, and there is no undo if you get the command wrong."
+      ],
+      "youDo": "Ask each tool to delete the 12 stale <code>.js</code> files, and count how many keystrokes stand between the request and an irreversible <code>rm</code>.",
+      "terminal": [
+        { "kind": "prompt", "text": "Delete all compiled .js files in src/ that have a .ts equivalent." },
+        { "kind": "tool", "text": "claude  ·  scan src/  →  12 .js/.ts pairs, listed by full path" },
+        { "kind": "gate", "text": "Delete these 12 files? [y/N]" },
+        { "kind": "tool", "text": "gemini --plan  ·  Plan: \"I will delete: src/auth.js, src/routes.js, … (12 files)\"" },
+        { "kind": "gate", "text": "Approve? [y/N]   ·  without --plan there is no gate here at all" },
+        { "kind": "prompt", "text": "gh copilot suggest \"delete js files in src/ that have a typescript equivalent\"" },
+        { "kind": "out", "text": "find src/ -name \"*.js\" -exec sh -c \\\n  'test -f \"${1%.js}.ts\" && echo \"Would delete: $1\"' _ {} \\;" },
+        { "kind": "out-pass", "text": "echo, not -delete · you edit the command and re-run to actually remove" }
+      ],
+      "state": {
+        "label": "destructive request · three safety models",
+        "before": {
+          "title": "WHAT STANDS BETWEEN THE ASK AND THE DELETION",
+          "view": {
+            "type": "rows",
+            "columns": ["tool", "gate", "on by default?", "what it costs you"],
+            "rows": [
+              { "cells": ["Claude Code", "explicit <code>y/N</code> per deletion batch, paths listed", "yes", "a prompt on every batch, including the boring ones"], "tone": "win" },
+              { "cells": ["Gemini CLI", "Plan Mode shows every deletion before executing", "<b>no</b> — <code>--plan</code> is opt-in", "forget the flag on an untracked directory and it just acts"], "tone": "bad" },
+              { "cells": ["Copilot CLI", "you are the gate — it only prints a command", "structurally, always", "no undo, and no reasoning about which files matter"], "tone": "win" }
+            ]
+          }
+        },
+        "after": {
+          "title": "WHAT TO TAKE FROM IT",
+          "view": {
+            "type": "note",
+            "text": "The property that made Copilot CLI last on the rename — it never touches your files — is the property that makes it first here. There is no ranking of these three that survives changing the task. What you can rank is the pairing: type-aware refactors to the agentic tools with their gates on, textual bulk edits and destructive one-liners to the command you read before you run it. And <code>gemini --plan</code> is the one line of this walkthrough worth writing on a sticky note."
+          }
+        }
+      }
+    }
+  ]
+}

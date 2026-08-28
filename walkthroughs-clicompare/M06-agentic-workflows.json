@@ -1,0 +1,165 @@
+{
+  "id": "cmp-agentic",
+  "badge": "WALKTHROUGH",
+  "color": "#C2410C",
+  "time": "~4 min",
+  "title": "Three gates on one refactor",
+  "spec": "M06 · auth module refactor — where each tool stops and asks",
+  "intro": "\"Refactor the entire auth module — extract interfaces, add tests, update documentation.\" Three tools, three completely different answers to the question of when a human gets a say. Four steps, then the safety table reads as the debrief.",
+  "provenance": {
+    "kind": "illustrative",
+    "source": "the three lanes are this module's own captured auth-refactor transcripts and flow diagrams, replayed as one session"
+  },
+  "foot": "The three lanes are drawn in full above, and the gate design behind them is the table in <code>#safety-models</code>.",
+  "steps": [
+    {
+      "title": "The task, and the word doing all the work",
+      "narrative": [
+        "One sentence, and it hides four jobs: read the module, extract interfaces, write tests, update the docs. That is the definitive agentic benchmark because none of the four is hard on its own — chaining them without a human in between is the hard part.",
+        "\"Agentic\" means the loop closes without you. The tool reads files, runs commands, checks the output, iterates on failures, and comes back with a result. You stop being the executor and become the approver. Claude Code and Gemini CLI do this. Copilot CLI does not — <b>by design</b>, and this module is emphatic that it is not a crippled agent but a deliberately non-agentic shell assistant.",
+        "So the interesting axis is not capability, it is <em>gate placement</em>: how many times does a human get to say no, and at what point in the work? Watch for that in each of the next three steps."
+      ],
+      "youDo": "Send the same sentence to all three and count the approval prompts before anything lands on disk.",
+      "terminal": [
+        { "kind": "prompt", "text": "Refactor the entire auth module: extract interfaces, add tests, update docs." },
+        { "kind": "out", "text": "src/auth/  ·  4 sub-jobs  ·  three tools, three different answers to\n\"when does a human get to say no?\"" }
+      ],
+      "state": {
+        "label": "the axis this walkthrough measures",
+        "before": {
+          "title": "NOT \"WHO IS BEST\" — \"WHERE IS THE GATE\"",
+          "view": {
+            "type": "rows",
+            "columns": ["tool", "who executes", "gate placement"],
+            "rows": [
+              { "cells": ["Claude Code", "the tool, in parallel", "at the end — one diff, after the work"] },
+              { "cells": ["Gemini CLI <code>--plan</code>", "the tool, sequentially", "at the front — one plan, before the work"] },
+              { "cells": ["Copilot CLI", "<b>you</b>", "every step, because every step is you"] }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "Claude Code — three subagents, one gate at the end",
+      "narrative": [
+        "Claude Code reads <code>src/auth/</code>, analyses the structure and types, then spawns three subagents in parallel: A extracts interfaces, B writes tests, C updates the docs. They run simultaneously with their own tool access, the orchestrator merges the results and runs the test suite, and only then do you see a diff.",
+        "Parallelism is the payoff. This module's worked example puts a two-track job at 45 seconds parallel against 90 sequential, and the saving compounds on bigger tasks. The gate is real — Claude Code asks before irreversible actions and <code>.claude/settings.json</code> plus <code>CLAUDE.md</code> let you move the line.",
+        "The trade-off is that the gate is <em>downstream of the work</em>. Tokens are spent, three files are written by the merge step, and your first chance to object is a diff of everything at once. There is also a race hazard the module names directly: two subagents writing the same file. The fix is a rule you have to write yourself — <em>tasks that must remain sequential: file writes to the same file, migrations, anything involving git commits</em> — and a rule you have not written yet is not protecting you."
+      ],
+      "claudeSays": "Spawns three parallel subagents, merges their output, runs the suite, then renders one diff for confirmation.",
+      "terminal": [
+        { "kind": "tool", "text": "Read  src/auth/  →  analyse structure + types" },
+        { "kind": "tool", "text": "spawn 3 subagents (parallel)\n  A: extract interfaces\n  B: write tests\n  C: update docs" },
+        { "kind": "out", "text": "A → 4 interfaces extracted to src/auth/types.ts\nB → 11 tests written to test/auth.spec.ts\nC → docs/auth.md rewritten" },
+        { "kind": "tool", "text": "merge results  →  npm test" },
+        { "kind": "out-pass", "text": "11 passing · 0 failing" },
+        { "kind": "gate", "text": "Review the combined diff — 7 files changed. Apply? [y/N]" }
+      ],
+      "state": {
+        "label": "Claude Code lane · gate at step 6 of 6",
+        "before": {
+          "title": "THE LANE — work first, approval last",
+          "view": {
+            "type": "rows",
+            "columns": ["step", "what happens", "can you stop it here?"],
+            "rows": [
+              { "cells": ["1", "Read <code>src/auth/</code>", "—"] },
+              { "cells": ["2", "Analyse structure + types", "—"] },
+              { "cells": ["3", "<b>Spawn 3 subagents in parallel</b> — A interfaces, B tests, C docs", "no — this is where the tokens go"], "tone": "bad" },
+              { "cells": ["4", "Merge results", "no"] },
+              { "cells": ["5", "Run tests → verify", "no"] },
+              { "cells": ["6", "<b>Show diff, confirm y/N</b>", "yes — one gate, all seven files at once"], "tone": "win" }
+            ],
+            "note": "Configurable: <code>CLAUDE.md</code> can force sequential handling for same-file writes and cap concurrency (<em>Max concurrent subagents: 3</em>), and <code>.claude/settings.json</code> permissions can add gates earlier. Powerful, and entirely on you to write."
+          }
+        }
+      }
+    },
+    {
+      "title": "Gemini CLI — the gate moves to the front",
+      "narrative": [
+        "Same task, inverted architecture. Gemini Pro reads <code>@src/auth/</code> and produces a complete numbered plan, then stops: <code>Approve this plan? [y/N/edit]</code>. Nothing has been written. If the plan is wrong you have spent one planning call, not a full refactor.",
+        "Approve, and the cheap Flash model executes the steps in order, reporting each before the next begins — and halting outright if the test step fails. That is the model-routing bet: Pro is worth paying for judgement, Flash is enough for execution. The <code>edit</code> option is the underrated one, because rewriting step 3 is far cheaper than reviewing seven files of consequences.",
+        "Two honest costs. Execution is <b>sequential</b> — there are no parallel subagents, so wall-clock is longer than the parallel lane on jobs that split cleanly. And Plan Mode is <em>opt-in</em>: Gemini CLI's default is act-first, which this module calls an intentional bet on throughput. Forget <code>--plan</code> on a task touching production config or untracked files and you have no gate at all."
+      ],
+      "youDo": "Run <code>gemini --plan</code>, then use <code>edit</code> rather than <code>y</code> — change one step of the plan and watch the whole downstream execution change with it.",
+      "terminal": [
+        { "kind": "prompt", "text": "gemini --plan" },
+        { "kind": "prompt", "text": "Refactor the entire auth module in @src/auth/: extract interfaces,\nadd tests, update docs." },
+        { "kind": "out", "text": "PLAN: Refactor auth module                        (Pro)\n  Step 1: Read src/auth/ — map exports and types   (Flash)\n  Step 2: Extract interfaces to src/auth/types.ts  (Flash)\n  Step 3: Write unit tests for each interface      (Flash)\n  Step 4: Update docs/auth.md                      (Flash)\n  Step 5: Run npm test to verify no regressions    (Flash)" },
+        { "kind": "gate", "text": "Approve this plan? [y/N/edit]" },
+        { "kind": "out-pass", "text": "y  ·  Flash executes 1–5 sequentially, reporting each step\n     step 5 fails → Gemini halts and shows you the error" }
+      ],
+      "state": {
+        "label": "gate placement · end vs front",
+        "before": {
+          "title": "BEFORE — Claude Code: approve the result",
+          "view": {
+            "type": "rows",
+            "columns": ["you see", "when", "what it costs to say no"],
+            "rows": [
+              { "cells": ["a seven-file diff", "after all work is done", "the whole refactor's tokens and wall-clock"], "tone": "bad" },
+              { "cells": ["parallel execution", "45s vs 90s on a two-track job", "—"], "tone": "win" }
+            ]
+          }
+        },
+        "after": {
+          "title": "AFTER — Gemini CLI --plan: approve the intent",
+          "view": {
+            "type": "rows",
+            "columns": ["you see", "when", "what it costs to say no"],
+            "rows": [
+              { "cells": ["a five-line plan", "before anything is written", "one planning call — and <code>edit</code> is cheaper still"], "tone": "win" },
+              { "cells": ["sequential execution", "no parallel subagents", "longer wall-clock on separable work"], "tone": "bad" },
+              { "cells": ["<b>no gate at all without <code>--plan</code></b>", "default mode acts first", "this is the one to remember"], "tone": "bad" }
+            ],
+            "note": "Approving a plan and approving a diff are not the same review. A plan is cheap to reject and easy to misread; a diff is expensive to reject and impossible to argue with. Neither placement is correct in general — the front gate suits irreversible work, the end gate suits work you would have approved anyway."
+          }
+        }
+      }
+    },
+    {
+      "title": "Copilot CLI — a gate at every step, because you are the agent",
+      "narrative": [
+        "Give the same sentence to <code>gh copilot suggest</code> and you get one shell command: a <code>grep</code> for interfaces, or <code>npx tsc --noEmit</code>, or a <code>find</code> over <code>src/auth/</code>. It does not read your auth module, plan the refactor, generate interfaces, write tests, update docs, or chain anything. You run the command, look at the output, and ask for the next one.",
+        "Called a limitation, that is unfair; it is the architecture working as specified. Copilot CLI was built to translate an intent you already have into the shell syntax you have forgotten — and this module makes the strongest available case for it: an autonomous agent requires you to trust its judgement, and <b>Copilot CLI's model requires no trust at all</b>, because you read every command before it runs. The class of errors where an agent misunderstands your intent and acts on it simply cannot occur.",
+        "The bill is that you are the integration layer. Three suggestions, three manual runs, and no refactor happened — the reasoning, the sequencing and the verification are all still yours. On a four-job refactor that is a bad trade. On \"what was the flag for that again?\" it is the best tool on this page."
+      ],
+      "youDo": "Chain it manually: <code>gh copilot suggest \"step 1: find auth interfaces\"</code>, run it, then ask for step 2. Stop when you notice you are doing the planning.",
+      "terminal": [
+        { "kind": "prompt", "text": "gh copilot suggest \"refactor the entire auth module: extract interfaces, add tests, update docs\"" },
+        { "kind": "out", "text": "Suggestion:  grep -r \"interface\" src/auth/" },
+        { "kind": "gate", "text": "? Select an option  →  1. Copy command to clipboard    ·  you run it" },
+        { "kind": "prompt", "text": "gh copilot suggest \"step 2: extract to new file\"" },
+        { "kind": "gate", "text": "? Select an option  →  you run it" },
+        { "kind": "prompt", "text": "gh copilot suggest \"step 3: update imports\"" },
+        { "kind": "gate", "text": "? Select an option  →  you run it" },
+        { "kind": "out", "text": "3 suggestions · 3 manual runs · 0 files refactored\neach step separately chained by hand" }
+      ],
+      "state": {
+        "label": "confirmation gate density across one task",
+        "before": {
+          "title": "HOW MANY TIMES A HUMAN SAYS YES",
+          "view": {
+            "type": "rows",
+            "columns": ["tool", "gates", "autonomy", "trust required in the model"],
+            "rows": [
+              { "cells": ["Claude Code", "1 (end) + per irreversible action", "full — parallel subagents", "high: it acts, then shows you"], "tone": "win" },
+              { "cells": ["Gemini CLI <code>--plan</code>", "1 (front), then halts on failure", "full — sequential, Flash-executed", "medium: you approved the plan, not each step"], "tone": "win" },
+              { "cells": ["Gemini CLI, default", "0", "full", "highest — it acts first, no gate"], "tone": "bad" },
+              { "cells": ["Copilot CLI", "every step — you run every command", "none, deliberately", "<b>none</b>"], "tone": "win" }
+            ]
+          }
+        },
+        "after": {
+          "title": "WHAT TO TAKE FROM IT",
+          "view": {
+            "type": "note",
+            "text": "Autonomy and oversight trade against each other, and every one of these tools sits at a defensible point on that line. Claude Code buys wall-clock with parallelism and pays with a late gate you must configure. Gemini CLI buys a cheap, early veto and pays with sequential execution — and with a default mode that has no gate unless you type <code>--plan</code>. Copilot CLI buys total reviewability and pays by not doing the work. The table that follows is the same three positions with the mechanism spelled out; read it knowing that \"no autonomous refactor\" is a specification, not a score."
+          }
+        }
+      }
+    }
+  ]
+}

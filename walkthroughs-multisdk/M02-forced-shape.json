@@ -1,0 +1,269 @@
+{
+  "id": "msdk-structured",
+  "badge": "WALKTHROUGH",
+  "color": "#DB2777",
+  "time": "~4 min",
+  "title": "Only one of these is safe",
+  "spec": "M02 · prompt-and-pray vs a schema the provider enforces",
+  "intro": "The same raw order note, parsed two ways. One works until it doesn't; the other cannot emit a fifth status value. Four steps, including the two ways schema-enforced output still hands you something that isn't your object.",
+  "provenance": {
+    "kind": "illustrative",
+    "source": "a narrated run of the six structured-output files shipped in M02 Step 2; the schema, the raw note, the call sites and the expected printed line are the module's own, the failing prompt-and-pray runs are reconstructed"
+  },
+  "foot": "Run it for real: the <code>OrderStatus</code> model in <b>Step 1</b> plus any tab from <b>Step 2 — Force the Shape</b>. Change the raw note and watch <code>status</code> refuse to invent a fifth value.",
+  "steps": [
+    {
+      "title": "Prompt-and-pray, run twice",
+      "narrative": [
+        "Start with the version everyone writes first: no schema, just <em>\"respond in JSON like <code>{...}</code>\"</em> in the prompt, then <code>json.loads</code> on whatever comes back. Feed it the raw note the module uses — <code>\"AC-1042 went out with UPS, should land Tuesday, all good on our end\"</code>.",
+        "Run one <b>parses</b>, and that is the trap. You get a dict, your tests go green, you ship. But <code>status</code> came back as <code>\"shipped-ish\"</code>, which no downstream <code>if</code> will ever match, and the model invented a <code>notes</code> field nobody asked for.",
+        "Run two is the same code on the same input a day later. This time the model opens with <em>\"Here's the data:\"</em> and wraps the object in a <code>```json</code> fence. <code>json.loads</code> throws on character zero. Toggle <b>Before / After</b> to see both outcomes of one unchanged program."
+      ],
+      "youDo": "Run <code>python naive_json.py</code> a few times in a row and diff the outputs.",
+      "terminal": [
+        { "kind": "prompt", "text": "python naive_json.py   # \"reply in JSON with order_id, status, carrier, eta, summary\"" },
+        { "kind": "out", "text": "run 1 — parsed OK\n{'order_id': 'AC-1042', 'status': 'shipped-ish', 'carrier': 'UPS',\n 'eta': 'Tuesday', 'summary': 'On its way!', 'notes': 'customer seems happy'}" },
+        { "kind": "out-fail", "text": "run 1 — downstream:  if order['status'] == 'shipped':  ->  False" },
+        { "kind": "prompt", "text": "python naive_json.py" },
+        { "kind": "out", "text": "run 2 — raw reply:\nHere's the data:\n```json\n{ \"order_id\": \"AC-1042\", \"status\": \"shipped\", ... }\n```" },
+        { "kind": "out-fail", "text": "Traceback (most recent call last):\n  File \"naive_json.py\", line 18, in <module>\n    order = json.loads(resp_text)\njson.decoder.JSONDecodeError: Expecting value: line 1 column 1 (char 0)" }
+      ],
+      "state": {
+        "label": "one program, two outcomes",
+        "before": {
+          "title": "RUN 1 — it parsed, and that is the problem",
+          "view": {
+            "type": "stack",
+            "views": [
+              {
+                "type": "json",
+                "data": {
+                  "order_id": "AC-1042",
+                  "status": "shipped-ish",
+                  "carrier": "UPS",
+                  "eta": "Tuesday",
+                  "summary": "On its way!",
+                  "notes": "customer seems happy"
+                },
+                "highlight": ["status", "notes"]
+              },
+              {
+                "type": "note",
+                "text": "Two defects, neither of which raises: <code>status</code> is outside your four allowed values, and <code>notes</code> is a field your dashboard has no column for. A green test suite hides both."
+              }
+            ]
+          }
+        },
+        "after": {
+          "title": "RUN 2 — same code, same input, no object at all",
+          "view": {
+            "type": "stack",
+            "views": [
+              {
+                "type": "diff",
+                "file": "stdout — the model's raw reply",
+                "lines": [
+                  ["m", "Here's the data:"],
+                  ["m", "```json"],
+                  ["p", "{"],
+                  ["p", "  \"order_id\": \"AC-1042\","],
+                  ["p", "  \"status\": \"shipped\","],
+                  ["p", "  \"carrier\": \"UPS\","],
+                  ["p", "  \"eta\": \"Tuesday\","],
+                  ["p", "  \"summary\": \"Your order shipped via UPS.\""],
+                  ["p", "}"],
+                  ["m", "```"]
+                ]
+              },
+              {
+                "type": "rows",
+                "columns": ["failure mode", "what came back", "what your parser does"],
+                "rows": [
+                  { "cells": ["preamble", "<code>Here's the data:</code>", "throws at char 0"], "tone": "bad" },
+                  { "cells": ["code fence", "<code>```json … ```</code>", "throws at char 0"], "tone": "bad" },
+                  { "cells": ["invented field", "<code>notes</code>", "parses, then surprises the DB write"], "tone": "bad" },
+                  { "cells": ["invalid enum", "<code>\"shipped-ish\"</code>", "parses, then silently fails every branch"], "tone": "bad" }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "Attach the schema — six call sites, one object",
+      "narrative": [
+        "Now the safe path. You hand the SDK an actual schema — the <code>OrderStatus</code> Pydantic model, or the Zod equivalent — and the provider <b>constrains generation</b> so nothing outside the shape can be emitted. Not \"asks nicely\": constrains. No fences, no preamble, no fifth status.",
+        "The schema plugs into a different parameter in each SDK, and that is genuinely all that moves. Anthropic Python takes <code>output_format=OrderStatus</code> on <code>messages.parse()</code>. Gemini takes <code>config.response_schema</code> and also insists on <code>response_mime_type=\"application/json\"</code>. OpenAI takes <code>text_format=OrderStatus</code> on <code>responses.parse()</code>.",
+        "The result reads back under three different names — <code>parsed_output</code>, <code>parsed</code>, <code>output_parsed</code> — and is the same validated object every time. You never wrote <code>json.loads</code>, never stripped a fence, never checked for a preamble."
+      ],
+      "youDo": "Run <code>python structured_anthropic.py</code>, then the Gemini and OpenAI files, on the same raw note.",
+      "claudeSays": "Still reasons in freeform internally, but every token it emits has to fit the schema — so <code>status</code> is decided among four options, not among all English.",
+      "terminal": [
+        { "kind": "prompt", "text": "python structured_anthropic.py" },
+        { "kind": "out", "text": "messages.parse(output_format=OrderStatus)  ->  resp.parsed_output" },
+        { "kind": "out-pass", "text": "shipped | Your order AC-1042 shipped via UPS and should arrive Tuesday." },
+        { "kind": "prompt", "text": "python structured_gemini.py" },
+        { "kind": "out", "text": "generate_content(response_schema=OrderStatus,\n                 response_mime_type=\"application/json\")  ->  resp.parsed" },
+        { "kind": "out-pass", "text": "shipped | Your order AC-1042 shipped via UPS and should arrive Tuesday." },
+        { "kind": "prompt", "text": "python structured_openai.py" },
+        { "kind": "out", "text": "responses.parse(text_format=OrderStatus)  ->  resp.output_parsed" },
+        { "kind": "out-pass", "text": "shipped | Your order AC-1042 shipped via UPS and should arrive Tuesday." }
+      ],
+      "state": {
+        "label": "OrderStatus · six call sites",
+        "before": {
+          "title": "THE ONLY THING THAT MOVES",
+          "view": {
+            "type": "rows",
+            "columns": ["SDK · language", "schema goes in", "read the result"],
+            "rows": [
+              { "cells": ["Anthropic · Py", "<code>output_format=OrderStatus</code>", "<code>resp.parsed_output</code>"] },
+              { "cells": ["Anthropic · JS", "<code>output_config: { format: zodOutputFormat(S) }</code>", "<code>resp.parsed_output</code> — nullable, guard it"] },
+              { "cells": ["Google · Py", "<code>config.response_schema=OrderStatus</code> + <code>response_mime_type</code>", "<code>resp.parsed</code>"] },
+              { "cells": ["Google · JS", "<code>config.responseSchema = { …Type… }</code>", "no typed helper — <code>JSON.parse(resp.text)</code>"], "tone": "bad" },
+              { "cells": ["OpenAI · Py", "<code>text_format=OrderStatus</code>", "<code>resp.output_parsed</code>"] },
+              { "cells": ["OpenAI · JS", "<code>text: { format: zodTextFormat(S, \"order_status\") }</code>", "<code>resp.output_parsed</code>"] }
+            ]
+          }
+        },
+        "after": {
+          "title": "THE OBJECT — same five fields out of all six",
+          "view": {
+            "type": "stack",
+            "views": [
+              {
+                "type": "json",
+                "data": {
+                  "order_id": "AC-1042",
+                  "status": "shipped",
+                  "carrier": "UPS",
+                  "eta": "Tuesday",
+                  "summary": "Your order AC-1042 shipped via UPS and should arrive Tuesday."
+                },
+                "highlight": ["status"]
+              },
+              {
+                "type": "note",
+                "text": "Compare it to run 1 in the previous step. <code>status</code> is now provably one of <code>processing / shipped / delivered / cancelled</code>, and there is no sixth key. The enum is doing more work here than the JSON guarantee is — validity gets you a dict, the enum gets you a dict your <code>if</code> statements can trust."
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "Two ways it still hands you nothing",
+      "narrative": [
+        "\"Guaranteed\" is a guarantee about <em>shape</em>, not about <em>arrival</em>. Two things can still leave you holding something that is not an <code>OrderStatus</code>, and production code checks for both before it touches <code>.status</code>.",
+        "<b>Refusal.</b> If the model declines on safety grounds it returns a refusal <em>instead of</em> schema-conforming output. The parsed field comes back empty. Reach straight for <code>order.status</code> and you get an <code>AttributeError</code> on <code>None</code> — at 2am, on the one request that tripped the filter.",
+        "<b>Truncation.</b> If the reply hits <code>max_tokens</code> mid-object you get half a JSON object, which will not parse no matter how strict the schema was. This one is your fault, not the model's: give structured calls headroom, and treat an incomplete parse as a retry rather than a crash."
+      ],
+      "youDo": "Wrap every structured call: check the refusal / stop reason first, then check the parsed field is not <code>None</code>, and only then read a field.",
+      "terminal": [
+        { "kind": "prompt", "text": "python structured_anthropic.py   # note containing content the filter declines" },
+        { "kind": "out-fail", "text": "resp.stop_reason = \"refusal\"\nresp.parsed_output = None" },
+        { "kind": "out-fail", "text": "Traceback (most recent call last):\n  File \"structured_anthropic.py\", line 24, in <module>\n    print(order.status, \"|\", order.summary)\nAttributeError: 'NoneType' object has no attribute 'status'" },
+        { "kind": "prompt", "text": "python structured_anthropic.py   # max_tokens=48" },
+        { "kind": "out-fail", "text": "stop_reason = \"max_tokens\"\nraw: {\"order_id\": \"AC-1042\", \"status\": \"shipp" },
+        { "kind": "prompt", "text": "python structured_anthropic.py   # guard added, max_tokens back to 512" },
+        { "kind": "out-pass", "text": "shipped | Your order AC-1042 shipped via UPS and should arrive Tuesday." }
+      ],
+      "state": {
+        "label": "the guard",
+        "before": {
+          "title": "BEFORE — trusting the parsed field",
+          "view": {
+            "type": "diff",
+            "file": "structured_anthropic.py",
+            "lines": [
+              ["p", "resp = client.messages.parse("],
+              ["p", "    model=\"claude-sonnet-5\", max_tokens=512,"],
+              ["p", "    output_format=OrderStatus,"],
+              ["p", ")"],
+              ["p", ""],
+              ["m", "order = resp.parsed_output"],
+              ["m", "print(order.status, \"|\", order.summary)"]
+            ]
+          }
+        },
+        "after": {
+          "title": "AFTER — check, then read",
+          "view": {
+            "type": "stack",
+            "views": [
+              {
+                "type": "diff",
+                "file": "structured_anthropic.py",
+                "lines": [
+                  ["p", "resp = client.messages.parse("],
+                  ["p", "    model=\"claude-sonnet-5\", max_tokens=512,"],
+                  ["p", "    output_format=OrderStatus,"],
+                  ["p", ")"],
+                  ["p", ""],
+                  ["a", "if resp.stop_reason == \"refusal\":"],
+                  ["a", "    return handoff(\"model declined — routing to a human\")"],
+                  ["a", "if resp.stop_reason == \"max_tokens\":"],
+                  ["a", "    return retry(max_tokens=1024)          # truncated, not malformed"],
+                  ["a", "order = resp.parsed_output"],
+                  ["a", "if order is None:"],
+                  ["a", "    return retry()                          # never assume it arrived"],
+                  ["p", "print(order.status, \"|\", order.summary)"]
+                ]
+              },
+              {
+                "type": "rows",
+                "columns": ["failure", "what you get", "the right response"],
+                "rows": [
+                  { "cells": ["refusal", "a refusal item / <code>stop_reason</code>, empty parsed field", "hand off — retrying will refuse again"], "tone": "bad" },
+                  { "cells": ["truncation", "half an object, unparseable", "retry with more <code>max_tokens</code>"], "tone": "bad" },
+                  { "cells": ["neither", "a validated <code>OrderStatus</code>", "read <code>.status</code> without a second thought"], "tone": "win" }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "The edges you design for: enums and nullables",
+      "narrative": [
+        "Strict mode has a rule that surprises people: <b>every field is required</b>, and objects forbid extra properties. You cannot leave a field off and hope the model omits it. So a value that might genuinely be missing has to be modelled, not ignored.",
+        "Try it on the other fixture order. <code>AC-2088</code> is still processing and has no carrier yet. The schema declares <code>carrier</code> as a plain <code>str</code> with the description <em>\"Carrier name, or 'unknown' if none yet\"</em> — a <b>sentinel</b>. The model fills in <code>\"unknown\"</code>, the field stays present, strict mode is satisfied.",
+        "The alternative is a <b>nullable</b>: <code>Optional[str]</code> in Pydantic, <code>z.string().nullable()</code> in Zod. Both are legal; they mean different things downstream. A sentinel is a string your code must remember to special-case; <code>None</code> is a type your code is forced to handle. Pick deliberately — the one thing you may not do is leave the field out."
+      ],
+      "youDo": "Change <code>RAW</code> to <code>\"AC-2088, nothing's moved yet, no label printed\"</code> and re-run any of the six files.",
+      "terminal": [
+        { "kind": "prompt", "text": "python structured_openai.py   # RAW = \"AC-2088, nothing's moved yet, no label printed\"" },
+        { "kind": "out-pass", "text": "processing | Your order AC-2088 is still being prepared and hasn't shipped yet." },
+        { "kind": "out", "text": "OrderStatus(order_id='AC-2088', status='processing', carrier='unknown',\n            eta='unknown', summary=\"Your order AC-2088 is still being prepared…\")" },
+        { "kind": "prompt", "text": "python structured_openai.py   # carrier: Optional[str] instead" },
+        { "kind": "out", "text": "OrderStatus(order_id='AC-2088', status='processing', carrier=None,\n            eta='unknown', summary=\"Your order AC-2088 is still being prepared…\")" },
+        { "kind": "prompt", "text": "python structured_openai.py   # carrier removed from the model entirely" },
+        { "kind": "out-fail", "text": "the field is simply gone from the schema — the model never reports a carrier,\nand you find out in the dashboard, not in the traceback" }
+      ],
+      "state": {
+        "label": "three ways to model a missing carrier",
+        "before": {
+          "title": "THE CHOICE — and what it costs downstream",
+          "view": {
+            "type": "rows",
+            "columns": ["how you model it", "AC-2088 comes back as", "strict mode", "downstream cost"],
+            "rows": [
+              { "cells": ["sentinel — <code>carrier: str</code> + \"unknown\"", "<code>\"unknown\"</code>", "fine", "every reader must know the magic string"], "tone": "win" },
+              { "cells": ["nullable — <code>Optional[str]</code>", "<code>None</code>", "fine", "the type system makes you handle it"], "tone": "win" },
+              { "cells": ["omit the field and hope", "field absent", "<b>not allowed</b>", "a silent hole in your data"], "tone": "bad" }
+            ]
+          }
+        },
+        "after": {
+          "title": "WHAT TO TAKE FROM IT",
+          "view": {
+            "type": "note",
+            "text": "\"Only one is safe\" is not a slogan — it is the difference between step 1 and step 2 on identical input. But note what schema enforcement does <em>not</em> buy you. It guarantees the shape, never the truth: a model that misreads the note will hand you a beautifully typed <code>OrderStatus</code> with the wrong <code>eta</code>, and nothing in the schema will notice. And support varies — the current Anthropic tiers, structured-outputs-capable OpenAI models, the Gemini 2.5 family. Pin an older model and strict output can quietly degrade to the prose you were trying to escape."
+          }
+        }
+      }
+    }
+  ]
+}
