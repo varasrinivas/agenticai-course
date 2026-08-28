@@ -1,0 +1,183 @@
+{
+  "id": "os-rate-limit",
+  "badge": "WALKTHROUGH",
+  "color": "#F97316",
+  "time": "~4 min",
+  "title": "Five tokens, then the wall",
+  "spec": "M16 · the bucket drains, per user, and fails closed",
+  "module": "output/courses/opensource/M16-input-guardrails.html",
+  "intro": "Watch a capacity-5 token bucket empty one request at a time, then confirm it is keyed per user and not global, then kill Ollama mid-suite and check that the pipeline blocks rather than passes.",
+  "provenance": {
+    "kind": "measured",
+    "source": "labs-opensource/M16-input-guardrails/expected_output/sample_output.txt"
+  },
+  "foot": "Run it for real: <code>labs-opensource/M16-input-guardrails/</code> — <code>python solution/guardrail_pipeline.py</code>",
+  "steps": [
+    {
+      "title": "Six requests, capacity five",
+      "narrative": [
+        "The pipeline is built with <code>GuardrailPipeline(rate_capacity=5)</code>, which creates a token bucket holding 5 tokens that refills at 1 token per second. Every request spends one token before any other layer runs.",
+        "Fire six requests with no gap between them. The first five each report the tokens left behind them — <b>4, 3, 2, 1, 0</b> — and the sixth finds an empty bucket. It is blocked with a retry hint computed from the refill rate: at 1 token/sec, one token is 1.0 seconds away."
+      ],
+      "youDo": "<code>python solution/guardrail_pipeline.py</code> and read the last block of the suite.",
+      "source": "labs-opensource/M16-input-guardrails/expected_output/sample_output.txt",
+      "terminal": [
+        { "kind": "prompt", "text": "python solution/guardrail_pipeline.py" },
+        { "kind": "out", "text": "TEST: Rate Limit Exhaustion (6 rapid requests, capacity 5)" },
+        { "kind": "out-pass", "text": "  Request 1: PASS — remaining=4" },
+        { "kind": "out-pass", "text": "  Request 2: PASS — remaining=3" },
+        { "kind": "out-pass", "text": "  Request 3: PASS — remaining=2" },
+        { "kind": "out-pass", "text": "  Request 4: PASS — remaining=1" },
+        { "kind": "out-pass", "text": "  Request 5: PASS — remaining=0" },
+        { "kind": "out-fail", "text": "  Request 6: BLOCKED — Rate limited. Retry after 1.0s" }
+      ],
+      "state": {
+        "label": "user_flood's bucket · capacity 5, refill 1.0/s",
+        "before": {
+          "title": "TOKENS LEFT AFTER EACH REQUEST",
+          "view": {
+            "type": "bars",
+            "unit": "tokens left",
+            "max": 5,
+            "items": [
+              { "label": "start", "value": 5, "note": "bucket full" },
+              { "label": "req 1", "value": 4, "note": "PASS" },
+              { "label": "req 2", "value": 3, "note": "PASS" },
+              { "label": "req 3", "value": 2, "note": "PASS" },
+              { "label": "req 4", "value": 1, "note": "PASS" },
+              { "label": "req 5", "value": 0, "tone": "win", "note": "PASS — the last one through" },
+              { "label": "req 6", "value": 0, "tone": "bad", "note": "BLOCKED — retry after 1.0s" }
+            ]
+          }
+        },
+        "after": {
+          "title": "WHY THIS LAYER RUNS FIRST",
+          "view": {
+            "type": "note",
+            "text": "Rate limiting is arithmetic on a float — sub-microsecond, no model call, no network. The injection classifier below it costs a full Mistral inference. Ordering the layers cheapest-first means a flood of abusive traffic is rejected by the free layer and never reaches the expensive one. Reverse the order and an attacker can bill you a GPU-second per request they send."
+          }
+        }
+      }
+    },
+    {
+      "title": "Mallory's blocks do not touch Alice",
+      "narrative": [
+        "<code>RateLimiter</code> keeps a <code>dict[str, TokenBucket]</code> and mints a fresh bucket the first time it sees a <code>user_id</code>. The consequence shows up in the middle of the suite: <code>user_mallory</code> gets blocked twice for injection attempts, and the very next request from <code>user_alice</code> still reports <code>Threat level: safe</code>.",
+        "This is the difference between a keyed limiter and a global one. A global counter would let one hostile client deny service to everyone else — an own-goal where your abuse defence becomes the attacker's tool."
+      ],
+      "claudeSays": "The injection classifier fired on both of Mallory's messages and returned <code>threat_level: malicious</code>, so the pipeline never reached the PASS branch for that user. Alice's bucket was untouched by any of it.",
+      "source": "labs-opensource/M16-input-guardrails/expected_output/sample_output.txt",
+      "terminal": [
+        { "kind": "out", "text": "TEST: Injection - Direct        (user_mallory)" },
+        { "kind": "out-fail", "text": "Result: BLOCKED\n  Blocked by: injection — Injection detected: attempts to override instructions" },
+        { "kind": "out", "text": "TEST: Injection - Role-play     (user_mallory)" },
+        { "kind": "out-fail", "text": "Result: BLOCKED\n  Blocked by: injection — Injection detected: role-play jailbreak attempt" },
+        { "kind": "out", "text": "TEST: Clean after injection     (user_alice)" },
+        { "kind": "out-pass", "text": "Result: PASS\n  Threat level: safe        <- user_alice unaffected by user_mallory's blocks" }
+      ],
+      "state": {
+        "label": "self._buckets — one bucket per user_id",
+        "before": {
+          "title": "THE KEYED BUCKET MAP",
+          "view": {
+            "type": "json",
+            "data": {
+              "user_alice": "3 requests spent · own bucket · still passing",
+              "user_bob": "1 request spent · own bucket",
+              "user_mallory": "2 requests spent · blocked at the injection layer, not the rate layer",
+              "user_flood": "6 requests spent · exhausted",
+              "global_counter": "does not exist — by design"
+            },
+            "highlight": ["user_alice", "global_counter"]
+          }
+        },
+        "after": {
+          "title": "GLOBAL vs KEYED",
+          "view": {
+            "type": "rows",
+            "columns": ["design", "what user_flood's 6 requests do to user_alice"],
+            "rows": [
+              { "cells": ["one global counter", "Alice is blocked too — the attacker denied service to your paying users"], "tone": "bad" },
+              { "cells": ["<code>dict[user_id, TokenBucket]</code>", "Alice is unaffected; only the noisy key drains"], "tone": "win" }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "Kill Ollama mid-suite",
+      "narrative": [
+        "The injection layer is a model call, and model calls fail. The server dies, the port moves, the machine swaps. What should the pipeline do with an input it could not classify?",
+        "There is only one safe answer, and the lab makes it a hard requirement: <em>killing Ollama mid-suite causes BLOCKED — never PASS — fail closed</em>. The <code>except</code> branch in <code>detect_injection</code> returns <code>{\"blocked\": True, \"threat_level\": \"error\"}</code>, so a broken classifier rejects traffic instead of waving it through.",
+        "Get this backwards and your guardrail has an off switch that any attacker able to cause a timeout can flip."
+      ],
+      "youDo": "In a second shell: <code>pkill -f \"ollama serve\"</code>, then re-run the suite and confirm every classifier-dependent test reads BLOCKED.",
+      "terminal": [
+        { "kind": "prompt", "text": "pkill -f \"ollama serve\"   # second shell, suite still running" },
+        { "kind": "out", "text": "TEST: Clean input" },
+        { "kind": "out-fail", "text": "Result: BLOCKED\n  Blocked by: injection — Injection detected: Connection error." },
+        { "kind": "gate", "text": "⏸  a clean input was rejected — that is the correct behaviour" },
+        { "kind": "out", "text": "The suite blocks everything it cannot classify, and keeps blocking until\nOllama is back. Availability suffers; the boundary holds." }
+      ],
+      "state": {
+        "label": "detect_injection · the except branch",
+        "before": {
+          "title": "FAIL OPEN — the tempting version",
+          "view": {
+            "type": "diff",
+            "file": "solution/guardrail_pipeline.py",
+            "lines": [
+              ["p", "    except Exception as e:"],
+              ["m", "        # classifier is down — let it through so the app stays up"],
+              ["m", "        return {\"blocked\": False, \"threat_level\": \"unknown\", \"reason\": str(e)}"]
+            ]
+          }
+        },
+        "after": {
+          "title": "FAIL CLOSED — what the lab ships",
+          "view": {
+            "type": "diff",
+            "file": "solution/guardrail_pipeline.py",
+            "lines": [
+              ["p", "    except Exception as e:"],
+              ["a", "        # FAIL CLOSED — block when the classifier itself breaks"],
+              ["a", "        return {\"blocked\": True, \"threat_level\": \"error\", \"reason\": str(e)}"]
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "Which layers you may actually trust",
+      "narrative": [
+        "Three of the four layers here are deterministic: the bucket is arithmetic, the PII redaction is regex plus a Luhn check, the schema validation is Pydantic. Run them a thousand times and you get the same answer a thousand times.",
+        "The injection classifier is not. The lab states its accuracy plainly: <b>Mistral-7B's injection classifier is ~80-90% accurate</b> — a role-play jailbreak occasionally passes as \"suspicious\" rather than \"malicious\", and a benign security question may be flagged. That is one in five to one in ten calls landing on the wrong side.",
+        "So do not put a hard guarantee on the probabilistic layer. The suite's pass criteria are all pinned to the deterministic ones — the SSN is redacted, request 6 is rate-limited, a dead classifier blocks. The model layer catches the obvious attacks it can, and you architect as if it will sometimes miss."
+      ],
+      "source": "labs-opensource/M16-input-guardrails/expected_output/sample_output.txt",
+      "state": {
+        "label": "four layers, two kinds of certainty",
+        "before": {
+          "title": "WHAT EACH LAYER GUARANTEES",
+          "view": {
+            "type": "rows",
+            "columns": ["layer", "mechanism", "reliability", "may carry a hard requirement?"],
+            "rows": [
+              { "cells": ["rate limit", "token bucket, float arithmetic", "deterministic", "yes — req 6 is always BLOCKED"], "tone": "win" },
+              { "cells": ["PII redaction", "regex + Luhn check", "deterministic", "yes — the SSN is always redacted"], "tone": "win" },
+              { "cells": ["schema validation", "Pydantic field validators", "deterministic", "yes"], "tone": "win" },
+              { "cells": ["injection detection", "Mistral-7B classifier call", "<b>~80-90% accurate</b>", "<b>no</b> — best-effort only"], "tone": "bad" }
+            ]
+          }
+        },
+        "after": {
+          "title": "THE RULE THAT FALLS OUT OF IT",
+          "view": {
+            "type": "note",
+            "text": "A guardrail suite whose green build depends on a 7B classifier agreeing with you is a flaky suite. Assert on the layers that cannot drift, treat the classifier's output as a signal to log and review, and make sure the expensive probabilistic layer sits <em>behind</em> the free deterministic ones — not in front of them."
+          }
+        }
+      }
+    }
+  ]
+}

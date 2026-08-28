@@ -1,0 +1,163 @@
+{
+  "id": "ca-evals",
+  "module": "output/courses/claude-agents/M18-evaluation-testing.html",
+  "badge": "WALKTHROUGH",
+  "color": "#06B6D4",
+  "time": "~4 min",
+  "title": "0.74 and still PASS",
+  "spec": "M18 · what a green suite does not tell you",
+  "intro": "Twenty eval cases, twenty passes, overall 0.943. One of those passes got the entity half wrong. Find it, then look at why the regression gate had nothing to say about it.",
+  "provenance": {
+    "kind": "measured",
+    "source": "labs/M18-evaluation-testing/expected_output/eval_report.txt"
+  },
+  "foot": "Run it for real: <code>cd labs/M18-evaluation-testing/solution &amp;&amp; python eval_runner.py</code>",
+  "steps": [
+    {
+      "title": "Twenty cases, three scorers each",
+      "narrative": [
+        "The dataset is 20 UCC research cases across four categories. Every case is scored three ways: <b>task completion</b> (did the answer contain the right filing numbers), <b>entity resolution</b> (did it name the right companies), and <b>Claude-as-judge</b> (a model grading accuracy, completeness and clarity).",
+        "<code>overall</code> is the plain mean of the three. Nothing is weighted, nothing is category-aware. Hold on to that — it is where the problem in step 3 comes from."
+      ],
+      "youDo": "Run <code>python eval_runner.py</code> and watch the twenty result lines stream past before the report renders.",
+      "source": "labs/M18-evaluation-testing/expected_output/eval_report.txt",
+      "terminal": [
+        { "kind": "prompt", "text": "python eval_runner.py" },
+        { "kind": "out", "text": "Dataset: 20 cases\n  edge_case: 4\n  entity_resolution: 5\n  filing_search: 6\n  risk_analysis: 5" },
+        { "kind": "out", "text": "Running evaluation...\n  [ 1/20] FS-001 PASS  task=1.00  entity=1.00  judge=1.00  overall=1.00\n  [ 2/20] FS-002 PASS  task=1.00  entity=1.00  judge=0.87  overall=0.96\n  [ 8/20] ER-002 PASS  task=1.00  entity=1.00  judge=1.00  overall=1.00\n  [13/20] RA-002 PASS  task=1.00  entity=1.00  judge=0.73  overall=0.91" },
+        { "kind": "out-pass", "text": "  Cases:     20  |  Pass: 20  |  Fail: 0\n  Overall:   0.943" }
+      ],
+      "state": {
+        "label": "the dataset",
+        "before": {
+          "title": "20 CASES · 4 CATEGORIES · 3 DIFFICULTIES",
+          "view": {
+            "type": "rows",
+            "columns": ["category", "cases", "avg"],
+            "rows": [
+              { "cells": ["entity_resolution", "5", "0.982"], "tone": "win" },
+              { "cells": ["filing_search", "6", "0.971"], "tone": "win" },
+              { "cells": ["risk_analysis", "5", "0.943"] },
+              { "cells": ["edge_case", "4", "0.846"] }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "Case 17 — the one that passed anyway",
+      "narrative": [
+        "Line 17 of the stream is <code>EC-001</code>: <em>\"Find all filings for XYZ Nonexistent Industries.\"</em> The scorers disagree sharply. Task completion is 1.00 — the agent correctly returned no filings. Entity resolution is <b>0.50</b>. The judge gives <b>0.73</b>.",
+        "Mean of 1.00, 0.50 and 0.73 is 0.743, printed as <b>0.74</b>. The pass threshold is <b>0.600</b>. So the line reads <code>PASS</code>, the suite stays green, and CI is happy.",
+        "Nothing here is a bug. The gate did exactly what it was configured to do. The gap is between <em>\"cleared the bar\"</em> and <em>\"good\"</em> — a case where half the entity signal is missing still clears a bar set at 0.6, because two healthy scores carry one sick one."
+      ],
+      "claudeSays": "The runner emits one PASS/FAIL per case from <code>overall &gt;= 0.6</code>. It never inspects which scorer sank, so a floor on the mean is not a floor on any individual dimension.",
+      "source": "labs/M18-evaluation-testing/expected_output/eval_report.txt",
+      "terminal": [
+        { "kind": "out", "text": "  [16/20] RA-005 PASS  task=1.00  entity=1.00  judge=0.80  overall=0.93" },
+        { "kind": "gate", "text": "  [17/20] EC-001 PASS  task=1.00  entity=0.50  judge=0.73  overall=0.74" },
+        { "kind": "out", "text": "  [18/20] EC-002 PASS  task=1.00  entity=1.00  judge=0.87  overall=0.96" },
+        { "kind": "out", "text": "  Threshold: 0.600 (pass/fail cutoff)" },
+        { "kind": "out-pass", "text": "  EC-001  score=0.744  (edge_case, easy)\n         query: Find all filings for XYZ Nonexistent Industr..." }
+      ],
+      "state": {
+        "label": "EC-001 · three scorers, one verdict",
+        "before": {
+          "title": "THE SCORES THAT MADE 0.74",
+          "view": {
+            "type": "rows",
+            "columns": ["scorer", "EC-001", "reading"],
+            "rows": [
+              { "cells": ["Task Completion", "1.00", "correctly reported no filings"], "tone": "win" },
+              { "cells": ["Entity Resolution", "<b>0.50</b>", "half the expected entity signal missing"], "tone": "bad" },
+              { "cells": ["Claude-as-Judge", "0.73", "lowest judge score outside EC-003/EC-004"] },
+              { "cells": ["<b>overall (mean)</b>", "<b>0.74</b>", "threshold is 0.600 → <b>PASS</b>"] }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "The averaging that hides it",
+      "narrative": [
+        "Zoom out and EC-001 vanishes. The scorer averages read <b>0.997 / 0.975 / 0.844</b> and the headline is <b>0.943</b>. Nothing on that summary says a case scored 0.50 on entity resolution.",
+        "The category table is the only place the shape survives: <code>edge_case</code> averages <b>0.846</b> against <code>entity_resolution</code>'s <b>0.982</b>. That is the signal — edge cases are systematically weaker — and it is visible only because someone thought to break the average down.",
+        "The judge column is the honest one here. Its average, 0.844, is well below the two deterministic scorers, and it is the only scorer that moves much between cases. Averaging a model's opinion together with two string-matching checks flattens exactly the dimension you most wanted to watch."
+      ],
+      "source": "labs/M18-evaluation-testing/expected_output/eval_report.txt",
+      "state": {
+        "label": "aggregate vs breakdown",
+        "before": {
+          "title": "BEFORE — the number people quote",
+          "view": {
+            "type": "rows",
+            "columns": ["metric", "value"],
+            "rows": [
+              { "cells": ["Cases / Pass / Fail", "20 / 20 / 0"], "tone": "win" },
+              { "cells": ["Overall", "0.943"], "tone": "win" },
+              { "cells": ["Threshold", "0.600"] }
+            ]
+          }
+        },
+        "after": {
+          "title": "AFTER — the same run, broken down",
+          "view": {
+            "type": "stack",
+            "views": [
+              {
+                "type": "rows",
+                "columns": ["scorer", "avg score"],
+                "rows": [
+                  { "cells": ["Task Completion", "0.997"] },
+                  { "cells": ["Entity Resolution", "0.975"] },
+                  { "cells": ["Claude-as-Judge", "<b>0.844</b>"], "tone": "bad" }
+                ]
+              },
+              {
+                "type": "rows",
+                "columns": ["worst cases", "score", "category"],
+                "rows": [
+                  { "cells": ["EC-001", "0.744", "edge_case, easy"], "tone": "bad", "new": true },
+                  { "cells": ["EC-003", "0.844", "edge_case, medium"], "new": true },
+                  { "cells": ["EC-004", "0.844", "edge_case, hard"], "new": true }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "The regression gate that confirms nothing moved",
+      "narrative": [
+        "Then the comparison against the saved baseline: <b>Previous avg 0.943 · Current avg 0.943 · Change +0.000 · No regressions detected · Unchanged: 20 cases</b>. That is a real, useful result — it proves this change did not make the agent worse.",
+        "It proves nothing else. A regression gate measures <em>movement</em>, and EC-001 has been sitting at 0.744 in both runs. A weakness that was already there on the day you saved the baseline is invisible to it forever.",
+        "The lab's own footnote keeps this honest: <em>\"Exact scores may vary slightly depending on mock heuristics.\"</em> These are mocked responses and a mocked judge, so treat the absolute numbers as a worked example and the <b>structure</b> — three scorers, a threshold, a category breakdown, a baseline diff — as the part you carry to a real agent."
+      ],
+      "youDo": "Raise <code>overall &gt;= 0.6</code> to <code>0.8</code> in <code>eval_runner.py</code> and re-run: EC-001 flips to FAIL and the suite goes red on the case you already knew was weak.",
+      "source": "labs/M18-evaluation-testing/expected_output/eval_report.txt",
+      "terminal": [
+        { "kind": "prompt", "text": "python eval_runner.py   # second run, comparing to saved results" },
+        { "kind": "out", "text": "Running comparison against saved results...\n  Previous avg: 0.943\n  Current avg:  0.943\n  Change:       +0.000" },
+        { "kind": "out-pass", "text": "  No regressions detected.\n\n  Unchanged: 20 cases" },
+        { "kind": "gate", "text": "EC-001 is unchanged at 0.744 — and unchanged is what this gate is designed to approve." }
+      ],
+      "state": {
+        "label": "what each gate can and cannot catch",
+        "before": {
+          "title": "TWO GATES, TWO BLIND SPOTS",
+          "view": {
+            "type": "rows",
+            "columns": ["gate", "catches", "misses"],
+            "rows": [
+              { "cells": ["threshold 0.600", "an answer that collapses", "a case that was always mediocre"], "tone": "bad" },
+              { "cells": ["regression vs baseline", "any drop from last run", "anything already wrong in the baseline"], "tone": "bad" },
+              { "cells": ["per-scorer floor (add it)", "entity=0.50 on any case", "—"], "tone": "win" },
+              { "cells": ["per-category floor (add it)", "edge_case sagging to 0.846", "—"], "tone": "win" }
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

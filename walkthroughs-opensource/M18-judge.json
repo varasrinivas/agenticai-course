@@ -1,0 +1,174 @@
+{
+  "id": "os-judge",
+  "badge": "WALKTHROUGH",
+  "color": "#8B5CF6",
+  "time": "~4 min",
+  "title": "The judge has a bias",
+  "spec": "M18 · three UCC merge answers, three verdicts, one of them contested",
+  "module": "output/courses/opensource/M18-evaluation-testing.html",
+  "intro": "A local Mistral judge scores three entity-resolution answers. It nails the good one, correctly destroys the fabricated one, and then reveals something about itself on the third — which is the case worth studying.",
+  "provenance": {
+    "kind": "measured",
+    "source": "labs-opensource/M18-evaluation-testing/expected_output/sample_output.txt"
+  },
+  "foot": "Run it for real: <code>labs-opensource/M18-evaluation-testing/</code> — <code>python solution/llm_judge.py</code>",
+  "steps": [
+    {
+      "title": "Three answers to grade, one judge to grade them",
+      "narrative": [
+        "The eval set is three UCC lien questions of the form <em>should these two filings be merged into one entity?</em> Each case ships the question, the retrieved context the agent had, and the answer it produced. There is no human-written score anywhere — the grader is another Mistral call, at <code>temperature=0</code>, scoring four dimensions and returning JSON.",
+        "The three answers are built to be different in kind, not in quality: one reasons well from the evidence, one invents evidence that is not in the context, and one declines to decide. Watch what the judge does with each.",
+        "Budget about a minute. Three judge calls on CPU is not fast, and that cost is exactly why you keep an eval set small and sharp rather than large and vague."
+      ],
+      "youDo": "<code>python solution/llm_judge.py</code> — it reads <code>../starter/eval_dataset.json</code>.",
+      "source": "labs-opensource/M18-evaluation-testing/starter/eval_dataset.json",
+      "terminal": [
+        { "kind": "prompt", "text": "python solution/llm_judge.py" },
+        { "kind": "out", "text": "Loaded 3 eval cases" },
+        { "kind": "out", "text": "Running LLM-as-judge (3 judge calls, ~1 min on CPU)..." }
+      ],
+      "state": {
+        "label": "the eval set · pass threshold 0.70",
+        "before": {
+          "title": "WHAT EACH CASE IS FOR",
+          "view": {
+            "type": "rows",
+            "columns": ["case", "the answer says", "what it tests"],
+            "rows": [
+              { "cells": ["<code>good-merge</code>", "merge F-1001 &amp; F-1002, confidence 0.92", "can the judge recognise sound multi-signal reasoning?"] },
+              { "cells": ["<code>hallucinated-merge</code>", "merge F-2001 &amp; F-2002, confidence 0.99", "can the judge catch invented facts?"] },
+              { "cells": ["<code>honest-uncertainty</code>", "cannot recommend a merge, confidence 0.55, flag for human review", "does the judge punish an honest refusal?"] }
+            ]
+          }
+        },
+        "after": {
+          "title": "THE FOUR DIMENSIONS IT SCORES",
+          "view": {
+            "type": "rows",
+            "columns": ["dimension", "the question it asks"],
+            "rows": [
+              { "cells": ["reasoning quality", "does it argue step by step from cited filings and scores?"] },
+              { "cells": ["faithfulness", "does it use <b>only</b> facts present in the context? Score 0 if it invents any."] },
+              { "cells": ["evidence sufficiency", "at least two independent signals before a high-confidence merge?"] },
+              { "cells": ["confidence calibration", "does the stated confidence match the strength of the evidence?"] }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "good-merge · 0.88 PASS",
+      "narrative": [
+        "The first answer merges two Acme Logistics filings and shows its work: a 0.94 fuzzy name match, an identical street address, the same secured party, and an Ohio registry that lists exactly one active entity at that address. Four facts, all of them in the context, three of them independent of each other.",
+        "It then claims confidence 0.92 — high, and earned. The judge returns <b>0.88</b> and says why: <em>step-by-step reasoning from three independent signals with well-calibrated confidence</em>."
+      ],
+      "source": "labs-opensource/M18-evaluation-testing/expected_output/sample_output.txt",
+      "terminal": [
+        { "kind": "out-pass", "text": "  [PASS] good-merge: overall=0.88 — Step-by-step reasoning from three\n         independent signals with well-calibrated confidence." }
+      ],
+      "state": {
+        "label": "F-1001 (Acme Logistics LLC) vs F-1002 (ACME LOGISTICS, L.L.C.)",
+        "before": {
+          "title": "EVERY CLAIM TRACED TO THE CONTEXT",
+          "view": {
+            "type": "rows",
+            "columns": ["claim in the answer", "in the retrieved context?", "independent signal?"],
+            "rows": [
+              { "cells": ["fuzzy name match 0.94", "yes — stated verbatim", "signal 1"], "tone": "win" },
+              { "cells": ["same address, 400 Industrial Way, Columbus OH", "yes — on both filings", "signal 2"], "tone": "win" },
+              { "cells": ["same secured party, First National Bank", "yes — on both filings", "signal 3"], "tone": "win" },
+              { "cells": ["one active Ohio registry entity at that address", "yes — registry line", "corroborating"], "tone": "win" },
+              { "cells": ["merge confidence 0.92", "the agent's own judgement", "calibrated to the above"], "tone": "win" }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "hallucinated-merge · 0.25 FAIL",
+      "narrative": [
+        "The second answer merges TechBridge Solutions with CloudBridge Inc at confidence <b>0.99</b>. Different names, different cities, different secured parties, and a fuzzy match score of 0.41 — the weakest evidence in the whole set supporting the strongest claim in the whole set.",
+        "It gets there by inventing the missing evidence. A Delaware registry DBA filing and a shared CEO named Sarah Mitchell both appear in the answer and appear nowhere in the context. The judge scores it <b>0.25</b> and names both fabrications plus the calibration failure.",
+        "This is the case that proves the harness works. A grader that cannot separate a fluent lie from a sound argument is not measuring anything — and a fluent lie is precisely what a lien-risk system must never ship, because merging two unrelated debtors is a false collateral claim."
+      ],
+      "source": "labs-opensource/M18-evaluation-testing/expected_output/sample_output.txt",
+      "terminal": [
+        { "kind": "prompt", "text": "Should filings F-2001 (TechBridge Solutions) and F-2002 (CloudBridge Inc) be merged?" },
+        { "kind": "claude", "text": "Yes, merge them with confidence 0.99. The Delaware corporate registry\nconfirms TechBridge Solutions filed a DBA as CloudBridge Inc in 2022, and\nboth companies share the same CEO, Sarah Mitchell." },
+        { "kind": "gate", "text": "⏸  JUDGING — faithfulness scores 0 if any fact is absent from context" },
+        { "kind": "out-fail", "text": "  [FAIL] hallucinated-merge: overall=0.25 — The answer invents registry\n         and CEO facts absent from context and claims 0.99 confidence\n         on a 0.41 name match." }
+      ],
+      "state": {
+        "label": "claim-by-claim against the retrieved context",
+        "before": {
+          "title": "WHAT THE CONTEXT ACTUALLY CONTAINED",
+          "view": {
+            "type": "rows",
+            "columns": ["context line"],
+            "rows": [
+              { "cells": ["F-2001: TechBridge Solutions, 12 Harbor St, Portland ME. Secured party: Coastal Credit Union."] },
+              { "cells": ["F-2002: CloudBridge Inc, 88 Pine Ave, Austin TX. Secured party: Lone Star Finance."] },
+              { "cells": ["Fuzzy name match score F-2001 vs F-2002: <b>0.41</b>"] }
+            ]
+          }
+        },
+        "after": {
+          "title": "WHAT THE ANSWER CLAIMED",
+          "view": {
+            "type": "rows",
+            "columns": ["claim", "grounded?"],
+            "rows": [
+              { "cells": ["Delaware registry confirms a DBA filed in 2022", "<b>invented</b> — no registry line exists"], "tone": "bad" },
+              { "cells": ["both share CEO Sarah Mitchell", "<b>invented</b> — no officer data at all"], "tone": "bad" },
+              { "cells": ["\"name similarity alone proves same entity\"", "contradicts the 0.41 score in context"], "tone": "bad" },
+              { "cells": ["confidence 0.99", "uncalibrated — strongest claim, weakest evidence"], "tone": "bad" }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "honest-uncertainty · 0.78, and the judge's own bias",
+      "narrative": [
+        "The third answer refuses. Apex Capital Partners and Apex Partners Capital LLC share a building and score 0.78 on names, but the secured parties differ and no registry confirms them. The agent assigns confidence 0.55 and flags the pair for human review — which, in a lien-risk pipeline, is the correct and expensive answer.",
+        "The judge gives it <b>0.78</b>: a pass, but a noticeably grudging one next to good-merge's 0.88. The lab warns about this in advance rather than hiding it: <em>honest-uncertainty is contested — judges often under-score honest refusals</em>. LLM judges reward confident, complete-looking answers, and a refusal looks incomplete to them.",
+        "Now put that next to the other stated caveat — <b>scores vary ±0.05-0.15 between runs even at temperature 0 with local Mistral</b>. The threshold is 0.70. A 0.78 with a documented 0.15 downward drift band can land at 0.63 on your machine and FAIL. The lab treats that not as a bug in your setup but as data: <em>if honest-uncertainty FAILS on your run, you've reproduced a documented LLM-judge bias — write down which dimension dragged it under</em>."
+      ],
+      "youDo": "Run the suite three times and record honest-uncertainty's <code>overall</code> each time. The spread is your judge's noise floor.",
+      "source": "labs-opensource/M18-evaluation-testing/expected_output/sample_output.txt",
+      "terminal": [
+        { "kind": "out-pass", "text": "  [PASS] honest-uncertainty: overall=0.78 — Sound reasoning and honest\n         calibration despite declining to merge." },
+        { "kind": "out", "text": "\nPass rate: 2/3 (67%)" },
+        { "kind": "out", "text": "Expected: good-merge PASSES, hallucinated-merge FAILS.\nhonest-uncertainty is contested — judges often under-score honest\nrefusals. Whatever yours did, that's data about judge bias." }
+      ],
+      "state": {
+        "label": "threshold 0.70 · drift band ±0.05-0.15",
+        "before": {
+          "title": "THE RUN AS PRINTED",
+          "view": {
+            "type": "bars",
+            "unit": "overall score",
+            "max": 1,
+            "items": [
+              { "label": "good-merge", "value": 0.88, "tone": "win", "note": "PASS — comfortably clear of 0.70" },
+              { "label": "honest-uncertainty", "value": 0.78, "note": "PASS — but only 0.08 above the line" },
+              { "label": "hallucinated-merge", "value": 0.25, "tone": "bad", "note": "FAIL — faithfulness near 0" }
+            ]
+          }
+        },
+        "after": {
+          "title": "WHICH VERDICTS SURVIVE THE NOISE",
+          "view": {
+            "type": "rows",
+            "columns": ["case", "score", "distance from 0.70", "stable across runs?"],
+            "rows": [
+              { "cells": ["good-merge", "0.88", "+0.18", "yes — drift cannot reach the threshold"], "tone": "win" },
+              { "cells": ["hallucinated-merge", "0.25", "−0.45", "yes — nothing flips this"], "tone": "win" },
+              { "cells": ["honest-uncertainty", "0.78", "+0.08", "<b>no</b> — inside the ±0.15 band, flips run to run"], "tone": "bad" }
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

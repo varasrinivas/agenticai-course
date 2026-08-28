@@ -1,0 +1,194 @@
+{
+  "id": "os-react",
+  "badge": "WALKTHROUGH",
+  "color": "#06B6D4",
+  "time": "~4 min",
+  "title": "Thought, act, observe — on a 7B",
+  "spec": "M12 · a ReAct loop that exits on stop, and the question that needs no tool at all",
+  "module": "output/courses/opensource/M12-react-agent-loop.html",
+  "intro": "Two turns of visible reasoning, a second search shaped by the first result, and an exit through finish_reason rather than the safety cap. Then the harder test: a question that should produce no tool call at all.",
+  "provenance": {
+    "kind": "measured",
+    "source": "labs-opensource/M12-react-agent-loop/expected_output/sample_output.txt"
+  },
+  "foot": "Run it for real: <code>labs-opensource/M12-react-agent-loop/</code> — <code>python solution/react_agent.py</code>, then <code>labs-opensource/M05-function-calling/</code> for the no-tool case",
+  "steps": [
+    {
+      "title": "Turn 1 — the thought comes before the call",
+      "narrative": [
+        "ReAct is three moves in a loop: <b>reason</b> about what you know and what is missing, <b>act</b> by calling a tool, <b>observe</b> the result. The reasoning is not decoration — it is what makes the next tool call better than a guess, and it is what you read when the agent goes wrong.",
+        "On a hosted model you would get this for free. On Mistral-7B you have to demand it in the system prompt, in capitals: <em>before EVERY tool call, write Thought: [your reasoning]</em>. The thought then arrives as <code>msg.content</code> alongside the tool call, and the loop prints it before executing anything.",
+        "Turn 1 does exactly that: it states a two-part plan — landscape first, then the specific SDK — and issues the broad search."
+      ],
+      "youDo": "<code>python solution/react_agent.py</code> and watch for a <code>Thought:</code> line above every <code>[tool call]</code>.",
+      "source": "labs-opensource/M12-react-agent-loop/expected_output/sample_output.txt",
+      "terminal": [
+        { "kind": "prompt", "text": "What are the main Python frameworks for building AI agents in 2025, and how does the claude-agent-sdk compare to them?" },
+        { "kind": "out", "text": "--- Turn 1 ---" },
+        { "kind": "claude", "text": "Thought: I need current information about Python AI agent frameworks. I'll\nsearch for an overview first, then dig into the claude-agent-sdk specifically." },
+        { "kind": "tool", "text": "[tool call] web_search({\"query\": \"python ai frameworks 2025\"})" },
+        { "kind": "out", "text": "[observe]   Search results for 'python ai frameworks 2025': Top Python AI/Agent Frameworks 2025: 1. LangChain..." }
+      ],
+      "state": {
+        "label": "the loop's three moves · turn 1",
+        "before": {
+          "title": "WHERE EACH MOVE LIVES IN THE CODE",
+          "view": {
+            "type": "rows",
+            "columns": ["move", "in <code>run_agent()</code>", "printed as"],
+            "rows": [
+              { "cells": ["REASON", "<code>msg.content</code>, arriving with the tool call", "<code>Thought: ...</code>"], "tone": "win" },
+              { "cells": ["ACT", "<code>msg.tool_calls</code> appended to <code>messages</code>", "<code>[tool call] web_search(...)</code>"] },
+              { "cells": ["OBSERVE", "result appended as a <code>role: \"tool\"</code> message", "<code>[observe]   ...</code>"] }
+            ]
+          }
+        },
+        "after": {
+          "title": "THE LINE PEOPLE DELETE BY ACCIDENT",
+          "view": {
+            "type": "diff",
+            "file": "solution/react_agent.py",
+            "lines": [
+              ["p", "        messages.append({"],
+              ["p", "            \"role\": \"assistant\","],
+              ["a", "            \"content\": msg.content,      # keep the thought — it is history, not logging"],
+              ["p", "            \"tool_calls\": msg.tool_calls,"],
+              ["p", "        })"]
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "Turn 2 — the second query comes from the first answer",
+      "narrative": [
+        "This is the move that separates a ReAct loop from two searches in a row. Turn 2's thought explicitly references what turn 1 returned — <em>I now have the framework landscape</em> — and narrows to what is still missing, so the query becomes <code>\"claude agent sdk features\"</code> rather than another broad sweep.",
+        "Mechanically this works because the observation went back into <code>messages</code> as a tool-role entry. The model is not remembering; it is re-reading. Drop the observation from the history and the second query degenerates into a rephrasing of the first."
+      ],
+      "claudeSays": "It has the list of frameworks but not the comparison target's feature set, so it spends its second call on the half of the question it cannot yet answer.",
+      "source": "labs-opensource/M12-react-agent-loop/expected_output/sample_output.txt",
+      "terminal": [
+        { "kind": "out", "text": "--- Turn 2 ---" },
+        { "kind": "claude", "text": "Thought: I now have the framework landscape. The comparison requires details\nabout claude-agent-sdk's specific features." },
+        { "kind": "tool", "text": "[tool call] web_search({\"query\": \"claude agent sdk features\"})" },
+        { "kind": "out", "text": "[observe]   Search results for 'claude agent sdk features': claude-agent-sdk v1.2 Features..." }
+      ],
+      "state": {
+        "label": "messages[] after two turns",
+        "before": {
+          "title": "AFTER TURN 1",
+          "view": {
+            "type": "rows",
+            "columns": ["#", "role", "content"],
+            "rows": [
+              { "cells": ["1", "user", "the two-part question"] },
+              { "cells": ["2", "assistant", "Thought + <code>web_search(\"python ai frameworks 2025\")</code>"] },
+              { "cells": ["3", "tool", "framework list — LangChain, LlamaIndex, CrewAI, AutoGen…"], "new": true }
+            ]
+          }
+        },
+        "after": {
+          "title": "AFTER TURN 2",
+          "view": {
+            "type": "rows",
+            "columns": ["#", "role", "content"],
+            "rows": [
+              { "cells": ["1", "user", "the two-part question"] },
+              { "cells": ["2", "assistant", "Thought + <code>web_search(\"python ai frameworks 2025\")</code>"] },
+              { "cells": ["3", "tool", "framework list — LangChain, LlamaIndex, CrewAI, AutoGen…"] },
+              { "cells": ["4", "assistant", "Thought <em>derived from #3</em> + <code>web_search(\"claude agent sdk features\")</code>"], "tone": "win", "new": true },
+              { "cells": ["5", "tool", "claude-agent-sdk v1.2 features"], "new": true }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "Turn 3 — it stops because it is finished",
+      "narrative": [
+        "Turn 3 issues no tool call. <code>finish_reason</code> comes back as <code>\"stop\"</code>, the loop returns <code>msg.content</code>, and the report prints with all three required sections: Summary, Key Findings, Sources Used.",
+        "The distinction that matters is <em>which</em> exit fired. <code>max_turns=20</code> is a safety cap — a circuit breaker for a loop that has stopped making progress, not a completion signal. If your agent routinely exits at the cap, it is not finishing, it is being cut off, and the report you get is a partial result wearing a report's formatting.",
+        "Three turns is typical with the mock search backend. Turn count is not a pass criterion; exiting through <code>stop</code> is."
+      ],
+      "source": "labs-opensource/M12-react-agent-loop/expected_output/sample_output.txt",
+      "terminal": [
+        { "kind": "out", "text": "--- Turn 3 ---" },
+        { "kind": "out-pass", "text": "finish_reason == \"stop\"  →  return msg.content" },
+        { "kind": "claude", "text": "FINAL REPORT:\nSummary: The 2025 Python agent ecosystem is led by LangChain, LlamaIndex,\nCrewAI, AutoGen, and first-party SDKs like claude-agent-sdk...\n\nKey Findings:\n- LangChain has the broadest integrations; CrewAI leads multi-agent...\n- claude-agent-sdk offers @tool decorators, hooks, and native subagents...\n\nSources Used:\n- \"python ai frameworks 2025\"\n- \"claude agent sdk features\"" }
+      ],
+      "state": {
+        "label": "two ways out of a while loop",
+        "before": {
+          "title": "THE EXIT THAT FIRED",
+          "view": {
+            "type": "rows",
+            "columns": ["exit", "code path", "what it means", "this run"],
+            "rows": [
+              { "cells": ["<code>finish_reason == \"stop\"</code>", "<code>return msg.content</code>", "the model decided it has enough", "<b>fired at turn 3</b>"], "tone": "win" },
+              { "cells": ["<code>turn &gt;= max_turns</code>", "<code>return \"[Safety cap reached...]\"</code>", "the loop was cut off mid-work", "not reached"] }
+            ]
+          }
+        },
+        "after": {
+          "title": "WHAT TO ASSERT IN A TEST",
+          "view": {
+            "type": "note",
+            "text": "Pin the three things the lab pins: a <code>Thought:</code> line appears before every tool call, the loop exits via <code>stop</code> and not the cap, and the report contains all three sections. Do <b>not</b> pin the turn count or the query strings — a 7B will phrase <code>\"python ai frameworks 2025\"</code> six different ways across six runs and every one of them is correct."
+          }
+        }
+      }
+    },
+    {
+      "title": "The test that passes by doing nothing",
+      "narrative": [
+        "Give the same tool-equipped agent a question it does not need a tool for. From the M05 suite: <b>\"What's the capital of France?\"</b> The correct trace has <em>no</em> <code>[tool call]</code> line at all — <code>finish_reason</code> is <code>\"stop\"</code> on the very first pass and the answer comes straight back.",
+        "Every other case in that suite calls exactly one tool: <code>get_weather</code> for Tokyo, <code>calculate</code> for the arithmetic, <code>get_time</code> for London. The France case is there to check the opposite skill — knowing when <em>not</em> to reach for a tool. An agent that searches the web for the capital of France is burning a round trip on something already in its weights.",
+        "And here the track is candid where a hosted-model course would not be: <b>Mistral-7B occasionally calls a tool anyway</b>, or answers the arithmetic from memory instead of calling <code>calculate</code>. The lab's own advice is to re-run or sharpen the tool descriptions if routing seems off. Tool routing on a local 7B is a tendency, not a guarantee — so keep the tool set small, describe each one narrowly, and never let a correctness-critical path depend on the model choosing to call it."
+      ],
+      "youDo": "<code>python solution/tool_agent.py</code> in <code>labs-opensource/M05-function-calling/</code> and check the last case for the <em>absence</em> of tool-call lines.",
+      "source": "labs-opensource/M05-function-calling/expected_output/sample_output.txt",
+      "terminal": [
+        { "kind": "prompt", "text": "What's the capital of France?" },
+        { "kind": "claude", "text": "Agent: The capital of France is Paris." },
+        { "kind": "out-pass", "text": "✓ no [tool call] lines — finish_reason was \"stop\" on the first pass" },
+        { "kind": "gate", "text": "⏸  if you see a tool call here, routing drifted — re-run, then sharpen the descriptions" }
+      ],
+      "state": {
+        "label": "M05 suite · four questions, three tools",
+        "before": {
+          "title": "THE ROUTING TABLE THIS SUITE CHECKS",
+          "view": {
+            "type": "rows",
+            "columns": ["question", "expected", "observed"],
+            "rows": [
+              { "cells": ["What's the weather like in Tokyo?", "<code>get_weather({\"city\": \"Tokyo\"})</code>", "correct"], "tone": "win" },
+              { "cells": ["What is (15 * 7) + 23?", "<code>calculate(...)</code> → <code>{\"result\": 128}</code>", "correct"], "tone": "win" },
+              { "cells": ["What time is it in London?", "<code>get_time({\"timezone\": \"Europe/London\"})</code>", "correct"], "tone": "win" },
+              { "cells": ["What's the capital of France?", "<b>no tool call</b>", "correct — answered directly"], "tone": "win" }
+            ]
+          }
+        },
+        "after": {
+          "title": "THE HONEST CAVEAT THE LAB PRINTS",
+          "view": {
+            "type": "stack",
+            "views": [
+              {
+                "type": "note",
+                "text": "\"Mistral-7B occasionally calls a tool anyway or answers math from memory; re-run or sharpen the tool descriptions if routing seems off.\" — <code>M05-function-calling/expected_output/sample_output.txt</code>"
+              },
+              {
+                "type": "rows",
+                "columns": ["failure mode", "what it looks like", "mitigation"],
+                "rows": [
+                  { "cells": ["over-calling", "a <code>web_search</code> for the capital of France", "narrow the tool description; say what it is <em>not</em> for"], "tone": "bad" },
+                  { "cells": ["under-calling", "arithmetic answered from memory, sometimes wrong", "never trust unverified model arithmetic in a money path"], "tone": "bad" }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

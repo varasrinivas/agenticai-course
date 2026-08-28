@@ -1,0 +1,158 @@
+{
+  "id": "ca-hooks",
+  "module": "output/courses/claude-agents/M26-hooks-sessions-agent-sdk.html",
+  "badge": "WALKTHROUGH",
+  "color": "#D4A843",
+  "time": "~4 min",
+  "title": "Blocked at $750",
+  "spec": "M26 · the hook between the decision and the world",
+  "intro": "The model decides to issue a $750 refund. Twenty lines of ordinary Python decide it does not happen. Watch where in the turn that decision lands.",
+  "provenance": {
+    "kind": "measured",
+    "source": "labs/M26-hooks-sessions-agent-sdk/expected_output/support_agent_output.txt"
+  },
+  "foot": "Run it for real: <code>cd labs/M26-hooks-sessions-agent-sdk/solution &amp;&amp; python support_agent.py</code>",
+  "steps": [
+    {
+      "title": "The boring request first",
+      "narrative": [
+        "Before the interesting failure, the shape of a normal turn. A customer asks for a filing lookup; the agent calls <code>lookup_filing</code>, then <code>check_risk_profile</code>, then stops. Two tool calls, two audit entries, nothing blocked.",
+        "The hooks were running the whole time. A <b>PostToolUse</b> hook with matcher <code>\"*\"</code> fires after every single tool execution, whether or not anything is wrong. That is the point: the audit trail is not something the model chooses to write, it is something the runtime writes on the model's behalf."
+      ],
+      "youDo": "Run <code>python support_agent.py</code> and read Scenario 1 before you read Scenario 2.",
+      "source": "labs/M26-hooks-sessions-agent-sdk/expected_output/support_agent_output.txt",
+      "terminal": [
+        { "kind": "prompt", "text": "Look up filing UCC-2024-NY-0012847 and check for risk flags." },
+        { "kind": "out", "text": "  Session: session-CUST-100-1\n  Classified as: filing_lookup" },
+        { "kind": "tool", "text": "  [AgentLoop] Starting filing lookup (max 3 turns)" },
+        { "kind": "out", "text": "    Turn 1: lookup_filing -> Active\n    Turn 2: check_risk_profile -> LOW\n    Turn 3: end_turn -> response delivered" },
+        { "kind": "out-pass", "text": "  Status: completed" }
+      ],
+      "state": {
+        "label": "audit trail · after request #1",
+        "before": {
+          "title": "TWO CALLS, TWO ENTRIES",
+          "view": {
+            "type": "rows",
+            "columns": ["phase", "tool", "action"],
+            "rows": [
+              { "cells": ["PostToolUse", "lookup_filing", "LOGGED"] },
+              { "cells": ["PostToolUse", "check_risk_profile", "LOGGED"] }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "The model decides. The hook decides otherwise.",
+      "narrative": [
+        "Request #2 is a refund for $750. The agent classifies it, composes the call, and fills in <code>{\"amount\": 750.0}</code> — the decision is made, the arguments are formed, the tool is about to run.",
+        "It does not run. A <b>PreToolUse</b> hook matched on <code>issue_refund</code> executes first, compares the amount against 500, and returns <code>{\"allowed\": False, \"reason\": …}</code>. No model is involved in that comparison. It is an <code>if</code> statement.",
+        "Watch <em>where</em> this sits. The block happens after the model has decided and before the world changes. Prompt rules live before the decision and can be talked around; a hook lives after it and cannot."
+      ],
+      "claudeSays": "The refund tool never executed. The agent receives <code>{\"blocked\": true, \"reason\": …}</code> where it expected a refund receipt, and has to do something with that.",
+      "source": "labs/M26-hooks-sessions-agent-sdk/expected_output/support_agent_output.txt",
+      "terminal": [
+        { "kind": "prompt", "text": "I need a refund of $750 for duplicate filing charges." },
+        { "kind": "out", "text": "  Session: session-CUST-200-2\n  Classified as: refund" },
+        { "kind": "tool", "text": "  [AgentLoop] Processing refund of $750.00" },
+        { "kind": "gate", "text": "    Refund BLOCKED: Refund $750.00 exceeds $500 limit. Requires human approval." }
+      ],
+      "state": {
+        "label": "issue_refund · the call that was composed",
+        "before": {
+          "title": "BEFORE — what the model handed to the runtime",
+          "view": {
+            "type": "json",
+            "data": {
+              "tool": "issue_refund",
+              "amount": 750.0,
+              "reason": "Customer request"
+            },
+            "highlight": ["amount"]
+          }
+        },
+        "after": {
+          "title": "AFTER — what the runtime handed back",
+          "view": {
+            "type": "json",
+            "data": {
+              "blocked": "true",
+              "reason": "Refund $750.00 exceeds $500 limit. Requires human approval.",
+              "refund_id": "— never issued —"
+            },
+            "highlight": ["blocked"]
+          }
+        }
+      }
+    },
+    {
+      "title": "Recovery is escalation, not retry",
+      "narrative": [
+        "A blocked call is not the end of the turn. The agent reads the reason, treats it as a <b>policy gap</b> rather than a tool failure, and calls <code>escalate_to_human</code> with <code>priority=\"high\"</code>. That call is allowed, so it runs, and the PostToolUse hook logs it like everything else.",
+        "The customer gets a real answer with a real ticket number instead of a silent failure — and the audit trail now shows one BLOCKED sitting between three LOGGED entries. That row is the compliance artefact. It is what you show when someone asks whether the $500 limit held."
+      ],
+      "source": "labs/M26-hooks-sessions-agent-sdk/expected_output/support_agent_output.txt",
+      "terminal": [
+        { "kind": "tool", "text": "escalate_to_human(priority=\"high\", reason=\"Refund of $750.00 exceeds automated limit\")" },
+        { "kind": "claude", "text": "I apologize, but I cannot process a refund of $750.00 automatically.\nRefunds over $500 require human approval.\nI have escalated your request (ticket: ESC-2024-0891).\nExpected response time: 15 minutes." },
+        { "kind": "out-pass", "text": "  Status: escalated\n  Escalation ticket: ESC-2024-0891" },
+        { "kind": "out", "text": "  Hook audit trail entries: 4\n  Hooks blocked: 1" }
+      ],
+      "state": {
+        "label": "audit trail · end of run",
+        "before": {
+          "title": "BEFORE — after request #1",
+          "view": {
+            "type": "rows",
+            "columns": ["phase", "tool", "action"],
+            "rows": [
+              { "cells": ["PostToolUse", "lookup_filing", "LOGGED"] },
+              { "cells": ["PostToolUse", "check_risk_profile", "LOGGED"] }
+            ]
+          }
+        },
+        "after": {
+          "title": "AFTER — the refund attempt is on the record",
+          "view": {
+            "type": "rows",
+            "columns": ["phase", "tool", "action"],
+            "rows": [
+              { "cells": ["PostToolUse", "lookup_filing", "LOGGED"] },
+              { "cells": ["PostToolUse", "check_risk_profile", "LOGGED"] },
+              { "cells": ["PreToolUse", "issue_refund", "<b>BLOCKED</b>"], "tone": "bad", "new": true },
+              { "cells": ["PostToolUse", "escalate_to_human", "LOGGED"], "tone": "win", "new": true }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "Why not just write it in the prompt?",
+      "narrative": [
+        "You could. In fact this lab does both: <code>.claude/agents/refund-specialist.md</code> tells the subagent <em>\"Never call <code>issue_refund</code> for amounts &gt; $500 — the permission gate will deny it and waste a turn.\"</em> That instruction is worth having, because it usually stops the wasted turn.",
+        "But the prompt is a suggestion the model is free to misread; the hook is a comparison Python performs. The lab puts the honest framing next to each other: <b>prompts are probabilistic (~95%), hooks are deterministic (100%)</b>. Use prompts for tone and format, hooks for money, data access and compliance.",
+        "And keep the limits in view. A hook only sees calls that pass through the tool layer with a matching <code>matcher</code> — no matcher, no enforcement — and a blocked call still costs you a turn and tokens. It buys certainty, not efficiency."
+      ],
+      "youDo": "Change <code>amount</code> to 150.00 in Scenario 2 and re-run: the same hook, same code path, allows it and you get <code>REF-2024-0042</code>.",
+      "source": "labs/M26-hooks-sessions-agent-sdk/solution/.claude/agents/refund-specialist.md",
+      "state": {
+        "label": "where to put a rule",
+        "before": {
+          "title": "PICK THE MECHANISM BY WHAT FAILURE COSTS",
+          "view": {
+            "type": "rows",
+            "columns": ["rule", "put it in", "if it fails"],
+            "rows": [
+              { "cells": ["Tone, response format, personality", "prompt", "a slightly wrong-shaped answer"], "tone": "win" },
+              { "cells": ["\"Prefer escalation over a doomed call\"", "prompt", "one wasted turn"] },
+              { "cells": ["Refund ceiling of $500", "<b>PreToolUse hook</b>", "money leaves the company"], "tone": "bad" },
+              { "cells": ["No writes to <code>data/production</code>", "<b>PreToolUse hook</b>", "production data overwritten"], "tone": "bad" },
+              { "cells": ["Audit every tool call", "<b>PostToolUse hook</b>", "no record when asked"], "tone": "bad" }
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

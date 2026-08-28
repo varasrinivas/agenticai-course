@@ -1,0 +1,157 @@
+{
+  "id": "ca-react",
+  "module": "output/courses/claude-agents/M12-react-agent-loop.html",
+  "badge": "WALKTHROUGH",
+  "color": "#10B981",
+  "time": "~4 min",
+  "title": "Turn 2 needs turn 1",
+  "spec": "M12 · derive the next call, exit on a field",
+  "intro": "One question about Greenfield Logistics, two tool calls. The second call's arguments did not come from you — they came out of the first call's result. That derivation is the loop.",
+  "provenance": {
+    "kind": "measured",
+    "source": "labs/M12-react-agent-loop/expected_output/sample_output.txt"
+  },
+  "foot": "Run it for real: <code>cd labs/M12-react-agent-loop/solution &amp;&amp; python react_agent.py</code>",
+  "steps": [
+    {
+      "title": "Turn 1 — everything it has is your sentence",
+      "narrative": [
+        "You ask: <em>\"Find all UCC filings for Greenfield Logistics in New York.\"</em> No filing number, because you do not have one — finding it is the job.",
+        "Claude picks <code>search_filings</code> and fills both arguments straight out of your text: <code>debtor_name</code> from the company you named, <code>state</code> from the state you named. This first hop is the easy one; every argument is a transcription.",
+        "The response comes back with <code>stop_reason: \"tool_use\"</code>, which is the loop's instruction to run the tool and go round again — not to answer."
+      ],
+      "youDo": "Run <code>python react_agent.py</code> and read the <code>[ACT]</code> / <code>[INPUT]</code> pair before the observation scrolls past.",
+      "source": "labs/M12-react-agent-loop/expected_output/sample_output.txt",
+      "terminal": [
+        { "kind": "prompt", "text": "[QUERY] Find all UCC filings for Greenfield Logistics in New York" },
+        { "kind": "tool", "text": "[ACT]   Tool: search_filings" },
+        { "kind": "out", "text": "[INPUT] {\n  \"debtor_name\": \"Greenfield Logistics\",\n  \"state\": \"New York\"\n}" }
+      ],
+      "state": {
+        "label": "turn 1 · where each argument came from",
+        "before": {
+          "title": "TRANSCRIBED FROM YOUR SENTENCE",
+          "view": {
+            "type": "rows",
+            "columns": ["argument", "value", "source"],
+            "rows": [
+              { "cells": ["debtor_name", "Greenfield Logistics", "your words"] },
+              { "cells": ["state", "New York", "your words"] },
+              { "cells": ["<i>stop_reason</i>", "<code>tool_use</code>", "the API, not the text"], "tone": "win" }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "The observation carries the next call's arguments",
+      "narrative": [
+        "The tool returns a filing record. Buried in it is <code>\"filing_number\": \"UCC-2024-NY-0012847\"</code> — a string that appears nowhere in your question and nowhere in the system prompt.",
+        "On turn 2 Claude calls <code>get_filing_details</code> with exactly that string. It could not have guessed it, and you could not have supplied it. The argument was <b>derived from the observation</b>, which is the entire reason this is a loop and not a single call.",
+        "Toggle Before / After and compare the two <code>[INPUT]</code> blocks. Turn 1's arguments came from a human; turn 2's came from the world."
+      ],
+      "claudeSays": "The loop appends the assistant's tool_use block and the tool_result to <code>messages</code>, then calls the API again. Turn 2 is the same request shape as turn 1 — the only difference is that the transcript now contains an answer.",
+      "source": "labs/M12-react-agent-loop/expected_output/sample_output.txt",
+      "terminal": [
+        { "kind": "out", "text": "[OBSERVE] Tool result:\n[\n  {\n    \"filing_number\": \"UCC-2024-NY-0012847\",\n    \"debtor\": \"Greenfield Logistics LLC\",\n    \"secured_party\": \"Atlantic Capital Partners\",\n    \"state\": \"New York\",\n    \"status\": \"Active\",\n    \"type\": \"UCC-1\"\n  },\n  ...\n]" },
+        { "kind": "tool", "text": "[ACT]   Tool: get_filing_details" },
+        { "kind": "out-pass", "text": "[INPUT] {\n  \"filing_number\": \"UCC-2024-NY-0012847\"\n}" }
+      ],
+      "state": {
+        "label": "tool input · turn 1 vs turn 2",
+        "before": {
+          "title": "BEFORE — turn 1, arguments from you",
+          "view": {
+            "type": "json",
+            "data": {
+              "tool": "search_filings",
+              "debtor_name": "Greenfield Logistics",
+              "state": "New York"
+            }
+          }
+        },
+        "after": {
+          "title": "AFTER — turn 2, argument from the observation",
+          "view": {
+            "type": "json",
+            "data": {
+              "tool": "get_filing_details",
+              "filing_number": "UCC-2024-NY-0012847"
+            },
+            "highlight": ["filing_number"]
+          }
+        }
+      }
+    },
+    {
+      "title": "It stops on a field, not on the words \"I'm done\"",
+      "narrative": [
+        "Turn 3 comes back with <code>stop_reason: \"end_turn\"</code> and the loop returns the text. The exit condition in <code>react_agent.py</code> is one line — <code>if response.stop_reason != \"tool_use\":</code> — and it reads a protocol field, never the prose.",
+        "The anti-pattern the module wants dead is the alternative: scanning the response text for <code>\"I'm done\"</code> or <code>\"Here's your answer\"</code>. The lab states the reason plainly: <em>\"The model's text is non-deterministic. It might say 'done' mid-conversation or forget to say it when actually finished.\"</em>",
+        "Two failure modes, both bad: the agent halts halfway through a research task because it narrated a milestone, or it spins to <code>max_turns</code> because it finished politely without the magic phrase. <code>stop_reason</code> has neither problem."
+      ],
+      "source": "labs/M26-hooks-sessions-agent-sdk/expected_output/agent_loop_output.txt",
+      "terminal": [
+        { "kind": "out", "text": "--- Turn 1 ---\n  stop_reason: tool_use\n  -> Tool call: lookup_filing({\"filing_number\": \"UCC-2024-NY-0012847\"}...)" },
+        { "kind": "out", "text": "--- Turn 2 ---\n  stop_reason: tool_use\n  -> Tool call: check_risk_profile({\"entity_name\": \"Greenfield Logistics LLC\"}...)" },
+        { "kind": "out-pass", "text": "--- Turn 3 ---\n  stop_reason: end_turn\n  -> Task complete. Final response delivered." },
+        { "kind": "gate", "text": "stop_reason is the ONLY reliable termination signal." }
+      ],
+      "state": {
+        "label": "the exit condition",
+        "before": {
+          "title": "BEFORE — parsing text for a phrase",
+          "view": {
+            "type": "diff",
+            "file": "the anti-pattern",
+            "lines": [
+              ["m", "if \"I'm done\" in response.text or \"Here's your answer\" in response.text:"],
+              ["m", "    break"],
+              ["p", "# halts on a narrated milestone; runs forever on a polite finish"]
+            ]
+          }
+        },
+        "after": {
+          "title": "AFTER — checking stop_reason",
+          "view": {
+            "type": "diff",
+            "file": "solution/react_agent.py",
+            "lines": [
+              ["a", "if response.stop_reason == \"end_turn\":"],
+              ["a", "    break"],
+              ["a", "elif response.stop_reason == \"tool_use\":"],
+              ["a", "    execute_tools(response.tool_calls)"],
+              ["p", "# a field the API sets, not language the model chose"]
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "What the loop still does not give you",
+      "narrative": [
+        "The loop terminates correctly and derives its own arguments — and it is still four lines of control flow with no budget. <code>max_turns=10</code> is the only ceiling, and hitting it returns the string <em>\"Agent did not produce a final response within max turns\"</em>, which is a fallback, not a plan.",
+        "Note also what the lab tells you to verify. Not the wording — <em>\"Exact wording varies between runs since Claude generates natural language\"</em> — but the structure: tool calls happened, results were observed, the final answer cites specific filing numbers, and the run finished in 3-5 turns. Assert on the trace, never on the prose.",
+        "Every module after this one adds something the bare loop lacks: M13 plans before acting, M16 filters what enters, M18 grades what comes out, M26 puts a hook between the decision and the world. The loop is the skeleton, not the agent."
+      ],
+      "youDo": "Set <code>max_turns=1</code> and re-run query 2 — the risk query needs a search <em>and</em> a calculate, so it hits the ceiling and returns the fallback string.",
+      "source": "labs/M12-react-agent-loop/expected_output/sample_output.txt",
+      "state": {
+        "label": "three queries, same loop",
+        "before": {
+          "title": "MEASURED — the lab's three runs",
+          "view": {
+            "type": "rows",
+            "columns": ["query", "tools called, in order", "derived argument"],
+            "rows": [
+              { "cells": ["Greenfield Logistics, New York", "search_filings → get_filing_details", "<code>UCC-2024-NY-0012847</code>"], "tone": "win" },
+              { "cells": ["Risk profile for Nextera Holdings", "search_filings → calculate_risk", "risk_score 0.55 · MEDIUM"], "tone": "win" },
+              { "cells": ["Filings in Texas, and the collateral", "search_filings → get_filing_details", "<code>UCC-2023-TX-0187634</code>"], "tone": "win" },
+              { "cells": ["<b>verify this, not the wording</b>", "≥1 [ACT] and [OBSERVE] per query", "answer cites the filing number"] }
+            ]
+          }
+        }
+      }
+    }
+  ]
+}
