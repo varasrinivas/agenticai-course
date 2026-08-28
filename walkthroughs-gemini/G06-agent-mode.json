@@ -1,0 +1,217 @@
+{
+  "id": "gca-agent-mode",
+  "module": "output/courses/gemini-code-assist/G06-agent-mode-basics.html",
+  "section": "lab",
+  "badge": "WALKTHROUGH",
+  "color": "#6D28D9",
+  "time": "~5 min",
+  "title": "Five files, three gates",
+  "spec": "G06 · plan gate, diff gate, and your own terminal",
+  "intro": "Recipe tagging touches storage, the API, search and two test files. You do not write those five files — you approve them, one gate at a time, and one of the gates is where you catch a real bug.",
+  "provenance": {
+    "kind": "illustrative",
+    "source": "the Recipe Box app ships only inside the module HTML, not as project files; the ticket, GEMINI.md rules and the ordering bug in the diff are taken from the module, terminal output is reconstructed"
+  },
+  "foot": "Run it for real: the module's lab ships the full six-requirement ticket to paste into Agent mode.",
+  "steps": [
+    {
+      "title": "Clean tree first, then a ticket instead of a wish",
+      "narrative": [
+        "Two commands before you start an agent, every time: <code>git status</code> to prove the tree is clean, and <code>pytest tests/ -v</code> to record what green looked like beforehand. Without the first, <code>git diff</code> afterwards mixes your work with the agent's. Without the second, you cannot tell a test the agent broke from one that was already broken.",
+        "Then give it outcomes and constraints, not implementation. Six numbered requirements, one deliberate demand — <em>explain the tradeoff you chose in the plan</em> — because a JSON column and a join table are both defensible and you want to see whether it reasoned or defaulted. End with <code>Show me your plan before editing</code> until that is a habit."
+      ],
+      "youDo": "git status && pytest tests/ -v, then paste the six-requirement tagging ticket into Agent mode.",
+      "terminal": [
+        { "kind": "prompt", "text": "git status" },
+        { "kind": "out-pass", "text": "On branch main\nnothing to commit, working tree clean" },
+        { "kind": "prompt", "text": "pytest tests/ -v" },
+        { "kind": "out-pass", "text": "===== 18 passed in 1.92s =====" },
+        { "kind": "prompt", "text": "Add tagging support to Recipe Box:\n1. Recipes can have zero or more string tags. Store them in SQLite — your\n   choice of schema, but explain the tradeoff you chose in the plan.\n2. POST /recipes accepts an optional \"tags\" list; invalid tags → 400.\n3. GET /recipes?tag=vegan filters by tag.\n4. search_recipes gains an optional tags parameter (match = ALL given tags).\n5. Tags are normalized to lowercase on write.\n6. Update the pytest suite to cover all of this; everything must pass.\nFollow the GEMINI.md rules. Show me your plan before editing." }
+      ],
+      "state": {
+        "label": "the \"before\" truth",
+        "before": {
+          "title": "BEFORE — nothing touched, and you can prove it",
+          "view": {
+            "type": "rows",
+            "columns": ["file", "state", "role in this ticket"],
+            "rows": [
+              { "cells": ["<code>storage.py</code>", "unchanged", "schema + <code>add_recipe</code> / <code>list_recipes</code>"] },
+              { "cells": ["<code>app.py</code>", "unchanged", "<code>POST /recipes</code>, <code>GET /recipes</code>"] },
+              { "cells": ["<code>search.py</code>", "unchanged", "<code>search_recipes</code>"] },
+              { "cells": ["<code>tests/test_storage.py</code>", "unchanged", "12 of the 18 passing tests"] },
+              { "cells": ["<code>tests/test_api.py</code>", "unchanged", "6 of the 18 passing tests"] },
+              { "cells": ["<code>GEMINI.md</code>", "unchanged", "the contract the agent is held to — <b>not</b> a file it should edit"], "tone": "win" }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "Gate 1 — the plan, where corrections are cheapest",
+      "narrative": [
+        "The plan comes back with a join table, and with the justification you asked for: a <code>tags</code> table plus a <code>recipe_tags</code> link table, because <code>GET /recipes?tag=vegan</code> is a filter and filtering a JSON column means scanning every row.",
+        "It also plans to <code>DROP TABLE recipes</code> and recreate it. Your database has data in it. Say so, in one sentence, in plain language — this is the cheapest intervention in the whole session, because no code exists yet to unwind.",
+        "Toggle Before / After. The correction cost you a sentence. The same correction discovered after five files were written would have cost the generation, the review, the revert and the regeneration."
+      ],
+      "youDo": "Read the plan against four questions: right files only? schema choice justified? migration or drop? tests at the end?",
+      "terminal": [
+        { "kind": "claude", "text": "Plan — recipe tagging (5 files)\n  1. storage.py    add tags + recipe_tags tables; delete_tags/add_tags helpers\n  2. storage.py    recreate the recipes table with the new schema\n  3. app.py        accept \"tags\" on POST; add ?tag= filter to GET\n  4. search.py     optional tags param, AND-match semantics\n  5. tests/        new cases in test_storage.py and test_api.py\n  6. run pytest tests/ -v\n\nSchema tradeoff: join table over a JSON column. ?tag= is a filter, and\nfiltering a JSON column means a full scan; a link table gets an index." },
+        { "kind": "gate", "text": "Approve plan? (y / edit / cancel): edit" },
+        { "kind": "prompt", "text": "Step 2 is wrong — don't drop the recipes table, it has data. Migrate it: ALTER TABLE, or create-copy-swap inside one transaction." },
+        { "kind": "claude", "text": "Understood. Step 2 becomes: create the new tables, backfill nothing\n(existing recipes get zero tags), and leave the recipes table intact.\nNo DROP anywhere in the plan." },
+        { "kind": "gate", "text": "Approve plan? (y / edit / cancel): y" }
+      ],
+      "state": {
+        "label": "plan, before and after one sentence from you",
+        "before": {
+          "title": "BEFORE — the plan as drafted",
+          "view": {
+            "type": "spec",
+            "id": "plan · recipe tagging",
+            "status": "AWAITING APPROVAL",
+            "rows": [
+              ["files", "<code>storage.py</code>, <code>app.py</code>, <code>search.py</code>, 2 test files"],
+              ["schema", "join table — justified: <code>?tag=</code> is a filter, a JSON column means a full scan"],
+              ["step 2", "<b>DROP TABLE recipes</b> and recreate with the new schema"],
+              ["your data", "gone — the plan never mentions the existing rows"],
+              ["verification", "<code>pytest tests/ -v</code> as the last step"]
+            ]
+          }
+        },
+        "after": {
+          "title": "AFTER — one sentence of correction",
+          "view": {
+            "type": "spec",
+            "id": "plan · recipe tagging",
+            "status": "REVISED · APPROVED",
+            "rows": [
+              ["files", "unchanged — same five, nothing crept in"],
+              ["schema", "unchanged — the reasoning was sound"],
+              ["step 2", "create <code>tags</code> + <code>recipe_tags</code>; <b>no DROP</b>, <code>recipes</code> left intact"],
+              ["your data", "preserved; existing recipes simply have zero tags"],
+              ["cost of the fix", "one sentence, zero files written"]
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "Gate 2 — reject a diff, revert to the checkpoint",
+      "narrative": [
+        "The agent takes a checkpoint before editing and presents <code>storage.py</code> first. Read every hunk against three questions: is it <b>correct</b>, is it <b>in scope</b>, and is it <b>rule-compliant</b> against your <code>GEMINI.md</code>?",
+        "This one fails the first question. The comprehension lowercases every tag, and the validation that tags must be non-empty strings runs on the line <em>after</em> it. Feed it a tag of <code>42</code> and <code>.strip()</code> raises <code>AttributeError</code> before the validator ever sees it. Reject the hunk and say exactly that: validate first, then normalize.",
+        "Reverting to the checkpoint restores files. It does not undo the side effects of commands you approved — a package installed, a table created, a row deleted. That asymmetry is why the command gate deserves more scrutiny than the diff gate, even though the diff gate is where you spend more time."
+      ],
+      "youDo": "Reject the hunk with a specific reason: \"validation runs after the lowercase comprehension — reorder it\".",
+      "claudeSays": "It reverts to checkpoint cp-2, restores storage.py, and re-emits the hunk with the validation loop above the normalization.",
+      "terminal": [
+        { "kind": "tool", "text": "◇ checkpoint cp-2 taken (5 files snapshotted)" },
+        { "kind": "tool", "text": "diff  storage.py  · hunk 1 of 3" },
+        { "kind": "gate", "text": "Apply this hunk? (y / n / explain): n" },
+        { "kind": "prompt", "text": "Order bug: you strip().lower() every tag, then validate that they're non-empty strings. A non-string tag crashes on .strip() before the validator runs. Validate first, then normalize." },
+        { "kind": "tool", "text": "⟲ reverted to checkpoint cp-2 (1 file restored)" },
+        { "kind": "claude", "text": "You're right — the guard was dead code as written. Re-ordered: validate\nthe raw list, raise ValueError on anything non-string or empty, then\nnormalize. Re-presenting hunk 1." },
+        { "kind": "gate", "text": "Apply this hunk? (y / n / explain): y" }
+      ],
+      "state": {
+        "label": "storage.py · add_recipe",
+        "before": {
+          "title": "REJECTED — normalize, then validate",
+          "view": {
+            "type": "diff",
+            "file": "storage.py — hunk 1, first attempt",
+            "lines": [
+              ["p", "def add_recipe(recipe: dict) -> int:"],
+              ["m", "    tags = [t.strip().lower() for t in recipe.get(\"tags\", [])]"],
+              ["m", "    if any(not isinstance(t, str) or not t for t in recipe.get(\"tags\", [])):"],
+              ["m", "        raise ValueError(\"tags must be non-empty strings\")"],
+              ["p", "    try:"],
+              ["p", "        with sqlite3.connect(DB_PATH) as conn:"]
+            ]
+          }
+        },
+        "after": {
+          "title": "ACCEPTED — validate, then normalize",
+          "view": {
+            "type": "diff",
+            "file": "storage.py — hunk 1, re-emitted",
+            "lines": [
+              ["p", "def add_recipe(recipe: dict) -> int:"],
+              ["a", "    raw = recipe.get(\"tags\", []) or []"],
+              ["a", "    if not isinstance(raw, list):"],
+              ["a", "        raise ValueError(\"tags must be a list of non-empty strings\")"],
+              ["a", "    for t in raw:"],
+              ["a", "        if not isinstance(t, str) or not t.strip():"],
+              ["a", "            raise ValueError(\"tags must be non-empty strings\")"],
+              ["a", "    tags = [t.strip().lower() for t in raw]"],
+              ["p", "    try:"],
+              ["p", "        with sqlite3.connect(DB_PATH) as conn:"]
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "Gate 3 — green in your terminal, not in its transcript",
+      "narrative": [
+        "Four more diffs, four more approvals, and the agent asks to run <code>pytest</code>. Allow it — but expect a wrinkle. Two older tests assert the exact shape of a recipe dict and now see a <code>tags</code> key. Updating a test because the contract intentionally grew is legitimate. Weakening a test so a bug passes is not, and only you can tell those apart.",
+        "Then verify independently. <code>git diff --stat</code> tells you the footprint: five files, and only the five the ticket named. <code>pytest tests/ -v</code> in your own terminal tells you the result, which is a different claim from the agent reporting that it ran.",
+        "Toggle Before / After to see the applied-versus-pending ledger close. The commit message says what happened: agent-assisted, human-reviewed — because you corrected the plan, rejected a diff, and ran the tests yourself."
+      ],
+      "youDo": "git diff --stat, then pytest tests/ -v in your own terminal — before you commit anything.",
+      "terminal": [
+        { "kind": "gate", "text": "Run `pytest tests/ -v`? (y / n): y" },
+        { "kind": "out", "text": "24 passed in 2.38s" },
+        { "kind": "prompt", "text": "git diff --stat" },
+        { "kind": "out-pass", "text": " app.py                  | 21 +++++++++++--\n search.py               | 14 +++++++--\n storage.py              | 48 +++++++++++++++++++++++++---\n tests/test_api.py       | 33 ++++++++++++++++++++\n tests/test_storage.py   | 29 +++++++++++++++++\n 5 files changed, 138 insertions(+), 7 deletions(-)" },
+        { "kind": "prompt", "text": "pytest tests/ -v" },
+        { "kind": "out-pass", "text": "===== 24 passed in 2.41s =====" },
+        { "kind": "prompt", "text": "git commit -am \"Add recipe tagging (agent-assisted, human-reviewed)\"" }
+      ],
+      "state": {
+        "label": "applied vs pending",
+        "before": {
+          "title": "MID-SESSION — two applied, three pending",
+          "view": {
+            "type": "rows",
+            "columns": ["file", "state", "gate outcome"],
+            "rows": [
+              { "cells": ["<code>storage.py</code>", "applied", "hunk 1 rejected once, re-emitted, approved"], "tone": "win" },
+              { "cells": ["<code>app.py</code>", "applied", "approved as presented"], "tone": "win" },
+              { "cells": ["<code>search.py</code>", "pending", "diff not yet shown"] },
+              { "cells": ["<code>tests/test_storage.py</code>", "pending", "diff not yet shown"] },
+              { "cells": ["<code>tests/test_api.py</code>", "pending", "diff not yet shown"] }
+            ]
+          }
+        },
+        "after": {
+          "title": "END — five applied, verified by you",
+          "view": {
+            "type": "stack",
+            "views": [
+              {
+                "type": "rows",
+                "columns": ["file", "state", "gate outcome"],
+                "rows": [
+                  { "cells": ["<code>storage.py</code>", "applied", "1 rejection, then approved"], "tone": "win" },
+                  { "cells": ["<code>app.py</code>", "applied", "approved as presented"], "tone": "win" },
+                  { "cells": ["<code>search.py</code>", "applied", "approved as presented"], "tone": "win" },
+                  { "cells": ["<code>tests/test_storage.py</code>", "applied", "+4 cases"], "tone": "win", "new": true },
+                  { "cells": ["<code>tests/test_api.py</code>", "applied", "+2 cases, 2 existing assertions widened for the <code>tags</code> key"], "tone": "win", "new": true }
+                ]
+              },
+              {
+                "type": "tests",
+                "run": 24,
+                "failures": 0,
+                "big": "BUILD SUCCESS",
+                "note": "18 before, 24 after. Run from <b>your</b> terminal — the agent's own green is a report, not a verification."
+              }
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

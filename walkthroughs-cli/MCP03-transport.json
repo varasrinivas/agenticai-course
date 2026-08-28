@@ -1,0 +1,207 @@
+{
+  "id": "mcp-transport",
+  "badge": "WALKTHROUGH",
+  "color": "#06B6D4",
+  "time": "~4 min",
+  "title": "Two lines and a container",
+  "spec": "MCP03 · migrating one server from stdio to HTTP",
+  "intro": "The same three tools, the same file, the same behaviour. What changes is who can reach them: a subprocess only your machine can spawn becomes a URL your whole team can point at. Four steps, and only one of them touches server code.",
+  "provenance": {
+    "kind": "illustrative",
+    "source": "a narrated migration of MCP01's document_server.py using the code, Dockerfile and client config shipped in the MCP03 lab; terminal output is reconstructed"
+  },
+  "foot": "Run it for real: MCP03 Lab — steps 1–5, then <code>docker stop mcp-lab && docker rm mcp-lab</code>.",
+  "steps": [
+    {
+      "title": "Swap the transport",
+      "narrative": [
+        "Open <code>document_server.py</code> from MCP01. The tools do not move, the decorators do not change, the schemas Claude sees are identical. The only required edit is the last two lines.",
+        "<code>mcp.run()</code> with no arguments means stdio: read JSON-RPC frames on stdin, write them to stdout, and die when the parent process does. <code>transport=\"streamable-http\"</code> starts a real HTTP server instead — which is why <code>host</code> and <code>port</code> suddenly matter, and why they come from environment variables rather than being hardcoded.",
+        "<code>0.0.0.0</code> rather than <code>127.0.0.1</code> is not carelessness: inside a container, binding to loopback makes the server unreachable from the host even with <code>-p</code> published."
+      ],
+      "youDo": "Delete <code>mcp.run()</code>, add the <code>streamable-http</code> block, then <code>python document_server.py</code> and <code>curl http://localhost:8000/health</code>.",
+      "terminal": [
+        { "kind": "prompt", "text": "python document_server.py" },
+        { "kind": "out", "text": "INFO:     Started server process [41827]\nINFO:     Uvicorn running on http://0.0.0.0:8000 (Press CTRL+C to quit)" },
+        { "kind": "prompt", "text": "curl http://localhost:8000/health" },
+        { "kind": "out-pass", "text": "{\"status\":\"ok\",\"server\":\"document-server\",\"tools\":3}" }
+      ],
+      "state": {
+        "label": "document_server.py · last lines",
+        "before": {
+          "title": "BEFORE — stdio, spawned by the client",
+          "view": {
+            "type": "diff",
+            "file": "document_server.py",
+            "lines": [
+              ["p", "@mcp.tool()"],
+              ["p", "def save_note(title: str, content: str) -> dict:"],
+              ["p", "    ..."],
+              ["p", ""],
+              ["p", "if __name__ == \"__main__\":"],
+              ["p", "    mcp.run()"]
+            ]
+          }
+        },
+        "after": {
+          "title": "AFTER — HTTP, listening on a port",
+          "view": {
+            "type": "diff",
+            "file": "document_server.py",
+            "lines": [
+              ["p", "@mcp.tool()"],
+              ["p", "def save_note(title: str, content: str) -> dict:"],
+              ["p", "    ..."],
+              ["p", ""],
+              ["m", "if __name__ == \"__main__\":"],
+              ["m", "    mcp.run()"],
+              ["a", "import os"],
+              ["a", ""],
+              ["a", "if __name__ == \"__main__\":"],
+              ["a", "    mcp.run("],
+              ["a", "        transport=\"streamable-http\","],
+              ["a", "        host=os.getenv(\"MCP_HOST\", \"0.0.0.0\"),"],
+              ["a", "        port=int(os.getenv(\"MCP_PORT\", \"8000\")),"],
+              ["a", "    )"]
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "Put it in a container that can prove it's alive",
+      "narrative": [
+        "The Dockerfile is deliberately dull except for one line. <code>HEALTHCHECK</code> makes the container assert its own liveness by calling the endpoint you just curled — so <code>docker ps</code> reports <code>healthy</code> or <code>unhealthy</code> instead of the useless <code>Up 4 minutes</code> a crashed-inside process would also show.",
+        "The two <code>ENV</code> lines are what make the environment-variable defaults from step 1 pay off: the same image runs on port 8000 locally and on whatever port a platform hands you, with no rebuild.",
+        "<code>COPY requirements.txt</code> before <code>COPY document_server.py</code> is not stylistic either — it keeps the <code>pip install</code> layer cached across every server edit you make."
+      ],
+      "youDo": "<code>docker build -t mcp-lab .</code> then <code>docker run -d --name mcp-lab -p 8000:8000 mcp-lab && curl http://localhost:8000/health</code>.",
+      "terminal": [
+        { "kind": "prompt", "text": "docker build -t mcp-lab ." },
+        { "kind": "out", "text": "[+] Building 21.4s (10/10) FINISHED\n => [4/6] RUN pip install --no-cache-dir -r requirements.txt   17.8s\n => exporting to image" },
+        { "kind": "out-pass", "text": "Successfully tagged mcp-lab:latest   ·   187MB" },
+        { "kind": "prompt", "text": "docker run -d --name mcp-lab -p 8000:8000 mcp-lab && curl http://localhost:8000/health" },
+        { "kind": "out", "text": "a1b2c3d4e5f6...\n{\"status\":\"ok\",\"server\":\"document-server\",\"tools\":3}" },
+        { "kind": "prompt", "text": "docker ps --filter name=mcp-lab" },
+        { "kind": "out-pass", "text": "CONTAINER ID   IMAGE     STATUS                    PORTS\na1b2c3d4e5f6   mcp-lab   Up 34 seconds (healthy)   0.0.0.0:8000->8000/tcp" }
+      ],
+      "state": {
+        "label": "Dockerfile",
+        "before": {
+          "title": "THE IMAGE — the HEALTHCHECK is the line that matters",
+          "view": {
+            "type": "diff",
+            "file": "Dockerfile",
+            "lines": [
+              ["a", "FROM python:3.12-slim"],
+              ["a", "WORKDIR /app"],
+              ["a", "COPY requirements.txt ."],
+              ["a", "RUN pip install --no-cache-dir -r requirements.txt"],
+              ["a", "COPY document_server.py ."],
+              ["a", "EXPOSE 8000"],
+              ["a", "HEALTHCHECK CMD python -c \\"],
+              ["a", "  \"import urllib.request; urllib.request.urlopen('http://localhost:8000/health')\" \\"],
+              ["a", "  || exit 1"],
+              ["a", "ENV MCP_HOST=0.0.0.0"],
+              ["a", "ENV MCP_PORT=8000"],
+              ["a", "CMD [\"python\", \"document_server.py\"]"]
+            ]
+          }
+        },
+        "after": {
+          "title": "WHAT JUST BECAME POSSIBLE",
+          "view": {
+            "type": "note",
+            "text": "Under stdio there was nothing to health-check — the server only existed while a client held it open, so \"is it up?\" was not a question you could ask. An HTTP server has a lifetime of its own, which is the upgrade and also the new thing you have to babysit."
+          }
+        }
+      }
+    },
+    {
+      "title": "Flip the client config",
+      "narrative": [
+        "This is the whole migration from the client's side. The stdio block told the client <em>how to start a process</em>: an interpreter, a script path, and an environment for it. The HTTP block tells it <em>where to connect</em>: a URL.",
+        "Everything downstream is unchanged. The tool list, the schemas, the JSON-RPC method names, the way Claude decides to call <code>search_documents</code> — none of it knows which of these two blocks it came from.",
+        "Toggle <b>Before / After</b>. Notice what disappears: absolute paths, <code>PYTHONPATH</code>, and the requirement that every teammate have Python and your dependencies installed. Notice what appears: a hostname you now have to keep running."
+      ],
+      "youDo": "Edit <code>.claude/settings.json</code> in your project root and replace the <code>command</code>/<code>args</code> block with the <code>url</code> block.",
+      "terminal": [
+        { "kind": "prompt", "text": "claude" },
+        { "kind": "prompt", "text": "/mcp" },
+        { "kind": "out-pass", "text": "Connected MCP servers:\n  document-server (http://localhost:8000/sse)  ✓ connected\n    Tools: search_documents, calculate_similarity, save_note" },
+        { "kind": "prompt", "text": "Search my documents for anything about transport" },
+        { "kind": "tool", "text": "search_documents (document-server)  {\"query\": \"transport\", \"limit\": 5}" },
+        { "kind": "out", "text": "[{\"id\":\"transport-docs\",\"preview\":\"stdio is local; HTTP/SSE is for shared...\",\"score\":3}]" },
+        { "kind": "claude", "text": "I found one document about transport: the \"transport-docs\" entry explains\nthat stdio is for local use while HTTP/SSE enables shared, remote servers." }
+      ],
+      "state": {
+        "label": ".claude/settings.json",
+        "before": {
+          "title": "BEFORE — stdio: how to start a subprocess",
+          "view": {
+            "type": "json",
+            "data": {
+              "mcpServers": {
+                "document-server": {
+                  "command": "/usr/bin/python3",
+                  "args": ["/absolute/path/to/document_server.py"],
+                  "env": { "PYTHONPATH": "/absolute/path/to/your/project" }
+                }
+              }
+            },
+            "highlight": ["mcpServers"],
+            "note": "Every teammate needs this path to exist on their own disk, with the right interpreter and the right dependencies."
+          }
+        },
+        "after": {
+          "title": "AFTER — HTTP: where to connect",
+          "view": {
+            "type": "json",
+            "data": {
+              "mcpServers": {
+                "document-server": {
+                  "url": "http://localhost:8000/sse"
+                }
+              }
+            },
+            "highlight": ["mcpServers"],
+            "note": "No auth headers for a local-only dev server. In production this grows a <code>\"headers\": {\"Authorization\": \"Bearer ${MCP_TOKEN}\"}</code> block — which is the first bill HTTP hands you."
+          }
+        }
+      }
+    },
+    {
+      "title": "What the URL costs you",
+      "narrative": [
+        "The migration worked and the tools are identical — so it is tempting to read HTTP as the grown-up transport and stdio as the training-wheels one. It is not that clean.",
+        "stdio has no auth story because it does not need one: the client spawns the process, so trust is inherited from the OS. The moment you publish a port you own authentication, CORS, TLS, and the reverse-proxy trap this module spends a whole quiz question on — nginx buffers responses by default, which silently queues SSE events until you set <code>proxy_buffering off</code>. None of those failure modes existed an hour ago.",
+        "So pick on reach, not on sophistication. One developer, one machine, one server → stdio, and skip the container entirely. A server several people or several hosts must share → HTTP, and budget for the operational surface that comes with it."
+      ],
+      "state": {
+        "label": "stdio vs HTTP · the honest trade",
+        "before": {
+          "title": "WHAT CHANGED — and what it cost",
+          "view": {
+            "type": "rows",
+            "columns": ["concern", "stdio", "HTTP / SSE"],
+            "rows": [
+              { "cells": ["who can reach it", "the one process that spawned it", "anyone who can route to the URL"], "tone": "win" },
+              { "cells": ["tool schemas", "identical", "identical"] },
+              { "cells": ["setup per teammate", "clone, install Python, install deps", "paste a URL"], "tone": "win" },
+              { "cells": ["auth", "inherited from the OS — nothing to write", "yours to build: tokens, rotation, revocation"], "tone": "bad" },
+              { "cells": ["\"is it up?\"", "not a question — no lifetime of its own", "a health endpoint, a container, an on-call"], "tone": "bad" },
+              { "cells": ["new failure modes", "subprocess crash", "CORS, TLS, proxy buffering, cold starts"], "tone": "bad" }
+            ]
+          }
+        },
+        "after": {
+          "title": "WHAT TO TAKE FROM IT",
+          "view": {
+            "type": "note",
+            "text": "Two lines of Python and one config block is genuinely the whole code migration — the module is not overselling that. What it cannot make small is the operational surface on the other side. Move to HTTP when <b>sharing</b> is the requirement; staying on stdio is not a lesser answer when nobody else needs the server."
+          }
+        }
+      }
+    }
+  ]
+}

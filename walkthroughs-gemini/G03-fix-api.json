@@ -1,0 +1,172 @@
+{
+  "id": "gca-fix-api",
+  "module": "output/courses/gemini-code-assist/G03-chat-smart-commands.html",
+  "section": "lab",
+  "badge": "WALKTHROUGH",
+  "color": "#8B5CF6",
+  "time": "~5 min",
+  "title": "Two crashes, two fixes",
+  "spec": "G03 · /fix with evidence, twice",
+  "intro": "Recipe Box's web layer ships with three planted bugs. Two of them crash, and each crash hands you a different kind of evidence — a Flask startup assertion and a runtime KeyError. Feed each one back verbatim and watch what /fix does with it.",
+  "provenance": {
+    "kind": "illustrative",
+    "source": "the Recipe Box app ships only inside the module HTML, not as project files; the code, commands and error strings are taken from the module, terminal output is reconstructed"
+  },
+  "foot": "Run it for real: build <code>app.py</code> from the module's lab, then <code>python app.py</code>",
+  "steps": [
+    {
+      "title": "It doesn't even boot",
+      "narrative": [
+        "Paste the module's <code>app.py</code> into your <code>recipe-box</code> folder and run it. You never reach the server — Flask raises during registration, before the first request exists.",
+        "Read the assertion literally: <em>View function mapping is overwriting an existing endpoint function: get_recipes</em>. Flask is not complaining about the path. It is complaining that a second view function is claiming a rule already owned by <code>get_recipes</code>, because both decorators say <code>methods=[\"GET\"]</code> on <code>/recipes</code>.",
+        "This is the friendliest bug class there is: it fails at import time, deterministically, with the offending name in the message. Most bugs are not this generous."
+      ],
+      "youDo": "python app.py",
+      "terminal": [
+        { "kind": "prompt", "text": "pip install flask" },
+        { "kind": "prompt", "text": "python app.py" },
+        { "kind": "out", "text": "Traceback (most recent call last):\n  File \"app.py\", line 15, in <module>\n    @app.route(\"/recipes\", methods=[\"GET\"])\n  File \"flask/scaffold.py\", line 452, in decorator\n    self.add_url_rule(rule, endpoint, f, **options)" },
+        { "kind": "out-fail", "text": "AssertionError: View function mapping is overwriting an existing endpoint function: get_recipes" }
+      ],
+      "state": {
+        "label": "Flask's URL map at import time",
+        "before": {
+          "title": "TWO DECORATORS, ONE RULE",
+          "view": {
+            "type": "rows",
+            "columns": ["line", "decorator", "handler", "what Flask does with it"],
+            "rows": [
+              { "cells": ["10", "<code>@app.route(\"/recipes\", methods=[\"GET\"])</code>", "<code>get_recipes</code>", "registers rule <code>GET /recipes</code>"], "tone": "win" },
+              { "cells": ["15", "<code>@app.route(\"/recipes\", methods=[\"GET\"])</code>", "<code>create_recipe</code>", "same rule, different function → <b>AssertionError</b>"], "tone": "bad" },
+              { "cells": ["—", "<code>POST /recipes</code>", "nothing", "the endpoint you meant to write does not exist"], "tone": "bad" }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "/fix with the error pasted verbatim",
+      "narrative": [
+        "Select the whole file, open chat, and paste the assertion as-is after <code>/fix</code>. You are not describing the problem — you are handing over the exact string Flask produced, which contains the endpoint name, the failure mode and the phase it happened in.",
+        "Gemini reads the selection, finds the two identical route rules and changes the second to <code>methods=[\"POST\"]</code>. Apply it and the server starts on port 5001."
+      ],
+      "youDo": "Select all of app.py, then in chat: /fix AssertionError: View function mapping is overwriting an existing endpoint function: get_recipes",
+      "claudeSays": "It changes one list literal. It does not rename the function, reorder the routes, or refactor anything else — a narrow fix for a narrow diagnosis.",
+      "terminal": [
+        { "kind": "prompt", "text": "/fix AssertionError: View function mapping is overwriting an existing endpoint function: get_recipes" },
+        { "kind": "claude", "text": "Both routes declare methods=[\"GET\"] on \"/recipes\". Flask keys the URL map\nby rule + method, so the second decorator tries to overwrite the first.\ncreate_recipe should serve POST." },
+        { "kind": "prompt", "text": "python app.py" },
+        { "kind": "out-pass", "text": " * Serving Flask app 'app'\n * Debug mode: on\n * Running on http://127.0.0.1:5001\nPress CTRL+C to quit" }
+      ],
+      "state": {
+        "label": "app.py · route registration",
+        "before": {
+          "title": "THE PATCH — one method list",
+          "view": {
+            "type": "diff",
+            "file": "app.py",
+            "lines": [
+              ["p", "@app.route(\"/recipes\", methods=[\"GET\"])"],
+              ["p", "def get_recipes():"],
+              ["p", "    recipes = storage.list_recipes()"],
+              ["p", "    return jsonify(recipes)"],
+              ["p", ""],
+              ["m", "@app.route(\"/recipes\", methods=[\"GET\"])      # BUG 1"],
+              ["a", "@app.route(\"/recipes\", methods=[\"POST\"])"],
+              ["p", "def create_recipe():"],
+              ["p", "    data = request.get_json()"]
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "It boots, then it 500s",
+      "narrative": [
+        "With the server up, send a POST that a real client would eventually send: a body missing two of the three fields. The handler indexes <code>data[\"ingredients\"]</code> straight away, and a missing key in Python is not a validation error — it is a <code>KeyError</code>, which Flask turns into a 500.",
+        "A 500 here is a lie about whose fault it is. The client sent a bad request and got told the server broke. That distinction is the whole difference between 4xx and 5xx, and it is what your on-call rotation pages on."
+      ],
+      "youDo": "curl -X POST http://localhost:5001/recipes -H \"Content-Type: application/json\" -d \"{\\\"name\\\": \\\"Toast\\\"}\"",
+      "terminal": [
+        { "kind": "prompt", "text": "curl -X POST http://localhost:5001/recipes -H \"Content-Type: application/json\" -d \"{\\\"name\\\": \\\"Toast\\\"}\"" },
+        { "kind": "out-fail", "text": "HTTP/1.1 500 INTERNAL SERVER ERROR\n<!doctype html>\n<title>500 Internal Server Error</title>" },
+        { "kind": "out-fail", "text": "server log:\n  File \"app.py\", line 19, in create_recipe\n    \"ingredients\": data[\"ingredients\"],\n                   ~~~~^^^^^^^^^^^^^^^\nKeyError: 'ingredients'\n127.0.0.1 - - [24/Aug/2026 14:02:11] \"POST /recipes HTTP/1.1\" 500 -" }
+      ],
+      "state": {
+        "label": "the request vs the handler",
+        "before": {
+          "title": "WHAT THE HANDLER ASSUMED",
+          "view": {
+            "type": "rows",
+            "columns": ["field", "in the request body?", "handler line", "result"],
+            "rows": [
+              { "cells": ["<code>name</code>", "yes — <code>\"Toast\"</code>", "<code>data[\"name\"]</code>", "fine"], "tone": "win" },
+              { "cells": ["<code>ingredients</code>", "<b>no</b>", "<code>data[\"ingredients\"]</code>", "<code>KeyError</code> → 500"], "tone": "bad" },
+              { "cells": ["<code>minutes</code>", "<b>no</b>", "<code>data[\"minutes\"]</code>", "never reached"], "tone": "bad" }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "/fix with a described requirement",
+      "narrative": [
+        "This time there is no error string worth pasting — a <code>KeyError</code> tells you which key was absent, not what should happen instead. So the evidence you supply is a requirement: what it does now, and what it should do, including the status code and the content of the message.",
+        "Gemini returns a handler that calls <code>request.get_json(silent=True)</code> so a malformed body is <code>None</code> rather than another exception, collects the missing keys into a list, and returns a 400 naming them. Re-run the same curl: a clean 400, and the server log stays traceback-free.",
+        "One bug is still live and it never crashes. The successful creation path returns <code>200</code> where REST convention is <code>201 Created</code> — that one you find with <code>/explain</code> used as a convention checker, not with <code>/fix</code>, because nothing has gone wrong enough to complain."
+      ],
+      "youDo": "Select create_recipe, then: /fix this returns a 500 KeyError when fields are missing. It should validate the JSON body and return a 400 with a helpful message listing missing fields.",
+      "terminal": [
+        { "kind": "prompt", "text": "/fix this returns a 500 KeyError when fields are missing. It should validate\nthe JSON body and return a 400 with a helpful message listing missing fields." },
+        { "kind": "claude", "text": "Validating before indexing. get_json(silent=True) avoids a second exception\nclass for malformed JSON, and the missing-field list is built in one pass so\nthe client learns everything that's wrong in one round trip." },
+        { "kind": "prompt", "text": "curl -X POST http://localhost:5001/recipes -H \"Content-Type: application/json\" -d \"{\\\"name\\\": \\\"Toast\\\"}\"" },
+        { "kind": "out-pass", "text": "HTTP/1.1 400 BAD REQUEST\n{\"error\": \"missing required fields: ingredients, minutes\"}\n127.0.0.1 - - [24/Aug/2026 14:07:33] \"POST /recipes HTTP/1.1\" 400 -" },
+        { "kind": "prompt", "text": "/explain what HTTP status code should a successful resource creation return, and is this code following that convention?" },
+        { "kind": "claude", "text": "REST convention for a successful creation is 201 Created, not 200 OK.\nYour return is `jsonify({\"id\": new_id}), 200`. Third bug found — and\nnothing had to crash for it to surface." }
+      ],
+      "state": {
+        "label": "same curl, before and after the fix",
+        "before": {
+          "title": "THE PATCH — validate, then index",
+          "view": {
+            "type": "diff",
+            "file": "app.py",
+            "lines": [
+              ["p", "def create_recipe():"],
+              ["m", "    data = request.get_json()"],
+              ["m", "    recipe = {"],
+              ["m", "        \"name\": data[\"name\"],                # BUG 2"],
+              ["m", "        \"ingredients\": data[\"ingredients\"],"],
+              ["m", "        \"minutes\": data[\"minutes\"],"],
+              ["m", "    }"],
+              ["a", "    data = request.get_json(silent=True)"],
+              ["a", "    if not isinstance(data, dict):"],
+              ["a", "        return jsonify({\"error\": \"request body must be a JSON object\"}), 400"],
+              ["a", ""],
+              ["a", "    required = (\"name\", \"ingredients\", \"minutes\")"],
+              ["a", "    missing = [f for f in required if f not in data]"],
+              ["a", "    if missing:"],
+              ["a", "        return jsonify({\"error\": f\"missing required fields: {', '.join(missing)}\"}), 400"],
+              ["a", ""],
+              ["a", "    recipe = {k: data[k] for k in required}"],
+              ["p", "    new_id = storage.add_recipe(recipe)"],
+              ["p", "    return jsonify({\"id\": new_id}), 200      # BUG 3 — still there"]
+            ]
+          }
+        },
+        "after": {
+          "title": "THE RESULT — the same request, answered honestly",
+          "view": {
+            "type": "rows",
+            "columns": ["", "status", "response body", "server log"],
+            "rows": [
+              { "cells": ["before", "500 Internal Server Error", "HTML error page", "<code>KeyError: 'ingredients'</code> traceback"], "tone": "bad" },
+              { "cells": ["after", "400 Bad Request", "<code>{\"error\": \"missing required fields: ingredients, minutes\"}</code>", "one clean access-log line"], "tone": "win" },
+              { "cells": ["still wrong", "200 on success", "<code>{\"id\": 4}</code> — should be 201", "nothing logged, nothing crashed"], "tone": "bad" }
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,201 @@
+{
+  "id": "cc-hooks",
+  "badge": "WALKTHROUGH",
+  "color": "#A855F7",
+  "time": "~4 min",
+  "title": "The edit that got rejected",
+  "spec": "CC7 · a PostToolUse hook that exits 2",
+  "intro": "A formatter that asks nicely gets ignored. A formatter wired to a PostToolUse hook that exits 2 gets obeyed — because the edit does not land until it passes. Four steps through the PublicRecords API lab.",
+  "provenance": {
+    "kind": "illustrative",
+    "source": "a narrated session against the shipped labs/cc/PublicRecordsAPI project; commands and file paths are real, terminal output is reconstructed"
+  },
+  "foot": "Run it for real: <code>labs/cc/PublicRecordsAPI</code> — CC7 lab, steps 1–5.",
+  "steps": [
+    {
+      "title": "Wire the gate",
+      "narrative": [
+        "Two edits, both to files you already have. Spotless goes into <code>pom.xml</code> so <code>mvn spotless:check</code> has something to check against, and a <b>PostToolUse</b> hook goes into the <code>.claude/settings.json</code> you started in CC4 — merged in beside <code>permissions</code>, not replacing it.",
+        "Read the hook command carefully. It pulls <code>tool_input.file_path</code> off the tool call's JSON on stdin, and only runs Maven when that path ends in <code>.java</code>. Without the <code>case</code> guard you would pay a JVM start on every Markdown edit too."
+      ],
+      "youDo": "Add the <code>spotless-maven-plugin</code> block to <code>&lt;build&gt;&lt;plugins&gt;</code>, baseline the tree with <code>mvn spotless:apply</code>, then merge the <code>hooks</code> key into <code>.claude/settings.json</code>.",
+      "terminal": [
+        { "kind": "prompt", "text": "mvn spotless:apply && mvn spotless:check" },
+        { "kind": "out", "text": "[INFO] --- spotless:2.43.0:apply (default-cli) @ publicrecords-api ---\n[INFO] Spotless.Java is keeping 6 files clean" },
+        { "kind": "out-pass", "text": "[INFO] BUILD SUCCESS  ·  6 java files now at Google Java Format" },
+        { "kind": "prompt", "text": "/hooks" },
+        { "kind": "out", "text": "PostToolUse\n  Edit|Write   command   source: Project (.claude/settings.json)\n    FILE=$(jq -r '.tool_input.file_path'); case \"$FILE\" in *.java) …" }
+      ],
+      "state": {
+        "label": ".claude/settings.json",
+        "before": {
+          "title": "BEFORE — permissions only, nothing enforced",
+          "view": {
+            "type": "json",
+            "data": {
+              "permissions": {
+                "allow": ["Bash(mvn test:*)", "Bash(mvn spotless:apply:*)", "Edit(src/**)"],
+                "ask": ["Bash(git push:*)"]
+              }
+            }
+          }
+        },
+        "after": {
+          "title": "AFTER — a PostToolUse gate on every Java edit",
+          "view": {
+            "type": "json",
+            "data": {
+              "permissions": { "...": "unchanged, from CC4" },
+              "hooks": {
+                "PostToolUse": [
+                  {
+                    "matcher": "Edit|Write",
+                    "hooks": [
+                      {
+                        "type": "command",
+                        "command": "FILE=$(jq -r '.tool_input.file_path'); case \"$FILE\" in *.java) mvn -q spotless:check 1>&2 || exit 2 ;; esac"
+                      }
+                    ]
+                  }
+                ]
+              }
+            },
+            "highlight": ["hooks"],
+            "note": "Three knobs decide everything here: matcher (which tool calls), exit code (0 allow / 2 block), and 1>&2 (send Spotless's report to stderr, because stderr on exit 2 is what Claude gets to read)."
+          }
+        }
+      }
+    },
+    {
+      "title": "Ask for something badly formatted",
+      "narrative": [
+        "Now provoke it. The lab's prompt asks for a new endpoint and explicitly tells Claude not to worry about Google style — which is the point: you want to see the gate fire, not to see Claude behave.",
+        "Watch what actually trips Spotless. The indentation instruction is largely a red herring — Google Java Format is <em>also</em> two-space. What fails the check is everything else a hand-rolled block gets wrong: the brace on its own line, the trailing whitespace, the fully-qualified type that Google format would import and shorten."
+      ],
+      "youDo": "In FilingController.java, add a new endpoint GET /filings/count that returns the total count. Use 2-space indentation throughout (don't worry about Google style).",
+      "claudeSays": "Claude writes the method, the Edit tool call completes, and the hook fires on the way out — after the write, before Claude gets its turn back.",
+      "terminal": [
+        { "kind": "prompt", "text": "In FilingController.java, add a new endpoint\nGET /filings/count that returns the total count.\nUse 2-space indentation throughout (don't worry about Google style)." },
+        { "kind": "tool", "text": "Edit  src/main/java/com/publicrecords/api/filing/FilingController.java" },
+        { "kind": "tool", "text": "hook  PostToolUse:Edit  →  mvn -q spotless:check" },
+        { "kind": "out-fail", "text": "[ERROR] The following files had format violations:\n[ERROR]   src/main/java/com/publicrecords/api/filing/FilingController.java\n[ERROR]     @@ -24,4 +24,3 @@\n[ERROR]      ··@GetMapping(\"/count\")\n[ERROR]     -··public·java.util.Map<String,·Long>·count()\n[ERROR]     -··{\n[ERROR]     +··public·Map<String,·Long>·count()·{\n[ERROR] Run 'mvn spotless:apply' to fix these violations." },
+        { "kind": "out-fail", "text": "PostToolUse:Edit hook exited with code 2 — edit rejected" }
+      ],
+      "state": {
+        "label": "what Claude tried to write",
+        "before": {
+          "title": "REJECTED — the block Spotless refused",
+          "view": {
+            "type": "diff",
+            "file": "src/main/java/com/publicrecords/api/filing/FilingController.java",
+            "lines": [
+              ["p", "  @GetMapping(\"/{id}\")"],
+              ["p", "  public ResponseEntity<Filing> findById(@PathVariable Long id) {"],
+              ["p", "    return repository.findById(id).map(ResponseEntity::ok)"],
+              ["p", "        .orElse(ResponseEntity.notFound().build());"],
+              ["p", "  }"],
+              ["a", ""],
+              ["a", "  @GetMapping(\"/count\")"],
+              ["a", "  public java.util.Map<String, Long> count()"],
+              ["a", "  {"],
+              ["a", "    return java.util.Map.of(\"count\", repository.count());   "],
+              ["a", "  }"],
+              ["p", "}"]
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "Claude reads the stderr and fixes it",
+      "narrative": [
+        "This is the part that makes exit 2 different from a failing CI job. The hook's stderr — the whole Spotless diff, character-for-character — comes back to Claude as a system reminder. It is not told <em>\"that failed\"</em>; it is handed the exact hunk the formatter wants.",
+        "So the repair is mechanical rather than a guess. Claude adds the <code>java.util.Map</code> import, pulls the brace up onto the signature line, drops the trailing spaces, and re-issues the Edit. The hook fires again on the new write and this time exits 0.",
+        "Toggle <b>Before / After</b>: the only thing that changed between the rejected block and the accepted one is formatting. The behaviour was never in question."
+      ],
+      "claudeSays": "Re-issues Edit with the formatter's own output as the target, then re-runs the same check to confirm rather than assuming.",
+      "terminal": [
+        { "kind": "claude", "text": "The hook blocked that edit — Spotless wants the brace on the signature\nline and the type imported. Re-applying with the formatter's shape." },
+        { "kind": "tool", "text": "Edit  src/main/java/com/publicrecords/api/filing/FilingController.java" },
+        { "kind": "tool", "text": "hook  PostToolUse:Edit  →  mvn -q spotless:check" },
+        { "kind": "out-pass", "text": "[INFO] BUILD SUCCESS  ·  exit 0  ·  hook silent" },
+        { "kind": "prompt", "text": "mvn test" },
+        { "kind": "out-pass", "text": "[INFO] Tests run: 3, Failures: 0, Errors: 0, Skipped: 0" }
+      ],
+      "state": {
+        "label": "FilingController.java · rejected vs accepted",
+        "before": {
+          "title": "BEFORE — hand-rolled, exit 2",
+          "view": {
+            "type": "diff",
+            "file": "src/main/java/com/publicrecords/api/filing/FilingController.java",
+            "lines": [
+              ["a", "  @GetMapping(\"/count\")"],
+              ["a", "  public java.util.Map<String, Long> count()"],
+              ["a", "  {"],
+              ["a", "    return java.util.Map.of(\"count\", repository.count());   "],
+              ["a", "  }"]
+            ]
+          }
+        },
+        "after": {
+          "title": "AFTER — Google Java Format, exit 0",
+          "view": {
+            "type": "diff",
+            "file": "src/main/java/com/publicrecords/api/filing/FilingController.java",
+            "lines": [
+              ["a", "import java.util.Map;"],
+              ["p", ""],
+              ["m", "  public java.util.Map<String, Long> count()"],
+              ["m", "  {"],
+              ["m", "    return java.util.Map.of(\"count\", repository.count());   "],
+              ["a", "  @GetMapping(\"/count\")"],
+              ["a", "  public Map<String, Long> count() {"],
+              ["a", "    return Map.of(\"count\", repository.count());"],
+              ["p", "  }"]
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "The clean edit passes and you never see the hook",
+      "narrative": [
+        "Ask for a properly formatted change and the gate does nothing visible: Spotless passes, exit 0, no system reminder, Claude carries straight on. A hook you notice is a hook that caught something.",
+        "The honest cost is latency. Every <code>.java</code> edit now pays a cold Maven start — call it two to four seconds — and that is charged on clean edits too, where it buys nothing. If that becomes annoying before it becomes useful, the lab's stretch (<code>\"async\": true, \"asyncRewake\": true</code>) moves the check off the critical path and wakes Claude a few seconds later instead of blocking it.",
+        "Trade-off, not a free win: async means the bad edit is <em>already on disk</em> when the reminder arrives. Block synchronously when the formatter is the source of truth; go async when the wait is worse than the drift."
+      ],
+      "youDo": "Now add a JavaDoc to the new endpoint method, properly formatted.",
+      "terminal": [
+        { "kind": "prompt", "text": "Now add a JavaDoc to the new endpoint method, properly formatted." },
+        { "kind": "tool", "text": "Edit  src/main/java/com/publicrecords/api/filing/FilingController.java" },
+        { "kind": "tool", "text": "hook  PostToolUse:Edit  →  mvn -q spotless:check" },
+        { "kind": "out-pass", "text": "exit 0" },
+        { "kind": "claude", "text": "Added. Running the suite to confirm nothing regressed." }
+      ],
+      "state": {
+        "label": "three edits, one gate",
+        "before": {
+          "title": "THE AUDIT TRAIL — what the hook did on each turn",
+          "view": {
+            "type": "rows",
+            "columns": ["edit", "spotless", "hook exit", "outcome"],
+            "rows": [
+              { "cells": ["/filings/count, hand-formatted", "violations in 1 file", "2", "edit rejected, stderr fed back"], "tone": "bad" },
+              { "cells": ["same method, formatter's shape", "clean", "0", "landed silently"], "tone": "win" },
+              { "cells": ["JavaDoc on the method", "clean", "0", "landed silently"], "tone": "win" },
+              { "cells": ["README.md tweak", "not run — <code>case</code> guard skipped it", "0", "no JVM start paid"] }
+            ]
+          }
+        },
+        "after": {
+          "title": "WHAT TO TAKE FROM IT",
+          "view": {
+            "type": "note",
+            "text": "The hook is not smarter than the formatter — it is <b>less optional</b> than the formatter. A <code>CLAUDE.md</code> line saying \"please run Spotless\" is advice the model can drop under pressure; <code>exit 2</code> is a wall it cannot route around, and the stderr you send back on the way out is what turns the wall into a fix instead of a retry loop."
+          }
+        }
+      }
+    }
+  ]
+}

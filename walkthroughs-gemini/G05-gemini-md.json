@@ -1,0 +1,187 @@
+{
+  "id": "gca-gemini-md",
+  "module": "output/courses/gemini-code-assist/G05-context-gemini-md.html",
+  "section": "lab",
+  "badge": "WALKTHROUGH",
+  "color": "#7C3AED",
+  "time": "~5 min",
+  "title": "Same prompt, different answer",
+  "spec": "G05 · a controlled experiment on your own rules",
+  "intro": "One prompt, run twice, with GEMINI.md as the only variable. This is the only demo in the course where you can see a rules file working rather than take it on faith — so run it as an experiment, with a control.",
+  "provenance": {
+    "kind": "illustrative",
+    "source": "the Recipe Box app ships only inside the module HTML, not as project files; the prompts, rules file and .aiexclude contents are taken from the module, model output is reconstructed"
+  },
+  "foot": "Run it for real: the module's lab ships the exact prompt and the exact <code>GEMINI.md</code> to paste.",
+  "steps": [
+    {
+      "title": "The control run — ask before you have rules",
+      "narrative": [
+        "In chat, with no selection and no <code>GEMINI.md</code> in the project, ask for a delete endpoint. Save the answer into a scratch file. You need the control group in writing, because in five minutes you will be tempted to remember it as worse than it was.",
+        "What comes back works. It also invents four decisions that were yours to make: it opens <code>sqlite3</code> inside the route, it returns a bare dict with a 200, it never checks whether the id existed, and it has no type hints. None of that is wrong in general — it is only wrong <em>here</em>, and the model had no way to know that."
+      ],
+      "youDo": "In a chat with no selection: Add a DELETE /recipes/<id> endpoint to app.py — then paste the answer into a scratch file.",
+      "terminal": [
+        { "kind": "prompt", "text": "Add a DELETE /recipes/<id> endpoint to app.py" },
+        { "kind": "claude", "text": "Here's a DELETE route for app.py. It connects to the SQLite database\ndirectly and removes the row by id." }
+      ],
+      "state": {
+        "label": "baseline suggestion",
+        "before": {
+          "title": "BASELINE — every choice invented",
+          "view": {
+            "type": "diff",
+            "file": "app.py — suggestion with no GEMINI.md",
+            "lines": [
+              ["a", "@app.route(\"/recipes/<int:recipe_id>\", methods=[\"DELETE\"])"],
+              ["a", "def delete_recipe(recipe_id):"],
+              ["a", "    conn = sqlite3.connect(\"recipes.db\")"],
+              ["a", "    cur = conn.cursor()"],
+              ["a", "    cur.execute(\"DELETE FROM recipes WHERE id = ?\", (recipe_id,))"],
+              ["a", "    conn.commit()"],
+              ["a", "    conn.close()"],
+              ["a", "    return jsonify({\"deleted\": recipe_id}), 200"]
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "Write the rules down once",
+      "narrative": [
+        "Create <code>GEMINI.md</code> at the project root. Three kinds of content earn their place: <b>facts</b> (what this is, where things live), <b>rules</b> (how we do it here), and <b>prohibitions</b> (the never list). Facts stop wrong guesses; rules encode conventions; the never list guards the edges where a wrong guess is expensive.",
+        "Keep it under about 150 lines. This file rides along with every request, so a rambling rulebook dilutes its own signal — and pays for the dilution in tokens on every single prompt you send."
+      ],
+      "youDo": "Create GEMINI.md at the project root with the module's architecture, testing and never-do sections.",
+      "terminal": [
+        { "kind": "prompt", "text": "code GEMINI.md" },
+        { "kind": "out", "text": "# Recipe Box — Project Context\n\n## Architecture rules\n- Routes never touch sqlite3 directly. Add storage functions instead.\n- Every route validates input and returns JSON errors:\n  {\"error\": \"...\"} with a correct status (400 bad input, 404 missing).\n- Successful creation returns 201; successful deletion returns 204.\n- All storage functions wrap sqlite3.Error in StorageError.\n- Type hints on every function. Google-style docstrings on public ones.\n\n## Never do\n- Never use f-strings to build SQL (parameterized queries only).\n- Never return hashed/internal fields to clients.\n- Never add a dependency without flagging it explicitly." },
+        { "kind": "out-pass", "text": "GEMINI.md written · 34 lines" }
+      ],
+      "state": {
+        "label": "GEMINI.md · what each line is for",
+        "before": {
+          "title": "THE RULES, AND WHAT EACH ONE PREVENTS",
+          "view": {
+            "type": "rows",
+            "columns": ["rule", "kind", "what it prevents in the next answer"],
+            "rows": [
+              { "cells": ["all DB access goes through <code>storage.py</code>", "architecture", "inline <code>sqlite3.connect</code> in a route"] },
+              { "cells": ["JSON errors: 400 bad input, 404 missing", "convention", "silent success on a missing id"] },
+              { "cells": ["creation 201, deletion 204", "convention", "a 200 on every path"] },
+              { "cells": ["wrap <code>sqlite3.Error</code> in <code>StorageError</code>", "architecture", "driver exceptions leaking to the route layer"] },
+              { "cells": ["type hints + Google-style docstrings", "style", "an untyped, undocumented function"] },
+              { "cells": ["every new storage function gets tests", "testing", "you writing the tests it forgot"] },
+              { "cells": ["never build SQL with f-strings", "prohibition", "an injection you would have caught in review — maybe"], "tone": "win" }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "The experiment run — identical prompt, new chat",
+      "narrative": [
+        "Start a <b>new</b> chat. This matters: an existing conversation assembled its context before <code>GEMINI.md</code> existed, and if you reuse it you are not running an experiment, you are running a different prompt. Then paste the same sentence, character for character.",
+        "Toggle Before / After. Five differences, each one a correction you would otherwise have made by hand: the route calls a new <code>storage.delete_recipe</code> instead of opening a connection, a missing id returns 404 with a JSON body, success returns 204, the signature is typed, and there is a docstring. It also volunteers a pytest test, because the rules ask for one.",
+        "Be honest about what this proves. Rules bias the output strongly; they do not guarantee it. A rule can still be ignored, especially in a long conversation where it has drifted far up the context. The file changes the odds — review is still yours."
+      ],
+      "youDo": "Open a new chat and paste the identical prompt: Add a DELETE /recipes/<id> endpoint to app.py",
+      "claudeSays": "It writes two files instead of one: the route in app.py, and the storage function the rules say the route must go through.",
+      "terminal": [
+        { "kind": "prompt", "text": "Add a DELETE /recipes/<id> endpoint to app.py" },
+        { "kind": "claude", "text": "Per GEMINI.md, routes don't touch sqlite3 directly — so this adds\nstorage.delete_recipe(recipe_id) -> bool and has the route call it.\nMissing id → 404 JSON error; success → 204. I've also drafted a pytest\ncase using the temp-DB fixture, since the testing rules require one." }
+      ],
+      "state": {
+        "label": "the only variable is GEMINI.md",
+        "before": {
+          "title": "BEFORE — no rules file",
+          "view": {
+            "type": "diff",
+            "file": "app.py — suggestion with no GEMINI.md",
+            "lines": [
+              ["a", "@app.route(\"/recipes/<int:recipe_id>\", methods=[\"DELETE\"])"],
+              ["a", "def delete_recipe(recipe_id):"],
+              ["a", "    conn = sqlite3.connect(\"recipes.db\")"],
+              ["a", "    cur = conn.cursor()"],
+              ["a", "    cur.execute(\"DELETE FROM recipes WHERE id = ?\", (recipe_id,))"],
+              ["a", "    conn.commit()"],
+              ["a", "    conn.close()"],
+              ["a", "    return jsonify({\"deleted\": recipe_id}), 200"]
+            ]
+          }
+        },
+        "after": {
+          "title": "AFTER — same prompt, rules present",
+          "view": {
+            "type": "diff",
+            "file": "app.py + storage.py — suggestion with GEMINI.md",
+            "lines": [
+              ["p", "# storage.py"],
+              ["a", "def delete_recipe(recipe_id: int) -> bool:"],
+              ["a", "    \"\"\"Delete a recipe by id. Returns True if a row was removed.\"\"\""],
+              ["a", "    try:"],
+              ["a", "        with sqlite3.connect(DB_PATH) as conn:"],
+              ["a", "            cur = conn.execute(\"DELETE FROM recipes WHERE id = ?\", (recipe_id,))"],
+              ["a", "            return cur.rowcount > 0"],
+              ["a", "    except sqlite3.Error as exc:"],
+              ["a", "        raise StorageError(\"failed to delete recipe\") from exc"],
+              ["p", ""],
+              ["p", "# app.py"],
+              ["a", "@app.route(\"/recipes/<int:recipe_id>\", methods=[\"DELETE\"])"],
+              ["a", "def delete_recipe(recipe_id: int):"],
+              ["a", "    \"\"\"Delete a recipe. Returns 204 on success, 404 if it does not exist.\"\"\""],
+              ["a", "    if not storage.delete_recipe(recipe_id):"],
+              ["a", "        return jsonify({\"error\": f\"recipe {recipe_id} not found\"}), 404"],
+              ["a", "    return \"\", 204"]
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": ".aiexclude — the file it cannot read",
+      "narrative": [
+        "Rules shape what comes out. <code>.aiexclude</code> controls what goes in. Create it at the project root listing <code>.env</code>, <code>*.pem</code> and <code>recipes.db</code>, then plant a decoy: a <code>.env</code> containing <code>FAKE_API_KEY=test-12345-not-real</code>.",
+        "In a fresh chat, ask what environment variables the project uses. The honest answer comes from <code>os.getenv</code> calls in your code — and your fake key is not in it, because the file never entered the prompt. If it <em>is</em> named, check the file is at the project root, check the spelling, reload the window and retry in a new chat.",
+        "Know the boundary. <code>.aiexclude</code> stops files being <em>retrieved</em> into context. It does not stop you pasting a secret into the chat box yourself, and it is not a scanner — a key hard-coded in <code>app.py</code> is still fair game for retrieval. It also does nothing about <code>.gitignore</code>; those two files answer different questions, which is why a checked-in credentials fixture needs the aiexclude entry specifically."
+      ],
+      "youDo": "Create .aiexclude with .env, *.pem and recipes.db, then in a NEW chat ask: What environment variables does this project use?",
+      "terminal": [
+        { "kind": "prompt", "text": "What environment variables does this project use?" },
+        { "kind": "claude", "text": "From the code I can see: FLASK_ENV and RECIPE_DB_PATH, both read via\nos.getenv in app.py. I don't have access to a .env file in this\nworkspace, so I can't tell you what values are set locally." },
+        { "kind": "prompt", "text": "git add GEMINI.md .aiexclude app.py storage.py search.py tests/" },
+        { "kind": "prompt", "text": "git commit -m \"Recipe Box with AI context rules and exclusions\"" },
+        { "kind": "out-pass", "text": "[main 4c1e9a2] Recipe Box with AI context rules and exclusions\n 7 files changed, 214 insertions(+)" }
+      ],
+      "state": {
+        "label": "what the model can retrieve",
+        "before": {
+          "title": "BEFORE — no .aiexclude",
+          "view": {
+            "type": "rows",
+            "columns": ["file", "retrievable into a prompt?", "consequence"],
+            "rows": [
+              { "cells": ["<code>app.py</code>, <code>storage.py</code>", "yes", "what you want — this is the point"], "tone": "win" },
+              { "cells": ["<code>.env</code>", "yes", "<code>FAKE_API_KEY=test-12345-not-real</code> can be quoted back at you"], "tone": "bad" },
+              { "cells": ["<code>recipes.db</code>", "yes", "real rows leave the machine as prompt text"], "tone": "bad" },
+              { "cells": ["<code>*.pem</code>", "yes", "private keys as context"], "tone": "bad" }
+            ]
+          }
+        },
+        "after": {
+          "title": "AFTER — .aiexclude at the project root",
+          "view": {
+            "type": "rows",
+            "columns": ["file", "retrievable into a prompt?", "consequence"],
+            "rows": [
+              { "cells": ["<code>app.py</code>, <code>storage.py</code>", "yes", "unchanged — code is still fully in scope"], "tone": "win" },
+              { "cells": ["<code>.env</code>", "no", "the decoy key cannot be named, because it was never read"], "tone": "win" },
+              { "cells": ["<code>recipes.db</code>", "no", "answers now come from schema in code, not from rows"], "tone": "win" },
+              { "cells": ["a secret hard-coded in <code>app.py</code>", "<b>yes</b>", "aiexclude filters files, not content — that one is still on you"], "tone": "bad" }
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,191 @@
+{
+  "id": "gc-plan-mode",
+  "module": "output/courses/gemini-cli/M04-plan-mode.html",
+  "section": "first-plan",
+  "badge": "WALKTHROUGH",
+  "color": "#1A73E8",
+  "time": "~4 min",
+  "title": "The pause before the edit",
+  "spec": "M04 · plan, inspect, edit, then approve",
+  "intro": "Adding one query parameter to TaskFlow's task list. Plan Mode splits that into a read phase you can argue with and a write phase you authorise — and the arguing costs ten seconds.",
+  "provenance": {
+    "kind": "illustrative",
+    "source": "a narrated session against the shipped sample-project/taskflow; file paths, commands and the failure transcript are taken from the module, terminal output is reconstructed"
+  },
+  "foot": "Run it for real: <code>cd sample-project/taskflow &amp;&amp; gemini --plan \"…\"</code>",
+  "steps": [
+    {
+      "title": "Ask with --plan, and nothing is written",
+      "narrative": [
+        "You want <code>GET /tasks/</code> to accept a <code>completed_after</code> parameter. Today <code>routers/tasks.py</code> filters on <code>completed</code>, <code>priority</code> and <code>tag</code> — dates are not in the list.",
+        "<code>gemini --plan</code> runs Phase 1 only: it reads, it reasons, it emits a numbered plan. Three files are opened. Zero bytes are written. That gap is the entire feature."
+      ],
+      "youDo": "cd sample-project/taskflow, then run gemini --plan with the change you want, referencing @routers/tasks.py.",
+      "terminal": [
+        { "kind": "prompt", "text": "cd sample-project/taskflow" },
+        { "kind": "prompt", "text": "gemini --plan \"Add a completed_after query param (Optional[datetime]) to GET /tasks/ in @routers/tasks.py. Return only tasks where created_at >= completed_after when the param is provided.\"" },
+        { "kind": "tool", "text": "read  routers/tasks.py   (106 lines)" },
+        { "kind": "tool", "text": "read  schemas.py         (48 lines)" },
+        { "kind": "tool", "text": "read  models.py          (41 lines)" },
+        { "kind": "claude", "text": "Phase 1 complete. 3 files read, 0 files modified.\nDrafting a plan." }
+      ],
+      "state": {
+        "label": "phase 1 · read only",
+        "before": {
+          "title": "AFTER THREE FILE READS — the disk is untouched",
+          "view": {
+            "type": "rows",
+            "columns": ["file", "phase 1 action", "why it was opened", "bytes written"],
+            "rows": [
+              { "cells": ["<code>routers/tasks.py</code>", "READ", "the <code>list_tasks</code> signature and existing filter chain", "0"] },
+              { "cells": ["<code>schemas.py</code>", "READ", "does the <code>Task</code> response already expose <code>created_at</code>?", "0"] },
+              { "cells": ["<code>models.py</code>", "READ", "is <code>Task.created_at</code> a <code>DateTime</code> that supports <code>&gt;=</code>?", "0"] }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "Read the plan the way you read a pull request",
+      "narrative": [
+        "Five steps, three reads and two writes, and one of the writes cancels itself: step 5 says <code>schemas.py</code> needs no change because <code>created_at</code> is already on the response model. Gemini worked that out during Phase 1 and left the reasoning in the plan rather than quietly dropping it.",
+        "Check three things before you touch the keyboard. Is every file you expect in WRITE? Is anything in WRITE that you did not ask for — <code>main.py</code>, <code>auth.py</code>? Are there EXEC steps, and do you know exactly what would run? Here there are none, which is the answer you want for a filter change."
+      ],
+      "claudeSays": "The plan is text. It has changed nothing and it commits you to nothing until you answer the prompt at the bottom.",
+      "terminal": [
+        { "kind": "out", "text": "⚙  Gemini Plan — Add completed_after filter to GET /tasks/\n\n  1. READ   routers/tasks.py   understand list_tasks and the current filter pattern\n  2. READ   schemas.py         verify Task response includes created_at\n  3. READ   models.py          confirm Task.created_at is DateTime\n  4. WRITE  routers/tasks.py   add completed_after: Optional[datetime] = Query(None)\n                               and .filter(Task.created_at >= completed_after)\n  5. WRITE  schemas.py         no change needed — created_at already present (skipping)\n\n  2 files to modify | 3 files to read | 0 shell commands" },
+        { "kind": "gate", "text": "Approve? (y/n/edit): " }
+      ],
+      "state": {
+        "label": "the plan card",
+        "before": {
+          "title": "PLAN — waiting on you",
+          "view": {
+            "type": "spec",
+            "id": "plan · completed_after filter",
+            "status": "AWAITING APPROVAL",
+            "rows": [
+              ["scope", "1 endpoint · <code>GET /tasks/</code>"],
+              ["reads", "<code>routers/tasks.py</code>, <code>schemas.py</code>, <code>models.py</code>"],
+              ["writes", "<code>routers/tasks.py</code> (step 4) — step 5 self-cancelled"],
+              ["shell commands", "<b>none</b> — no EXEC step to scrutinise"],
+              ["step 4 as written", "<code>Add completed_after: Optional[datetime] = Query(None) and .filter(Task.created_at &gt;= completed_after) to list_tasks()</code>"],
+              ["what is missing", "no null check, no <code>datetime</code> import, no <code>Query</code> description"]
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "Edit one step instead of rejecting the plan",
+      "narrative": [
+        "Step 4 is directionally right and mechanically thin. As written it never says what happens when the parameter is absent, it does not mention the <code>from datetime import datetime</code> the annotation needs, and it leaves the parameter undocumented in the OpenAPI page at <code>/docs</code>.",
+        "Answer <code>e</code>, pick step 4, and replace it. This costs about ten seconds. Answering <code>n</code> and re-prompting regenerates the whole plan and re-reads all three files to fix one sentence.",
+        "The gotcha: edited steps are not validated. If your replacement contradicts another step, Gemini executes your text literally — so re-read the whole plan after editing, not just the line you touched."
+      ],
+      "youDo": "Answer e at the gate, choose step 4, and paste a tighter version of it.",
+      "terminal": [
+        { "kind": "gate", "text": "Approve? (y/n/edit): e" },
+        { "kind": "prompt", "text": "4" },
+        { "kind": "out", "text": "Current step 4:\n  Add completed_after: Optional[datetime] = Query(None) and\n  .filter(Task.created_at >= completed_after) to list_tasks()\n\nYour edit (press Enter to keep current, or type replacement):" },
+        { "kind": "prompt", "text": "Add completed_after: Optional[datetime] = Query(None, description=\"Filter tasks created after this datetime (UTC ISO-8601)\"). Guard it: if completed_after: query = query.filter(Task.created_at >= completed_after). Add the import: from datetime import datetime" },
+        { "kind": "out", "text": "Updated plan." },
+        { "kind": "gate", "text": "Re-run approval? (y/n/edit): " }
+      ],
+      "state": {
+        "label": "step 4, before and after your edit",
+        "before": {
+          "title": "BEFORE — the plan Gemini drafted",
+          "view": {
+            "type": "spec",
+            "id": "plan · step 4",
+            "status": "AWAITING APPROVAL",
+            "rows": [
+              ["parameter", "<code>completed_after: Optional[datetime] = Query(None)</code>"],
+              ["filter", "<code>.filter(Task.created_at &gt;= completed_after)</code> — applied unconditionally"],
+              ["import", "not mentioned"],
+              ["/docs description", "none"],
+              ["risk", "with the param absent, <code>completed_after</code> is <code>None</code> and the comparison filters everything out"]
+            ]
+          }
+        },
+        "after": {
+          "title": "AFTER — one step rewritten, plan re-presented",
+          "view": {
+            "type": "spec",
+            "id": "plan · step 4",
+            "status": "EDITED · AWAITING APPROVAL",
+            "rows": [
+              ["parameter", "<code>Query(None, description=\"Filter tasks created after this datetime (UTC ISO-8601)\")</code>"],
+              ["filter", "<code>if completed_after:</code> guard, then <code>.filter(...)</code>"],
+              ["import", "<code>from datetime import datetime</code> — named explicitly"],
+              ["/docs description", "appears on the parameter in the generated OpenAPI page"],
+              ["risk", "absent param is now a no-op, which is what a filter should do"]
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "Approve, and watch the plan become a diff",
+      "narrative": [
+        "Answer <code>y</code>. Phase 2 executes the steps in order: three reads, one write, one skip. One file modified — the same file the plan said it would modify, with the wording you supplied.",
+        "Toggle Before / After. The left panel is intent; the right panel is the artefact. Because you edited step 4 rather than accepting it, the diff arrives with the guard, the import and the description already in place — three review comments that never had to be written.",
+        "Plan Mode is not free. You pay an extra round trip and a decision point on every task, and for a one-line change in a file you already have open that is pure overhead. It earns its keep when the blast radius is uncertain, which is exactly when you are least able to judge it."
+      ],
+      "youDo": "Answer y, then confirm the change: git diff routers/tasks.py",
+      "terminal": [
+        { "kind": "gate", "text": "Re-run approval? (y/n/edit): y" },
+        { "kind": "tool", "text": "✦ Executing step 1: Reading routers/tasks.py..." },
+        { "kind": "tool", "text": "✦ Executing step 2: Reading schemas.py..." },
+        { "kind": "tool", "text": "✦ Executing step 3: Reading models.py..." },
+        { "kind": "tool", "text": "✦ Executing step 4: Writing routers/tasks.py..." },
+        { "kind": "out", "text": "✦ Step 5 skipped (no changes needed to schemas.py)" },
+        { "kind": "out-pass", "text": "Done. 1 file modified." },
+        { "kind": "prompt", "text": "git diff --stat routers/tasks.py" },
+        { "kind": "out-pass", "text": " routers/tasks.py | 5 ++++-\n 1 file changed, 4 insertions(+), 1 deletion(-)" }
+      ],
+      "state": {
+        "label": "plan → file",
+        "before": {
+          "title": "BEFORE — approved, still nothing on disk",
+          "view": {
+            "type": "spec",
+            "id": "plan · completed_after filter",
+            "status": "APPROVED",
+            "rows": [
+              ["files to modify", "<code>routers/tasks.py</code>"],
+              ["files to skip", "<code>schemas.py</code> — step 5, self-cancelled"],
+              ["shell commands", "none"],
+              ["human edits", "1 (step 4)"]
+            ]
+          }
+        },
+        "after": {
+          "title": "AFTER — the one file that changed",
+          "view": {
+            "type": "diff",
+            "file": "routers/tasks.py",
+            "lines": [
+              ["p", "from typing import List, Optional"],
+              ["a", "from datetime import datetime"],
+              ["p", ""],
+              ["p", "def list_tasks("],
+              ["p", "    completed: Optional[bool] = Query(None, description=\"Filter by completion status\"),"],
+              ["p", "    priority: Optional[str] = Query(None, description=\"Filter by priority: low/medium/high\"),"],
+              ["p", "    tag: Optional[str] = Query(None, description=\"Filter by tag name\"),"],
+              ["a", "    completed_after: Optional[datetime] = Query(None, description=\"Filter tasks created after this datetime (UTC ISO-8601)\"),"],
+              ["p", "    db: Session = Depends(get_db),"],
+              ["p", "):"],
+              ["p", "    if tag:"],
+              ["p", "        query = query.join(models.Task.tags).filter(models.Tag.name == tag)"],
+              ["a", "    if completed_after:"],
+              ["a", "        query = query.filter(models.Task.created_at >= completed_after)"],
+              ["p", "    return query.order_by(models.Task.created_at.desc()).all()"]
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

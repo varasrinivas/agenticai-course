@@ -1,0 +1,210 @@
+{
+  "id": "gc-deployment",
+  "module": "output/courses/gemini-cli/M09-deployment.html",
+  "section": "lab",
+  "badge": "WALKTHROUGH",
+  "color": "#0B57D0",
+  "time": "~5 min",
+  "title": "Four gates to green",
+  "spec": "M09 · source → image → compose → CI",
+  "intro": "TaskFlow already runs on your laptop. Turning that into a pipeline means four gates, each of which can only be entered from the one before — and the gate that stops you is the coverage gate, exactly as designed.",
+  "provenance": {
+    "kind": "illustrative",
+    "source": "a narrated session against the shipped sample-project/taskflow; file paths, commands and the failure transcript are taken from the module, terminal output is reconstructed"
+  },
+  "foot": "Run it for real: <code>cd sample-project/taskflow &amp;&amp; docker build -t taskflow:lab .</code>",
+  "steps": [
+    {
+      "title": "Gate 1 — source to a hardened image",
+      "narrative": [
+        "The shipped <code>Dockerfile</code> is the honest first draft: <code>FROM python:3.12-slim</code>, <code>pip install</code>, <code>COPY . .</code>, done. It builds and it runs, and it also ships the pip cache, the build toolchain, your <code>.env</code> if you forgot a <code>.dockerignore</code>, and a process running as root.",
+        "Hand Gemini the <code>Dockerfile</code> and <code>requirements.txt</code> together and ask for a multi-stage build with a non-root user and a health check. It has the dependency list in front of it, so it knows which wheels need a compiler at build time and which do not need one at runtime."
+      ],
+      "youDo": "gemini \"@Dockerfile @requirements.txt Improve with multi-stage build, non-root user, health check. Output only the Dockerfile content.\"",
+      "terminal": [
+        { "kind": "prompt", "text": "cd sample-project/taskflow" },
+        { "kind": "prompt", "text": "gemini \"@Dockerfile @requirements.txt Improve with multi-stage build, non-root user, health check. Output only the Dockerfile content.\"" },
+        { "kind": "claude", "text": "Builder stage installs into /install with --prefix; runtime stage copies\nonly /install. cryptography and bcrypt need build tooling — that stays\nin the builder and never reaches the final layer." },
+        { "kind": "prompt", "text": "docker build -t taskflow:lab ." },
+        { "kind": "out", "text": "[+] Building 41.7s (14/14) FINISHED\n => => naming to docker.io/library/taskflow:lab" },
+        { "kind": "prompt", "text": "docker run -d -p 8000:8000 -e SECRET_KEY=lab-secret taskflow:lab" },
+        { "kind": "prompt", "text": "Invoke-RestMethod http://localhost:8000/health" },
+        { "kind": "out-pass", "text": "status service\n------ -------\nok     taskflow" }
+      ],
+      "state": {
+        "label": "image · single-stage vs multi-stage",
+        "before": {
+          "title": "BEFORE — the shipped Dockerfile",
+          "view": {
+            "type": "rows",
+            "columns": ["property", "value", "consequence"],
+            "rows": [
+              { "cells": ["image size", "412 MB", "pip cache and compilers ride along"], "tone": "bad" },
+              { "cells": ["runs as", "<code>root</code>", "a container escape starts with uid 0"], "tone": "bad" },
+              { "cells": ["HEALTHCHECK", "none", "Docker reports <em>running</em>, not <em>working</em>"], "tone": "bad" },
+              { "cells": ["build tools present at runtime", "gcc, python3-dev", "attack surface you never call"], "tone": "bad" }
+            ]
+          }
+        },
+        "after": {
+          "title": "AFTER — multi-stage, non-root, health-checked",
+          "view": {
+            "type": "rows",
+            "columns": ["property", "value", "consequence"],
+            "rows": [
+              { "cells": ["image size", "78 MB", "81% smaller — pulls faster on every deploy"], "tone": "win" },
+              { "cells": ["runs as", "<code>appuser</code> (uid 1000)", "no root in the runtime layer"], "tone": "win" },
+              { "cells": ["HEALTHCHECK", "<code>curl -f localhost:8000/health</code> every 30s", "orchestrators can tell healthy from merely alive"], "tone": "win" },
+              { "cells": ["build tools present at runtime", "none — left in the builder stage", "smaller surface, nothing to compile with"], "tone": "win" }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "Gate 2 — one container becomes a service",
+      "narrative": [
+        "<code>docker run</code> with three flags is fine until you need the same three flags tomorrow. <code>docker-compose.yml</code> makes the flags a file, and the interesting part is the volume: TaskFlow's database is <code>sqlite:///./taskflow.db</code> relative to <code>WORKDIR /app</code>, so the mount point has to be <code>/app/taskflow.db</code> or your data dies with the container.",
+        "Gemini gets that path by reading <code>database.py</code> and the <code>Dockerfile</code> together, not by guessing from the project name. Give it both, and give it <code>main.py</code> so it can wire the health check to the endpoint that actually exists."
+      ],
+      "youDo": "Generate the compose file, write a .env (never commit it), then docker compose up -d and check the health status.",
+      "terminal": [
+        { "kind": "prompt", "text": "gemini \"@Dockerfile @database.py @main.py Generate docker-compose.yml with SQLite volume, .env file, restart policy, and health check.\"" },
+        { "kind": "prompt", "text": "\"SECRET_KEY=compose-test-secret`nDATABASE_URL=sqlite:///./taskflow.db\" | Out-File -FilePath .env -Encoding utf8" },
+        { "kind": "prompt", "text": "docker compose up -d" },
+        { "kind": "out", "text": "[+] Running 2/2\n ✔ Volume \"taskflow_taskflow-data\"  Created\n ✔ Container taskflow-api-1        Started" },
+        { "kind": "prompt", "text": "docker compose ps" },
+        { "kind": "out-pass", "text": "NAME               IMAGE            STATUS                    PORTS\ntaskflow-api-1     taskflow:local   Up 12 seconds (healthy)   0.0.0.0:8000->8000/tcp" }
+      ],
+      "state": {
+        "label": "docker compose ps",
+        "before": {
+          "title": "WHAT THE COMPOSE FILE PINS DOWN",
+          "view": {
+            "type": "rows",
+            "columns": ["setting", "value", "where the value came from"],
+            "rows": [
+              { "cells": ["volume mount", "<code>taskflow-data:/app/taskflow.db</code>", "<code>database.py</code> path + <code>WORKDIR /app</code>"], "tone": "win" },
+              { "cells": ["env source", "<code>env_file: .env</code>", "<code>load_dotenv()</code> in <code>main.py</code>"] },
+              { "cells": ["restart", "<code>unless-stopped</code>", "survives a daemon restart, not your explicit stop"] },
+              { "cells": ["healthcheck", "<code>GET /health</code>, 30s interval, 3 retries", "the endpoint in <code>main.py</code>"], "tone": "win" },
+              { "cells": ["status after 12s", "<code>Up (healthy)</code>", "the check passed, not just the process start"], "tone": "win" }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "Gate 3 — CI stops you, and it is right to",
+      "narrative": [
+        "The workflow Gemini generates ends with <code>pytest --cov --cov-fail-under=80</code>, then a Docker build step that depends on it. Run it locally with <code>act</code> before you push, because a red run on GitHub costs a round trip and a red run on your laptop costs forty seconds.",
+        "It fails. Every test passes — and coverage is 72%, which is the number M08's coverage report already told you. <code>auth.py</code> at 58% and <code>routers/tags.py</code> at 56% are dragging the total under the line.",
+        "This is the gate working. The Docker build step never runs, because building an image from code whose auth paths are untested is exactly the thing the gate exists to prevent."
+      ],
+      "youDo": "act push --secret SECRET_KEY=test-secret -P ubuntu-latest=catthehacker/ubuntu:act-latest",
+      "terminal": [
+        { "kind": "prompt", "text": "gemini \"@requirements.txt @Dockerfile Generate .github/workflows/ci.yml with Python 3.12, pytest --cov --cov-fail-under=80, Docker build step.\"" },
+        { "kind": "prompt", "text": "act push --secret SECRET_KEY=test-secret -P ubuntu-latest=catthehacker/ubuntu:act-latest" },
+        { "kind": "out", "text": "[TaskFlow CI/test-and-build] ✅  Checkout repository\n[TaskFlow CI/test-and-build] ✅  Set up Python 3.12\n[TaskFlow CI/test-and-build] ✅  Install dependencies\n[TaskFlow CI/test-and-build] ⚙  Run tests with coverage\n  ===== 8 passed in 2.61s =====\n  TOTAL                     146     41    72%" },
+        { "kind": "out-fail", "text": "  FAIL Required test coverage of 80% not reached. Total coverage: 72.00%\n[TaskFlow CI/test-and-build] ❌  Run tests with coverage (exit 1)\n[TaskFlow CI/test-and-build] ⏭  Build Docker image — skipped\n[TaskFlow CI/test-and-build] ❌  Job failed" }
+      ],
+      "state": {
+        "label": "act push · local CI run",
+        "before": {
+          "title": "GATE FAILED — all green, still refused",
+          "view": {
+            "type": "stack",
+            "views": [
+              {
+                "type": "tests",
+                "failures": 1,
+                "big": "GATE FAILED · coverage 72% < 80%",
+                "note": "8 tests, 0 failures. The job still exits non-zero — <code>--cov-fail-under</code> is a test result too."
+              },
+              {
+                "type": "rows",
+                "columns": ["module", "coverage", "uncovered lines", "verdict"],
+                "rows": [
+                  { "cells": ["<code>auth.py</code>", "58%", "36-44, 47, 53-54 — the JWT decode path", "the expensive gap"], "tone": "bad" },
+                  { "cells": ["<code>routers/tags.py</code>", "56%", "17, 22-29, 32-37", "whole endpoints untested"], "tone": "bad" },
+                  { "cells": ["<code>routers/tasks.py</code>", "73%", "36-37, 57-62, 81-82, 99-106", "error branches"] },
+                  { "cells": ["<code>main.py</code> / <code>models.py</code>", "100%", "—", "fine"], "tone": "win" }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "Gate 4 — close the gap, then the pipeline runs end to end",
+      "narrative": [
+        "Ask Gemini for tests against the specific uncovered lines, weighted the way you actually care: <em>which of these gaps are security-critical?</em> Without that steer it optimises for line count and writes you twelve tests for <code>routers/tags.py</code>. With it, it goes at <code>auth.py</code> lines 36-44 — malformed tokens, expired tokens, valid tokens for deleted users.",
+        "Twenty more tests, coverage at 95%, gate passes, Docker build runs, job succeeds. Toggle Before / After to watch the two blocked stages unblock.",
+        "Keep one thing in proportion: 95% line coverage means 95% of lines <em>executed</em>, not 95% of behaviour verified. A test that calls a function and asserts nothing raises coverage. The gate is a floor against neglect, not a proof of correctness."
+      ],
+      "youDo": "Generate the auth tests, re-run act, then docker compose down to clean up.",
+      "terminal": [
+        { "kind": "prompt", "text": "gemini \"@auth.py @routers/tags.py Coverage: auth.py 58% missing 36-44,47,53-54; tags.py 56% missing 17,22-29,32-37. Which gaps matter most from a security perspective? Write pytest tests for the top 3.\"" },
+        { "kind": "prompt", "text": "act push --secret SECRET_KEY=test-secret -P ubuntu-latest=catthehacker/ubuntu:act-latest" },
+        { "kind": "out-pass", "text": "[TaskFlow CI/test-and-build] ✅  Run tests with coverage\n  ===== 28 passed in 3.41s =====\n  TOTAL                     146      8    95%\n[TaskFlow CI/test-and-build] ✅  Build Docker image\n  Successfully built abc123def456\n[TaskFlow CI/test-and-build] ✅  Job succeeded" },
+        { "kind": "prompt", "text": "docker compose down" },
+        { "kind": "out", "text": "[+] Running 2/2\n ✔ Container taskflow-api-1  Removed\n ✔ Network taskflow_default  Removed" }
+      ],
+      "state": {
+        "label": "the pipeline as a state machine",
+        "before": {
+          "title": "BEFORE — halted at stage 4 of 5",
+          "view": {
+            "type": "stack",
+            "views": [
+              {
+                "type": "tests",
+                "failures": 1,
+                "big": "GATE FAILED · coverage 72%",
+                "note": "8 tests · 0 test failures · 1 gate failure"
+              },
+              {
+                "type": "rows",
+                "columns": ["stage", "state", "detail"],
+                "rows": [
+                  { "cells": ["1 · checkout", "passed", "—"], "tone": "win" },
+                  { "cells": ["2 · set up Python 3.12", "passed", "—"], "tone": "win" },
+                  { "cells": ["3 · install dependencies", "passed", "10 packages from <code>requirements.txt</code>"], "tone": "win" },
+                  { "cells": ["4 · tests + coverage gate", "<b>failed</b>", "72% &lt; 80% → exit 1"], "tone": "bad" },
+                  { "cells": ["5 · build Docker image", "skipped", "depends on stage 4"], "tone": "bad" }
+                ]
+              }
+            ]
+          }
+        },
+        "after": {
+          "title": "AFTER — 20 tests later, all five stages",
+          "view": {
+            "type": "stack",
+            "views": [
+              {
+                "type": "tests",
+                "run": 28,
+                "failures": 0,
+                "big": "BUILD SUCCESS · coverage 95%",
+                "note": "The added tests target <code>auth.py</code> 36-44: unsigned tokens, expired tokens, tokens for deleted users."
+              },
+              {
+                "type": "rows",
+                "columns": ["stage", "state", "detail"],
+                "rows": [
+                  { "cells": ["1 · checkout", "passed", "—"], "tone": "win" },
+                  { "cells": ["2 · set up Python 3.12", "passed", "—"], "tone": "win" },
+                  { "cells": ["3 · install dependencies", "passed", "10 packages from <code>requirements.txt</code>"], "tone": "win" },
+                  { "cells": ["4 · tests + coverage gate", "passed", "28 passed · 95% ≥ 80%"], "tone": "win" },
+                  { "cells": ["5 · build Docker image", "passed", "<code>abc123def456</code> · 78 MB"], "new": true }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,167 @@
+{
+  "id": "mcp-first-server",
+  "badge": "WALKTHROUGH",
+  "color": "#0891B2",
+  "time": "~3 min",
+  "title": "It's alive",
+  "spec": "MCP01 · first boot under the Inspector",
+  "intro": "Three decorated Python functions, one command, and a browser tab that proves an LLM could call them. Four steps from \"I wrote a file\" to \"a client discovered my tools and got a real result back\".",
+  "provenance": {
+    "kind": "illustrative",
+    "source": "a narrated first run of MCP01's document_server.py under the Inspector; the boot banner, tool names and search result are the module's own, timing and request ids are reconstructed"
+  },
+  "foot": "Run it for real: MCP01 §5 — <code>mcp dev document_server.py</code>, then work the five verification checks.",
+  "steps": [
+    {
+      "title": "One command, and something is listening",
+      "narrative": [
+        "<code>mcp dev</code> does three things at once: it starts your server as a subprocess, attaches the Inspector to it over stdio, and serves a UI at <code>localhost:5173</code>. You did not write a network layer, a router, or a schema — FastMCP derived all of it from your type hints.",
+        "Read the fourth line of the banner before anything else. <b>Tools discovered</b> is the first honest signal that your decorators worked; if a tool is missing here it is missing everywhere, and no amount of prompting will conjure it."
+      ],
+      "youDo": "<code>mcp dev document_server.py</code>, then open <code>http://localhost:5173</code>.",
+      "terminal": [
+        { "kind": "prompt", "text": "mcp dev document_server.py" },
+        { "kind": "out", "text": "Starting MCP Inspector...\nConnecting to server: python document_server.py" },
+        { "kind": "out-pass", "text": "Server connected: document-server v1.0.0\nTools discovered: search_documents, calculate_similarity, save_note\nInspector running at: http://localhost:5173" }
+      ],
+      "state": {
+        "label": "document_server.py",
+        "before": {
+          "title": "WHAT YOU ACTUALLY WROTE",
+          "view": {
+            "type": "rows",
+            "columns": ["decorator", "signature", "pattern"],
+            "rows": [
+              { "cells": ["<code>@mcp.tool()</code>", "<code>search_documents(query: str, limit: int = 5)</code>", "read / query — no side effects"] },
+              { "cells": ["<code>@mcp.tool()</code>", "<code>calculate_similarity(text_a: str, text_b: str)</code>", "pure computation"] },
+              { "cells": ["<code>@mcp.tool()</code>", "<code>save_note(title: str, content: str)</code>", "mutates server state"] }
+            ],
+            "note": "No JSON Schema anywhere in the file. FastMCP reads the annotations and the docstring and generates the schema a client will see."
+          }
+        }
+      }
+    },
+    {
+      "title": "The handshake",
+      "narrative": [
+        "Before any tool can be called, client and server agree on two things: which protocol version they are both speaking, and what each side is capable of. That is the <code>initialize</code> exchange, and the Inspector shows it in the <b>Server Info</b> tab.",
+        "Capabilities are a contract, not a boast. Your server declares <code>tools</code> because you used <code>@mcp.tool()</code>; it does not declare <code>resources</code> or <code>prompts</code> because you have not written any. A client reads that and never asks for what is not there — which is why an empty Resources tab is correct here, not broken."
+      ],
+      "terminal": [
+        { "kind": "tool", "text": "→ initialize  protocolVersion 2025-06-18  client: mcp-inspector" },
+        { "kind": "out", "text": "← serverInfo: document-server v1.0.0  ·  capabilities: tools" },
+        { "kind": "tool", "text": "→ notifications/initialized" }
+      ],
+      "state": {
+        "label": "initialize · the capability exchange",
+        "before": {
+          "title": "→ what the client offered",
+          "view": {
+            "type": "json",
+            "data": {
+              "jsonrpc": "2.0",
+              "id": 0,
+              "method": "initialize",
+              "params": {
+                "protocolVersion": "2025-06-18",
+                "capabilities": {},
+                "clientInfo": { "name": "mcp-inspector", "version": "0.16.1" }
+              }
+            }
+          }
+        },
+        "after": {
+          "title": "← what your server claimed",
+          "view": {
+            "type": "json",
+            "data": {
+              "jsonrpc": "2.0",
+              "id": 0,
+              "result": {
+                "protocolVersion": "2025-06-18",
+                "capabilities": { "tools": { "listChanged": false } },
+                "serverInfo": { "name": "document-server", "version": "1.0.0" }
+              }
+            },
+            "highlight": ["capabilities", "serverInfo"],
+            "note": "<code>tools</code> and nothing else. Add <code>@mcp.resource(...)</code> later and a <code>resources</code> key appears here on its own — the handshake is generated, not hand-maintained."
+          }
+        }
+      }
+    },
+    {
+      "title": "tools/list — the version of your code an LLM reads",
+      "narrative": [
+        "Click <b>Tools</b>. Three entries, each with a form built from your parameter names and defaults. This is the moment your docstrings stop being documentation and become an interface.",
+        "Look at what carried through from the source and what did not. The <em>types</em> came from the annotations, the <em>defaults</em> from the signature, and the <em>description</em> from the first lines of the docstring. Your validation logic — <code>limit</code> must be between 1 and 50 — did not: schemas describe shape, not rules. That constraint still exists, but it exists as a runtime error, which is exactly the distinction step 4 turns on."
+      ],
+      "youDo": "Click <b>Tools</b> in the left panel and confirm all three appear with their descriptions.",
+      "terminal": [
+        { "kind": "tool", "text": "→ tools/list" },
+        { "kind": "out", "text": "search_documents      Search the document store for documents matching a query string.\ncalculate_similarity  Calculate cosine similarity between two text strings using word overlap.\nsave_note             Save a note with a title and content." }
+      ],
+      "state": {
+        "label": "tools/list · search_documents",
+        "before": {
+          "title": "THE GENERATED SCHEMA",
+          "view": {
+            "type": "json",
+            "data": {
+              "name": "search_documents",
+              "description": "Search the document store for documents matching a query string. Performs case-insensitive substring matching across document IDs and content. Returns a ranked list of matching documents.",
+              "inputSchema": {
+                "type": "object",
+                "properties": {
+                  "query": { "type": "string", "description": "The search string. Case-insensitive." },
+                  "limit": { "type": "integer", "default": 5, "description": "Maximum number of results to return. Default is 5." }
+                },
+                "required": ["query"]
+              }
+            },
+            "highlight": ["description", "inputSchema"],
+            "note": "<code>limit</code> is optional here because it has a default in Python. <code>query</code> is required because it does not. Nothing else decided that."
+          }
+        }
+      }
+    },
+    {
+      "title": "Call it — and then call it wrong",
+      "narrative": [
+        "Enter <code>{\"query\": \"MCP\", \"limit\": 2}</code> and click <b>Run</b>. Two documents come back, ranked: <code>mcp-overview</code> scores 3 because \"MCP\" appears in both the id and the content, <code>fastmcp-guide</code> scores 1 because it appears in the content only. Your scoring rule, visible from the outside for the first time.",
+        "Now do the thing that separates a demo from a server: call it with an empty <code>query</code>. Your <code>ValueError</code> comes back as a JSON-RPC error, and you can read the exact message a model would have to work with. A tool that fails legibly here is one you can debug later; a tool that fails silently inside an LLM session is not.",
+        "One caveat before you wire this into Claude Desktop. A green Inspector proves the <em>wire</em> works — it does not predict whether a model will choose the right tool at the right moment. That is decided by the descriptions you just saw in step 3, and the only way to test it is with a model in the loop."
+      ],
+      "youDo": "Run <code>search_documents</code> with <code>{\"query\": \"MCP\", \"limit\": 2}</code>, then again with <code>{\"query\": \"\"}</code>.",
+      "terminal": [
+        { "kind": "tool", "text": "→ tools/call  search_documents  {\"query\": \"MCP\", \"limit\": 2}" },
+        { "kind": "out-pass", "text": "[{\"id\":\"mcp-overview\",\"preview\":\"MCP is an open protocol...\",\"score\":3},\n {\"id\":\"fastmcp-guide\",\"preview\":\"FastMCP reduces MCP server...\",\"score\":1}]" },
+        { "kind": "tool", "text": "→ tools/call  search_documents  {\"query\": \"\"}" },
+        { "kind": "out-fail", "text": "← error  {\"code\": -32603, \"message\": \"query must be a non-empty string\"}" }
+      ],
+      "state": {
+        "label": "the five checks worth running before you connect a model",
+        "before": {
+          "title": "VERIFICATION — all three tools, both paths",
+          "view": {
+            "type": "rows",
+            "columns": ["check", "expected", "result"],
+            "rows": [
+              { "cells": ["all three tools listed with descriptions", "3 tools", "3 tools"], "tone": "win" },
+              { "cells": ["<code>search_documents(\"MCP\")</code>", "non-empty ranked list", "2 hits, scores 3 and 1"], "tone": "win" },
+              { "cells": ["<code>calculate_similarity(\"hello world\", \"world peace\")</code>", "a score plus <code>common_words</code>", "<code>common_words: [\"world\"]</code>"], "tone": "win" },
+              { "cells": ["<code>save_note(\"test-note\", \"My first note\")</code>", "<code>{\"success\": true, \"total_notes\": 1}</code>", "matched"], "tone": "win" },
+              { "cells": ["<code>search_documents(\"\")</code>", "an error, not a crash", "<code>-32603</code> with a readable message"], "tone": "win" }
+            ]
+          }
+        },
+        "after": {
+          "title": "WHAT TO TAKE FROM IT",
+          "view": {
+            "type": "note",
+            "text": "You now have the smallest complete loop in MCP: a server that declares what it can do, a client that discovers it, and a call that returns real data. Every remaining module in this course adds one thing to this loop — resources and prompts, a transport that other machines can reach, auth, and the defences that stop the data coming back from giving orders. None of them change the shape you just saw."
+          }
+        }
+      }
+    }
+  ]
+}

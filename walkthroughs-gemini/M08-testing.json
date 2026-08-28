@@ -1,0 +1,184 @@
+{
+  "id": "gc-testing",
+  "module": "output/courses/gemini-cli/M08-testing.html",
+  "section": "failure-diagnosis",
+  "badge": "WALKTHROUGH",
+  "color": "#4285F4",
+  "time": "~5 min",
+  "title": "It wasn't the filter",
+  "spec": "M08 · paste the failure, get the real cause",
+  "intro": "One red test in TaskFlow, and every instinct says the priority filter is broken. It isn't. The bug is in the fixture that set the test up — and you find that by pasting evidence instead of guessing.",
+  "provenance": {
+    "kind": "illustrative",
+    "source": "a narrated session against the shipped sample-project/taskflow; file paths, commands and the failure transcript are taken from the module, terminal output is reconstructed"
+  },
+  "foot": "Run it for real: <code>cd sample-project/taskflow &amp;&amp; pytest tests/ -v</code>",
+  "steps": [
+    {
+      "title": "Run the suite before you theorise",
+      "narrative": [
+        "You are in <code>sample-project/taskflow</code>. Eight tests, seven green, one red. The red one is <code>test_filter_by_priority_low</code>: it asks <code>GET /tasks/?priority=low</code> for low-priority tasks and gets back three tasks of three different priorities.",
+        "Pipe the run to a file as well as the screen. You are about to paste this output verbatim, and retyping a traceback from memory is how you lose the one detail that solves it."
+      ],
+      "youDo": "cd sample-project/taskflow, then run the suite and tee the output to disk.",
+      "terminal": [
+        { "kind": "prompt", "text": "cd sample-project/taskflow" },
+        { "kind": "prompt", "text": "pytest tests/ -v 2>&1 | Tee-Object -FilePath test-output.txt" },
+        { "kind": "out", "text": "============================= test session starts =============================\nplatform win32 -- Python 3.12.3, pytest-8.2.0, pluggy-1.5.0\nrootdir: D:\\dev\\taskflow\ncollected 8 items" },
+        { "kind": "out-pass", "text": "tests/test_list_tasks.py::test_create_task PASSED                    [ 12%]\ntests/test_list_tasks.py::test_list_tasks_happy_path PASSED         [ 25%]\ntests/test_list_tasks.py::test_get_task PASSED                      [ 37%]\ntests/test_list_tasks.py::test_get_task_not_found PASSED            [ 50%]\ntests/test_list_tasks.py::test_update_task PASSED                   [ 62%]\ntests/test_list_tasks.py::test_delete_task PASSED                   [ 75%]" },
+        { "kind": "out-fail", "text": "tests/test_list_tasks.py::test_filter_by_priority_low FAILED         [ 87%]" },
+        { "kind": "out-pass", "text": "tests/test_list_tasks.py::test_unauthenticated_request PASSED        [100%]" },
+        { "kind": "out-fail", "text": "FAILED tests/test_list_tasks.py::test_filter_by_priority_low - AssertionError: assert 3 >= 1\n========================= 1 failed, 7 passed in 2.84s ========================" }
+      ],
+      "state": {
+        "label": "pytest tests/ -v",
+        "before": {
+          "title": "THE RUN — one red",
+          "view": {
+            "type": "tests",
+            "run": 8,
+            "failures": 1,
+            "big": "BUILD FAILURE",
+            "note": "Seven tests pass. The one that fails is the only one that <b>reads back what earlier tests wrote</b> — remember that when you get to the diagnosis."
+          }
+        }
+      }
+    },
+    {
+      "title": "Paste the evidence, not a paraphrase",
+      "narrative": [
+        "Open the failure detail and look at what the assertion actually saw: three task dicts, ids 1, 2 and 3, priorities <code>high</code>, <code>low</code> and <code>medium</code>. The test created exactly one of them.",
+        "Now hand Gemini the raw output <em>plus</em> the two files it needs with <code>@</code> references. <code>@tests/conftest.py</code> is the non-obvious one — most people attach only the failing test, which is precisely the file where the bug is not."
+      ],
+      "youDo": "Paste the failure into a gemini prompt and attach @tests/conftest.py alongside the failing test file.",
+      "claudeSays": "The @ references pull both files into the prompt as text. Gemini reads the fixture chain — client depends on db_session, auth_headers depends on client — before it looks at the endpoint.",
+      "terminal": [
+        { "kind": "out-fail", "text": "=================================== FAILURES ==================================\n______________________ test_filter_by_priority_low ______________________\nE   AssertionError: assert all(t[\"priority\"] == \"low\" for t in tasks)\nE   + where tasks = [{'completed': False, 'id': 1, 'priority': 'high',   'title': 'High task', ...},\n                     {'completed': False, 'id': 2, 'priority': 'low',    'title': 'Low task',  ...},\n                     {'completed': False, 'id': 3, 'priority': 'medium', 'title': 'Done task', ...}]" },
+        { "kind": "prompt", "text": "gemini \"This pytest output shows test_filter_by_priority_low failing:\nFAILED tests/test_list_tasks.py::test_filter_by_priority_low\nAssertionError: assert all(t['priority'] == 'low' for t in tasks)\ntasks = [high task, low task, medium task — all three returned]\nLook at @tests/conftest.py and @tests/test_list_tasks.py and diagnose\nwhy the filter is returning all tasks instead of just low-priority ones.\"" },
+        { "kind": "tool", "text": "read  tests/conftest.py   (54 lines)" },
+        { "kind": "tool", "text": "read  tests/test_list_tasks.py   (81 lines)" }
+      ],
+      "state": {
+        "label": "what the assertion saw",
+        "before": {
+          "title": "THREE ROWS WHERE ONE BELONGED",
+          "view": {
+            "type": "rows",
+            "columns": ["id", "title", "priority", "who created it"],
+            "rows": [
+              { "cells": ["1", "High task", "high", "<code>test_create_task</code> — an earlier test"], "tone": "bad" },
+              { "cells": ["2", "Low task", "low", "<code>test_filter_by_priority_low</code> — this test"], "tone": "win" },
+              { "cells": ["3", "Done task", "medium", "<code>test_update_task</code> — an earlier test"], "tone": "bad" }
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "The diagnosis: the fixture, not the filter",
+      "narrative": [
+        "Gemini's answer is the twist. <code>routers/tasks.py</code> is correct — <code>query.filter(models.Task.priority == priority)</code> does exactly what it says. The problem is that all three rows belong to the same <code>testuser</code>, in the same SQLite file, because nothing ever removed them.",
+        "Look at <code>conftest.py</code>: <code>TEST_DATABASE_URL</code> is a real file, <code>test_taskflow.db</code>, created once per session. The <code>db_session</code> fixture opens a session and closes it — <b>close is not rollback</b>. Every row an earlier test committed is still there when the next test runs.",
+        "That is why this failure is order-dependent. Run <code>test_filter_by_priority_low</code> on its own and it passes, which is the classic signature of a flaky test: green alone, red in the suite."
+      ],
+      "claudeSays": "Gemini returns the root cause and a drop-in replacement fixture: open a connection, begin a transaction, bind the session to that connection, and roll the transaction back in the finally block.",
+      "terminal": [
+        { "kind": "claude", "text": "Root cause: Test database isolation problem.\n\nThe conftest.py uses a single SQLite file (test_taskflow.db) and the\ndb_session fixture does NOT roll back between tests. Tasks created by\nearlier tests (test_create_task, test_list_tasks_happy_path) persist\nin the database when test_filter_by_priority_low runs.\n\nWhen you call GET /tasks/?priority=low, the query correctly filters by\npriority — but the \"High task\" and \"Medium task\" from previous tests\nare still in the database under the same user (auth_headers creates\nthe same testuser every time).\n\nFix: wrap each test in a transaction and roll it back afterwards." }
+      ],
+      "state": {
+        "label": "tests/conftest.py · db_session",
+        "before": {
+          "title": "THE FIX — transaction per test",
+          "view": {
+            "type": "diff",
+            "file": "tests/conftest.py",
+            "lines": [
+              ["p", "@pytest.fixture()"],
+              ["p", "def db_session():"],
+              ["m", "    session = TestingSessionLocal()"],
+              ["m", "    try:"],
+              ["m", "        yield session"],
+              ["m", "    finally:"],
+              ["m", "        session.close()"],
+              ["a", "    connection = engine.connect()"],
+              ["a", "    transaction = connection.begin()"],
+              ["a", "    session = TestingSessionLocal(bind=connection)"],
+              ["a", "    try:"],
+              ["a", "        yield session"],
+              ["a", "    finally:"],
+              ["a", "        session.close()"],
+              ["a", "        transaction.rollback()"],
+              ["a", "        connection.close()"]
+            ]
+          }
+        }
+      }
+    },
+    {
+      "title": "Green — and it stays green in any order",
+      "narrative": [
+        "Apply the fixture and re-run. Eight passed. Nothing in <code>routers/tasks.py</code> changed, because nothing in <code>routers/tasks.py</code> was wrong.",
+        "Toggle Before / After. The left panel is the database as <code>test_filter_by_priority_low</code> found it: two rows it never created. The right panel is the same moment after the rewrite — the transaction from every earlier test has been rolled back, so the only row present is the one this test wrote.",
+        "One honest caveat: rollback isolation fixes rows, not sequences. SQLite's <code>AUTOINCREMENT</code> counter and anything your app writes outside the session — a file, a cache, an env var — survive the rollback. If a test asserts <code>id == 1</code>, it will still surprise you."
+      ],
+      "youDo": "Apply the fixture, then run the suite twice: pytest tests/ -v and pytest tests/ -v -p no:randomly --lf",
+      "terminal": [
+        { "kind": "prompt", "text": "pytest tests/ -v" },
+        { "kind": "out-pass", "text": "tests/test_list_tasks.py::test_filter_by_priority_low PASSED         [ 87%]\n========================= 8 passed in 2.61s =========================" },
+        { "kind": "prompt", "text": "pytest tests/test_list_tasks.py::test_filter_by_priority_low -v" },
+        { "kind": "out-pass", "text": "========================= 1 passed in 0.44s =========================" }
+      ],
+      "state": {
+        "label": "the database as the failing test sees it",
+        "before": {
+          "title": "BEFORE — rows leaked in from earlier tests",
+          "view": {
+            "type": "stack",
+            "views": [
+              {
+                "type": "tests",
+                "run": 8,
+                "failures": 1,
+                "big": "BUILD FAILURE",
+                "note": "Order-dependent. Passes alone, fails in the suite."
+              },
+              {
+                "type": "rows",
+                "columns": ["source of the row", "rows still in test_taskflow.db", "cleaned up?"],
+                "rows": [
+                  { "cells": ["<code>test_create_task</code>", "1", "no — session.close() only"], "tone": "bad" },
+                  { "cells": ["<code>test_update_task</code>", "1", "no — session.close() only"], "tone": "bad" },
+                  { "cells": ["<code>test_filter_by_priority_low</code>", "1", "its own row"], "tone": "win" }
+                ]
+              }
+            ]
+          }
+        },
+        "after": {
+          "title": "AFTER — every earlier transaction rolled back",
+          "view": {
+            "type": "stack",
+            "views": [
+              {
+                "type": "tests",
+                "run": 8,
+                "failures": 0,
+                "big": "BUILD SUCCESS",
+                "note": "Same endpoint code, same assertion. Only <code>tests/conftest.py</code> changed."
+              },
+              {
+                "type": "rows",
+                "columns": ["source of the row", "rows still in test_taskflow.db", "cleaned up?"],
+                "rows": [
+                  { "cells": ["<code>test_create_task</code>", "0", "yes — transaction.rollback()"], "tone": "win" },
+                  { "cells": ["<code>test_update_task</code>", "0", "yes — transaction.rollback()"], "tone": "win" },
+                  { "cells": ["<code>test_filter_by_priority_low</code>", "1", "its own row, rolled back at teardown"], "tone": "win" }
+                ]
+              }
+            ]
+          }
+        }
+      }
+    }
+  ]
+}

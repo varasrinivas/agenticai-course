@@ -1,0 +1,163 @@
+{
+  "id": "cc-mcp",
+  "badge": "WALKTHROUGH",
+  "color": "#9333EA",
+  "time": "~4 min",
+  "title": "Postman for MCP",
+  "spec": "CC9 · debugging a server with the Inspector",
+  "intro": "When a tool misbehaves in Claude Code you have two suspects: your server returned the wrong thing, or Claude sent the wrong arguments. The Inspector settles it in one screen, because it speaks the same JSON-RPC Claude Code does.",
+  "provenance": {
+    "kind": "illustrative",
+    "source": "a narrated session against the CC9 lab's ucc_lookup FastMCP server; commands, tool names and the JSON-RPC frames are taken from the module, terminal timing and ids are reconstructed"
+  },
+  "foot": "Run it for real: CC9 Lab 2 — <code>npx @modelcontextprotocol/inspector python server.py</code>.",
+  "steps": [
+    {
+      "title": "Boot the Inspector against your server",
+      "narrative": [
+        "One command. The Inspector spawns <code>server.py</code> as a subprocess over stdio, sits between you and it as a proxy, and opens a browser UI with the auth token already in the URL.",
+        "Two ports, and knowing which is which saves you ten minutes later: <b>6277</b> is the proxy that actually holds the stdio pipe to your server, <b>6274</b> is the UI you look at. If the UI loads but nothing connects, the problem is at 6277 — your subprocess died on startup."
+      ],
+      "youDo": "<code>npx @modelcontextprotocol/inspector python server.py</code>, then open the pre-filled URL, pick <b>stdio</b> transport and click <b>Connect</b>.",
+      "terminal": [
+        { "kind": "prompt", "text": "npx @modelcontextprotocol/inspector python server.py" },
+        { "kind": "out", "text": "Starting MCP inspector...\n✓  Proxy server listening on 127.0.0.1:6277\n🔗 Open inspector with token pre-filled:\n   http://localhost:6274/?MCP_PROXY_AUTH_TOKEN=abc123...\n🔌 Connecting to server: python server.py" },
+        { "kind": "out-pass", "text": "Connected to python server.py" }
+      ],
+      "state": {
+        "label": "connection",
+        "before": {
+          "title": "IF IT DOESN'T CONNECT",
+          "view": {
+            "type": "rows",
+            "columns": ["symptom", "almost always", "check"],
+            "rows": [
+              { "cells": ["header never turns green", "subprocess died on import", "Server Info tab → subprocess stderr"], "tone": "bad" },
+              { "cells": ["connects, then drops mid-call", "a stray <code>print()</code> in your tool", "run <code>python server.py</code> alone — stdout must be silent"], "tone": "bad" },
+              { "cells": ["UI loads, spinner forever", "proxy on 6277 not reachable", "the token in the URL, and that 6277 is free"] }
+            ],
+            "note": "stdio transport <b>is</b> stdout. Anything you print that is not a JSON-RPC frame corrupts the stream — which is why logging goes through <code>ctx.info</code>, not <code>print</code>."
+          }
+        }
+      }
+    },
+    {
+      "title": "Read the schema Claude reads",
+      "narrative": [
+        "Click <b>Tools</b>. The Inspector issues <code>tools/list</code> and renders a form for each tool derived from your Python type hints — <code>lookup_filing(po_number: str)</code> becomes one text field.",
+        "This is the same payload Claude Code receives when it decides whether to call your tool. Which makes the Tools tab a description review, not just a debugging screen: if the docstring is vague here, the model will pick the wrong tool there. <code>ucc_lookup</code>'s docstring earns its keep by saying <em>when</em> to call — \"whenever a user mentions a PO# or asks about filing status\" — and what shape comes back."
+      ],
+      "claudeSays": "Nothing yet — Claude is not in this loop. That is the point: you are testing the server in isolation before any model gets a vote.",
+      "terminal": [
+        { "kind": "tool", "text": "→ tools/list" },
+        { "kind": "out", "text": "lookup_filing   Look up a UCC filing by purchase order number.\nsearch_debtor   Search filings by debtor name (case-insensitive substring)." }
+      ],
+      "state": {
+        "label": "tools/list · lookup_filing",
+        "before": {
+          "title": "THE SCHEMA — form fields on the left, model affordance on the right",
+          "view": {
+            "type": "json",
+            "data": {
+              "name": "lookup_filing",
+              "description": "Look up a UCC filing by purchase order number. Use whenever a user mentions a PO# or asks about filing status. Returns: {po_number, debtor, status, filed_at, lien_count}.",
+              "inputSchema": {
+                "type": "object",
+                "properties": { "po_number": { "type": "string" } },
+                "required": ["po_number"]
+              }
+            },
+            "highlight": ["description"],
+            "note": "The <code>description</code> is the only thing standing between a correct tool choice and a wrong one. The Inspector is where you notice it is thin."
+          }
+        }
+      }
+    },
+    {
+      "title": "Invoke it and watch the wire",
+      "narrative": [
+        "Fill <code>po_number</code> with <code>PO-100001</code> and hit <b>Run Tool</b>. Two things appear: the Tool Result panel with your function's return, and the JSON-RPC history pane at the bottom with the raw exchange.",
+        "Toggle <b>Before / After</b> to see the pair as one beat — request out, response back, same <code>id</code>. That <code>id</code> is the whole correlation mechanism; when a call appears to hang, look for a request whose id never came back.",
+        "Note <code>isError: false</code> sitting next to <code>content</code>. A tool that ran and found nothing is still a successful call at the protocol level — which is the distinction the next step turns on."
+      ],
+      "youDo": "In the Tools tab, click <code>lookup_filing</code>, enter <code>PO-100001</code>, click <b>Run Tool</b>, then expand the request in the history pane.",
+      "terminal": [
+        { "kind": "tool", "text": "12:42:18  → SEND  tools/call  lookup_filing  {\"po_number\": \"PO-100001\"}" },
+        { "kind": "out-pass", "text": "12:42:18  ← RECV  id 7  isError: false  ·  1 content block" }
+      ],
+      "state": {
+        "label": "JSON-RPC · id 7",
+        "before": {
+          "title": "→ SEND — what Claude Code would send, byte for byte",
+          "view": {
+            "type": "json",
+            "data": {
+              "jsonrpc": "2.0",
+              "id": 7,
+              "method": "tools/call",
+              "params": {
+                "name": "lookup_filing",
+                "arguments": { "po_number": "PO-100001" }
+              }
+            },
+            "highlight": ["id", "params"]
+          }
+        },
+        "after": {
+          "title": "← RECV — what your server sent back",
+          "view": {
+            "type": "json",
+            "data": {
+              "jsonrpc": "2.0",
+              "id": 7,
+              "result": {
+                "content": [
+                  { "type": "text", "text": "{\"po_number\": \"PO-100001\", \"debtor\": \"Acme LLC\", \"status\": \"active\", \"filed_at\": \"2024-03-12\", \"lien_count\": 2}" }
+                ],
+                "isError": false
+              }
+            },
+            "highlight": ["id", "result"],
+            "note": "Your <code>dict</code> came back serialised into a <b>text</b> content block. The model sees that string, not a Python object — so keys and formatting are part of your interface whether you meant them to be or not."
+          }
+        }
+      }
+    },
+    {
+      "title": "Now break it on purpose",
+      "narrative": [
+        "Run the same tool with <code>po_number = NOPE</code>. What comes back tells you which of two very different things your server does when it cannot find something — and Claude treats them completely differently.",
+        "A <b>tool-level</b> error keeps the JSON-RPC envelope healthy and puts the problem in <code>content</code> with <code>isError: true</code>. Claude reads that as \"the tool ran and told me something\", and can retry, ask you, or move on. A <b>protocol-level</b> error — what you get from a bare <code>raise</code> — comes back as <code>error: {code: -32603}</code>, and Claude treats it as the tool being broken. No graceful recovery.",
+        "So the rule is small and worth a lot: expected failures (not found, bad argument, rate limited) return a structured dict; only genuine bugs are allowed to raise. Test both shapes here, before a model is anywhere near them."
+      ],
+      "youDo": "Invoke <code>lookup_filing</code> with <code>po_number</code> = <code>NOPE</code> and read the response envelope, not the message.",
+      "terminal": [
+        { "kind": "tool", "text": "12:44:02  → SEND  tools/call  lookup_filing  {\"po_number\": \"NOPE\"}" },
+        { "kind": "out-fail", "text": "12:44:02  ← RECV  id 8  error  {\"code\": -32603, \"message\": \"KeyError: 'NOPE'\"}" },
+        { "kind": "gate", "text": "protocol-level error — Claude would treat this server as broken, not the lookup as empty" }
+      ],
+      "state": {
+        "label": "two failure shapes",
+        "before": {
+          "title": "THE DIFFERENCE THAT MATTERS",
+          "view": {
+            "type": "rows",
+            "columns": ["shape", "JSON-RPC envelope", "what Claude sees"],
+            "rows": [
+              { "cells": ["tool-level error", "<code>\"isError\": true</code> + <code>content</code> with error text", "\"tool ran and returned an error\" — can react, retry, or ask"], "tone": "win" },
+              { "cells": ["protocol-level error", "<code>\"error\": { \"code\": -32603, … }</code>", "\"tool is broken\" — treated as fatal, no recovery"], "tone": "bad" }
+            ],
+            "note": "In FastMCP: return a dict with an <code>error</code> key → tool-level. <code>raise Exception(...)</code> → protocol-level."
+          }
+        },
+        "after": {
+          "title": "WHAT TO TAKE FROM IT",
+          "view": {
+            "type": "note",
+            "text": "A green Inspector does not mean Claude will use your server well — it means the wire works. The two things the Inspector <em>can</em> settle are the two that waste the most time: whether your server returned bad shape, and whether the arguments that arrived were the ones you expected. Everything after that is a description problem, and you fix it in the Tools tab."
+          }
+        }
+      }
+    }
+  ]
+}
