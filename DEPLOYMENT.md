@@ -5,7 +5,7 @@ The course site is a static site served at **https://agenticai.varasrinivas.com*
 > **Decoupled deploys.** The site is one bucket fed by **several repos**. This
 > repo deploys only **its own course folders** (`courses/<slug>/`) and the
 > **mobile** guide. The site's root **`index.html` (the master catalog) is owned
-> by the separate `agenticai-landing` repo**, and three courses
+> by `learnings-hub/agenticai/index.html`**, and three courses
 > (`courses/llmops/`, `courses/context-engineering/`,
 > `courses/ai-platform-engineering/`) are owned by their own repos
 > (`llmops-kit`, `context-eng-kit`, `ai-platform-kit`). No repo's deploy may
@@ -16,9 +16,9 @@ The course site is a static site served at **https://agenticai.varasrinivas.com*
 | S3 bucket | `agenticai.varasrinivas.com` (us-east-1, private — no S3 website hosting) |
 | CloudFront distribution | ID in `scripts/deploy-config.ps1` (gitignored) → `*.cloudfront.net` |
 | DNS | `agenticai.varasrinivas.com` is a CNAME to the CloudFront domain |
-| Default root object | `index.html` (set on the distribution; **deployed by `agenticai-landing`, not here**) |
+| Default root object | `index.html` (set on the distribution; **deployed from `learnings-hub/agenticai/`, not here**) |
 | This repo deploys | `output/courses/<slug>/` (8 courses) + `output/mobile/` |
-| This repo does NOT deploy | the root `index.html` (owned by `agenticai-landing`) |
+| This repo does NOT deploy | the root `index.html` (owned by `learnings-hub/agenticai/`) |
 | Deploy script | `scripts/deploy-s3.ps1` |
 
 The course slugs this repo owns are discovered automatically from
@@ -28,7 +28,11 @@ Each is synced to its own `courses/<slug>/` prefix with a **scoped** `--delete`,
 so a deploy from this repo can never remove the catalog or another repo's course.
 
 `output/index.html` is kept as a **local preview only** and is not uploaded —
-the authoritative catalog lives in the `agenticai-landing` repo.
+the authoritative catalog is `learnings-hub/agenticai/index.html`.
+
+> **Note.** The `agenticai-landing` repo previously owned the catalog and still
+> contains a stale 11-course copy. It was **retired on 2026-08-28** and its
+> deploy script now refuses to run. Do not deploy the catalog from there.
 
 ## Legacy redirects & subfolder behavior
 
@@ -82,11 +86,12 @@ the bucket root or the catalog.
 
 ### 3. Deploy the catalog (separately, only when it changes)
 
-The root `index.html` catalog is deployed from the **`agenticai-landing`** repo:
+The root `index.html` catalog is deployed from **`learnings-hub/agenticai/`**:
 
-```powershell
-# in the agenticai-landing repo
-.\scripts\deploy-index.ps1
+```bash
+# from the learnings-hub repo
+aws s3 cp agenticai/index.html s3://agenticai.varasrinivas.com/index.html   --content-type "text/html; charset=utf-8" --cache-control "public, max-age=300"
+MSYS_NO_PATHCONV=1 aws cloudfront create-invalidation   --distribution-id E204WFPQTUDQ3Q --paths "/" "/index.html"
 ```
 
 Update the catalog there whenever a course is added/renamed/removed — editing a
@@ -95,7 +100,7 @@ card doesn't touch the course itself.
 ### 4. Verify
 
 ```powershell
-# Homepage serves (deployed by agenticai-landing)
+# Homepage serves (deployed from learnings-hub/agenticai/)
 Invoke-WebRequest https://agenticai.varasrinivas.com/ -UseBasicParsing | Select-Object StatusCode
 
 # A course page owned by this repo
