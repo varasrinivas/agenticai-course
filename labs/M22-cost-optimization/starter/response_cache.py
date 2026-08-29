@@ -161,7 +161,11 @@ class ResponseCache:
 
     def _evict_lru(self) -> None:
         """Remove the least recently used entry."""
-        # TODO: Find the entry with the oldest last_accessed time and remove it
+        # TODO: Remove the least recently used entry.
+        # Order by a monotonically increasing counter you bump on every get()
+        # and set() -- NOT by time.time(). The wall clock has ~15ms resolution
+        # on Windows, so several operations in one tick share a timestamp and
+        # min() evicts whichever key happens to come first.
         # Increment self.stats["evictions"]
         pass
 

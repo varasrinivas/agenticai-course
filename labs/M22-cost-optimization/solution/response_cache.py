@@ -27,6 +27,11 @@ class ResponseCache:
         self.max_entries = max_entries
         self.cache = {}
         self.stats = {"hits": 0, "misses": 0, "evictions": 0}
+        # LRU order is tracked by a monotonic counter, NOT by the wall clock.
+        # time.time() has ~15ms resolution on Windows, so three cache writes in
+        # the same tick share an identical timestamp, min() ties, and the wrong
+        # entry gets evicted. A counter cannot tie.
+        self._access_seq = 0
 
     def _normalize_query(self, query: str, context: str = None) -> str:
         """Normalize query for consistent cache key generation."""
@@ -63,8 +68,11 @@ class ResponseCache:
                 del self.cache[key]
                 self.stats["misses"] += 1
                 return None
-            # Update last accessed time (for LRU)
+            # Update recency (for LRU). last_accessed stays for reporting;
+            # lru_seq is what eviction actually orders by.
             entry["last_accessed"] = time.time()
+            self._access_seq += 1
+            entry["lru_seq"] = self._access_seq
             self.stats["hits"] += 1
             return entry["response"]
 
@@ -77,10 +85,12 @@ class ResponseCache:
             self._evict_lru()
         key = self._hash_key(query, context)
         now = time.time()
+        self._access_seq += 1
         self.cache[key] = {
             "response": response,
             "timestamp": now,
             "last_accessed": now,
+            "lru_seq": self._access_seq,
         }
 
     def invalidate(self, query: str, context: str = None) -> bool:
@@ -123,7 +133,7 @@ class ResponseCache:
         """Remove the least recently used entry."""
         if not self.cache:
             return
-        lru_key = min(self.cache, key=lambda k: self.cache[k]["last_accessed"])
+        lru_key = min(self.cache, key=lambda k: self.cache[k]["lru_seq"])
         del self.cache[lru_key]
         self.stats["evictions"] += 1
 

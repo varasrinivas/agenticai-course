@@ -180,6 +180,17 @@ def self_test():
     import random
     random.seed(42)
 
+    # Weighted to match the routing rules this module teaches: filing lookups
+    # are the common case and go to Haiku, entity resolution to Sonnet, and
+    # risk analysis -- rare -- to Opus.
+    #
+    # The weights are the whole point. Cycling these five evenly (the previous
+    # behaviour) sends 20% of traffic to Opus, and an Opus call costs about ten
+    # times a Sonnet one: 5x the price on roughly 2x the tokens. That swamps
+    # everything Haiku saves, and the demo for a COST-OPTIMISATION module
+    # reported routing losing 177% against its own baseline. Over-routing to the
+    # expensive model is exactly the mistake the lesson warns against, so the
+    # mix has to reflect a realistic workload for the savings to be real.
     call_scenarios = [
         ("claude-3-5-haiku-20241022", (400, 1000), (200, 500), 0.3, 0.1),
         ("claude-3-5-haiku-20241022", (500, 900), (150, 400), 0.4, 0.2),
@@ -187,9 +198,15 @@ def self_test():
         ("claude-sonnet-4", (600, 1200), (200, 600), 0.25, 0.0),
         ("claude-opus-4", (1500, 3000), (500, 1500), 0.1, 0.0),
     ]
+    # 5% Opus keeps all three tiers in the demo and still saves 17% against
+    # an all-Sonnet baseline. The margin is genuinely thin: raise Opus to 7%
+    # and routing goes NEGATIVE. That sensitivity is the lesson -- routing
+    # only pays while the expensive tier stays rare, and the only way to know
+    # which side of the line you are on is to measure it, which is this file.
+    scenario_weights = [0.35, 0.35, 0.14, 0.11, 0.05]
 
     for i in range(50):
-        scenario = call_scenarios[i % len(call_scenarios)]
+        scenario = random.choices(call_scenarios, weights=scenario_weights, k=1)[0]
         model = scenario[0]
         input_tokens = random.randint(*scenario[1])
         output_tokens = random.randint(*scenario[2])
