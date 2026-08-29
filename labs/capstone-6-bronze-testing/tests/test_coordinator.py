@@ -26,7 +26,7 @@ class TestLoadManifest:
         coord = Coordinator(mock_data_dir=MOCK_DATA_DIR)
         coord.load_manifest()
         assert "states" in coord.manifest
-        assert len(coord.manifest["states"]) == 15
+        assert len(coord.manifest["states"]) == 16
 
     def test_manifest_states_have_required_fields(self):
         coord = Coordinator(mock_data_dir=MOCK_DATA_DIR)
@@ -126,7 +126,7 @@ class TestRunParallel:
         coord.load_bronze_table()
         results = coord.run_parallel()
 
-        assert len(results) == 15
+        assert len(results) == 16
         states_tested = {r["state"] for r in results}
         expected_states = {s["state"] for s in coord.manifest["states"]}
         assert states_tested == expected_states

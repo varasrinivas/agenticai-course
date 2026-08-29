@@ -2,7 +2,7 @@
 
 ## What You'll Build
 
-A **coordinator agent** that spawns **parallel state tester subagents**, each validating one state's UCC filing data load into a Bronze canonical table. The system processes **15 states**, **5 file formats**, and runs **12 validation checks** per state.
+A **coordinator agent** that spawns **parallel state tester subagents**, each validating one state's UCC filing data load into a Bronze canonical table. The system processes **16 states**, **5 file formats**, and runs **12 validation checks** per state.
 
 Architecture:
 
@@ -15,7 +15,7 @@ Coordinator Agent
        +-- StateTester("CA")  --> parse pipe  --> 12 checks --> result
        +-- StateTester("TX")  --> parse fixed --> 12 checks --> result
        +-- StateTester("FL")  --> parse JSON  --> 12 checks --> result
-       +-- ...  (15 states total, including 2 intentional error files)
+       +-- ...  (16 states total, including 2 intentional error files)
        |
   +-- Dashboard
        +-- Console table
@@ -45,7 +45,7 @@ pip install -r requirements.txt
 
 # Verify mock data is present
 ls mock_data/source_files/
-# Should show 15 files: NY_2024_Q4.xml, CA_2024_Q4.csv, ... TX_BAD_truncated.dat, FL_BAD_encoding.json
+# Should show 16 files: NY_2024_Q4.xml, CA_2024_Q4.csv, ... TX_BAD_truncated.dat, FL_BAD_encoding.json
 ```
 
 ## The 12 Bronze Validation Checks
@@ -99,7 +99,7 @@ Read through the three main files to understand the data flow:
 3. **`dashboard.py`** -- Aggregates results into console, HTML, and JSON reports
 
 Also review:
-- `mock_data/load_manifest.json` -- Describes all 15 states, their source files, and formats
+- `mock_data/load_manifest.json` -- Describes all 16 states, their source files, and formats
 - `mock_data/bronze_table.json` -- The canonical Bronze table with 195 sample records
 - `mock_data/state_format_registry.json` -- Maps each state code to its file format
 
@@ -161,10 +161,16 @@ python coordinator.py --data-dir mock_data --workers 5
 
 Expected output:
 - 11 states CLEAN (all 12 checks pass)
-- GA with ERRORS (DT-01, DT-02 fail on date format)
-- NV with WARNINGS (DUP-01 warns on 3 duplicates)
+- GA with ERRORS (DT-01 fails -- dates are DD/MM/YYYY, not YYYY-MM-DD)
+- NY with ERRORS (DT-02 fails -- 2 records whose lapse date precedes their filing date)
+- NV with WARNINGS (DUP-01 warns on 3 duplicate filing numbers)
 - TX_BAD with ERRORS (SRC-01 fails -- truncated file)
 - FL_BAD with ERRORS (SRC-01 fails -- encoding error)
+
+That is 11 clean + 5 flagged = 16. The JSON summary counts `states_clean: 12`
+because it counts states with zero *failures*, and NV's duplicate is a warning
+rather than a failure -- two defensible tallies of the same run, so read the
+definition before comparing the numbers.
 
 Compare your console output against `expected_output/full_seed_dashboard.txt`.
 
@@ -199,7 +205,7 @@ docker compose up --build
 Compare your output against the files in `expected_output/`. Your system should:
 
 - [ ] Parse all 5 file formats correctly (XML, pipe CSV, comma CSV, fixed-width, JSON)
-- [ ] Run all 12 validation checks for each of 15 states
+- [ ] Run all 12 validation checks for each of 16 states
 - [ ] Execute state tests in parallel using ThreadPoolExecutor
 - [ ] Detect GA date format issues (DT-01 FAIL, DT-02 FAIL)
 - [ ] Detect NV duplicate filing numbers (DUP-01 WARN)
@@ -217,7 +223,7 @@ Compare your output against the files in `expected_output/`. Your system should:
 By completing this capstone, you have built:
 
 1. **A coordinator agent** that orchestrates parallel subagent execution
-2. **15 state tester subagents** that each validate one state's data independently
+2. **16 state tester subagents** that each validate one state's data independently
 3. **5 file format parsers** for XML, pipe-delimited CSV, comma CSV, fixed-width, and JSON
 4. **12 validation checks** covering source integrity, counts, schema, dates, names, metadata, and spot checks
 5. **A multi-format dashboard** generating console, HTML, and JSON reports

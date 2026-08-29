@@ -9,10 +9,10 @@ Expected column widths (from header):
     FILING_TYPE: 20 chars
     FILING_DATE: 11 chars (10 + space)
     LAPSE_DATE: 11 chars
-    STATUS: 12 chars
-    DEBTOR_NAME: 50 chars
-    DEBTOR_ADDRESS: 60 chars
-    SECURED_PARTY: 50 chars
+    STATUS: 11 chars (10 + space) -- starts at column 57
+    DEBTOR_NAME: 51 chars (50 + space) -- starts at column 68, NOT 69
+    DEBTOR_ADDRESS: 61 chars (60 + space) -- starts at column 119
+    SECURED_PARTY: 51 chars (50 + space) -- starts at column 180
     COLLATERAL: remainder of line
 
 Returns:

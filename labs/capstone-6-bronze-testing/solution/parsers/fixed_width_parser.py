@@ -6,16 +6,25 @@ import re
 from pathlib import Path
 from typing import Any
 
+# Offsets verified against the COLUMNS header the .dat files carry and against
+# the data itself: debtor_name begins at 68, debtor_address at 119,
+# secured_party_name at 180, collateral_description at 231. Each field is
+# followed by a single space separator, so every width below is (field + 1)
+# and .strip() removes the separator.
+#
+# The earlier spec gave status a width of 12, which reached into column 68 and
+# took the first letter of debtor_name with it -- "DEVILS TOWER TOURISM GROUP"
+# parsed as status "Lapsed     D" and debtor "EVILS TOWER TOURISM GROUP".
 COLUMN_SPECS = [
     ("filing_number", 0, 15),
     ("filing_type", 15, 20),
     ("filing_date", 35, 11),
     ("lapse_date", 46, 11),
-    ("status", 57, 12),
-    ("debtor_name", 69, 50),
-    ("debtor_address", 119, 60),
-    ("secured_party_name", 179, 50),
-    ("collateral_description", 229, None),
+    ("status", 57, 11),
+    ("debtor_name", 68, 51),
+    ("debtor_address", 119, 61),
+    ("secured_party_name", 180, 51),
+    ("collateral_description", 231, None),
 ]
 
 
