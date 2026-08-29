@@ -1,12 +1,22 @@
 """
 Mock UCC Filing Records — Solution
-(Re-exports from starter/mock_data.py so the solution runs standalone)
+(Re-exports starter/mock_data.py so there is exactly one copy of the data.)
 """
 
-import sys
-import os
+# The starter file is ALSO called mock_data.py. A plain `from mock_data import
+# ...` therefore resolves to *this* module — which Python has already placed in
+# sys.modules and is still executing — so the name is not defined yet and the
+# import dies with an ImportError. Adding starter/ to sys.path does not help,
+# because sys.modules is consulted first. Load the file by path, under a name
+# that cannot collide.
+import importlib.util as _importlib_util
+import os as _os
 
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "starter"))
-from mock_data import UCC_FILINGS
+_starter_path = _os.path.join(_os.path.dirname(__file__), "..", "starter", "mock_data.py")
+_spec = _importlib_util.spec_from_file_location("_starter_mock_data", _starter_path)
+_starter = _importlib_util.module_from_spec(_spec)
+_spec.loader.exec_module(_starter)
+
+UCC_FILINGS = _starter.UCC_FILINGS
 
 __all__ = ["UCC_FILINGS"]
