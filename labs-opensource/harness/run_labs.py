@@ -98,6 +98,8 @@ def main() -> int:
                     help="use the Ollama already serving :11434 instead of the stub")
     ap.add_argument("--only", default="", help="substring filter on the lab path")
     ap.add_argument("--timeout", type=int, default=300)
+    ap.add_argument("--resume", action="store_true",
+                    help="skip labs already recorded in the results file and append to it")
     args = ap.parse_args()
 
     server = None
@@ -139,10 +141,24 @@ def main() -> int:
     # leave behind everything it learned. Buffering the table to the end means a
     # kill throws all of it away.
     log = HERE / ("results-live.txt" if args.live else "results-stub.txt")
-    log.write_text(f"# mode={'live' if args.live else 'stub'}\n", encoding="utf-8")
+    done: set[str] = set()
+    if args.resume and log.is_file():
+        # A live sweep is long enough to be interrupted, so allow picking it up
+        # where it stopped: anything already recorded is not worth 40s/call to
+        # re-prove. Parse column 2 of each result line back out of the log.
+        for line in log.read_text(encoding="utf-8", errors="replace").splitlines():
+            parts = line.split()
+            if len(parts) >= 2 and parts[0] in ("PASS", "FAIL", "TODO"):
+                done.add(parts[1])
+        print(f"resuming: {len(done)} lab(s) already recorded, skipping them\n", flush=True)
+    else:
+        log.write_text(f"# mode={'live' if args.live else 'stub'}\n", encoding="utf-8")
+
     print(f"{'':4s}  {'lab script':{width}s}  kind      secs", flush=True)
 
     for script, rel in scripts:
+        if rel in done:
+            continue
         needs = wants_model(script)
         started = time.time()
         try:
@@ -177,7 +193,25 @@ def main() -> int:
     n_pass = sum(1 for s, _, _ in rows if s == "PASS")
     n_todo = sum(1 for s, _, _ in rows if s == "TODO")
     n_fail = sum(1 for s, _, _ in rows if s == "FAIL")
-    print(f"\n{n_pass} passed, {n_todo} unimplemented starter(s), {n_fail} failed, {len(rows)} total")
+    print(f"\nthis run: {n_pass} passed, {n_todo} unimplemented starter(s), "
+          f"{n_fail} failed, {len(rows)} total")
+
+    # With --resume the rows above are only the current batch, so report the
+    # whole log too -- otherwise a resumed sweep looks like it covered far less
+    # than it did.
+    tally: dict[str, int] = {}
+    for line in log.read_text(encoding="utf-8", errors="replace").splitlines():
+        head = line.split(" ", 1)[0]
+        if head in ("PASS", "FAIL", "TODO"):
+            tally[head] = tally.get(head, 0) + 1
+    total = sum(tally.values())
+    if total != len(rows):
+        # denominator is every declared script, not the --only subset, or a
+        # batched sweep reports "17 of 1"
+        print(f"cumulative in {log.name}: {tally.get('PASS', 0)} passed, "
+              f"{tally.get('TODO', 0)} unimplemented starter(s), "
+              f"{tally.get('FAIL', 0)} failed, {total} of "
+              f"{len(declared_scripts())} declared")
     for rel, msg in failures:
         print(f"\nFAIL {rel}\n     {msg}")
     for rel, why in EXPECTED_FAILURES.items():
