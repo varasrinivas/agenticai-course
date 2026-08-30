@@ -64,6 +64,51 @@ def uses_anthropic(src: str) -> bool:
     return False
 
 
+# These labs catch API errors, print a friendly line and exit 0 -- good for a
+# student, useless for a harness, because a completely failed run still looks
+# like a pass. Exit status alone cannot tell "worked" from "failed politely".
+#
+# Match API failures specifically, not any error text. A bare "Traceback" or
+# "[ERROR]" is not evidence: M15 is a code-interpreter sandbox whose whole job
+# is to run code that raises, so its correct output contains both. Flagging that
+# as an API problem is the same mistake in the other direction -- a false defect
+# instead of a false pass.
+TROUBLE = re.compile(
+    r"Invalid API key|authentication_error|permission_error|not_found_error|"
+    r"model_not_found|rate_limit_error|insufficient|credit balance|"
+    r"overloaded_error|invalid_request_error|APIConnectionError|"
+    r"APIStatusError|AuthenticationError", re.I)
+
+
+def preflight(env: dict) -> tuple[bool, str]:
+    """One cheap call, before spending anything on a full sweep.
+
+    Catches the two ways a live run silently produces nothing of value: a key
+    that does not authenticate, and a model id the account cannot serve. Both
+    would otherwise show up as a page of PASSes, since the labs swallow their
+    own API errors.
+    """
+    default_model = "claude-sonnet-4-6"
+    code = (
+        "import os,sys,json\n"
+        "import anthropic\n"
+        "m=os.environ.get('PREFLIGHT_MODEL')\n"
+        "try:\n"
+        "    r=anthropic.Anthropic().messages.create(model=m,max_tokens=4,\n"
+        "        messages=[{'role':'user','content':'hi'}])\n"
+        "    print('OK '+r.model)\n"
+        "except Exception as e:\n"
+        "    print(type(e).__name__+': '+str(e)[:180]); sys.exit(1)\n"
+    )
+    proc = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True,
+                          timeout=120, env=dict(env, PREFLIGHT_MODEL=default_model))
+    out = (proc.stdout or proc.stderr or "").strip().splitlines()
+    line = out[-1] if out else "(no output)"
+    if proc.returncode == 0 and line.startswith("OK"):
+        return True, f"key authenticates, {default_model} served (as {line[3:]})"
+    return False, line
+
+
 def candidates() -> list[tuple[Path, str, bool]]:
     out = []
     for s in sorted(LABS.rglob("solution/*.py")):
@@ -87,12 +132,35 @@ def main() -> int:
     args = ap.parse_args()
 
     env = dict(os.environ, PYTHONIOENCODING="utf-8")
+
+    # labs/.env is the documented place for the key (see .env.example) and is
+    # gitignored. Reading it here means the key never has to be exported into a
+    # shell, where it would sit in history. Parsed by hand rather than via
+    # python-dotenv so the harness has no dependency the labs do not already
+    # have, and so a stray value never overwrites something already exported.
+    dotenv = LABS / ".env"
+    if dotenv.is_file():
+        for line in dotenv.read_text(encoding="utf-8", errors="replace").splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            k, v = line.split("=", 1)
+            k, v = k.strip(), v.strip().strip('"').strip("'")
+            if k and v and k not in env:
+                env[k] = v
+
     server = None
     if args.live:
         if not env.get("ANTHROPIC_API_KEY"):
-            print("--live needs ANTHROPIC_API_KEY in the environment", file=sys.stderr)
+            print("--live needs ANTHROPIC_API_KEY: export it, or put it in labs/.env "
+                  "(gitignored; see labs/.env.example)", file=sys.stderr)
             return 2
-        print("mode: LIVE — real Anthropic API, this run costs money\n", flush=True)
+        ok, detail = preflight(env)
+        if not ok:
+            print(f"pre-flight failed, refusing to start: {detail}", file=sys.stderr)
+            return 2
+        print(f"mode: LIVE — real Anthropic API, this run costs money")
+        print(f"pre-flight OK: {detail}\n", flush=True)
     else:
         sys.path.insert(0, str(HERE))
         from fake_anthropic import serve      # noqa: E402
@@ -131,8 +199,19 @@ def main() -> int:
             rc, out = -1, f"exceeded --timeout of {args.timeout}s"
         secs = time.time() - started
 
-        status = "PASS" if rc == 0 else "FAIL"
-        if rc != 0:
+        combined = ((proc.stdout or "") + (proc.stderr or "")) if rc != -1 else out
+        if rc == 0 and TROUBLE.search(combined):
+            # Exit 0 but the output confesses an API failure. Reporting this as
+            # PASS is how a whole live sweep can look green while nothing ever
+            # reached the API.
+            status = "WARN"
+            hit = TROUBLE.search(combined)
+            ctx = combined[max(0, hit.start() - 40): hit.end() + 90].replace("\n", " ")
+            failures.append((rel, f"exit 0 but output reports: …{ctx.strip()}"))
+        elif rc == 0:
+            status = "PASS"
+        else:
+            status = "FAIL"
             tail = [l for l in out.strip().splitlines() if l.strip()]
             failures.append((rel, tail[-1][:130] if tail else "(no output)"))
         rows.append((status, rel))
@@ -144,11 +223,14 @@ def main() -> int:
         server.shutdown()
 
     n = lambda k: sum(1 for s, _ in rows if s == k)   # noqa: E731
-    print(f"\n{n('PASS')} passed, {n('FAIL')} failed, {n('SKIP')} skipped (interactive), "
-          f"{len(rows)} total")
+    print(f"\n{n('PASS')} passed, {n('WARN')} exited 0 but reported an API error, "
+          f"{n('FAIL')} failed, {n('SKIP')} skipped (interactive), {len(rows)} total")
     for rel, msg in failures:
-        print(f"\nFAIL {rel}\n     {msg}")
-    return 1 if n("FAIL") else 0
+        tag = "WARN" if msg.startswith("exit 0") else "FAIL"
+        print(f"\n{tag} {rel}\n     {msg}")
+    # WARN is a failure for CI purposes: a green sweep in which nothing reached
+    # the API is the exact outcome this harness exists to prevent.
+    return 1 if (n("FAIL") or n("WARN")) else 0
 
 
 if __name__ == "__main__":
