@@ -226,6 +226,21 @@ def main() -> int:
         secs = time.time() - started
 
         combined = ((proc.stdout or "") + (proc.stderr or "")) if rc != -1 else out
+
+        # An exhausted balance is not a lab result, and every remaining script
+        # would report the same thing -- turning one budget problem into a page
+        # of failures that look like defects. Pre-flight cannot catch this: a
+        # four-token probe still fits in the last few cents. Stop here instead
+        # and say so, so the run is not mistaken for evidence about the labs.
+        if re.search(r"credit balance is too low", combined, re.I):
+            print(f"\nABORTED at {rel}: the account's credit balance is exhausted.\n"
+                  f"Everything already recorded above stands; nothing after this point "
+                  f"would have been a test of the labs.", flush=True)
+            log.open("a", encoding="utf-8").write(
+                f"# ABORTED at {rel}: credit balance exhausted\n")
+            rows.append(("FAIL", rel))
+            failures.append((rel, "credit balance exhausted — run aborted"))
+            break
         if rc == 0 and TROUBLE.search(combined):
             # Exit 0 but the output confesses an API failure. Reporting this as
             # PASS is how a whole live sweep can look green while nothing ever

@@ -57,6 +57,48 @@ error branch.
 That heuristic has limits. If you add a lab that parses a new structure, expect
 to teach the stub about it — or run that lab under `--live`.
 
+## Results, 2026-08-31 (live, real API)
+
+One full pass against the real Anthropic API before the account's $5 balance
+ran out. **33 passed, 1 WARN, 5 failed, 8 skipped.**
+
+It found four defects no stub could have, all since fixed:
+
+* **M03's prefill lesson had never worked.** The prefill literal ends in a
+  newline and the API rejects a final assistant message ending in whitespace.
+  Fixing that exposed the real problem: `claude-sonnet-4-6` does not support
+  assistant prefill at all. Call 3 now uses a model that does.
+* **M01's multimodal image URL was dead**, and URLs were the wrong mechanism:
+  the API fetches the image itself, so the lab depended on a third party
+  serving that path to Anthropic's fetcher. Now base64 from a PNG shipped with
+  the lab.
+* **`claude-3-5-haiku-20241022` is retired** and 404s; it appeared in five M22
+  files.
+* A solution too broken to parse was **silently dropped from discovery** rather
+  than failing.
+
+Still unresolved: `M08/auto_summarize`, `M13/planning_agent`,
+`M14/multi_agent` and `capstone-9/coordinator` exceeded a 300s timeout. Real
+inference is far slower than canned replies, so these are *probably* the
+timeout being too tight rather than defects — but that has not been confirmed,
+and should not be assumed. Re-run those four with `--timeout 900` on a funded
+account.
+
+### On budget, and why a green run can be worthless
+
+The second full sweep reported 22 failures and 13 WARNs. **None of them were
+lab defects.** The balance had run out, and every script was returning
+"Your credit balance is too low". The run said nothing about the labs at all.
+
+Pre-flight cannot prevent this: a four-token probe still fits in the last few
+cents. So the harness now aborts the whole sweep the moment it sees that error,
+rather than converting one budget problem into a page of red that reads like
+forty.
+
+That is the same principle as the WARN check, in the other direction. Both
+exist because the expensive failure here is not a lab that breaks — it is a run
+that *looks* like it measured something.
+
 ## Results, 2026-08-31 (stub)
 
 **37 passed, 2 failed, 8 skipped, 47 total.**
