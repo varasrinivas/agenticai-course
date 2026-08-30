@@ -6,7 +6,10 @@ Run: python langchain_agent.py
 
 from datetime import datetime
 from zoneinfo import ZoneInfo
-from langchain_community.chat_models import ChatOllama
+# ChatOllama moved out of langchain-community into its own package. With
+# langchain-community >= 0.4 the old import raises ImportError, so this
+# needs langchain-ollama (pinned in requirements.txt).
+from langchain_ollama import ChatOllama
 from langchain.agents import create_openai_tools_agent, AgentExecutor
 from langchain_core.tools import tool
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder

@@ -86,7 +86,12 @@ class VectorMemory:
 if __name__ == "__main__":
     import tempfile
 
-    with tempfile.TemporaryDirectory() as tmp:
+    # ignore_cleanup_errors because Chroma keeps chroma.sqlite3 open, and
+    # Windows refuses to delete an open file -- without it this demo prints
+    # all its passing checks and then dies with a NotADirectoryError from
+    # shutil.rmtree, which looks like the lab failing when it did not.
+    # (Python 3.10+, which this course already requires.)
+    with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as tmp:
         mem = VectorMemory(persist_directory=tmp)
 
         id1 = mem.save("Order TRK-001 was shipped via FedEx on Monday", {"order_id": "TRK-001"})
