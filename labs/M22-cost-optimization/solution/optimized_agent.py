@@ -247,8 +247,8 @@ class OptimizedAgent:
         savings_pct = (savings_amount / baseline_total * 100) if baseline_total > 0 else 0
 
         # Count model distribution (non-cached calls only)
-        haiku_calls = by_model.get("claude-3-5-haiku-20241022", {}).get("calls", 0) - \
-            sum(1 for r in self.tracker.records if r["model"] == "claude-3-5-haiku-20241022" and r["cached"])
+        haiku_calls = by_model.get("claude-haiku-4-5-20251001", {}).get("calls", 0) - \
+            sum(1 for r in self.tracker.records if r["model"] == "claude-haiku-4-5-20251001" and r["cached"])
         sonnet_calls = by_model.get("claude-sonnet-4", {}).get("calls", 0) - \
             sum(1 for r in self.tracker.records if r["model"] == "claude-sonnet-4" and r["cached"])
         opus_calls = by_model.get("claude-opus-4", {}).get("calls", 0) - \

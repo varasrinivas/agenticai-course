@@ -12,7 +12,7 @@ from datetime import datetime
 
 
 MODEL_PRICING = {
-    "claude-3-5-haiku-20241022": {"input_per_1m": 0.80, "output_per_1m": 4.00},
+    "claude-haiku-4-5-20251001": {"input_per_1m": 0.80, "output_per_1m": 4.00},
     "claude-sonnet-4": {"input_per_1m": 3.00, "output_per_1m": 15.00},
     "claude-opus-4": {"input_per_1m": 15.00, "output_per_1m": 75.00},
 }
@@ -192,8 +192,8 @@ def self_test():
     # expensive model is exactly the mistake the lesson warns against, so the
     # mix has to reflect a realistic workload for the savings to be real.
     call_scenarios = [
-        ("claude-3-5-haiku-20241022", (400, 1000), (200, 500), 0.3, 0.1),
-        ("claude-3-5-haiku-20241022", (500, 900), (150, 400), 0.4, 0.2),
+        ("claude-haiku-4-5-20251001", (400, 1000), (200, 500), 0.3, 0.1),
+        ("claude-haiku-4-5-20251001", (500, 900), (150, 400), 0.4, 0.2),
         ("claude-sonnet-4", (800, 1500), (300, 800), 0.2, 0.05),
         ("claude-sonnet-4", (600, 1200), (200, 600), 0.25, 0.0),
         ("claude-opus-4", (1500, 3000), (500, 1500), 0.1, 0.0),

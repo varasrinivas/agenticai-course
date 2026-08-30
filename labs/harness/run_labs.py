@@ -109,17 +109,30 @@ def preflight(env: dict) -> tuple[bool, str]:
     return False, line
 
 
-def candidates() -> list[tuple[Path, str, bool]]:
-    out = []
+def candidates() -> tuple[list[tuple[Path, str, bool]], list[tuple[str, str]]]:
+    """Returns (runnable, unparseable).
+
+    A file that will not parse is returned rather than skipped. uses_anthropic()
+    answers False for it, so a silent skip would quietly shrink the run: a
+    solution broken badly enough to be a syntax error would vanish from the
+    report entirely, and the totals would look normal. That is the worst
+    possible way for this harness to fail.
+    """
+    out, broken = [], []
     for s in sorted(LABS.rglob("solution/*.py")):
         if s.name == "__init__.py" or "__pycache__" in s.parts or HERE in s.parents:
             continue
         src = s.read_text(encoding="utf-8", errors="replace")
+        rel = str(s.relative_to(LABS)).replace("\\", "/")
+        try:
+            ast.parse(src)
+        except SyntaxError as exc:
+            broken.append((rel, f"does not parse: {exc.msg} (line {exc.lineno})"))
+            continue
         if not uses_anthropic(src) or "__main__" not in src:
             continue
-        out.append((s, str(s.relative_to(LABS)).replace("\\", "/"),
-                    bool(INTERACTIVE.search(src))))
-    return out
+        out.append((s, rel, bool(INTERACTIVE.search(src))))
+    return out, broken
 
 
 def main() -> int:
@@ -179,13 +192,22 @@ def main() -> int:
         env["ANTHROPIC_API_KEY"] = "stub-not-a-real-key"
         print("mode: STUB (canned replies; proves plumbing, not answer quality)\n", flush=True)
 
-    work = [(p, rel, inter) for p, rel, inter in candidates() if args.only in rel]
+    discovered, broken = candidates()
+    work = [(p, rel, inter) for p, rel, inter in discovered if args.only in rel]
     width = max((len(r) for _, r, _ in work), default=10)
     log = HERE / (args.results or ("results-live.txt" if args.live else "results-stub.txt"))
     log.write_text(f"# mode={'live' if args.live else 'stub'}\n", encoding="utf-8")
 
     print(f"{'':4s}  {'solution':{width}s}  secs", flush=True)
     rows, failures = [], []
+    for rel, why in broken:
+        if args.only not in rel:
+            continue
+        rows.append(("FAIL", rel))
+        failures.append((rel, why))
+        line = f"{'FAIL':4s}  {rel:{width}s}      - {why}"
+        print(line, flush=True)
+        log.open("a", encoding="utf-8").write(line + "\n")
     for script, rel, interactive in work:
         if interactive:
             rows.append(("SKIP", rel))

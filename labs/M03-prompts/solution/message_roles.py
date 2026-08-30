@@ -13,6 +13,13 @@ load_dotenv()
 client = anthropic.Anthropic()
 MODEL = "claude-sonnet-4-6"
 
+# Assistant prefill is not universal. claude-sonnet-4-6 rejects it outright --
+# "This model does not support assistant message prefill" -- so Call 3 below
+# uses a model that does. That is the lesson as much as the technique is: a
+# prompting trick you rely on can be unavailable on the model you deploy, so
+# check before you build on it.
+PREFILL_MODEL = "claude-haiku-4-5-20251001"
+
 
 def basic_call(user_message: str) -> str:
     """Send a simple user message with no system prompt."""
@@ -38,12 +45,17 @@ def with_system_prompt(system: str, user_message: str) -> str:
 def with_prefill(system: str, user_message: str, assistant_prefill: str) -> str:
     """Use assistant prefill to guide the response format."""
     response = client.messages.create(
-        model=MODEL,
+        model=PREFILL_MODEL,
         max_tokens=1024,
         system=system,
         messages=[
             {"role": "user", "content": user_message},
-            {"role": "assistant", "content": assistant_prefill},
+            # rstrip(): the API rejects a final assistant message ending in
+            # whitespace ("final assistant content cannot end with trailing
+            # whitespace"), and the prefill below ends in a newline. The
+            # un-stripped text is still used for the value returned, so the
+            # formatting the prefill is teaching is preserved.
+            {"role": "assistant", "content": assistant_prefill.rstrip()},
         ],
     )
     return assistant_prefill + response.content[0].text

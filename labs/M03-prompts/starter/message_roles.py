@@ -44,6 +44,10 @@ def with_prefill(system: str, user_message: str, assistant_prefill: str) -> str:
     #   - messages: [user message, then an assistant message with the prefill text]
     # The assistant prefill "starts" Claude's response — Claude will continue
     # from where the prefill leaves off.
+    # GOTCHA: send assistant_prefill.rstrip(). The API rejects a final assistant
+    # message ending in whitespace ("final assistant content cannot end with
+    # trailing whitespace"), and the prefill below ends in a newline. Keep the
+    # un-stripped text for the value you return, so the formatting survives.
     # Return the PREFILL + the text content of the response (concatenated).
     pass
 
