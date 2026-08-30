@@ -100,6 +100,10 @@ def main() -> int:
     ap.add_argument("--timeout", type=int, default=300)
     ap.add_argument("--resume", action="store_true",
                     help="skip labs already recorded in the results file and append to it")
+    ap.add_argument("--results", default="",
+                    help="results filename (default results-live.txt / results-stub.txt). "
+                         "Use a distinct file when a run is served by a different model, so "
+                         "one model's results never land in another's log")
     args = ap.parse_args()
 
     server = None
@@ -140,7 +144,7 @@ def main() -> int:
     # 40s per model call), so a run that is interrupted after an hour must still
     # leave behind everything it learned. Buffering the table to the end means a
     # kill throws all of it away.
-    log = HERE / ("results-live.txt" if args.live else "results-stub.txt")
+    log = HERE / (args.results or ("results-live.txt" if args.live else "results-stub.txt"))
     done: set[str] = set()
     if args.resume and log.is_file():
         # A live sweep is long enough to be interrupted, so allow picking it up
