@@ -48,7 +48,7 @@ import sys
 import threading
 import urllib.error
 import urllib.request
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 LISTEN = 11434
 UPSTREAM = 11435
@@ -57,6 +57,11 @@ SWAPPED = 0
 
 
 class Handler(BaseHTTPRequestHandler):
+    # HTTP/1.1 means keep-alive, and a keep-alive connection is held open by the
+    # client between calls. On a single-threaded server the second connection
+    # then waits forever behind the first -- M09 completed once and hung on the
+    # next run with no output at all, which reads exactly like a lab that hangs.
+    # ThreadingHTTPServer below is what makes 1.1 safe here.
     protocol_version = "HTTP/1.1"
 
     def log_message(self, *a):
@@ -125,7 +130,7 @@ def main() -> int:
     UPSTREAM, SUBSTITUTE = args.to, args.model
 
     try:
-        srv = HTTPServer(("127.0.0.1", LISTEN), Handler)
+        srv = ThreadingHTTPServer(("127.0.0.1", LISTEN), Handler)
     except OSError as exc:
         print(f"cannot bind {LISTEN}: {exc}\n"
               f"Move the real Ollama aside first: OLLAMA_HOST=127.0.0.1:{UPSTREAM} ollama serve",

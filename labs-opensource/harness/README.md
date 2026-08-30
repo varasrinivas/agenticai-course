@@ -68,18 +68,59 @@ that extraction really succeeds. Model text varies between runs, so read it as
 Between them they still leave the last question open — whether the lab
 *teaches* well. No harness reaches that.
 
-## Live run, 2026-08-30
+## Results, 2026-08-30
 
-23 of the 46 declared scripts have been run against a real model — Ollama
-0.33.2, `mistral:latest` (7.2B, Q4, 4.4 GB), CPU only. **22 passed, 0 failed**,
-plus M03B's starter failing by design. 48 minutes of model time.
+Two runs, kept in two logs on purpose. They answer different questions and
+merging them into one number would overstate both.
+
+| run | model | covered | result |
+|---|---|---|---|
+| `results-live.txt` | `mistral:latest` 7B, local CPU | 23 of 46 | 22 pass, 0 fail |
+| `results-cloud-gptoss.txt` | `gpt-oss:20b-cloud` via `cloud_proxy.py` | **46 of 46** | **45 pass, 0 fail** |
+
+Both also record M03B's starter failing by design.
+
+**Every lab in this course runs to completion against a real LLM.** That is the
+cloud row, and it is a statement about the code: requests are well-formed, the
+tool-call round trips work, replies parse, the loops terminate.
+
+**About half are confirmed on the model the course actually ships.** That is the
+mistral row, and it is the stronger claim, because the labs hardcode
+`model="mistral"` and a 20B model clears prompts a 7B one may not. The gap is
+not a defect; it is CPU inference at ~40s per call versus ~1.3s on cloud. The
+remaining 23 finish overnight on the shipped model, or in minutes on a GPU:
+
+```bash
+python harness/run_labs.py --live --resume        # picks up where it left off
+```
+
+### Two failures that were the harness, not the labs
+
+`M09-rag/solution/rag_pipeline.py` was reported FAIL twice, and was fine both
+times. Worth reading before trusting any red result here:
+
+1. It timed out at 900s while ChromaDB downloaded its embedding model on first
+   use — a one-time cost that happened to land inside the timed run.
+2. It then hung with *no output at all*, because `cloud_proxy.py` was a
+   single-threaded server speaking HTTP/1.1. Clients hold keep-alive connections
+   open between calls, so the second connection waited behind the first forever.
+   `ThreadingHTTPServer` took it from a 900s hang to a 34s pass.
+
+The tell was inconsistency: it completed once, then hung completely. A lab that
+is genuinely broken does not alternate. When a red result cannot be reproduced,
+suspect the measurement before the lab.
+
+## Live run detail, 2026-08-30
+
+Ollama 0.33.2, `mistral:latest` (7.2B, Q4, 4.4 GB), CPU only. 48 minutes of
+model time for 23 scripts — the reason the cloud proxy exists.
 
 Covered: CAPSTONE-C3, M00, M00B (all three frameworks), M01, M02, M03, M04,
 M05, M06, M08's `conversation_manager`.
 
 The claim worth singling out: `M04/extractor.py` reports **5/5 extracted**
-against the real model, matching its committed sample name for name, where the
-stub reports 0/5. That is the difference between the two modes in one line.
+against real mistral, matching its committed sample name for name, where the
+stub reports 0/5. One lab, one line, showing why the modes are not redundant.
 
 Not yet covered: M09–M22. Those are the multi-call labs — the ReAct loop,
 planning decomposition, the multi-agent pipeline, guardrails, the LLM judge —
