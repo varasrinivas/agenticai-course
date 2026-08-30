@@ -122,10 +122,12 @@ The claim worth singling out: `M04/extractor.py` reports **5/5 extracted**
 against real mistral, matching its committed sample name for name, where the
 stub reports 0/5. One lab, one line, showing why the modes are not redundant.
 
-Not yet covered: M09–M22. Those are the multi-call labs — the ReAct loop,
-planning decomposition, the multi-agent pipeline, guardrails, the LLM judge —
-so they are both the slowest and the ones most likely to behave differently
-against a real model than against canned replies. Treat them as unverified.
+Not covered *on mistral*: M09–M22 — the multi-call labs (ReAct, planning
+decomposition, multi-agent, guardrails, the LLM judge). All of them pass against
+`gpt-oss:20b-cloud`, so their code is sound; what is untested is whether a 7B
+model holds up where a 20B one does. Strict JSON, tool-call formatting and loop
+termination are where that difference shows, and those are exactly what these
+labs exercise — so treat them as code-verified but not shipped-config verified.
 
 ### Why it stops there, and what it needs
 
