@@ -46,10 +46,19 @@ is the stub being wrong. If you extend the stub, keep the two dialects apart.
 tool-call round trip, parses the reply, and reaches the end of its own demo.
 Deterministic and free, so it is worth running on every change.
 
-It does **not** prove a real model answers well. Replies are canned, so a lab
-whose point is answer *quality* passes here regardless: M04's extractor
-reports 5/5 signatures because the stub hands it well-formed JSON, not because
-extraction works. Treat a stub pass as "the plumbing is intact".
+It does **not** prove a real model answers well, and M04 shows exactly how far
+a stub pass is from a correct lab. Run `extractor.py` under the stub and it
+exits 0 — so the harness reports `PASS` — while printing:
+
+```
+Results: 0/5 extracted successfully
+```
+
+against a committed sample that says 5/5. The stub returns the same canned
+record for every signature, so the extraction genuinely fails; the script has
+no assertion on that count, so it exits 0 anyway. `PASS` here means "ran to
+completion", nothing more. Read the output, not just the status, and use
+`--live` for anything whose point is answer quality.
 
 **Live** — `ollama pull mistral`, then `--live`. This is what checks the
 claims the stub cannot: that the prompts work, that the ReAct loop converges,
