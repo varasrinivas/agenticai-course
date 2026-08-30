@@ -140,7 +140,11 @@ def main() -> int:
     # have, and so a stray value never overwrites something already exported.
     dotenv = LABS / ".env"
     if dotenv.is_file():
-        for line in dotenv.read_text(encoding="utf-8", errors="replace").splitlines():
+        # utf-8-sig, not utf-8: Windows PowerShell's `Set-Content -Encoding utf8`
+        # writes a BOM, which otherwise makes the first key parse as
+        # "﻿ANTHROPIC_API_KEY" and go unnoticed -- the harness then reports
+        # "no key" while staring straight at one.
+        for line in dotenv.read_text(encoding="utf-8-sig", errors="replace").splitlines():
             line = line.strip()
             if not line or line.startswith("#") or "=" not in line:
                 continue
