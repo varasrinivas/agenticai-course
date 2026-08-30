@@ -93,7 +93,7 @@ def _options(system_prompt: str, model: str, skills: list[str],
         },
         allowed_tools=allowed,
         can_use_tool=hooks.can_use_tool,
-        hooks=[HookMatcher(matcher="*", hooks=[hooks.audit_log])],
+        hooks={"PostToolUse": [HookMatcher(matcher="*", hooks=[hooks.audit_log])]},
         # TODO(3): two options make skills work, and BOTH are required.
         #
         # One tells the SDK to read filesystem settings from the project --

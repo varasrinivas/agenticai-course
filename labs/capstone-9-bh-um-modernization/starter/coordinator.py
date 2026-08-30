@@ -168,7 +168,7 @@ def _options(system_prompt: str, model: str, allowed: list[str] | None = None):
         },
         allowed_tools=allowed,
         can_use_tool=hooks.can_use_tool,
-        hooks=[HookMatcher(matcher="*", hooks=[hooks.audit_log])],
+        hooks={"PostToolUse": [HookMatcher(matcher="*", hooks=[hooks.audit_log])]},
     )
 
 

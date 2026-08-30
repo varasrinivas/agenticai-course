@@ -67,7 +67,7 @@ def _options(system_prompt: str, model: str, allowed: list[str] | None = None):
       - model, system_prompt, max_turns from config
       - mcp_servers: oracle_src, pg_target, migration_local
       - can_use_tool=hooks.can_use_tool          <- the three PreToolUse guards
-      - hooks=[HookMatcher(matcher="*", hooks=[hooks.audit_log])]
+      - hooks={"PostToolUse": [HookMatcher(matcher="*", hooks=[hooks.audit_log])]}
     """
     raise NotImplementedError("Build _options")
 

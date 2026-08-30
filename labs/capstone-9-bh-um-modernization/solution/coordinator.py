@@ -149,7 +149,13 @@ PHASE_PROMPTS = {
 
 def _options(system_prompt: str, model: str, allowed: list[str] | None = None):
     """One place where every SDK knob is set, so a caller cannot forget a guard."""
-    return ClaudeAgentOptions(
+    # allowed_tools is omitted rather than passed as None when unrestricted.
+    # Recent claude-agent-sdk versions cross-check allowed_tools against
+    # can_use_tool and call dict.fromkeys() on it, which raises
+    # "TypeError: 'NoneType' object is not iterable" before a single request is
+    # made. Passing [] instead would not do: that reads as "no tools allowed",
+    # which is the opposite of what None means here.
+    kwargs = dict(
         model=model,
         system_prompt=system_prompt,
         max_turns=config.MAX_TURNS,
@@ -158,10 +164,12 @@ def _options(system_prompt: str, model: str, allowed: list[str] | None = None):
             "legacy_src": legacy_server,
             "local": local_server,
         },
-        allowed_tools=allowed,
         can_use_tool=hooks.can_use_tool,
-        hooks=[HookMatcher(matcher="*", hooks=[hooks.audit_log])],
+        hooks={"PostToolUse": [HookMatcher(matcher="*", hooks=[hooks.audit_log])]},
     )
+    if allowed is not None:
+        kwargs["allowed_tools"] = allowed
+    return ClaudeAgentOptions(**kwargs)
 
 
 async def _run(prompt: str, *, system_prompt: str, model: str, tracer: Tracer,

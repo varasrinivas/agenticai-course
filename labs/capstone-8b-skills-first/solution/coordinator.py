@@ -119,7 +119,7 @@ def _options(system_prompt: str, model: str, skills: list[str],
         },
         allowed_tools=allowed,
         can_use_tool=hooks.can_use_tool,
-        hooks=[HookMatcher(matcher="*", hooks=[hooks.audit_log])],
+        hooks={"PostToolUse": [HookMatcher(matcher="*", hooks=[hooks.audit_log])]},
         # Without this, `.claude/skills/` is never read and every skill
         # silently does not exist. The agent then improvises the type
         # mapping from memory and the run looks like it worked.
