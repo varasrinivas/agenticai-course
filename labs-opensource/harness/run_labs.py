@@ -108,9 +108,21 @@ def main() -> int:
             return 2
         print("mode: LIVE (real model on :11434)\n")
     else:
+        if endpoint_alive(1.0):
+            print("something is already serving http://localhost:11434 — most likely a real\n"
+                  "Ollama, or a stub left over from an earlier run. The stub cannot take the\n"
+                  "port, and letting it appear to start would mean these results came from a\n"
+                  "server this run does not control.\n\n"
+                  "  ->  pass --live to use whatever is serving, or stop it and re-run.",
+                  file=sys.stderr)
+            return 2
         sys.path.insert(0, str(HERE))
         from fake_ollama import serve      # noqa: E402
-        server = serve()
+        try:
+            server = serve()
+        except OSError as exc:
+            print(f"could not bind port 11434 for the stub: {exc}", file=sys.stderr)
+            return 2
         for _ in range(40):
             if endpoint_alive(0.5):
                 break
@@ -118,31 +130,49 @@ def main() -> int:
         print("mode: STUB (canned replies; proves plumbing, not answer quality)\n")
 
     scripts = [(s, r) for s, r in declared_scripts() if args.only in r]
+    width = max((len(r) for _, r in scripts), default=10)
     rows, failures = [], []
+
+    # Results are printed and appended to the log AS THEY HAPPEN, not collected
+    # and dumped at the end. --live is minutes per lab (CPU inference runs about
+    # 40s per model call), so a run that is interrupted after an hour must still
+    # leave behind everything it learned. Buffering the table to the end means a
+    # kill throws all of it away.
+    log = HERE / ("results-live.txt" if args.live else "results-stub.txt")
+    log.write_text(f"# mode={'live' if args.live else 'stub'}\n", encoding="utf-8")
+    print(f"{'':4s}  {'lab script':{width}s}  kind      secs", flush=True)
+
     for script, rel in scripts:
         needs = wants_model(script)
-        proc = subprocess.run([sys.executable, script.name], cwd=script.parent,
-                              capture_output=True, text=True, errors="replace",
-                              timeout=args.timeout,
-                              env={**os.environ, "PYTHONIOENCODING": "utf-8"})
+        started = time.time()
+        try:
+            proc = subprocess.run([sys.executable, script.name], cwd=script.parent,
+                                  capture_output=True, text=True, errors="replace",
+                                  timeout=args.timeout,
+                                  env={**os.environ, "PYTHONIOENCODING": "utf-8"})
+            rc, out = proc.returncode, (proc.stderr or proc.stdout) or ""
+        except subprocess.TimeoutExpired:
+            rc, out = -1, f"exceeded --timeout of {args.timeout}s"
+        secs = time.time() - started
+
         expected = rel in EXPECTED_FAILURES
-        if proc.returncode == 0:
+        if rc == 0:
             status = "PASS"
         elif expected:
             status = "TODO"                 # designed to fail until implemented
         else:
             status = "FAIL"
-            tail = [l for l in ((proc.stderr or proc.stdout) or "").strip().splitlines() if l.strip()]
+            tail = [l for l in out.strip().splitlines() if l.strip()]
             failures.append((rel, tail[-1][:130] if tail else "(no output)"))
         rows.append((status, rel, "model" if needs else "offline"))
 
+        line = f"{status:4s}  {rel:{width}s}  {'model' if needs else 'offline':7s} {secs:6.0f}"
+        print(line, flush=True)
+        with log.open("a", encoding="utf-8") as fh:
+            fh.write(line + "\n")
+
     if server is not None:
         server.shutdown()
-
-    width = max((len(r) for _, r, _ in rows), default=10)
-    print(f"{'':4s}  {'lab script':{width}s}  kind")
-    for status, rel, kind in rows:
-        print(f"{status:4s}  {rel:{width}s}  {kind}")
 
     n_pass = sum(1 for s, _, _ in rows if s == "PASS")
     n_todo = sum(1 for s, _, _ in rows if s == "TODO")
