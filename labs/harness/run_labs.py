@@ -73,11 +73,24 @@ def uses_anthropic(src: str) -> bool:
 # is to run code that raises, so its correct output contains both. Flagging that
 # as an API problem is the same mistake in the other direction -- a false defect
 # instead of a false pass.
+#
+# Every marker must be something only the API says. Loose words are not enough:
+# an earlier version matched bare "insufficient" (aiming at "insufficient
+# credits") and flagged three healthy labs because the MODEL's answer contained
+# "if assets are insufficient", "an insufficient basis for comparison" and
+# "Insufficiently Precise". A detector that reads the model's prose as evidence
+# about the transport will invent defects in exactly the labs that are working.
 TROUBLE = re.compile(
-    r"Invalid API key|authentication_error|permission_error|not_found_error|"
-    r"model_not_found|rate_limit_error|insufficient|credit balance|"
-    r"overloaded_error|invalid_request_error|APIConnectionError|"
-    r"APIStatusError|AuthenticationError", re.I)
+    r"credit balance is too low"
+    r"|Invalid API key"
+    r"|'type':\s*'(?:authentication_error|permission_error|not_found_error"
+    r"|rate_limit_error|invalid_request_error|overloaded_error|api_error)'"
+    r'|"type":\s*"(?:authentication_error|permission_error|not_found_error'
+    r'|rate_limit_error|invalid_request_error|overloaded_error|api_error)"'
+    r"|\b(?:AuthenticationError|PermissionDeniedError|NotFoundError"
+    r"|RateLimitError|APIConnectionError|APIStatusError|BadRequestError"
+    r"|InternalServerError)\b",
+    re.I)
 
 
 def preflight(env: dict) -> tuple[bool, str]:
@@ -171,6 +184,10 @@ def main() -> int:
     ap.add_argument("--skip-interactive", action="store_true",
                     help="skip stdin-reading labs instead of driving them with a "
                          "scripted transcript")
+    ap.add_argument("--save-output", default="",
+                    help="directory to write each lab's stdout/stderr into. Needed to "
+                         "judge ANSWER quality: exit status only shows a lab ran, and "
+                         "for an eval, judge or guardrail the answer is the whole point")
     ap.add_argument("--timeout", type=int, default=300)
     ap.add_argument("--results", default="")
     args = ap.parse_args()
@@ -264,6 +281,11 @@ def main() -> int:
         secs = time.time() - started
 
         combined = ((proc.stdout or "") + (proc.stderr or "")) if rc != -1 else out
+
+        if args.save_output:
+            dest = Path(args.save_output)
+            dest.mkdir(parents=True, exist_ok=True)
+            (dest / (rel.replace("/", "__") + ".txt")).write_text(combined, encoding="utf-8")
 
         # An exhausted balance is not a lab result, and every remaining script
         # would report the same thing -- turning one budget problem into a page
