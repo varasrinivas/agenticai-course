@@ -242,10 +242,38 @@ if __name__ == "__main__":
 
     try:
         filing = extract_and_validate(EDGE_CASE_TEXT)
-        print("[UNEXPECTED PASS] Edge case should have failed validation!")
+        # Expect this branch from a capable model, and read it as the lesson
+        # rather than as a surprise. The input says "sometime in 2024", "maybe
+        # New York" and "the filing number is unknown" -- yet a schema-valid
+        # object comes back with a precise filing_date and a definite state.
+        # Nothing was validated away because nothing was malformed. It was
+        # invented.
+        #
+        # A schema checks SHAPE, not TRUTH. A confident fabrication satisfies
+        # every type, enum and regex you can write, so "we use structured output,
+        # therefore the data is reliable" does not follow. Structured output
+        # makes data parseable; grounding it is a separate job.
+        print("[VALIDATION PASSED] — and that is the point:")
         print(f"  Got: {filing.model_dump_json(indent=2)}")
+        print()
+        vague = {
+            "filing_date": "the input said only 'sometime in 2024'",
+            "debtor_state": "the input said 'maybe New York'",
+            "debtor_name": "the input offered two spellings; one was chosen",
+        }
+        for field, why in vague.items():
+            value = getattr(filing, field, None)
+            if value not in (None, "", "<UNKNOWN>"):
+                print(f"  invented  {field} = {value!r}  ({why})")
+        print()
+        print("  Defence: make uncertainty representable, then validate THAT —")
+        print("  an Optional field the model may leave null, or an explicit")
+        print("  'unknown' sentinel, so a gap can be stated instead of guessed.")
     except ValidationError as e:
-        print("[EXPECTED FAIL] Validation caught bad data:")
+        # More literal models do refuse here. That is the other half of the
+        # lesson: whether invention happens is a property of the model, not of
+        # the schema, so it is not something to build a guarantee on.
+        print("[VALIDATION FAILED] This model declined to invent the missing fields:")
         for error in e.errors():
             print(f"  - {error['loc'][0]}: {error['msg']}")
     except Exception as e:

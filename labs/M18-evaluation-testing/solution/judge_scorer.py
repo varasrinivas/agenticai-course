@@ -256,8 +256,22 @@ if __name__ == "__main__":
         print(f"  Completeness: {result3['completeness']}/5")
         print(f"  Clarity: {result3['clarity']}/5")
         print(f"  Reasoning: {result3['reasoning']}")
-    else:
-        print(f"\nTest 3 — Skipped (no API key or anthropic not installed)")
+
+        # Test 4 exists because Test 3 alone proves nothing about a judge. It
+        # only ever shows the judge APPROVING a good answer, and a judge that
+        # returned 5/5 unconditionally would pass it. The property that makes an
+        # evaluator worth having is that it can also REJECT -- so score the bad
+        # answer live too, and assert the gap.
+        print(f"\nTest 4 — Bad response (LIVE mode):")
+        result4 = score_with_judge(query, response_bad, expected, mock_mode=False)
+        print(f"  Score: {result4['score']:.2f}")
+        print(f"  Accuracy: {result4['accuracy']}/5")
+        print(f"  Reasoning: {result4['reasoning']}")
+        assert result4["score"] < result3["score"], (
+            "the live judge did not rank the bad answer below the good one — "
+            "an evaluator that cannot discriminate is worse than none, because "
+            "it produces a number you will trust"
+        )
 
     print("\n" + "=" * 50)
     print("All self-tests passed!")
