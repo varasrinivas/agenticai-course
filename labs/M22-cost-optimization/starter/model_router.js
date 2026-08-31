@@ -193,4 +193,4 @@ function selfTest() {
 
 selfTest();
 
-module.exports = { ModelRouter, MODEL_PRICING };
+export { ModelRouter, MODEL_PRICING };

@@ -201,4 +201,4 @@ at this point in time for why no results were found.`;
 
 selfTest();
 
-module.exports = { TokenOptimizer };
+export { TokenOptimizer };

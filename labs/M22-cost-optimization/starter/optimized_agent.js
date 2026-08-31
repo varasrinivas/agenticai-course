@@ -12,10 +12,10 @@
  *     node optimized_agent.js
  */
 
-const { ResponseCache } = require("./response_cache");
-const { ModelRouter, MODEL_PRICING } = require("./model_router");
-const { TokenOptimizer } = require("./token_optimizer");
-const { CostTracker } = require("./cost_tracker");
+import { ResponseCache } from "./response_cache.js";
+import { ModelRouter, MODEL_PRICING } from "./model_router.js";
+import { TokenOptimizer } from "./token_optimizer.js";
+import { CostTracker } from "./cost_tracker.js";
 
 // =============================================================================
 // MOCK UCC AGENT
@@ -184,4 +184,4 @@ function selfTest() {
 
 selfTest();
 
-module.exports = { OptimizedAgent };
+export { OptimizedAgent };

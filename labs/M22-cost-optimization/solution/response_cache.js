@@ -7,7 +7,7 @@
  *     node response_cache.js
  */
 
-const crypto = require("crypto");
+import crypto from "crypto";
 
 class ResponseCache {
   constructor(ttlSeconds = 300, maxEntries = 1000) {
@@ -198,4 +198,4 @@ async function selfTest() {
 
 selfTest();
 
-module.exports = { ResponseCache };
+export { ResponseCache };

@@ -203,4 +203,4 @@ function selfTest() {
 
 selfTest();
 
-module.exports = { CostTracker, MODEL_PRICING, BATCH_DISCOUNT };
+export { CostTracker, MODEL_PRICING, BATCH_DISCOUNT };

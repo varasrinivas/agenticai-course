@@ -143,10 +143,18 @@ would have caught:
    is read as protocol `d:` and rejected with `ERR_UNSUPPORTED_ESM_URL_SCHEME`.
    M12–M15 were dead on arrival for every Windows reader — solutions *and*
    starters. Fixed with `pathToFileURL(...).href`.
-2. **CommonJS under `"type": "module"`.** The M18 family used `require` /
-   `module.exports`, which node refuses outright in this package. Converted to
-   ESM, which is what the rest of the course already uses. **M21, M22 and M22B
-   still have this** — 15 files, not yet addressed.
+2. **CommonJS under `"type": "module"`.** M18 and M22 used `require` /
+   `module.exports`, which node refuses outright when the governing manifest
+   declares `"type": "module"`. Converted to ESM, which is what the rest of the
+   course already uses.
+
+   **M21 and M22B are NOT affected, and must not be "fixed".** Both ship their
+   own `solution/package.json` with no `type` field, so those directories
+   default to CommonJS and their `require` is correct. A nested manifest
+   overrides the parent — which is easy to miss, because the files look
+   identical to the broken ones. I converted them before noticing and had to
+   revert. If a JS lab uses `require`, check for a nearer `package.json` before
+   concluding anything.
 3. **`readline` used after close.** capstone-1's agents recurse `askQuestion()`
    after each turn; when stdin ends mid-request the recursive call throws
    `ERR_USE_AFTER_CLOSE`. Interactive typing never hits it, redirected input

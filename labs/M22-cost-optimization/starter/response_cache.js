@@ -13,7 +13,7 @@
  *     node response_cache.js
  */
 
-const crypto = require("crypto");
+import crypto from "crypto";
 
 class ResponseCache {
   /**
@@ -220,4 +220,4 @@ async function selfTest() {
 
 selfTest();
 
-module.exports = { ResponseCache };
+export { ResponseCache };
