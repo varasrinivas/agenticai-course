@@ -1,3 +1,4 @@
+const assert = require("node:assert/strict");
 /**
  * M22 Lab — Token Optimizer (Solution)
  * ======================================
@@ -169,13 +170,13 @@ at this point in time for why no results were found.`;
   console.log(`  Original:   ${result.originalTokens} tokens`);
   console.log(`  Compressed: ${result.compressedTokens} tokens`);
   console.log(`  Reduction:  ${result.reductionPct.toFixed(1)}%`);
-  console.assert(result.reductionPct >= 25, "FAIL: Expected >= 25%");
+  assert.ok(result.reductionPct >= 25, "FAIL: Expected >= 25%");
   console.log(`  PASS: Achieved ${result.reductionPct.toFixed(1)}% reduction`);
 
   console.log("\n--- Test 2: Output Constraints ---");
   const c1 = optimizer.setOutputConstraints(300, "json");
   console.log(`  JSON: "${c1.constraintText}"`);
-  console.assert(c1.constraintText.toLowerCase().includes("json"));
+  assert.ok(c1.constraintText.toLowerCase().includes("json"));
   console.log("  PASS");
 
   console.log("\n--- Test 3: Message Windowing ---");
@@ -185,13 +186,13 @@ at this point in time for why no results were found.`;
   }));
   const msgResult = optimizer.optimizeMessages(messages);
   console.log(`  ${msgResult.originalCount} -> ${msgResult.optimizedCount} messages`);
-  console.assert(msgResult.optimizedCount <= 6);
+  assert.ok(msgResult.optimizedCount <= 6);
   console.log("  PASS");
 
   console.log("\n--- Test 4: Cumulative Savings ---");
   const savings = optimizer.getSavings();
   console.log(`  Saved: ${savings.savedTokens} tokens (${savings.reductionPct.toFixed(1)}%)`);
-  console.assert(savings.reductionPct > 0);
+  assert.ok(savings.reductionPct > 0);
   console.log("  PASS");
 
   console.log("\n" + "=".repeat(60));

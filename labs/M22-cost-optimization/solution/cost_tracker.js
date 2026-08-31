@@ -1,3 +1,4 @@
+const assert = require("node:assert/strict");
 /**
  * M22 Lab — Cost Tracker (Solution)
  * ===================================
@@ -8,7 +9,7 @@
  */
 
 const MODEL_PRICING = {
-  "claude-3-5-haiku-20241022": { inputPer1m: 0.80, outputPer1m: 4.00 },
+  "claude-haiku-4-5-20251001": { inputPer1m: 0.80, outputPer1m: 4.00 },
   "claude-sonnet-4": { inputPer1m: 3.00, outputPer1m: 15.00 },
   "claude-opus-4": { inputPer1m: 15.00, outputPer1m: 75.00 },
 };
@@ -169,8 +170,8 @@ function selfTest() {
   }
 
   const scenarios = [
-    ["claude-3-5-haiku-20241022", [400, 1000], [200, 500], 0.3, 0.1],
-    ["claude-3-5-haiku-20241022", [500, 900], [150, 400], 0.4, 0.2],
+    ["claude-haiku-4-5-20251001", [400, 1000], [200, 500], 0.3, 0.1],
+    ["claude-haiku-4-5-20251001", [500, 900], [150, 400], 0.4, 0.2],
     ["claude-sonnet-4", [800, 1500], [300, 800], 0.2, 0.05],
     ["claude-sonnet-4", [600, 1200], [200, 600], 0.25, 0.0],
     ["claude-opus-4", [1500, 3000], [500, 1500], 0.1, 0.0],
@@ -193,7 +194,7 @@ function selfTest() {
   const total = tracker.getTotalCost();
   console.log("\n--- Verification ---");
   console.log(`  Total cost: $${total.toFixed(4)}`);
-  console.assert(total > 0, "FAIL");
+  assert.ok(total > 0, "FAIL");
   console.log("  PASS: All checks passed");
 
   console.log("\n" + "=".repeat(60));

@@ -1,4 +1,5 @@
 import { fileURLToPath } from "url";
+import assert from "node:assert/strict";
 /**
  * M18 — Claude-as-Judge Scorer (Node.js Starter)
  * Uses a SEPARATE Claude call to evaluate response quality on a rubric.
@@ -108,11 +109,11 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
 
     const r1 = await scoreWithJudge(query, responseGood, expected, true);
     console.log(`\nTest 1 — Good (mock): score=${r1.score.toFixed(2)}`);
-    console.assert(r1.score >= 0.5, `Expected >= 0.5, got ${r1.score}`);
+    assert.ok(r1.score >= 0.5, `Expected >= 0.5, got ${r1.score}`);
 
     const r2 = await scoreWithJudge(query, responseBad, expected, true);
     console.log(`Test 2 — Bad (mock): score=${r2.score.toFixed(2)}`);
-    console.assert(r2.score < r1.score, "Bad should score lower");
+    assert.ok(r2.score < r1.score, "Bad should score lower");
 
     console.log("\n" + "=".repeat(50));
     console.log("All self-tests passed!");

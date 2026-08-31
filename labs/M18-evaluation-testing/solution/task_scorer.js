@@ -1,4 +1,5 @@
 import { fileURLToPath } from "url";
+import assert from "node:assert/strict";
 /**
  * M18 — Task Completion Scorer (Node.js Solution)
  * Scores whether the agent found the correct UCC filings.
@@ -93,7 +94,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     { expected_filings: ["UCC-2024-NY-0012847", "UCC-2024-NY-0015921"] }
   );
   console.log(`\nTest 1 — Perfect match: score=${result1.score} (expected: 1.0)`);
-  console.assert(result1.score === 1.0, `Expected 1.0, got ${result1.score}`);
+  assert.ok(result1.score === 1.0, `Expected 1.0, got ${result1.score}`);
 
   // Test 2: Partial match
   const result2 = scoreTaskCompletion(
@@ -101,7 +102,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     { expected_filings: ["UCC-2024-NY-0012847", "UCC-2024-NY-0015921"] }
   );
   console.log(`\nTest 2 — Partial match: score=${result2.score} (expected: 0.5)`);
-  console.assert(result2.score === 0.5, `Expected 0.5, got ${result2.score}`);
+  assert.ok(result2.score === 0.5, `Expected 0.5, got ${result2.score}`);
 
   // Test 3: No match
   const result3 = scoreTaskCompletion(
@@ -109,14 +110,14 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     { expected_filings: ["UCC-2024-NY-0012847"] }
   );
   console.log(`\nTest 3 — No match: score=${result3.score} (expected: 0.0)`);
-  console.assert(result3.score === 0.0, `Expected 0.0, got ${result3.score}`);
+  assert.ok(result3.score === 0.0, `Expected 0.0, got ${result3.score}`);
 
   // Test 4: Empty expected
   const result4 = scoreTaskCompletion("No filings were found for XYZ Corp.", {
     expected_filings: [],
   });
   console.log(`\nTest 4 — Empty expected: score=${result4.score} (expected: 1.0)`);
-  console.assert(result4.score === 1.0, `Expected 1.0, got ${result4.score}`);
+  assert.ok(result4.score === 1.0, `Expected 1.0, got ${result4.score}`);
 
   console.log("\n" + "=".repeat(50));
   console.log("All self-tests passed!");

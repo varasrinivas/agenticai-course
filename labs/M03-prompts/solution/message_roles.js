@@ -11,6 +11,13 @@ import "dotenv/config";
 const client = new Anthropic();
 const MODEL = "claude-sonnet-4-6";
 
+// Assistant prefill is not universal. claude-sonnet-4-6 rejects it outright --
+// "This model does not support assistant message prefill" -- so Call 3 below
+// uses a model that does. That is as much the lesson as the technique is: a
+// prompting trick you rely on can be unavailable on the model you deploy, so
+// check before building on it. The Python twin does the same.
+const PREFILL_MODEL = "claude-haiku-4-5-20251001";
+
 /**
  * Send a simple user message with no system prompt.
  * @param {string} userMessage
@@ -50,12 +57,17 @@ async function withSystemPrompt(system, userMessage) {
  */
 async function withPrefill(system, userMessage, assistantPrefill) {
   const response = await client.messages.create({
-    model: MODEL,
+    model: PREFILL_MODEL,
     max_tokens: 1024,
     system,
     messages: [
       { role: "user", content: userMessage },
-      { role: "assistant", content: assistantPrefill },
+      // trimEnd(): the API rejects a final assistant message ending in
+      // whitespace ("final assistant content cannot end with trailing
+      // whitespace"), and the prefill below ends in a newline. The un-trimmed
+      // text is still used for the value returned, so the formatting the
+      // prefill is teaching is preserved.
+      { role: "assistant", content: assistantPrefill.trimEnd() },
     ],
   });
   return assistantPrefill + response.content[0].text;

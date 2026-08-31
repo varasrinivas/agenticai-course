@@ -272,11 +272,40 @@ async function main() {
 
   try {
     const filing = await extractAndValidate(EDGE_CASE_TEXT);
-    console.log("[UNEXPECTED PASS] Edge case should have failed validation!");
+    // Expect this branch from a capable model, and read it as the lesson rather
+    // than as a surprise. The input says "sometime in 2024", "maybe New York"
+    // and "the filing number is unknown" -- yet a schema-valid object comes
+    // back with a precise filing_date and a definite state. Nothing was
+    // validated away because nothing was malformed. It was invented.
+    //
+    // A schema checks SHAPE, not TRUTH. A confident fabrication satisfies every
+    // type, enum and regex you can write, so "we use structured output,
+    // therefore the data is reliable" does not follow. Structured output makes
+    // data parseable; grounding it is a separate job. (As in the Python twin.)
+    console.log("[VALIDATION PASSED] — and that is the point:");
     console.log(`  Got: ${JSON.stringify(filing, null, 2)}`);
+    console.log();
+    const vague = {
+      filing_date: "the input said only 'sometime in 2024'",
+      debtor_state: "the input said 'maybe New York'",
+      debtor_name: "the input offered two spellings; one was chosen",
+    };
+    for (const [field, why] of Object.entries(vague)) {
+      const value = filing?.[field];
+      if (value !== undefined && value !== null && value !== "" && value !== "<UNKNOWN>") {
+        console.log(`  invented  ${field} = ${JSON.stringify(value)}  (${why})`);
+      }
+    }
+    console.log();
+    console.log("  Defence: make uncertainty representable, then validate THAT —");
+    console.log("  an optional field the model may leave null, or an explicit");
+    console.log("  'unknown' sentinel, so a gap can be stated instead of guessed.");
   } catch (e) {
     if (e instanceof z.ZodError) {
-      console.log("[EXPECTED FAIL] Validation caught bad data:");
+      // More literal models do refuse here. That is the other half of the
+      // lesson: whether invention happens is a property of the model, not of
+      // the schema, so it is not something to build a guarantee on.
+      console.log("[VALIDATION FAILED] This model declined to invent the missing fields:");
       for (const issue of e.issues) {
         console.log(`  - ${issue.path[0]}: ${issue.message}`);
       }

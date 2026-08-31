@@ -1,4 +1,5 @@
 import { fileURLToPath } from "url";
+import assert from "node:assert/strict";
 /**
  * M18 — Fuzzy Entity Match Scorer (Node.js Solution)
  * Scores entity resolution accuracy using token-based fuzzy matching.
@@ -121,26 +122,26 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
 
   const s1 = scoreEntityMatch("Acme Corporation", "Acme Corporation");
   console.log(`\nTest 1 — Exact: ${s1.toFixed(2)} (expected: 1.00)`);
-  console.assert(s1 === 1.0);
+  assert.ok(s1 === 1.0);
 
   const s2 = scoreEntityMatch("Acme Corp", "Acme Corporation");
   console.log(`\nTest 2 — Abbreviation: ${s2.toFixed(2)} (expected: ~0.33)`);
-  console.assert(s2 >= 0.3 && s2 <= 0.7);
+  assert.ok(s2 >= 0.3 && s2 <= 0.7);
 
   const s3 = scoreEntityMatch("Totally Different Company", "Acme Corporation");
   console.log(`\nTest 3 — No match: ${s3.toFixed(2)} (expected: 0.00)`);
-  console.assert(s3 === 0.0);
+  assert.ok(s3 === 0.0);
 
   const r5 = scoreEntityResolution(
     "I found filings for Acme Corporation in New York.",
     { expected_entity: "Acme Corporation" }
   );
   console.log(`\nTest 5 — Entity in response: ${r5.score.toFixed(2)} (expected: >= 0.5)`);
-  console.assert(r5.score >= 0.5);
+  assert.ok(r5.score >= 0.5);
 
   const r6 = scoreEntityResolution("Some response", { expected_entity: null });
   console.log(`\nTest 6 — No expected entity: ${r6.score.toFixed(2)} (expected: 1.00)`);
-  console.assert(r6.score === 1.0);
+  assert.ok(r6.score === 1.0);
 
   console.log("\n" + "=".repeat(50));
   console.log("All self-tests passed!");

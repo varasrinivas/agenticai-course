@@ -1,4 +1,5 @@
 import { fileURLToPath } from "url";
+import assert from "node:assert/strict";
 /**
  * M18 — Task Completion Scorer (Node.js Starter)
  * Scores whether the agent found the correct UCC filings.
@@ -57,7 +58,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     { expected_filings: ["UCC-2024-NY-0012847", "UCC-2024-NY-0015921"] }
   );
   console.log(`\nTest 1 — Perfect match: score=${r1.score} (expected: 1.0)`);
-  console.assert(r1.score === 1.0);
+  assert.ok(r1.score === 1.0);
 
   // Test 2: Partial
   const r2 = scoreTaskCompletion(
@@ -65,17 +66,17 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
     { expected_filings: ["UCC-2024-NY-0012847", "UCC-2024-NY-0015921"] }
   );
   console.log(`Test 2 — Partial: score=${r2.score} (expected: 0.5)`);
-  console.assert(r2.score === 0.5);
+  assert.ok(r2.score === 0.5);
 
   // Test 3: None
   const r3 = scoreTaskCompletion("No filings.", { expected_filings: ["UCC-2024-NY-0012847"] });
   console.log(`Test 3 — None: score=${r3.score} (expected: 0.0)`);
-  console.assert(r3.score === 0.0);
+  assert.ok(r3.score === 0.0);
 
   // Test 4: Empty expected
   const r4 = scoreTaskCompletion("No filings found.", { expected_filings: [] });
   console.log(`Test 4 — Empty expected: score=${r4.score} (expected: 1.0)`);
-  console.assert(r4.score === 1.0);
+  assert.ok(r4.score === 1.0);
 
   console.log("\n" + "=".repeat(50));
   console.log("All self-tests passed!");

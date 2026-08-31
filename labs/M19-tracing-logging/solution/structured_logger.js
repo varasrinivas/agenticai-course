@@ -1,3 +1,4 @@
+const assert = require("node:assert/strict");
 /**
  * M19 Lab — Structured Logger (Solution)
  * =======================================
@@ -196,7 +197,7 @@ function selfTest() {
 
   logger = new StructuredLogger("ucc_agent", "WARN");
   const result = logger.log("DEBUG", "This should be filtered out");
-  console.assert(
+  assert.ok(
     result === null,
     "DEBUG should be filtered when minLevel is WARN"
   );

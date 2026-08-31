@@ -6,6 +6,7 @@
  */
 
 import { pathToFileURL } from "node:url";
+import assert from "node:assert/strict";
 
 export class BufferMemory {
   constructor({ maxMessages = 20, maxTokens = 4000 } = {}) {
@@ -66,8 +67,8 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   console.log(`BufferMemory(messages=${buf.get().length}, ~${buf.tokenCount()} tokens)`);
   for (const m of buf.get()) console.log(`  [${m.role}] ${m.content.slice(0, 60)}`);
 
-  console.assert(buf.get().length <= 6, "max_messages eviction failed");
-  console.assert(buf.tokenCount() <= 200, "token eviction failed");
-  console.assert(buf.get()[0]?.role === "user", "buffer must start with a user turn (evict in pairs!)");
+  assert.ok(buf.get().length <= 6, "max_messages eviction failed");
+  assert.ok(buf.tokenCount() <= 200, "token eviction failed");
+  assert.ok(buf.get()[0]?.role === "user", "buffer must start with a user turn (evict in pairs!)");
   console.log("\nAll eviction checks passed.");
 }

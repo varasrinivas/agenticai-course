@@ -9,6 +9,7 @@
 
 import { Trace, Span, withSpan } from "./trace_model.js";
 import { StructuredLogger, scrubPii } from "./structured_logger.js";
+import assert from "node:assert/strict";
 
 // =============================================================================
 // MOCK AGENT
@@ -229,17 +230,17 @@ async function selfTest() {
   console.log(result.answer);
   console.log();
 
-  console.assert(
+  assert.ok(
     trace.spans.length === 4,
     `Expected 4 spans, got ${trace.spans.length}`
   );
   const spanNames = trace.spans.map((s) => s.name);
-  console.assert(spanNames.includes("agent_request"), "Missing root span");
-  console.assert(
+  assert.ok(spanNames.includes("agent_request"), "Missing root span");
+  assert.ok(
     spanNames.filter((n) => n === "llm_call").length === 2,
     "Expected 2 llm_call spans"
   );
-  console.assert(
+  assert.ok(
     spanNames.includes("tool_execution"),
     "Missing tool_execution span"
   );

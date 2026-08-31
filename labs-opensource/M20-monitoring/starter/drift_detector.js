@@ -1,3 +1,4 @@
+const assert = require("node:assert/strict");
 /**
  * M20 Lab - Step 1: Z-Score Drift Detector (Node.js)
  * ===================================================
@@ -106,7 +107,7 @@ for (let i = 0; i < 5; i++) {
   }
 }
 
-console.assert(stableCriticals === 0, `criticals during stable phase: ${stableCriticals}`);
-console.assert(fired.some((a) => a.metric === "quality_score" && a.direction === "down" && a.severity === "critical"), "quality drop not critical");
-console.assert(fired.some((a) => a.metric === "tokens_per_query" && a.direction === "up" && a.severity === "critical"), "token explosion not critical");
+assert.ok(stableCriticals === 0, `criticals during stable phase: ${stableCriticals}`);
+assert.ok(fired.some((a) => a.metric === "quality_score" && a.direction === "down" && a.severity === "critical"), "quality drop not critical");
+assert.ok(fired.some((a) => a.metric === "tokens_per_query" && a.direction === "up" && a.severity === "critical"), "token explosion not critical");
 console.log("\nAll drift checks passed.");

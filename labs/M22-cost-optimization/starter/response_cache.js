@@ -14,6 +14,7 @@
  */
 
 import crypto from "crypto";
+import assert from "node:assert/strict";
 
 class ResponseCache {
   /**
@@ -148,19 +149,19 @@ async function selfTest() {
     model: "sonnet",
   });
   let result = cache.get("Find filings for Acme Corp");
-  console.assert(result !== null, "FAIL: Should have found cached response");
+  assert.ok(result !== null, "FAIL: Should have found cached response");
   console.log(`  PASS: Cached and retrieved response: ${result.answer}`);
 
   // --- Test 2: Normalization ---
   console.log("\n--- Test 2: Query normalization ---");
   let result2 = cache.get("  FIND  FILINGS  FOR  ACME  CORP  ");
-  console.assert(result2 !== null, "FAIL: Normalized query should hit cache");
+  assert.ok(result2 !== null, "FAIL: Normalized query should hit cache");
   console.log(`  PASS: Normalized query matched: ${result2.answer}`);
 
   // --- Test 3: Cache miss ---
   console.log("\n--- Test 3: Cache miss ---");
   let result3 = cache.get("Totally different query");
-  console.assert(result3 === null, "FAIL: Should be a cache miss");
+  assert.ok(result3 === null, "FAIL: Should be a cache miss");
   console.log("  PASS: Cache miss returned null");
 
   // --- Test 4: TTL expiry ---
@@ -168,14 +169,14 @@ async function selfTest() {
   const shortCache = new ResponseCache(1, 10);
   shortCache.set("expiring query", { answer: "temporary" });
   let result4 = shortCache.get("expiring query");
-  console.assert(result4 !== null, "FAIL: Should be cached immediately");
+  assert.ok(result4 !== null, "FAIL: Should be cached immediately");
   console.log("  Cached response found (before expiry)");
   console.log("  Waiting 1.5 seconds for TTL expiry...");
 
   await new Promise((r) => setTimeout(r, 1500));
 
   let result4b = shortCache.get("expiring query");
-  console.assert(result4b === null, "FAIL: Should have expired");
+  assert.ok(result4b === null, "FAIL: Should have expired");
   console.log("  PASS: Response expired after TTL");
 
   // --- Test 5: LRU eviction ---
@@ -189,17 +190,17 @@ async function selfTest() {
 
   lruCache.set("query D", { answer: "D" }); // Should evict B
 
-  console.assert(lruCache.get("query A") !== null, "FAIL: A should still be cached");
-  console.assert(lruCache.get("query B") === null, "FAIL: B should have been evicted");
-  console.assert(lruCache.get("query D") !== null, "FAIL: D should be cached");
+  assert.ok(lruCache.get("query A") !== null, "FAIL: A should still be cached");
+  assert.ok(lruCache.get("query B") === null, "FAIL: B should have been evicted");
+  assert.ok(lruCache.get("query D") !== null, "FAIL: D should be cached");
   console.log("  PASS: LRU eviction removed oldest entry (B)");
 
   // --- Test 6: Invalidation ---
   console.log("\n--- Test 6: Invalidation ---");
   cache.set("to remove", { answer: "bye" });
   let removed = cache.invalidate("to remove");
-  console.assert(removed === true, "FAIL: Should return true");
-  console.assert(cache.get("to remove") === null, "FAIL: Should be gone");
+  assert.ok(removed === true, "FAIL: Should return true");
+  assert.ok(cache.get("to remove") === null, "FAIL: Should be gone");
   console.log("  PASS: Entry invalidated successfully");
 
   // --- Test 7: Stats ---
@@ -209,8 +210,8 @@ async function selfTest() {
     `  Hits: ${stats.hits}, Misses: ${stats.misses}, ` +
       `Hit Rate: ${(stats.hitRate * 100).toFixed(1)}%, Evictions: ${stats.evictions}`
   );
-  console.assert(stats.hits > 0, "FAIL: Should have recorded hits");
-  console.assert(stats.misses > 0, "FAIL: Should have recorded misses");
+  assert.ok(stats.hits > 0, "FAIL: Should have recorded hits");
+  assert.ok(stats.misses > 0, "FAIL: Should have recorded misses");
   console.log("  PASS: Stats tracking works");
 
   console.log("\n" + "=".repeat(60));

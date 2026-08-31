@@ -8,6 +8,7 @@
  */
 
 import crypto from "crypto";
+import assert from "node:assert/strict";
 
 // =============================================================================
 // SPAN
@@ -166,15 +167,15 @@ async function selfTest() {
 
   const children = trace.getChildSpans(trace.rootSpan);
   console.log(`Root span has ${children.length} children`);
-  console.assert(
+  assert.ok(
     trace.spans.length === 4,
     `Expected 4 spans, got ${trace.spans.length}`
   );
-  console.assert(
+  assert.ok(
     children.length === 3,
     `Expected 3 children, got ${children.length}`
   );
-  console.assert(trace.rootSpan.status === "ok", "Root span should be ok");
+  assert.ok(trace.rootSpan.status === "ok", "Root span should be ok");
   console.log("\nAll assertions passed!");
 }
 

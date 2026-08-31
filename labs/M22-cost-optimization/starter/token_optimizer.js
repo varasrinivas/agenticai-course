@@ -1,3 +1,4 @@
+const assert = require("node:assert/strict");
 /**
  * M22 Lab — Token Optimizer (Starter)
  * ====================================
@@ -138,14 +139,14 @@ at this point in time for why no results were found.`;
   console.log(`  Original:   ${result.originalTokens} tokens (${result.original.length} chars)`);
   console.log(`  Compressed: ${result.compressedTokens} tokens (${result.compressed.length} chars)`);
   console.log(`  Reduction:  ${result.reductionPct.toFixed(1)}%`);
-  console.assert(result.reductionPct >= 25, `FAIL: Expected >= 25% reduction`);
+  assert.ok(result.reductionPct >= 25, `FAIL: Expected >= 25% reduction`);
   console.log(`  PASS: Achieved ${result.reductionPct.toFixed(1)}% reduction`);
 
   // --- Test 2: Output constraints ---
   console.log("\n--- Test 2: Output Constraints ---");
   const constraints = optimizer.setOutputConstraints(300, "json");
   console.log(`  Constraint text: "${constraints.constraintText}"`);
-  console.assert(constraints.constraintText.toLowerCase().includes("json"));
+  assert.ok(constraints.constraintText.toLowerCase().includes("json"));
   console.log("  PASS: JSON format constraint applied");
 
   const constraints2 = optimizer.setOutputConstraints(200, "brief");
@@ -173,8 +174,8 @@ at this point in time for why no results were found.`;
   console.log(`  Original messages:  ${msgResult.originalCount}`);
   console.log(`  Optimized messages: ${msgResult.optimizedCount}`);
   console.log(`  Tokens saved:       ~${msgResult.tokensSaved}`);
-  console.assert(msgResult.optimizedCount <= 6, "FAIL: Should have trimmed");
-  console.assert(
+  assert.ok(msgResult.optimizedCount <= 6, "FAIL: Should have trimmed");
+  assert.ok(
     msgResult.optimizedMessages[0].content === messages[0].content,
     "FAIL: First message should be preserved"
   );
@@ -187,7 +188,7 @@ at this point in time for why no results were found.`;
   console.log(`  Total optimized tokens: ${savings.optimizedTokens}`);
   console.log(`  Total saved:            ${savings.savedTokens}`);
   console.log(`  Overall reduction:      ${savings.reductionPct.toFixed(1)}%`);
-  console.assert(savings.reductionPct > 0, "FAIL: Should show savings");
+  assert.ok(savings.reductionPct > 0, "FAIL: Should show savings");
   console.log("  PASS: Cumulative tracking works");
 
   console.log("\n" + "=".repeat(60));

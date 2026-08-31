@@ -1,4 +1,5 @@
 import { fileURLToPath } from "url";
+import assert from "node:assert/strict";
 /**
  * M18 — Claude-as-Judge Scorer (Node.js Solution)
  * Uses a SEPARATE Claude call to evaluate response quality on a rubric.
@@ -195,13 +196,46 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
       key_facts: ["Atlantic Capital Partners", "Citibank N.A.", "accounts receivable"],
     };
 
+    // Checks below use assert.ok (node:assert/strict), which throws. They were
+    // written with console.assert, which in Node prints "Assertion failed" and
+    // carries on with exit code 0 -- so the self-test could not fail, which is
+    // precisely the failure mode this module exists to teach about.
+
     const r1 = await scoreWithJudge(query, responseGood, expected, true);
     console.log(`\nTest 1 — Good (mock): score=${r1.score.toFixed(2)}`);
-    console.assert(r1.score >= 0.5);
+    assert.ok(r1.score >= 0.5, "mock judge scored a good answer below 0.5");
 
     const r2 = await scoreWithJudge(query, responseBad, expected, true);
     console.log(`Test 2 — Bad (mock): score=${r2.score.toFixed(2)}`);
-    console.assert(r2.score < r1.score);
+    assert.ok(r2.score < r1.score, "mock judge did not rank the bad answer lower");
+
+    // Tests 3 and 4 mirror the Python twin, which had a live check while this
+    // file had none: the mock is deterministic teaching scaffolding, but only a
+    // real call shows whether the judge actually judges.
+    if (process.env.ANTHROPIC_API_KEY) {
+      const r3 = await scoreWithJudge(query, responseGood, expected, false);
+      console.log(`\nTest 3 — Good (LIVE): score=${r3.score.toFixed(2)}`);
+      console.log(`  Reasoning: ${r3.reasoning}`);
+
+      const r4 = await scoreWithJudge(query, responseBad, expected, false);
+      console.log(`Test 4 — Bad (LIVE): score=${r4.score.toFixed(2)}`);
+      console.log(`  Reasoning: ${r4.reasoning}`);
+
+      // Only meaningful against a real endpoint: a stub returns the same canned
+      // reply whatever it is asked, so good and bad necessarily score alike.
+      const base = process.env.ANTHROPIC_BASE_URL || "";
+      const againstStub = base.includes("localhost") || base.includes("127.0.0.1");
+      if (againstStub) {
+        console.log("  (stub endpoint — skipping the discrimination check)");
+      } else {
+        assert.ok(r4.score < r3.score,
+          "the live judge did not rank the bad answer below the good one — an " +
+          "evaluator that cannot discriminate is worse than none, because it " +
+          "produces a number you will trust");
+      }
+    } else {
+      console.log("\nTests 3-4 — skipped (no ANTHROPIC_API_KEY)");
+    }
 
     console.log("\n" + "=".repeat(50));
     console.log("All self-tests passed!");

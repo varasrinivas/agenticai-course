@@ -8,6 +8,7 @@
  */
 
 import crypto from "crypto";
+import assert from "node:assert/strict";
 
 class ResponseCache {
   constructor(ttlSeconds = 300, maxEntries = 1000) {
@@ -136,30 +137,30 @@ async function selfTest() {
   const cache = new ResponseCache(5, 3);
   cache.set("Find filings for Acme Corp", { answer: "Found 3 filings", model: "sonnet" });
   let result = cache.get("Find filings for Acme Corp");
-  console.assert(result !== null, "FAIL");
+  assert.ok(result !== null, "FAIL");
   console.log(`  PASS: Cached and retrieved response: ${result.answer}`);
 
   // --- Test 2 ---
   console.log("\n--- Test 2: Query normalization ---");
   let result2 = cache.get("  FIND  FILINGS  FOR  ACME  CORP  ");
-  console.assert(result2 !== null, "FAIL");
+  assert.ok(result2 !== null, "FAIL");
   console.log(`  PASS: Normalized query matched: ${result2.answer}`);
 
   // --- Test 3 ---
   console.log("\n--- Test 3: Cache miss ---");
   let result3 = cache.get("Totally different query");
-  console.assert(result3 === null, "FAIL");
+  assert.ok(result3 === null, "FAIL");
   console.log("  PASS: Cache miss returned null");
 
   // --- Test 4 ---
   console.log("\n--- Test 4: TTL expiry (short TTL) ---");
   const shortCache = new ResponseCache(1, 10);
   shortCache.set("expiring query", { answer: "temporary" });
-  console.assert(shortCache.get("expiring query") !== null, "FAIL");
+  assert.ok(shortCache.get("expiring query") !== null, "FAIL");
   console.log("  Cached response found (before expiry)");
   console.log("  Waiting 1.5 seconds for TTL expiry...");
   await new Promise((r) => setTimeout(r, 1500));
-  console.assert(shortCache.get("expiring query") === null, "FAIL");
+  assert.ok(shortCache.get("expiring query") === null, "FAIL");
   console.log("  PASS: Response expired after TTL");
 
   // --- Test 5 ---
@@ -170,16 +171,16 @@ async function selfTest() {
   lruCache.set("query C", { answer: "C" });
   lruCache.get("query A");
   lruCache.set("query D", { answer: "D" });
-  console.assert(lruCache.get("query A") !== null, "FAIL: A should be cached");
-  console.assert(lruCache.get("query B") === null, "FAIL: B should be evicted");
-  console.assert(lruCache.get("query D") !== null, "FAIL: D should be cached");
+  assert.ok(lruCache.get("query A") !== null, "FAIL: A should be cached");
+  assert.ok(lruCache.get("query B") === null, "FAIL: B should be evicted");
+  assert.ok(lruCache.get("query D") !== null, "FAIL: D should be cached");
   console.log("  PASS: LRU eviction removed oldest entry (B)");
 
   // --- Test 6 ---
   console.log("\n--- Test 6: Invalidation ---");
   cache.set("to remove", { answer: "bye" });
-  console.assert(cache.invalidate("to remove") === true);
-  console.assert(cache.get("to remove") === null);
+  assert.ok(cache.invalidate("to remove") === true);
+  assert.ok(cache.get("to remove") === null);
   console.log("  PASS: Entry invalidated successfully");
 
   // --- Test 7 ---

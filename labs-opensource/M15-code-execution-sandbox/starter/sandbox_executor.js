@@ -12,6 +12,7 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 
 import { pathToFileURL } from "node:url";
+import assert from "node:assert/strict";
 const execFileAsync = promisify(execFile);
 const PYTHON = process.platform === "win32" ? "python" : "python3";
 
@@ -59,17 +60,17 @@ if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) 
   console.log("TEST 1: happy path");
   let r = await ex.run("print(sum(range(101)))");
   console.log(`  ${toToolContent(r)}`);
-  console.assert(r.exitCode === 0 && r.stdout.includes("5050"));
+  assert.ok(r.exitCode === 0 && r.stdout.includes("5050"));
 
   console.log("\nTEST 2: deliberate NameError (must return, not throw)");
   r = await ex.run("print(undefined_variable)");
   console.log(`  exitCode=${r.exitCode}, stderr contains NameError: ${r.stderr.includes("NameError")}`);
-  console.assert(r.exitCode !== 0 && r.stderr.includes("NameError"));
+  assert.ok(r.exitCode !== 0 && r.stderr.includes("NameError"));
 
   console.log("\nTEST 3: infinite loop (must time out at exit code 124, not hang)");
   r = await ex.run("while True: pass");
   console.log(`  exitCode=${r.exitCode}, stderr=${r.stderr.slice(0, 50)}`);
-  console.assert(r.exitCode === 124);
+  assert.ok(r.exitCode === 124);
 
   console.log("\nAll executor checks passed.");
 }

@@ -17,6 +17,7 @@ import { fileURLToPath } from "url";
 import { Trace, Span, withSpan } from "./trace_model.js";
 import { StructuredLogger } from "./structured_logger.js";
 import { MockUCCAgent, InstrumentedAgent } from "./instrumenter.js";
+import assert from "node:assert/strict";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -147,9 +148,9 @@ async function selfTest() {
   console.log(`Trace duration:  ${traceJson.durationMs.toFixed(1)} ms`);
   console.log();
 
-  console.assert(rendered != null, "renderTrace should return a string");
-  console.assert(rendered.length > 0, "Rendered trace should not be empty");
-  console.assert(traceJson.spans.length === 4, `Expected 4 spans, got ${traceJson.spans.length}`);
+  assert.ok(rendered != null, "renderTrace should return a string");
+  assert.ok(rendered.length > 0, "Rendered trace should not be empty");
+  assert.ok(traceJson.spans.length === 4, `Expected 4 spans, got ${traceJson.spans.length}`);
   console.log("All assertions passed!");
 }
 
