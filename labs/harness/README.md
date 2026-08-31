@@ -165,6 +165,19 @@ would have caught:
    labs, declared by neither manifest, so `npm install` produced a tree that
    could not run the RAG, MCP, API or deployment labs at all.
 
+### Live results for the JavaScript labs, 2026-08-31
+
+**46 of 46 pass against the real API.** The sweep initially showed one WARN on
+`M03/message_roles.js` (trailing-whitespace prefill); that run had started
+before the fix landed, and the lab passes on re-run — the prefill now works,
+printing `## Analysis` followed by the model's continuation.
+
+Running the JS live is what exposed that four earlier Python fixes had never
+been carried to their `.js` twins: M22's retired model id, M03's two prefill
+defects, M04's misleading edge-case framing, and M18's complete absence of a
+live test. A fix applied to one language and not the other leaves the reader on
+the other path with the broken version, so treat "fixed" as meaning both files.
+
 ### The JS RAG labs need a Chroma server
 
 Python's `chromadb.Client()` is in-memory. The JavaScript `ChromaClient()` is an
