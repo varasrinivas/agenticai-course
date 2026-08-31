@@ -3,6 +3,9 @@
  */
 import Anthropic from '@anthropic-ai/sdk';
 import 'dotenv/config';
+import { readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const client = new Anthropic();
 const MODEL = 'claude-haiku-4-5-20251001';
@@ -16,7 +19,14 @@ async function generativeCall(question) {
   return response.content[0].text;
 }
 
-async function multimodalCall(imageUrl, question) {
+async function multimodalCall(imagePath, question) {
+  // Send the image as base64 from disk rather than pointing the API at a URL.
+  // The API fetches a URL itself, so that form depends on a third party still
+  // serving that exact path to Anthropic's fetcher: the Wikimedia URL this lab
+  // used now fails with "Unable to download the file", and a Google-hosted
+  // replacement returns "This URL is disallowed". Reading bytes has neither
+  // failure mode, and the Python twin does the same.
+  const data = readFileSync(imagePath).toString('base64');
   const response = await client.messages.create({
     model: MODEL,
     max_tokens: 128,
@@ -24,7 +34,7 @@ async function multimodalCall(imageUrl, question) {
       {
         role: 'user',
         content: [
-          { type: 'image', source: { type: 'url', url: imageUrl } },
+          { type: 'image', source: { type: 'base64', media_type: 'image/png', data } },
           { type: 'text', text: question },
         ],
       },
@@ -33,8 +43,9 @@ async function multimodalCall(imageUrl, question) {
   return response.content[0].text;
 }
 
-const IMAGE_URL =
-  'https://upload.wikimedia.org/wikipedia/commons/thumb/3/3f/Bikesgray.jpg/320px-Bikesgray.jpg';
+// Shipped with the lab so it cannot rot: a red circle, a blue square and a
+// green triangle, chosen so the description is checkable by eye.
+const IMAGE_PATH = join(dirname(fileURLToPath(import.meta.url)), '..', 'assets', 'shapes.png');
 
 try {
   console.log('='.repeat(60));
@@ -46,7 +57,7 @@ try {
   console.log('='.repeat(60));
   console.log('PART 2: MULTIMODAL MODEL (image + text → text)');
   console.log('='.repeat(60));
-  const description = await multimodalCall(IMAGE_URL, 'Describe this image in one sentence.');
+  const description = await multimodalCall(IMAGE_PATH, 'Describe this image in one sentence.');
   console.log(`Claude sees: ${description}\n`);
 
   console.log('='.repeat(60));
