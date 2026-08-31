@@ -206,38 +206,43 @@ def run_agent(user_message: str) -> str:
     #   while turn < MAX_TURNS:
     #       turn += 1
     #       observe("THINKING", f"Turn {turn}...")
+    #
+    #   TODOs 3-5 below all belong INSIDE that loop -- indent them once
+    #   you have written it. They are left at function level here so the
+    #   file parses before you start; a stray indent with no loop above
+    #   it is an IndentationError, not an exercise.
     # ------------------------------------------------------------------
     pass
 
-        # --------------------------------------------------------------
-        # TODO 3: Call client.messages.create with:
-        #   model=MODEL, max_tokens=1024, system=SYSTEM_PROMPT,
-        #   tools=TOOLS, messages=messages
-        # --------------------------------------------------------------
-        pass
+    # --------------------------------------------------------------
+    # TODO 3: Call client.messages.create with:
+    #   model=MODEL, max_tokens=1024, system=SYSTEM_PROMPT,
+    #   tools=TOOLS, messages=messages
+    # --------------------------------------------------------------
+    pass
 
-        # --------------------------------------------------------------
-        # TODO 4: Handle stop_reason == "tool_use"
-        #   - Loop through response.content
-        #   - For each block where block.type == "tool_use":
-        #       - Log with observe_tool_call
-        #       - Execute TOOL_FUNCTIONS[block.name](block.input)
-        #       - Log with observe_tool_result
-        #       - Collect {"type": "tool_result", "tool_use_id": block.id,
-        #                   "content": json.dumps(result)}
-        #   - Append assistant message: {"role": "assistant", "content": response.content}
-        #   - Append tool results: {"role": "user", "content": tool_results}
-        #   - Continue the loop (Claude will see results on next turn)
-        # --------------------------------------------------------------
-        pass
+    # --------------------------------------------------------------
+    # TODO 4: Handle stop_reason == "tool_use"
+    #   - Loop through response.content
+    #   - For each block where block.type == "tool_use":
+    #       - Log with observe_tool_call
+    #       - Execute TOOL_FUNCTIONS[block.name](block.input)
+    #       - Log with observe_tool_result
+    #       - Collect {"type": "tool_result", "tool_use_id": block.id,
+    #                   "content": json.dumps(result)}
+    #   - Append assistant message: {"role": "assistant", "content": response.content}
+    #   - Append tool results: {"role": "user", "content": tool_results}
+    #   - Continue the loop (Claude will see results on next turn)
+    # --------------------------------------------------------------
+    pass
 
-        # --------------------------------------------------------------
-        # TODO 5: Handle stop_reason == "end_turn"
-        #   - Extract text from response.content (check hasattr(block, "text"))
-        #   - observe("RESPONSE", final_text)
-        #   - Return the final text
-        # --------------------------------------------------------------
-        pass
+    # --------------------------------------------------------------
+    # TODO 5: Handle stop_reason == "end_turn"
+    #   - Extract text from response.content (check hasattr(block, "text"))
+    #   - observe("RESPONSE", final_text)
+    #   - Return the final text
+    # --------------------------------------------------------------
+    pass
 
     # ------------------------------------------------------------------
     # TODO 6: If we exit the loop, return a max-turns error message

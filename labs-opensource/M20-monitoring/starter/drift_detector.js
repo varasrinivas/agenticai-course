@@ -1,4 +1,4 @@
-const assert = require("node:assert/strict");
+import assert from "node:assert/strict";
 /**
  * M20 Lab - Step 1: Z-Score Drift Detector (Node.js)
  * ===================================================

@@ -191,6 +191,44 @@ chroma run --path ./chroma-data --port 8000    # labs/.venv/Scripts/chroma.exe
 This is a real asymmetry between the two languages, not a bug, and it was
 previously undocumented — the labs failed with a bare `ChromaConnectionError`.
 
+## The starters, 2026-09-01
+
+260 entry-point starters were run for the first time (both courses, both
+languages). A starter is *meant* to fail — it ships TODOs — so the question is
+not pass/fail but whether it fails **at** the exercise or **before** it.
+
+| outcome | count | meaning |
+|---|---|---|
+| exits 0 | 166 | see below — mostly fine |
+| stops at a TODO | 40 | correct |
+| other runtime error | 41 | reaches the exercise, fails inside it |
+| **cannot reach the exercise** | **7** | defect |
+| missing third-party package | 6 | environment |
+
+**The 7 that could not reach the exercise are fixed.** One was genuine and
+pre-existing: `M05/starter/multi_tool.py` did not parse at all
+(`IndentationError`) — TODOs 3–5 were indented as if inside the loop TODO 2 asks
+you to write, but nothing opened a block. Dedented, with the structure now
+stated in words instead of whitespace. The other six were **mine**: the
+`console.assert` conversion inserted the CommonJS `require` form into files that
+had no existing `import` line, which is fatal under `"type": "module"`.
+
+**166 exiting 0 is not the alarm it looks like.** 19 have no TODOs at all —
+they are modules the reader is *given*, not exercises. 141 have TODOs and
+nothing that asserts them, which is ordinary for a starter and is exactly why
+exit status alone means nothing here.
+
+Two do deserve a note, because their checks pass while the work is missing:
+
+* `M19/starter/structured_logger.py` asserts `result is None` for a filtered
+  log — and an unimplemented `log()` returns `None`, so it prints "DEBUG log
+  correctly filtered" to a reader who has implemented nothing.
+* `M19/starter/trace_model.js` passes its `assert.ok` checks with its TODOs
+  unfilled.
+
+Neither blocks anyone, and neither is wrong — they are just not load-bearing.
+Worth knowing before treating a green starter as evidence of anything.
+
 ## Setup
 
 ```bash

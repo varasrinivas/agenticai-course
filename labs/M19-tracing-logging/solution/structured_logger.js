@@ -1,4 +1,4 @@
-const assert = require("node:assert/strict");
+import assert from "node:assert/strict";
 /**
  * M19 Lab — Structured Logger (Solution)
  * =======================================
