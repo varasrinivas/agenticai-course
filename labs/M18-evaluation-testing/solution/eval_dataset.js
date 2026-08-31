@@ -1,3 +1,4 @@
+import { fileURLToPath } from "url";
 /**
  * M18 — Evaluation Dataset for UCC Research Agent (Node.js)
  * 20 test cases across 4 categories, using the M15B mock data.
@@ -234,7 +235,8 @@ function getSummary() {
   return { total_cases: EVAL_CASES.length, categories, difficulties };
 }
 
-if (require.main === module) {
+// ESM has no require.main; compare the resolved entry path instead.
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const summary = getSummary();
   console.log(`M18 Eval Dataset: ${summary.total_cases} test cases`);
   console.log("\nBy category:");
@@ -247,4 +249,4 @@ if (require.main === module) {
   }
 }
 
-module.exports = { EVAL_CASES, MOCK_AGENT_RESPONSES, getCasesByCategory, getCaseById, getMockResponse, getSummary };
+export { EVAL_CASES, MOCK_AGENT_RESPONSES, getCasesByCategory, getCaseById, getMockResponse, getSummary };

@@ -125,6 +125,51 @@ drift that no amount of reading would have caught:
    the capstone-8, 8b and 9 coordinators had been left behind. Migrated to
    `{"PostToolUse": [...]}`, the event those labs' own docstrings name.
 
+## The JavaScript labs
+
+The course ships a `.js` beside almost every `.py`, and until 2026-08-31 none of
+it had ever been run. The JS SDK reads `ANTHROPIC_BASE_URL` exactly like the
+Python one, so the same stub covers both languages; the harness discovers
+`solution/*.js` alongside `solution/*.py`.
+
+**Stub run: 91 of 93 pass** (47 Python + 46 JavaScript). The two failures are
+`capstone-9` and `M26` — see below.
+
+Four defect classes were found the first time these ran, none of which reading
+would have caught:
+
+1. **ESM cannot import a Windows path.** `await import(join(__dirname, ...))`
+   hands the loader a filesystem path. Posix paths happen to work; a Windows one
+   is read as protocol `d:` and rejected with `ERR_UNSUPPORTED_ESM_URL_SCHEME`.
+   M12–M15 were dead on arrival for every Windows reader — solutions *and*
+   starters. Fixed with `pathToFileURL(...).href`.
+2. **CommonJS under `"type": "module"`.** The M18 family used `require` /
+   `module.exports`, which node refuses outright in this package. Converted to
+   ESM, which is what the rest of the course already uses. **M21, M22 and M22B
+   still have this** — 15 files, not yet addressed.
+3. **`readline` used after close.** capstone-1's agents recurse `askQuestion()`
+   after each turn; when stdin ends mid-request the recursive call throws
+   `ERR_USE_AFTER_CLOSE`. Interactive typing never hits it, redirected input
+   always does.
+4. **Undeclared npm dependencies** — 8 in `labs/`, 4 in `labs-opensource/`
+   (`chromadb`, `chromadb-default-embed`, `express`, `cors`, `uuid`,
+   `gpt-tokenizer`, `serverless-http`, `@modelcontextprotocol/sdk`). Imported by
+   labs, declared by neither manifest, so `npm install` produced a tree that
+   could not run the RAG, MCP, API or deployment labs at all.
+
+### The JS RAG labs need a Chroma server
+
+Python's `chromadb.Client()` is in-memory. The JavaScript `ChromaClient()` is an
+HTTP client with no embedded mode, so M10, M11 and capstone-2's JS variants need
+a server before they will run at all:
+
+```bash
+chroma run --path ./chroma-data --port 8000    # labs/.venv/Scripts/chroma.exe
+```
+
+This is a real asymmetry between the two languages, not a bug, and it was
+previously undocumented — the labs failed with a bare `ChromaConnectionError`.
+
 ## Setup
 
 ```bash

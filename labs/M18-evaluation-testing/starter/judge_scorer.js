@@ -1,3 +1,4 @@
+import { fileURLToPath } from "url";
 /**
  * M18 — Claude-as-Judge Scorer (Node.js Starter)
  * Uses a SEPARATE Claude call to evaluate response quality on a rubric.
@@ -9,7 +10,7 @@
 let Anthropic;
 let HAS_ANTHROPIC = false;
 try {
-  Anthropic = require("@anthropic-ai/sdk").default || require("@anthropic-ai/sdk");
+  Anthropic = (await import("@anthropic-ai/sdk")).default;
   HAS_ANTHROPIC = true;
 } catch {
   HAS_ANTHROPIC = false;
@@ -89,7 +90,8 @@ async function scoreWithJudge(query, response, expected, mockMode = true) {
 // ---------------------------------------------------------------------------
 // Self-test
 // ---------------------------------------------------------------------------
-if (require.main === module) {
+// ESM has no require.main; compare the resolved entry path instead.
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
   (async () => {
     console.log("Claude-as-Judge Scorer — Self-Test");
     console.log("=".repeat(50));
@@ -117,4 +119,4 @@ if (require.main === module) {
   })();
 }
 
-module.exports = { scoreWithJudge, mockJudgeScore };
+export { scoreWithJudge, mockJudgeScore };

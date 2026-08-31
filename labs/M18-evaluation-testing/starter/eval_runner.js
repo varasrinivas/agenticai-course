@@ -5,20 +5,26 @@
  * TODO: Implement the EvalRunner class and mockAgentFn.
  */
 
-const fs = require("fs");
+import fs from "fs";
 
-// NOTE: These imports will work once you copy eval_dataset.js to the starter/ folder
-// or adjust the path. For development, the solution/ version is the reference.
+// NOTE: loads eval_dataset.js from starter/ once you have copied it there, and
+// falls back to the solution/ copy until then.
+//
+// await import(), not require(): labs/package.json declares "type": "module",
+// so require is not defined in this file at all. A static import would not work
+// either — it cannot be wrapped in try/catch, and tolerating a missing first
+// path is the whole point of this block.
 let EVAL_CASES, MOCK_AGENT_RESPONSES, getSummary;
 try {
-  ({ EVAL_CASES, MOCK_AGENT_RESPONSES, getSummary } = require("./eval_dataset.js"));
+  ({ EVAL_CASES, MOCK_AGENT_RESPONSES, getSummary } = await import("./eval_dataset.js"));
 } catch {
-  // Fallback: try solution directory
-  ({ EVAL_CASES, MOCK_AGENT_RESPONSES, getSummary } = require("../solution/eval_dataset.js"));
+  // Fallback: the solution directory's copy
+  ({ EVAL_CASES, MOCK_AGENT_RESPONSES, getSummary } = await import("../solution/eval_dataset.js"));
 }
-const { scoreTaskCompletion } = require("./task_scorer.js");
-const { scoreEntityResolution } = require("./fuzzy_scorer.js");
-const { scoreWithJudge } = require("./judge_scorer.js");
+import { scoreTaskCompletion } from "./task_scorer.js";
+import { scoreEntityResolution } from "./fuzzy_scorer.js";
+import { scoreWithJudge } from "./judge_scorer.js";
+import { fileURLToPath } from "url";
 
 /**
  * Mock agent function that returns predetermined responses.
@@ -98,7 +104,8 @@ class EvalRunner {
 // ---------------------------------------------------------------------------
 // Self-test
 // ---------------------------------------------------------------------------
-if (require.main === module) {
+// ESM has no require.main; compare the resolved entry path instead.
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
   (async () => {
     console.log("M18 Eval Runner — Full Pipeline Test (Node.js)");
     console.log("=".repeat(60));
@@ -118,4 +125,4 @@ if (require.main === module) {
   })();
 }
 
-module.exports = { EvalRunner, mockAgentFn };
+export { EvalRunner, mockAgentFn };

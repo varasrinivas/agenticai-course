@@ -1,3 +1,4 @@
+import { fileURLToPath } from "url";
 /**
  * M18 — Task Completion Scorer (Node.js Starter)
  * Scores whether the agent found the correct UCC filings.
@@ -45,7 +46,8 @@ function scoreTaskCompletion(response, expected) {
 // ---------------------------------------------------------------------------
 // Self-test
 // ---------------------------------------------------------------------------
-if (require.main === module) {
+// ESM has no require.main; compare the resolved entry path instead.
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
   console.log("Task Completion Scorer — Self-Test");
   console.log("=".repeat(50));
 
@@ -79,4 +81,4 @@ if (require.main === module) {
   console.log("All self-tests passed!");
 }
 
-module.exports = { extractFilingNumbers, scoreTaskCompletion };
+export { extractFilingNumbers, scoreTaskCompletion };

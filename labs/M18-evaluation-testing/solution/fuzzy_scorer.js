@@ -1,3 +1,4 @@
+import { fileURLToPath } from "url";
 /**
  * M18 — Fuzzy Entity Match Scorer (Node.js Solution)
  * Scores entity resolution accuracy using token-based fuzzy matching.
@@ -113,7 +114,8 @@ function scoreEntityResolution(response, expected) {
 // ---------------------------------------------------------------------------
 // Self-test
 // ---------------------------------------------------------------------------
-if (require.main === module) {
+// ESM has no require.main; compare the resolved entry path instead.
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
   console.log("Fuzzy Entity Match Scorer — Self-Test");
   console.log("=".repeat(50));
 
@@ -144,4 +146,4 @@ if (require.main === module) {
   console.log("All self-tests passed!");
 }
 
-module.exports = { tokenize, scoreEntityMatch, scoreEntityResolution };
+export { tokenize, scoreEntityMatch, scoreEntityResolution };

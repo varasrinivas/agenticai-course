@@ -3,11 +3,12 @@
  * Orchestrates the full evaluation pipeline.
  */
 
-const fs = require("fs");
-const { EVAL_CASES, MOCK_AGENT_RESPONSES, getSummary } = require("./eval_dataset.js");
-const { scoreTaskCompletion } = require("./task_scorer.js");
-const { scoreEntityResolution } = require("./fuzzy_scorer.js");
-const { scoreWithJudge } = require("./judge_scorer.js");
+import fs from "fs";
+import { EVAL_CASES, MOCK_AGENT_RESPONSES, getSummary } from "./eval_dataset.js";
+import { scoreTaskCompletion } from "./task_scorer.js";
+import { scoreEntityResolution } from "./fuzzy_scorer.js";
+import { scoreWithJudge } from "./judge_scorer.js";
+import { fileURLToPath } from "url";
 
 /**
  * Mock agent function that returns predetermined responses.
@@ -253,7 +254,8 @@ class EvalRunner {
 // ---------------------------------------------------------------------------
 // Self-test
 // ---------------------------------------------------------------------------
-if (require.main === module) {
+// ESM has no require.main; compare the resolved entry path instead.
+if (process.argv[1] === fileURLToPath(import.meta.url)) {
   (async () => {
     console.log("M18 Eval Runner — Full Pipeline Test (Node.js)");
     console.log("=".repeat(60));
@@ -273,4 +275,4 @@ if (require.main === module) {
   })();
 }
 
-module.exports = { EvalRunner, mockAgentFn };
+export { EvalRunner, mockAgentFn };
