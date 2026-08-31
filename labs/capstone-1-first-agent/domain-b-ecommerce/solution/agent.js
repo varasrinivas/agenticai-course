@@ -161,6 +161,12 @@ async function runAgent() {
   console.log();
 
   const askQuestion = () => {
+    // Bail out if stdin has already ended. askQuestion() recurses after each
+    // turn, and when input is redirected (or Ctrl-D lands mid-request) readline
+    // closes while the turn is still awaiting the API -- the recursive call
+    // then throws ERR_USE_AFTER_CLOSE instead of exiting cleanly.
+    if (rl.closed) return;
+
     rl.question("You: ", async (userInput) => {
       userInput = userInput.trim();
 

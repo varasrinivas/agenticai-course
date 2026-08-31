@@ -16,7 +16,7 @@ import Anthropic from "@anthropic-ai/sdk";
 import { config } from "dotenv";
 import { readFileSync } from "fs";
 import { join, dirname } from "path";
-import { fileURLToPath } from "url";
+import { fileURLToPath, pathToFileURL } from "url";
 
 config();
 
@@ -24,7 +24,11 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 
 // Load shared mock data
 const mockDataPath = join(__dirname, "..", "..", "shared", "mock_ucc_data.js");
-const { MOCK_FILINGS, EDGE_CASE_FILINGS, ALL_FILINGS, searchFilings, getFilingByNumber } = await import(mockDataPath);
+// pathToFileURL: ESM import() needs a file:// URL, not a filesystem path.
+// A bare Windows path (D:\...) is read as protocol 'd:' and rejected with
+// ERR_UNSUPPORTED_ESM_URL_SCHEME. Posix paths happen to work, which is why
+// this only breaks on Windows.
+const { MOCK_FILINGS, EDGE_CASE_FILINGS, ALL_FILINGS, searchFilings, getFilingByNumber } = await import(pathToFileURL(mockDataPath).href);
 
 const client = new Anthropic();
 const MODEL = "claude-sonnet-4-6";

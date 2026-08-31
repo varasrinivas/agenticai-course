@@ -45,6 +45,18 @@ STUB_PORT = 8787
 # Scripts that block on stdin cannot be run unattended. They are reported, not
 # silently dropped, so the count never overstates what was actually exercised.
 INTERACTIVE = re.compile(r"\binput\s*\(")
+# The Node equivalent: a readline interface, or an awaited question() prompt.
+INTERACTIVE_JS = re.compile(r"readline|createInterface|\bquestion\s*\(")
+
+
+def uses_anthropic_js(src: str) -> bool:
+    """The Node half of the course was never run by anything.
+
+    The labs ship a .js beside almost every .py -- 137 solutions -- and the
+    JS SDK reads ANTHROPIC_BASE_URL exactly like the Python one, so the same
+    stub covers both. There is no reason for that half to stay unverified.
+    """
+    return bool(re.search(r"@anthropic-ai/sdk|ANTHROPIC_API_KEY", src))
 
 
 def uses_anthropic(src: str) -> bool:
@@ -160,11 +172,22 @@ def candidates() -> tuple[list[tuple[Path, str, bool]], list[tuple[str, str]]]:
     possible way for this harness to fail.
     """
     out, broken = [], []
-    for s in sorted(LABS.rglob("solution/*.py")):
+    for s in sorted(list(LABS.rglob("solution/*.py")) + list(LABS.rglob("solution/*.js"))):
         if s.name == "__init__.py" or "__pycache__" in s.parts or HERE in s.parents:
+            continue
+        if "node_modules" in s.parts:
             continue
         src = s.read_text(encoding="utf-8", errors="replace")
         rel = str(s.relative_to(LABS)).replace("\\", "/")
+
+        if s.suffix == ".js":
+            # No cheap parse check for JS, so a syntax error simply shows up as
+            # a failing run -- which is fine, because node reports it clearly.
+            if not uses_anthropic_js(src):
+                continue
+            out.append((s, rel, bool(INTERACTIVE_JS.search(src))))
+            continue
+
         try:
             ast.parse(src)
         except SyntaxError as exc:
@@ -272,7 +295,9 @@ def main() -> int:
 
         started = time.time()
         try:
-            proc = subprocess.run([sys.executable, script.name], cwd=script.parent,
+            argv = (["node", script.name] if script.suffix == ".js"
+                    else [sys.executable, script.name])
+            proc = subprocess.run(argv, cwd=script.parent,
                                   capture_output=True, text=True, errors="replace",
                                   timeout=args.timeout, env=env, input=feed)
             rc, out = proc.returncode, (proc.stderr or proc.stdout) or ""
