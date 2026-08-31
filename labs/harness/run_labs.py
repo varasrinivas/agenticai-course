@@ -109,6 +109,34 @@ def preflight(env: dict) -> tuple[bool, str]:
     return False, line
 
 
+def stdin_script(script: Path) -> str:
+    """Build a scripted stdin so an interactive lab can run unattended.
+
+    These labs are REPLs: they loop on input() until the reader types quit. That
+    made them unrunnable here, so eight of them were skipped outright -- the
+    largest hole in this harness's coverage, and it included every capstone-1
+    and capstone-2 agent.
+
+    Where the lab ships a transcript, the transcript IS the script: its "You:"
+    lines are exactly what a reader typed. Replaying them exercises the real
+    path, including the deliberate miss (capstone-1 asks for PA-9999-99999,
+    which does not exist) that the happy path would never reach.
+
+    With no transcript, "quit" alone still runs module import, client
+    construction, data loading and tool registration, then a clean exit. That is
+    weaker, and the report labels it so, but it is the difference between
+    checking a lab starts and not checking it at all.
+    """
+    sample = script.parent.parent / "expected_output" / "sample_output.txt"
+    turns: list[str] = []
+    if sample.is_file():
+        for line in sample.read_text(encoding="utf-8", errors="replace").splitlines():
+            m = re.match(r"^You:\s*(\S.*)$", line.strip())
+            if m:
+                turns.append(m.group(1))
+    return "\n".join(turns + ["quit"]) + "\n"
+
+
 def candidates() -> tuple[list[tuple[Path, str, bool]], list[tuple[str, str]]]:
     """Returns (runnable, unparseable).
 
@@ -140,6 +168,9 @@ def main() -> int:
     ap.add_argument("--live", action="store_true",
                     help="call the real Anthropic API (SPENDS MONEY; needs ANTHROPIC_API_KEY)")
     ap.add_argument("--only", default="")
+    ap.add_argument("--skip-interactive", action="store_true",
+                    help="skip stdin-reading labs instead of driving them with a "
+                         "scripted transcript")
     ap.add_argument("--timeout", type=int, default=300)
     ap.add_argument("--results", default="")
     args = ap.parse_args()
@@ -209,17 +240,24 @@ def main() -> int:
         print(line, flush=True)
         log.open("a", encoding="utf-8").write(line + "\n")
     for script, rel, interactive in work:
-        if interactive:
+        if interactive and args.skip_interactive:
             rows.append(("SKIP", rel))
             line = f"{'SKIP':4s}  {rel:{width}s}     - reads stdin"
             print(line, flush=True)
             log.open("a", encoding="utf-8").write(line + "\n")
             continue
+
+        feed = stdin_script(script) if interactive else None
+        note = ""
+        if interactive:
+            replayed = feed.count("\n") - 1
+            note = f" [driven: {replayed} replayed turn(s)]" if replayed else " [driven: quit only]"
+
         started = time.time()
         try:
             proc = subprocess.run([sys.executable, script.name], cwd=script.parent,
                                   capture_output=True, text=True, errors="replace",
-                                  timeout=args.timeout, env=env)
+                                  timeout=args.timeout, env=env, input=feed)
             rc, out = proc.returncode, (proc.stderr or proc.stdout) or ""
         except subprocess.TimeoutExpired:
             rc, out = -1, f"exceeded --timeout of {args.timeout}s"
@@ -256,7 +294,7 @@ def main() -> int:
             tail = [l for l in out.strip().splitlines() if l.strip()]
             failures.append((rel, tail[-1][:130] if tail else "(no output)"))
         rows.append((status, rel))
-        line = f"{status:4s}  {rel:{width}s}  {secs:5.0f}"
+        line = f"{status:4s}  {rel:{width}s}  {secs:5.0f}{note}"
         print(line, flush=True)
         log.open("a", encoding="utf-8").write(line + "\n")
 
