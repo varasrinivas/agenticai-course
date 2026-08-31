@@ -56,10 +56,58 @@ def canned_reply(body: dict) -> dict:
         }
 
     # If JSON was demanded, return JSON — several labs parse it strictly.
+    #
+    # Scan every message, not just the last one. The instruction usually lives
+    # in the SYSTEM prompt ("Return ONLY a JSON object, no prose") while the last
+    # message is the user's data; checking only the last one missed it, the stub
+    # answered with prose, and M21C's triage agent correctly rejected it and
+    # exited 2. The lab was right and the stub was wrong.
+    blob = " ".join(str(m.get("content") or "") for m in msgs)
     wants_json = (body.get("response_format", {}) or {}).get("type") == "json_object" \
-        or re.search(r"\bJSON\b", str(last), re.I)
-    content = ('{"name": "Jane Smith", "email": "jane@acme.com", "company": "Acme Corp"}'
-               if wants_json else "This is a deterministic stub response.")
+        or bool(re.search(r"\bJSON\b", blob, re.I))
+
+    # Honour the shape the prompt spells out, types included. These prompts tend
+    # to embed a literal template:
+    #
+    #   {"anomalies": [{"line": <str>, "severity": "low|medium|high"}],
+    #    "clean": <bool>}
+    #
+    # Filling every field with a string satisfies the key names and still fails:
+    # M21C rejected the reply with "'anomalies' must be a list" and exited 2,
+    # which is the lab validating correctly against a stub that lied about the
+    # type. Read the template and match it.
+    def from_template(text: str):
+        m = re.search(r"\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}", text, re.S)
+        if not m:
+            return None
+        tpl, out = m.group(0), {}
+        for key, val in re.findall(r'"(\w+)"\s*:\s*([^,}]+)', tpl):
+            v = val.strip()
+            if v.startswith("["):
+                out[key] = []                       # a list must stay a list
+            elif "bool" in v:
+                out[key] = True
+            elif "|" in v:
+                out[key] = v.strip('"<> ').split("|")[0]   # first enum option
+            elif re.search(r"\b(int|num|float|count|score)\b", v, re.I):
+                out[key] = 1
+            elif re.fullmatch(r"-?\d+(\.\d+)?", v.strip('"<> ')):
+                # A numeric LITERAL in the template ("overall": 0.0) is the shape
+                # too, not a placeholder. Returning "stub" here made M18's judge
+                # die on (scores.overall ?? 0).toFixed -- a string satisfied the
+                # key and failed the type, which is the same trap as a list.
+                out[key] = float(v) if "." in v else int(v)
+            else:
+                out[key] = "stub"
+        return out or None
+
+    shaped = from_template(blob) if wants_json else None
+    if shaped is not None:
+        content = json.dumps(shaped)
+    elif wants_json:
+        content = '{"name": "Jane Smith", "email": "jane@acme.com", "company": "Acme Corp"}'
+    else:
+        content = "This is a deterministic stub response."
 
     return {
         "id": "chatcmpl-stub", "object": "chat.completion", "created": 0,

@@ -68,8 +68,52 @@ def declared_scripts() -> list[tuple[Path, str]]:
     return found
 
 
+# Every `.js` here reaches Ollama the same way its `.py` twin does, so the same
+# stub serves both.
+# A lab that blocks on a prompt cannot run unattended. Rather than skip those
+# (chat_cli.js was simply timing out and reporting FAIL), feed them a short
+# scripted session so they exercise a real turn and then exit.
+# A lab that calls listen() is a long-running server: it never exits, so a
+# plain run always ends at the timeout and reports FAIL. That says nothing
+# about the lab. For these the verifiable property is different -- it starts
+# and stays up -- so run it briefly, confirm it did not crash, then stop it.
+SERVER = re.compile(r"\.listen\s*\(|createServer\s*\(")
+
+INTERACTIVE = re.compile(r"input\s*\(|readline|createInterface|question\s*\(")
+
+JS_MODEL = re.compile(r"\bfrom ['\"](openai|ollama|@langchain/[\w-]+)['\"]"
+                      r"|require\(['\"](openai|ollama|@langchain/[\w-]+)['\"]\)")
+
+
+def scanned_js() -> list[tuple[Path, str]]:
+    """Find the JavaScript solutions, which no sample declares.
+
+    The samples in this course open each block with `$ python solution/x.py` and
+    that is how the Python side is discovered. **Not one declares a `node`
+    command** -- 47 python declarations, zero node -- so the 41 `.js` solutions
+    shipped beside them were invisible to this harness and had never been run by
+    anything.
+
+    They cannot be discovered the same way, so they are scanned for instead.
+    That difference is deliberate: a declared command is stronger evidence (the
+    sample says this is how the lab is invoked), and where the course provides
+    one it is still preferred.
+    """
+    found: list[tuple[Path, str]] = []
+    for js in sorted(LABS.rglob("solution/*.js")):
+        if "node_modules" in js.parts:
+            continue
+        if JS_MODEL.search(js.read_text(encoding="utf-8", errors="replace")):
+            found.append((js, str(js.relative_to(LABS)).replace("\\", "/")))
+    return found
+
+
 def wants_model(script: Path) -> bool:
     src = script.read_text(encoding="utf-8", errors="replace")
+    if script.suffix == ".js":
+        # ast.parse cannot read JavaScript; without this every JS lab would be
+        # labelled "offline" in the report while actually calling the model.
+        return bool(JS_MODEL.search(src))
     try:
         tree = ast.parse(src)
     except SyntaxError:
@@ -135,7 +179,9 @@ def main() -> int:
             time.sleep(0.1)
         print("mode: STUB (canned replies; proves plumbing, not answer quality)\n")
 
-    scripts = [(s, r) for s, r in declared_scripts() if args.only in r]
+    # Python from declared commands, JavaScript by scan -- see scanned_js().
+    scripts = [(s, r) for s, r in declared_scripts() + scanned_js()
+               if args.only in r]
     width = max((len(r) for _, r in scripts), default=10)
     rows, failures = [], []
 
@@ -165,14 +211,38 @@ def main() -> int:
             continue
         needs = wants_model(script)
         started = time.time()
+        src = script.read_text(encoding="utf-8", errors="replace")
+        is_server = bool(SERVER.search(src))
+        # A server is asked only to start and stay up, so give it a short leash
+        # and read a timeout as success rather than waiting out the full budget.
+        limit = 20 if is_server else args.timeout
+
         try:
-            proc = subprocess.run([sys.executable, script.name], cwd=script.parent,
+            argv = (["node", script.name] if script.suffix == ".js"
+                    else [sys.executable, script.name])
+            feed = ("What is a UCC-1 filing?\nquit\n"
+                    if INTERACTIVE.search(src) else None)
+            proc = subprocess.run(argv, cwd=script.parent, input=feed,
                                   capture_output=True, text=True, errors="replace",
-                                  timeout=args.timeout,
-                                  env={**os.environ, "PYTHONIOENCODING": "utf-8"})
+                                  timeout=limit,
+                                  env={**os.environ,
+                                       "PYTHONIOENCODING": "utf-8",
+                                       # M21's app.js documents its own run line
+                                       # as `API_KEY=dev-secret-123 node app.js`
+                                       # and exits immediately without it. That
+                                       # is a stated prerequisite, not a defect,
+                                       # so supply it rather than report a lab
+                                       # that works as broken.
+                                       "API_KEY": os.environ.get("API_KEY", "harness-dummy-key")})
             rc, out = proc.returncode, (proc.stderr or proc.stdout) or ""
+            if is_server and rc != 0:
+                # Exited on its own before the leash ran out: it crashed.
+                out = f"server exited with {rc} instead of staying up:\n{out}"
         except subprocess.TimeoutExpired:
-            rc, out = -1, f"exceeded --timeout of {args.timeout}s"
+            if is_server:
+                rc, out = 0, "server started and stayed up"
+            else:
+                rc, out = -1, f"exceeded --timeout of {limit}s"
         secs = time.time() - started
 
         expected = rel in EXPECTED_FAILURES

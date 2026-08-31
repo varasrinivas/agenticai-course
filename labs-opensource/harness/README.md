@@ -149,6 +149,52 @@ python harness/run_labs.py --live --resume --timeout 1800
 `--resume` exists precisely because that is not true on CPU: the sweep has to
 be walked forward in batches, and anything already recorded is skipped.
 
+## The JavaScript labs
+
+This course ships 41 `.js` solutions beside its Python ones, and until
+2026-08-31 **none had ever been run**. They were invisible to this harness by
+construction: it discovers work from the `$ python solution/x.py` lines the
+samples carry, and **not one sample declares a `node` command** — 47 python
+declarations, zero node. They are scanned for instead (`scanned_js()`), which is
+weaker evidence than a declared command and is why the two mechanisms are kept
+distinct.
+
+**Stub run: 78 of 79 pass** (46 Python + 33 JavaScript), plus M03B's starter
+failing by design.
+
+Three things had to change before that number meant anything:
+
+1. **`chat_cli.js` crashed on redirected input** — `ERR_USE_AFTER_CLOSE`, the
+   same readline race the Claude course's capstone-1 agents had. A person typing
+   never triggers it; anything unattended always does.
+2. **`express-async-errors` was imported and declared nowhere**, so M21's
+   `app.js` could not start.
+3. **Server labs were being reported as timeouts.** `app.js` calls
+   `app.listen()` and never exits, so a plain run always ended at the timeout
+   and read as FAIL. For a server the verifiable property is different — it
+   starts and stays up — so those get a short leash and a timeout counts as
+   success.
+
+### Two traps worth knowing
+
+**Use `labs-opensource/.venv`, not `labs/.venv`.** Running this harness with the
+Claude course's interpreter produced 37 failures that were nothing but
+`ModuleNotFoundError: No module named 'openai'`. It looks exactly like a broken
+course.
+
+**The stub must match the requested TYPE, not just the key names.** These labs
+embed a literal template in the prompt:
+
+```
+{"anomalies": [{"line": <str>, "severity": "low|medium|high"}], "clean": <bool>}
+```
+
+Filling every field with a string satisfies the keys and still fails — M21C
+rejected the reply with `'anomalies' must be a list`, and M18's judge died on
+`(scores.overall ?? 0).toFixed`. Both were the lab validating correctly against
+a stub that lied about the type. `fake_ollama.py` now reads the template and
+matches it, including numeric literals like `"overall": 0.0`.
+
 ## Reading the output
 
 - `PASS` — ran to completion, exit 0

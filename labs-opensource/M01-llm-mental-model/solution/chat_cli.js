@@ -15,7 +15,18 @@ const conversation = [];
 console.log("Chat with Mistral! (type 'quit' to exit)\n");
 
 while (true) {
-  const userInput = (await rl.question("You: ")).trim();
+  // Stop if stdin has ended. Redirecting input (or Ctrl-D) closes readline, and
+  // asking again then throws ERR_USE_AFTER_CLOSE instead of exiting cleanly --
+  // you only see it when the chat is not driven by a person typing.
+  if (rl.closed) break;
+
+  let userInput;
+  try {
+    userInput = (await rl.question("You: ")).trim();
+  } catch {
+    break;                      // stream closed mid-prompt
+  }
+
   if (["quit", "exit"].includes(userInput.toLowerCase())) {
     rl.close();
     break;
